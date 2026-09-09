@@ -1,0 +1,47 @@
+{
+  "name": "kuroi",
+  "version": "0.5.0",
+  "private": true,
+  "main": "electron/main.cjs",
+  "scripts": {
+    "start": "node server.mjs",
+    "test": "node --test tests/*.test.cjs",
+    "desktop": "electron .",
+    "mcp": "node mcp/server.mjs",
+    "build:win": "electron-builder --win nsis"
+  },
+  "build": {
+    "appId": "com.kuroi.local",
+    "productName": "KUROI",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "**/*",
+      "!vault/**",
+      "!work/**",
+      "!outputs/**",
+      "!tests/**",
+      "!dist/**",
+      "!.claude/**",
+      "!app.next.js"
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "kuroi-logo-transparent.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "artifactName": "KUROI-Setup-${version}.${ext}"
+    }
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "js-yaml": "4.3.2"
+  },
+  "devDependencies": {
+    "electron": "^44.1.1",
+    "electron-builder": "^26.15.3"
+  }
+}

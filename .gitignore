@@ -1,0 +1,16 @@
+# Dependências e artefatos de build
+node_modules/
+dist/
+outputs/
+
+# Cofre pessoal: notas do usuário, não versionar
+vault/
+
+# Resíduo de teste manual da interface
+work/ui-test-vault/
+
+# Preferências locais do Claude Code
+.claude/settings.local.json
+
+# Cópias de segurança avulsas
+*.bak

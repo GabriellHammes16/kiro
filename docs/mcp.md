@@ -1,0 +1,144 @@
+# Kuroi MCP Server
+
+Expõe o cofre do Kuroi como ferramentas MCP, para qualquer cliente compatível
+com o Model Context Protocol.
+
+O servidor é um adaptador fino: valida o pedido e chama a
+[Kuroi Agent API](./agent-api.md). Nenhuma manipulação de arquivo acontece nele.
+
+## Iniciar
+
+```bash
+npm run mcp
+```
+
+Ou apontando um cofre específico:
+
+```bash
+node mcp/server.mjs --vault "C:/MeuCofre"
+```
+
+```bash
+KUROI_VAULT="C:/MeuCofre" node mcp/server.mjs
+```
+
+Sem argumento, o cofre é resolvido nesta ordem: `--vault`, `KUROI_VAULT`, cofre
+escolhido no aplicativo desktop, `Documentos/KUROI/vault`, cofre do projeto.
+
+O servidor escreve `Kuroi MCP ativo. Cofre: <caminho>` em **stderr** e fica
+aguardando. Rodar direto no terminal é normal: um cliente MCP é quem conversa
+com ele pela entrada padrão.
+
+## Transporte
+
+**stdio apenas.** O servidor não abre porta de rede, não escuta em `0.0.0.0` e
+não expõe nada na rede local. O cliente inicia o processo e conversa por
+entrada/saída padrão, e o processo morre junto com o cliente.
+
+Não há transporte HTTP. Se um dia houver, o padrão terá de ser `127.0.0.1` com
+autenticação — nunca `0.0.0.0`. Expor este servidor na rede daria a quem
+alcançasse a porta o mesmo poder sobre o cofre que o agente tem.
+
+`stdout` pertence ao protocolo. Qualquer diagnóstico vai para `stderr`.
+
+## Conectar um cliente
+
+Formato usado pela maioria dos clientes MCP:
+
+```json
+{
+  "mcpServers": {
+    "kuroi": {
+      "command": "node",
+      "args": ["C:/Projetos/Meu segundo cerebro/mcp/server.mjs"],
+      "env": { "KUROI_VAULT": "C:/Users/voce/Documents/KUROI/vault" }
+    }
+  }
+}
+```
+
+`env` é opcional: sem ele, o servidor usa o cofre aberto no aplicativo desktop.
+Cada cliente tem seu próprio local para esse arquivo — consulte a documentação
+do cliente que você usa.
+
+Conectando por biblioteca, em Node:
+
+```js
+import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
+
+const cliente = new Client({ name: 'meu-agente', version: '1.0.0' }, { capabilities: {} });
+await cliente.connect(new StdioClientTransport({
+  command: 'node',
+  args: ['C:/Projetos/Meu segundo cerebro/mcp/server.mjs'],
+}));
+
+const { tools } = await cliente.listTools();
+const resposta = await cliente.callTool({
+  name: 'kuroi_create_note',
+  arguments: { title: 'Ideias para o canal', folder: 'Projetos', content: 'Primeira ideia.' },
+});
+```
+
+O nome que o cliente informa no handshake vira o `clientId` da auditoria. Não é
+obrigatório e não muda o comportamento do Kuroi: serve para você saber depois
+quem fez o quê.
+
+## Ferramentas publicadas
+
+`kuroi_create_note`, `kuroi_read_note`, `kuroi_update_note`, `kuroi_delete_note`,
+`kuroi_restore_note`, `kuroi_list_notes`, `kuroi_search_notes`,
+`kuroi_list_trash`, `kuroi_create_folder`, `kuroi_list_folders`,
+`kuroi_move_note`, `kuroi_get_backlinks`, `kuroi_get_outgoing_links`,
+`kuroi_create_note_link`, `kuroi_get_recent_notes`, `kuroi_get_daily_note`,
+`kuroi_add_tag`, `kuroi_remove_tag`, `kuroi_search_by_tag`,
+`kuroi_get_vault_info`.
+
+Schemas e níveis de risco estão em [agent-api.md](./agent-api.md).
+
+Cada ferramenta vai com *annotations* padrão do MCP — `readOnlyHint`,
+`destructiveHint`, `idempotentHint`, `openWorldHint` — e com `kuroi/risk` e
+`kuroi/permission` no `_meta`. Um cliente pode usar isso para pedir confirmação
+antes de uma ação destrutiva.
+
+## Recursos
+
+| URI | Conteúdo |
+|---|---|
+| `kuroi://vault` | Caminho, revisão e contagem de notas e pastas. |
+| `kuroi://daily` | Nota de hoje, se existir. |
+| `kuroi://notes/<id>` | Uma nota pelo id. |
+
+Só isso, de propósito: nada de despejar o cofre inteiro em contexto.
+
+## Erros
+
+Erro de ferramenta volta como resultado com `isError: true`, não como falha de
+protocolo, para que o modelo leia a mensagem e corrija a chamada:
+
+```json
+{ "error": "PATH_TRAVERSAL", "message": "Navegar para fora do cofre não é permitido." }
+```
+
+Códigos: `INVALID_INPUT`, `INVALID_PATH`, `PATH_TRAVERSAL`, `RESERVED_PATH`,
+`INVALID_NAME`, `NOTE_NOT_FOUND`, `FOLDER_NOT_FOUND`, `NOTE_EXISTS`,
+`PERMISSION_DENIED`, `AGENT_DISABLED`, `UNKNOWN_TOOL`.
+
+## Segurança
+
+O servidor MCP não afrouxa nada: as mesmas validações de caminho, as mesmas
+permissões e a mesma auditoria da Agent API valem aqui.
+
+Vale saber:
+
+- **Excluir vem desligado por padrão.** `kuroi_delete_note` responde
+  `PERMISSION_DENIED` até você ligar em **IA e integrações** na barra lateral.
+- **Desligar tudo** é uma caixa na mesma tela: com `enabled: false`, toda
+  ferramenta responde `AGENT_DISABLED`.
+- **O agente só alcança o cofre.** Não existe ferramenta de arquivo genérico nem
+  de execução de comando.
+- **Conteúdo de nota é dado, não instrução.** Uma nota do cofre pode conter
+  texto tentando comandar o agente; quem decide o que fazer com isso é o cliente
+  de IA, não o Kuroi.
+- Rodar o servidor dá ao cliente conectado o mesmo alcance que a configuração
+  permite. Conecte apenas clientes em que você confia.
