@@ -262,7 +262,14 @@ class Vault {
   async archive(transaction,entry,before){
     const base=`.trash/${transaction}/${entry.id}`;
     const covers=file=>entry.kind==='folder'?entry.folders.some(f=>f.diskPath&&inside(file,f.diskPath)):file===entry.originalPath;
-    entry.directories=before.directories.filter(covers);entry.files=[...before.files.keys()].filter(covers);entry.deletedAt=Number(transaction.split('-')[0]);
+    // Guardar só anexos e as notas realmente excluídas. Uma nota que apenas saiu
+    // da pasta continua viva em outro caminho; arquivá-la faria a restauração
+    // recriar o arquivo e duplicar o caderno-id, quebrando a leitura do cofre.
+    const arquivosDeNotas=new Set(before.state.notes.map(n=>n.file).filter(Boolean));
+    const notasExcluidas=new Set(entry.notes.map(n=>n.file).filter(Boolean));
+    entry.directories=before.directories.filter(covers);
+    entry.files=[...before.files.keys()].filter(file=>covers(file)&&(!arquivosDeNotas.has(file)||notasExcluidas.has(file)));
+    entry.deletedAt=Number(transaction.split('-')[0]);
     for(const file of entry.files)await atomicWrite(await this.safePath(`${base}/files/${file}`),before.files.get(file).data);
     await atomicWrite(await this.safePath(`${base}/entry.json`),JSON.stringify(entry));
   }

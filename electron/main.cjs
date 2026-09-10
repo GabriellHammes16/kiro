@@ -22,6 +22,7 @@ else app.whenReady().then(async () => {
   ipcMain.handle('vault:load', () => vault.load());
   ipcMain.handle('vault:save', (_event, state) => vault.save(state));
   ipcMain.handle('vault:trash', () => vault.trash());
+  ipcMain.handle('vault:restore', (_event, pedido) => vault.restore(pedido));
   ipcMain.handle('vault:open', async () => { await mkdir(vault.directory, { recursive: true }); return shell.openPath(vault.directory); });
   ipcMain.handle('vault:path', () => vault.directory);
   ipcMain.handle('agent:config:get', () => agentConfig.load());

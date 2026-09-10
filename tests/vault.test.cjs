@@ -152,3 +152,67 @@ test('historyLimit 0 desliga a poda', async t => {
   // Sobram 4 — mais do que o padrão de 3 usado no teste anterior, provando que não houve poda.
   assert.equal((await fs.readdir(path.join(directory,'.history'))).length,4);
 });
+
+test('restaurar pasta traz de volta subpastas, notas e identificadores', async t => {
+  const vault=await setup(t);
+  let state=await vault.load();
+  state=await vault.save({...state,
+    folders:[{id:'pai',title:'Estudos',parentId:'',description:''},{id:'filha',title:'Python',parentId:'pai',description:''}],
+    notes:[note({id:'n1',title:'Solta'}),note({id:'n2',title:'Na raiz da pasta',folderId:'pai'}),note({id:'n3',title:'Na subpasta',folderId:'filha'})]});
+  const caminhoOriginal=state.notes.find(n=>n.id==='n3').file;
+  assert.match(caminhoOriginal,/^Estudos\/Python\//);
+
+  // remover a pasta-mãe leva junto a subpasta e as duas notas
+  state=await vault.save({...state,folders:[],notes:state.notes.filter(n=>n.id==='n1')});
+  await assert.rejects(fs.access(path.join(vault.directory,'Estudos')));
+
+  const lixeira=await vault.trash();
+  const entrada=lixeira.find(i=>i.kind==='folder');
+  assert.ok(entrada,'a pasta deveria estar na lixeira');
+  assert.equal(entrada.title,'Estudos');
+  assert.equal(entrada.noteCount,2);
+  assert.equal(entrada.folderCount,2);
+
+  state=await vault.restore({entryId:entrada.entryId,revision:state.revision});
+  assert.deepEqual(state.folders.map(f=>f.path).sort(),['Estudos','Estudos/Python']);
+  assert.equal(state.notes.length,3);
+  // os identificadores voltam, então as tarefas ligadas às notas seguem valendo
+  assert.deepEqual(state.notes.map(n=>n.id).sort(),['n1','n2','n3']);
+  assert.equal(state.notes.find(n=>n.id==='n3').file,caminhoOriginal);
+  await fs.access(path.join(vault.directory,caminhoOriginal));
+});
+
+test('restaurar com revisão vencida é recusado sem alterar o cofre', async t => {
+  const vault=await setup(t);
+  let state=await seed(vault);
+  const antiga=state.revision;
+  state=await vault.save({...state,notes:[]});
+  const entrada=(await vault.trash())[0];
+  await assert.rejects(vault.restore({entryId:entrada.entryId,revision:antiga}),/mudou/);
+  assert.equal((await vault.load()).notes.length,0);
+  // com a revisão correta, funciona
+  state=await vault.restore({entryId:entrada.entryId,revision:state.revision});
+  assert.equal(state.notes.length,1);
+});
+
+test('restaurar pasta cujas notas foram movidas não duplica as notas', async t => {
+  const vault=await setup(t);
+  await fs.mkdir(path.join(vault.directory,'Estudos/Python'),{recursive:true});
+  await fs.writeFile(path.join(vault.directory,'Estudos/basico.md'),'---\ntitle: Basico\n---\n\nx\n');
+  await fs.writeFile(path.join(vault.directory,'Estudos/Python/listas.md'),'---\ntitle: Listas\n---\n\ny\n');
+  await fs.writeFile(path.join(vault.directory,'Estudos/anexo.txt'),'um anexo');
+  let state=await vault.load();
+  const idsOriginais=state.notes.map(n=>n.id).sort();
+
+  // é o que a interface faz ao excluir uma pasta: some com as pastas, notas vão para a raiz
+  state=await vault.save({...state,folders:[],notes:state.notes.map(n=>({...n,folderId:''}))});
+  const entrada=(await vault.trash()).find(i=>i.kind==='folder');
+  state=await vault.restore({entryId:entrada.entryId,revision:state.revision});
+
+  assert.deepEqual(state.folders.map(f=>f.path).sort(),['Estudos','Estudos/Python']);
+  assert.equal(state.notes.length,2,'nenhuma nota pode ser duplicada pela restauração');
+  assert.deepEqual(state.notes.map(n=>n.id).sort(),idsOriginais);
+  assert.deepEqual(state.notes.map(n=>n.file).sort(),['basico.md','listas.md']);
+  // anexos, que não são notas, voltam para dentro da pasta
+  await fs.access(path.join(vault.directory,'Estudos/anexo.txt'));
+});

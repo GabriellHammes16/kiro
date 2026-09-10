@@ -858,14 +858,29 @@ async function extraAction(type,id){
     $('#routine-form').onsubmit=async e=>{e.preventDefault();state.routine.push({id:uid(),title:$('#routine-title').value,date:today(),done:false});if(await save())closeModal(true);};
   }
 }
+// A restauração é do próprio Vault: ele devolve a nota ou a pasta inteira, com
+// subpastas, anexos e os identificadores originais. Reconstruir isso aqui, como
+// se fazia antes, quebrava com pastas e travava a janela.
+const restaurarDoCofre = pedido => window.cadernoDesktop ? window.cadernoDesktop.restore(pedido) : api('restore', pedido);
 async function showTrash(){
   if(!loaded||failed||busy)return;
   try{
-    const notes=window.cadernoDesktop?await window.cadernoDesktop.trash():await api('trash');
-    modal('Lixeira',notes.length?notes.map(n=>`<div class="routine-item"><span class="routine-title">${escapeHtml(n.title)}</span><button class="secondary" data-restore="${escapeHtml(n.id)}">Restaurar</button></div>`).join(''):'<p>A lixeira está vazia.</p>');
+    const itens=window.cadernoDesktop?await window.cadernoDesktop.trash():await api('trash');
+    const quando=ms=>new Intl.DateTimeFormat('pt-BR',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}).format(new Date(ms));
+    const detalhe=i=>i.kind==='folder'
+      ? `pasta · ${i.noteCount} nota${i.noteCount===1?'':'s'}${i.folderCount>1?` · ${i.folderCount-1} subpasta${i.folderCount===2?'':'s'}`:''}`
+      : 'nota';
+    modal('Lixeira', itens.length ? itens.map(i=>`<div class="routine-item"><span class="brand-mark">${i.kind==='folder'?'▣':'◈'}</span><span class="routine-title">${escapeHtml(i.title)}<div class="task-info">${detalhe(i)} · removido em ${quando(i.deletedAt)}</div></span><button class="secondary" data-restore="${escapeHtml(i.entryId)}">Restaurar</button></div>`).join('') : '<p>A lixeira está vazia.</p>');
     document.querySelectorAll('[data-restore]').forEach(b=>b.onclick=async()=>{
-      if(busy||failed)return;const note=structuredClone(notes.find(n=>n.id===b.dataset.restore));delete note.file;delete note.deletedAt;
-      state.notes.push(note);if(await save())closeModal(true);
+      if(busy||failed)return;
+      setBusy(true);status('Restaurando…');
+      try{
+        state=await restaurarDoCofre({entryId:b.dataset.restore,revision:state.revision});
+        expanded=null;closeModal(true);render();status('Restaurado do cofre');
+      }catch(erro){
+        // Falha ao restaurar não põe em risco o que está na janela: não trava a interface.
+        status('Não foi possível restaurar: '+erro.message,true);
+      }finally{setBusy(false);}
     });
   }catch(error){status(error.message,true);}
 }

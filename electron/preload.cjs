@@ -6,6 +6,7 @@ contextBridge.exposeInMainWorld('cadernoDesktop', {
   vaultPath: () => ipcRenderer.invoke('vault:path'),
   chooseVault: () => ipcRenderer.invoke('vault:choose'),
   trash: () => ipcRenderer.invoke('vault:trash'),
+  restore: pedido => ipcRenderer.invoke('vault:restore', pedido),
   agentConfig: () => ipcRenderer.invoke('agent:config:get'),
   saveAgentConfig: parcial => ipcRenderer.invoke('agent:config:set', parcial)
 });

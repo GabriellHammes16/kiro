@@ -22,6 +22,11 @@ createServer(async (request, response) => {
   try {
     if (request.url === '/api/state' && request.method === 'GET') return send(response, 200, await vault.load());
     if (request.url === '/api/trash' && request.method === 'GET') return send(response, 200, await vault.trash());
+    if (request.url === '/api/restore' && request.method === 'POST') {
+      if (request.headers['content-type']?.split(';')[0] !== 'application/json') return send(response, 415, { error: 'Use JSON.' });
+      let bruto = ''; for await (const parte of request) { bruto += parte; if (bruto.length > 4096) return send(response, 413, { error: 'Pedido grande demais.' }); }
+      return send(response, 200, await vault.restore(JSON.parse(bruto)));
+    }
     if (request.url === '/api/agent-config' && request.method === 'GET') return send(response, 200, await agentConfig.load());
     if (request.url === '/api/agent-config' && request.method === 'POST') {
       if (request.headers['content-type']?.split(';')[0] !== 'application/json') return send(response, 415, { error: 'Use JSON.' });

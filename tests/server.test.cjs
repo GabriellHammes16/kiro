@@ -28,4 +28,16 @@ test('servidor restringe acesso e persiste o cofre pela API', async t => {
   state.notes=[{id:'http-note',title:'HTTP',body:'Conteúdo',links:[],updatedAt:Date.now()}];
   const saved=await fetch(base+'/api/state',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(state)});
   assert.equal(saved.status,200);assert.equal((await saved.json()).notes[0].body,'Conteúdo');
+
+  // exclusão e restauração pela API: é o caminho que a lixeira da interface usa
+  let atual=await (await fetch(base+'/api/state')).json();
+  atual=await (await fetch(base+'/api/state',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...atual,notes:[]})})).json();
+  const lixeira=await (await fetch(base+'/api/trash')).json();
+  assert.equal(lixeira.length,1);
+  assert.equal((await fetch(base+'/api/restore',{method:'POST',headers:{'Content-Type':'text/plain'},body:'{}'})).status,415);
+  const restaurada=await fetch(base+'/api/restore',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({entryId:lixeira[0].entryId,revision:atual.revision})});
+  assert.equal(restaurada.status,200);
+  const volta=await restaurada.json();
+  assert.equal(volta.notes.length,1);
+  assert.equal(volta.notes[0].body,'Conteúdo');
 });
