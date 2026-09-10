@@ -108,3 +108,47 @@ test('datas locais, links entre notas, tags e URLs seguras', () => {
   assert.deepEqual(domain.tags(note({body:'Estudar #programação e #java',tags:['java']})),['java','programação']);
   assert.equal(domain.findLinkedNote([note({title:'Programação'})],'programacao').id,'note-1');
 });
+
+test('salvamento concluído não deixa lixo em .staging', async t => {
+  const vault=await setup(t);let state=await seed(vault);
+  for(let i=0;i<3;i++){state.notes[0].body=`versão ${i}`;state=await vault.save(state);}
+  await assert.rejects(fs.access(path.join(vault.directory,'.staging')),'.staging deveria sumir após o commit');
+});
+
+test('.history é podado ao passar do limite, sem tocar na lixeira', async t => {
+  const directory=await fs.mkdtemp(path.join(os.tmpdir(),'kuroi-hist-'));
+  t.after(()=>fs.rm(directory,{recursive:true,force:true}));
+  const vault=new Vault(directory,{historyLimit:3});
+  let state=await vault.load();
+  state=await vault.save({...state,notes:[note(),note({id:'note-2',title:'Outra'})]});
+
+  // uma exclusão precisa continuar recuperável depois da poda
+  const apagada=state.notes.find(n=>n.id==='note-2');
+  state=await vault.save({...state,notes:state.notes.filter(n=>n.id!=='note-2')});
+  assert.equal((await vault.trash()).length,1);
+
+  for(let i=0;i<6;i++){state.notes[0].body=`edição ${i}`;state=await vault.save(state);}
+  const snapshots=await fs.readdir(path.join(directory,'.history'));
+  assert.ok(snapshots.length<=3,`esperava no máximo 3 snapshots, veio ${snapshots.length}`);
+
+  // o mais recente sobrevive e a lixeira segue intacta
+  const maisNovo=snapshots.sort((a,b)=>Number(b.split('-')[0])-Number(a.split('-')[0]))[0];
+  await fs.access(path.join(directory,'.history',maisNovo,'caderno.json'));
+  const lixeira=await vault.trash();
+  assert.equal(lixeira.length,1);
+  assert.equal(lixeira[0].title,apagada.title);
+  state=await vault.restore({entryId:lixeira[0].entryId,revision:state.revision});
+  assert.equal(state.notes.length,2);
+});
+
+test('historyLimit 0 desliga a poda', async t => {
+  const directory=await fs.mkdtemp(path.join(os.tmpdir(),'kuroi-hist0-'));
+  t.after(()=>fs.rm(directory,{recursive:true,force:true}));
+  const vault=new Vault(directory,{historyLimit:0});
+  let state=await vault.load();
+  state=await vault.save({...state,notes:[note()]});
+  for(let i=0;i<4;i++){state.notes[0].body=`v${i}`;state=await vault.save(state);}
+  // O primeiro salvamento num cofre vazio não gera snapshot: não há nada para copiar.
+  // Sobram 4 — mais do que o padrão de 3 usado no teste anterior, provando que não houve poda.
+  assert.equal((await fs.readdir(path.join(directory,'.history'))).length,4);
+});

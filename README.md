@@ -58,7 +58,7 @@ Antes de cada salvamento que altera arquivos, uma cópia do cofre anterior é cr
 
 Cada arquivo é gravado por substituição atômica. Um registro `.transaction.json` identifica salvamentos interrompidos entre arquivos: nesse caso o aplicativo bloqueia a abertura para não aceitar dados parciais. Com o aplicativo fechado, preserve uma cópia da pasta e restaure o snapshot indicado em `backup` nesse registro em uma pasta vazia; abra essa pasta como outro cofre. Uma interrupção abrupta também pode deixar `.kuroi.lock`; só remova esse arquivo depois de confirmar que nenhum processo está usando o cofre.
 
-Histórico e lixeira não são apagados automaticamente. Eles ocupam espaço e não substituem uma cópia em outro disco. O backup JSON exportado inclui as notas ativas e os dados auxiliares, mas não o histórico e a lixeira; copie a pasta inteira para preservar tudo.
+O histórico guarda os 30 salvamentos mais recentes; os mais antigos são apagados ao final de cada gravação. A lixeira não é apagada automaticamente. Nenhum dos dois substitui uma cópia em outro disco. O backup JSON exportado inclui as notas ativas e os dados auxiliares, mas não o histórico e a lixeira; copie a pasta inteira para preservar tudo.
 
 Importações são validadas antes de alterar o estado. Elas substituem os dados ativos; notas removidas vão para a lixeira e o cofre anterior fica no histórico. A API do navegador aceita até 20 MB por salvamento.
 

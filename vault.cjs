@@ -48,6 +48,8 @@ function markdown(note, previous = '') {
 }
 
 const FOLDER_MARKER = '.kuroi-folder.json';
+// Cada gravação copia o cofre inteiro para .history. Sem teto, isso cresce sem fim.
+const HISTORY_LIMIT = 30;
 const visible = name => !name.split('/').some(part => part.startsWith('.'));
 const parentPath = file => path.posix.dirname(file) === '.' ? '' : path.posix.dirname(file);
 const inside = (file, directory) => file === directory || file.startsWith(directory + '/');
@@ -78,7 +80,7 @@ function rewritePaths(body, source, destination, changes) {
   });
 }
 class Vault {
-  constructor(directory) { this.directory = path.resolve(directory); this.queue = Promise.resolve(); }
+  constructor(directory, { historyLimit = HISTORY_LIMIT } = {}) { this.directory = path.resolve(directory); this.queue = Promise.resolve(); this.historyLimit = historyLimit; }
   exclusive(operation) { const result=this.queue.then(operation); this.queue=result.catch(()=>{}); return result; }
   async safePath(relative) {
     if (typeof relative!=='string'||!relative||relative.includes(':')||relative.includes('\\')||relative.split('/').some(p=>!p||p==='.'||p==='..')) throw new Error('Caminho inválido.');
@@ -236,7 +238,26 @@ class Vault {
     for(const dir of [...desiredDirs].sort((a,b)=>a.length-b.length))await fs.mkdir(await this.safePath(dir),{recursive:true});
     for(const [file]of writes)await fs.rename(await this.safePath(`${stage}/${file}`),await this.safePath(file));
     await fs.unlink(await this.safePath('.transaction.json'));
+    try{await this.tidy(transaction);}catch{/* a faxina não pode falhar um salvamento já aplicado */}
     return (await this.read()).state;
+  }
+  /**
+   * Chamado só depois que a gravação foi aplicada e o journal removido.
+   * Nesse ponto não há transação pendente: o que restou em .staging é lixo de
+   * um salvamento interrompido cujo journal já foi resolvido, e os snapshots
+   * mais antigos podem sair. A lixeira é independente e não é tocada aqui.
+   */
+  async tidy(transaction){
+    await fs.rm(await this.safePath('.staging'),{recursive:true,force:true});
+    if(!(this.historyLimit>0))return;
+    let entradas;
+    try{entradas=await fs.readdir(await this.safePath('.history'));}
+    catch(erro){if(erro.code==='ENOENT')return;throw erro;}
+    const ordenadas=entradas.filter(nome=>/^\d+-[\w-]+$/.test(nome)).sort((a,b)=>Number(a.split('-')[0])-Number(b.split('-')[0]));
+    for(const antiga of ordenadas.slice(0,Math.max(0,ordenadas.length-this.historyLimit))){
+      if(antiga===transaction)continue;
+      await fs.rm(await this.safePath(`.history/${antiga}`),{recursive:true,force:true});
+    }
   }
   async archive(transaction,entry,before){
     const base=`.trash/${transaction}/${entry.id}`;
@@ -282,4 +303,4 @@ class Vault {
     await atomicWrite(await this.safePath(`.trash/${entryId}/restored`),'true');return result;
   });}
 }
-module.exports={Vault,parseMarkdown,markdown,atomicWrite,rewritePaths};
+module.exports={Vault,parseMarkdown,markdown,atomicWrite,rewritePaths,HISTORY_LIMIT};
