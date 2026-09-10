@@ -210,9 +210,186 @@ function bindEditor(){
     if(!Kuroi.safeUrl(valor)){alert('Informe um endereço http:// ou https:// válido.');return;}
     editing.links.push(valor);campo.value='';sujar();desenharLinksDoc();
   };
+  corpo.addEventListener('contextmenu', e => abrirMenuContexto(e, corpo));
   document.querySelectorAll('[data-editor]').forEach(b=>b.onclick=()=>acaoEditor(b.dataset.editor));
   desenharLinksDoc();estadoDoc();
   (editing.id?corpo:titulo).focus();
+}
+// ---- Menu de contexto do corpo da nota ----
+// O corpo é Markdown puro: cada item insere a marcação correspondente.
+// Usa execCommand('insertText') para não destruir a pilha de desfazer do textarea.
+function inserirTexto(area, texto) {
+  area.focus();
+  let ok = false;
+  try { ok = document.execCommand('insertText', false, texto); } catch { ok = false; }
+  if (!ok) area.setRangeText(texto, area.selectionStart, area.selectionEnd, 'end');
+  area.dispatchEvent(new Event('input', { bubbles: true }));
+}
+function envolver(area, abre, fecha = abre) {
+  const i = area.selectionStart, sel = area.value.slice(i, area.selectionEnd);
+  inserirTexto(area, abre + sel + fecha);
+  if (sel) area.setSelectionRange(i + abre.length, i + abre.length + sel.length);
+  else { const p = i + abre.length; area.setSelectionRange(p, p); }
+}
+function limitesDasLinhas(area) {
+  const v = area.value;
+  const inicio = v.lastIndexOf('\n', area.selectionStart - 1) + 1;
+  const seguinte = v.indexOf('\n', area.selectionEnd);
+  return [inicio, seguinte < 0 ? v.length : seguinte];
+}
+function porLinha(area, transformar) {
+  const [i, f] = limitesDasLinhas(area);
+  const bloco = area.value.slice(i, f).split('\n').map(transformar).join('\n');
+  area.setSelectionRange(i, f);
+  inserirTexto(area, bloco);
+  area.setSelectionRange(i, i + bloco.length);
+}
+const semPrefixo = linha => linha.replace(/^\s*(#{1,6}\s+|[-*+]\s+\[[ xX]\]\s+|[-*+]\s+|\d+\.\s+|>\s?)/, '');
+const prefixar = (area, prefixo) => porLinha(area, l => prefixo + semPrefixo(l));
+function inserirBloco(area, texto) {
+  const v = area.value, i = area.selectionStart;
+  const antes = i === 0 || v.slice(0, i).endsWith('\n\n') ? '' : v.slice(0, i).endsWith('\n') ? '\n' : '\n\n';
+  inserirTexto(area, antes + texto);
+}
+function linkExterno(area) {
+  const sel = area.value.slice(area.selectionStart, area.selectionEnd);
+  const url = prompt('Endereço do link:', 'https://');
+  if (url === null) return;
+  const limpo = Kuroi.safeUrl(url.trim());
+  if (!limpo) { alert('Informe um endereço http:// ou https:// válido.'); return; }
+  const i = area.selectionStart;
+  inserirTexto(area, '[' + sel + '](' + limpo + ')');
+  if (!sel) area.setSelectionRange(i + 1, i + 1);
+}
+async function colar(area) {
+  try {
+    const texto = await navigator.clipboard.readText();
+    if (texto) inserirTexto(area, texto);
+  } catch {
+    status('O navegador não liberou a área de transferência. Use Ctrl+V.', true);
+  }
+}
+async function copiarSelecao(area, recortar) {
+  const sel = area.value.slice(area.selectionStart, area.selectionEnd);
+  if (!sel) return;
+  try { await navigator.clipboard.writeText(sel); } catch { status('Não foi possível copiar.', true); return; }
+  if (recortar) inserirTexto(area, '');
+}
+const TABELA = '| Coluna | Coluna |\n| --- | --- |\n|  |  |\n';
+const temSelecao = area => area.selectionStart !== area.selectionEnd;
+function menuDaNota() {
+  return [
+    { rotulo: 'Adicionar link', icone: '🔗', acao: a => envolver(a, '[[', ']]') },
+    { rotulo: 'Adicionar link externo', icone: '↗', acao: linkExterno },
+    { separador: true },
+    { rotulo: 'Formatar', icone: '✎', filhos: [
+      { rotulo: 'Negrito', icone: 'B', acao: a => envolver(a, '**') },
+      { rotulo: 'Itálico', icone: 'I', acao: a => envolver(a, '*') },
+      { rotulo: 'Riscado', icone: 'S', acao: a => envolver(a, '~~') },
+      { rotulo: 'Realce', icone: '▨', acao: a => envolver(a, '==') },
+      { separador: true },
+      { rotulo: 'Código', icone: '<>', acao: a => envolver(a, '`') },
+      { rotulo: 'Equação', icone: 'Σ', acao: a => envolver(a, '$') },
+      { rotulo: 'Comentário', icone: '%', acao: a => envolver(a, '%%') },
+      { separador: true },
+      { rotulo: 'Limpar formatação', icone: '⌫', acao: a => {
+        const i = a.selectionStart, sel = a.value.slice(i, a.selectionEnd);
+        if (!sel) return;
+        const limpo = sel.replace(/\*\*|~~|==|%%|[*`$]/g, '');
+        inserirTexto(a, limpo);
+        a.setSelectionRange(i, i + limpo.length);
+      } },
+    ] },
+    { rotulo: 'Parágrafo', icone: '¶', filhos: [
+      { rotulo: 'Texto normal', acao: a => porLinha(a, semPrefixo) },
+      { separador: true },
+      { rotulo: 'Título 1', acao: a => prefixar(a, '# ') },
+      { rotulo: 'Título 2', acao: a => prefixar(a, '## ') },
+      { rotulo: 'Título 3', acao: a => prefixar(a, '### ') },
+      { separador: true },
+      { rotulo: 'Lista com marcadores', acao: a => prefixar(a, '- ') },
+      { rotulo: 'Lista numerada', acao: a => { let n = 0; porLinha(a, l => (++n) + '. ' + semPrefixo(l)); } },
+      { rotulo: 'Lista de tarefas', acao: a => prefixar(a, '- [ ] ') },
+      { rotulo: 'Citação', acao: a => prefixar(a, '> ') },
+    ] },
+    { rotulo: 'Inserir', icone: '＋', filhos: [
+      { rotulo: 'Nota de rodapé', icone: 'a1', acao: a => {
+        const n = (a.value.match(/\[\^(\d+)\]/g) || []).length + 1;
+        inserirTexto(a, '[^' + n + ']');
+        const fim = a.selectionStart;
+        const rodape = (a.value.endsWith('\n') ? '' : '\n') + '\n[^' + n + ']: ';
+        a.setSelectionRange(a.value.length, a.value.length);
+        inserirTexto(a, rodape);
+        a.setSelectionRange(fim, fim);
+      } },
+      { rotulo: 'Tabela', icone: '▦', acao: a => inserirBloco(a, TABELA) },
+      { rotulo: 'Destaque', icone: '❝', acao: a => inserirBloco(a, '> [!note]\n> ') },
+      { rotulo: 'Régua horizontal', icone: '—', acao: a => inserirBloco(a, '---\n') },
+      { separador: true },
+      { rotulo: 'Bloco de código', icone: '<>', acao: a => { inserirBloco(a, '```\n\n```\n'); const p = a.selectionStart - 5; a.setSelectionRange(p, p); } },
+      { rotulo: 'Equação em bloco', icone: 'Σ', acao: a => { inserirBloco(a, '$$\n\n$$\n'); const p = a.selectionStart - 4; a.setSelectionRange(p, p); } },
+    ] },
+    { separador: true },
+    { rotulo: 'Cortar', icone: '✂', ativo: temSelecao, acao: a => copiarSelecao(a, true) },
+    { rotulo: 'Copiar', icone: '⧉', ativo: temSelecao, acao: a => copiarSelecao(a, false) },
+    { rotulo: 'Colar', icone: '⎘', acao: colar },
+    { separador: true },
+    { rotulo: 'Selecionar tudo', icone: '⬚', acao: a => a.select() },
+  ];
+}
+let menuAberto = null;
+function fecharMenuContexto() {
+  if (!menuAberto) return;
+  menuAberto.remove();
+  menuAberto = null;
+  document.removeEventListener('pointerdown', aoClicarFora, true);
+  document.removeEventListener('keydown', aoTeclarNoMenu, true);
+}
+const aoClicarFora = e => { if (!menuAberto || !menuAberto.contains(e.target)) fecharMenuContexto(); };
+const aoTeclarNoMenu = e => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); fecharMenuContexto(); } };
+function montarNivel(itens, area) {
+  const nivel = document.createElement('div');
+  nivel.className = 'ctx-menu';
+  for (const item of itens) {
+    if (item.separador) { nivel.appendChild(Object.assign(document.createElement('div'), { className: 'ctx-sep' })); continue; }
+    const habilitado = item.ativo ? item.ativo(area) : true;
+    const linha = document.createElement('button');
+    linha.type = 'button';
+    linha.className = 'ctx-item' + (item.filhos ? ' tem-filhos' : '');
+    linha.disabled = !habilitado;
+    linha.innerHTML = '<span class="ctx-icone">' + escapeHtml(item.icone || '') + '</span><span class="ctx-rotulo">' + escapeHtml(item.rotulo) + '</span>' + (item.filhos ? '<span class="ctx-seta">›</span>' : '');
+    if (item.filhos) {
+      const sub = montarNivel(item.filhos, area);
+      sub.classList.add('ctx-sub');
+      linha.appendChild(sub);
+      // Abrir para a esquerda quando não couber à direita.
+      linha.addEventListener('mouseenter', () => {
+        sub.classList.remove('para-esquerda');
+        if (linha.getBoundingClientRect().right + sub.offsetWidth > window.innerWidth - 8) sub.classList.add('para-esquerda');
+      });
+    } else if (habilitado) {
+      linha.addEventListener('click', async () => {
+        fecharMenuContexto();
+        if (document.body.contains(area)) await item.acao(area);
+      });
+    }
+    nivel.appendChild(linha);
+  }
+  return nivel;
+}
+function abrirMenuContexto(evento, area) {
+  evento.preventDefault();
+  fecharMenuContexto();
+  const menu = montarNivel(menuDaNota(), area);
+  menu.style.visibility = 'hidden';
+  document.body.appendChild(menu);
+  const largura = menu.offsetWidth, altura = menu.offsetHeight;
+  menu.style.left = Math.max(8, Math.min(evento.clientX, window.innerWidth - largura - 8)) + 'px';
+  menu.style.top = Math.max(8, Math.min(evento.clientY, window.innerHeight - altura - 8)) + 'px';
+  menu.style.visibility = '';
+  menuAberto = menu;
+  document.addEventListener('pointerdown', aoClicarFora, true);
+  document.addEventListener('keydown', aoTeclarNoMenu, true);
 }
 async function acaoEditor(tipo){
   if(tipo==='salvar')return void await salvarNota();

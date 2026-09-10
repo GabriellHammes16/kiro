@@ -202,3 +202,22 @@ select:focus-visible, textarea:focus-visible, .tree-row:focus-visible {
 .ai-row { display:flex; align-items:center; gap:10px; font-size:14px; cursor:pointer; padding:5px 0; }
 .ai-row input { width:16px; height:16px; accent-color:var(--accent); cursor:pointer; }
 .modal h3 { font-size:13px; text-transform:uppercase; letter-spacing:.8px; color:var(--muted); margin:14px 0 2px; }
+
+/* Menu de contexto do corpo da nota. */
+.ctx-menu { position:fixed; z-index:20; min-width:216px; padding:6px; border-radius:11px;
+  background:var(--panel-raised); border:1px solid var(--line); box-shadow:0 18px 50px rgba(0,0,0,.55);
+  display:flex; flex-direction:column; gap:1px; }
+.ctx-item { display:flex; align-items:center; gap:10px; width:100%; position:relative;
+  padding:7px 9px; border:0; border-radius:7px; background:transparent; color:var(--ink);
+  font-size:13.5px; font-weight:500; text-align:left; }
+.ctx-item:hover:not(:disabled), .ctx-item:focus-visible:not(:disabled) { background:var(--accent-soft); color:#F2E6FF; }
+.ctx-item:disabled { color:#5a5a5a; cursor:default; }
+.ctx-icone { width:17px; flex:0 0 auto; text-align:center; color:var(--muted); font-size:12.5px; }
+.ctx-item:hover:not(:disabled) .ctx-icone { color:#C77DFF; }
+.ctx-rotulo { flex:1; white-space:nowrap; }
+.ctx-seta { color:var(--muted); font-size:14px; }
+.ctx-sep { height:1px; margin:5px 8px; background:var(--line); }
+/* Submenu: só aparece com o ponteiro sobre o item que o contém. */
+.ctx-sub { display:none; position:absolute; top:-7px; left:100%; margin-left:3px; }
+.ctx-sub.para-esquerda { left:auto; right:100%; margin:0 3px 0 0; }
+.ctx-item.tem-filhos:hover > .ctx-sub, .ctx-item.tem-filhos:focus-within > .ctx-sub { display:flex; }
