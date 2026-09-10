@@ -46,7 +46,7 @@ body.saving { cursor:progress; }
 @media (max-width:780px) { #save-status { left:0; } .sidebar { flex-wrap:wrap; } .sidebar-bottom { display:flex; flex-wrap:wrap; gap:8px; width:100%; } .sidebar-bottom p { display:none; } .quiet-button { padding:3px; } }
 :root { --bg:#0A0A0A; --panel:#141414; --panel-raised:#1A1A1A; --ink:#F2F2F2; --muted:#A3A3A3; --line:#2A2A2A; --accent:#9D4EDD; --accent-strong:#8A2BE2; --accent-soft:rgba(199,125,255,.16); --warning:#ffad85; --shadow:0 14px 40px rgba(0,0,0,.32); color-scheme:dark; }
 body { background:var(--bg); }
-.sidebar { background:#0E0E0E; border-color:var(--line); }
+.sidebar { background:var(--sidebar-bg,#0E0E0E); border-color:var(--line); }
 .brand { color:var(--ink); letter-spacing:1.7px; }
 .brand-logo { width:38px; height:38px; filter:drop-shadow(0 3px 10px rgba(157,78,221,.45)); }
 .brand-mark { color:var(--accent); }
@@ -60,7 +60,8 @@ body { background:var(--bg); }
 .nav-item.active span { color:#C77DFF; }
 .sidebar-bottom { border-color:var(--line); }
 .quiet-button { color:var(--muted); }.quiet-button:hover { color:#C77DFF; }.sidebar-bottom p { color:#777; }
-.content { background:radial-gradient(ellipse 65% 45% at 80% -5%,rgba(138,43,226,.08),transparent 65%); }
+.content { background-color:var(--content-bg,#0A0A0A); background-image:radial-gradient(ellipse 65% 45% at 80% -5%,rgba(138,43,226,.08),transparent 65%); }
+body { background:var(--content-bg,#0A0A0A); }
 .eyebrow { color:#C77DFF; }.subhead { color:var(--muted); }
 .primary { background:var(--accent); color:#fff; box-shadow:0 8px 18px rgba(138,43,226,.18); }
 .secondary { background:var(--panel-raised); border-color:var(--line); color:var(--ink); }
@@ -77,7 +78,7 @@ body { background:var(--bg); }
 .study-link { background:#171717; border-color:var(--line); color:var(--ink); }.study-link:hover { border-color:#9D4EDD; background:#1D1723; }
 .search,.field input,.field textarea,.field select,.add-link input { background:#101010; border-color:var(--line); color:var(--ink); }
 .search::placeholder,.field input::placeholder,.field textarea::placeholder,.add-link input::placeholder { color:#777; }
-.search:focus,.field input:focus,.field textarea:focus,.field select:focus,.add-link input:focus { border-color:#9D4EDD; box-shadow:0 0 0 3px rgba(157,78,221,.14); outline:none; }
+.search:focus,.field input:focus,.field textarea:focus,.field select:focus,.add-link input:focus { border-color:#555; box-shadow:none; outline:none; }
 .field label { color:#C8C8C8; }.note-card p,.study-card p { color:var(--muted); }.note-meta,.task-info,.small-muted,.study-card footer { color:var(--muted); }
 .modal-backdrop { background:rgba(0,0,0,.72); backdrop-filter:blur(4px); }.modal { background:var(--panel-raised); border:1px solid var(--line); box-shadow:0 24px 80px rgba(0,0,0,.62); }
 .link-row { border-color:var(--line); }
@@ -143,6 +144,8 @@ button:focus-visible, a:focus-visible, input:focus-visible,
 select:focus-visible, textarea:focus-visible, .tree-row:focus-visible {
   outline: 2px solid #C77DFF; outline-offset: 2px;
 }
+/* Escrever não precisa de moldura: o cursor já mostra onde o foco está. */
+.doc-title:focus, .doc-title:focus-visible, .doc-body:focus, .doc-body:focus-visible { outline: none; }
 
 /* Entrada da tela, só quando a view muda de fato. */
 @keyframes viewEnter { from { opacity:0; transform:translateY(9px); } to { opacity:1; transform:none; } }
@@ -190,7 +193,7 @@ select:focus-visible, textarea:focus-visible, .tree-row:focus-visible {
 .doc-bar, .doc-title, .doc-details, .doc-body, #connections { max-width:880px; }
 .doc-title { display:block; width:100%; background:transparent; border:0; border-bottom:1px solid transparent;
   color:var(--ink); font-size:32px; font-weight:750; letter-spacing:-1.1px; padding:2px 0 10px; outline:none; }
-.doc-title:focus { border-bottom-color:rgba(157,78,221,.45); }
+.doc-title:focus { border-bottom-color:var(--line); }
 .doc-title::placeholder { color:#4a4a4a; }
 .doc-details { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:16px; margin:8px 0 14px; display:grid; gap:12px; }
 .doc-body { display:block; width:100%; min-height:56vh; background:transparent; border:0; outline:none;
@@ -221,3 +224,22 @@ select:focus-visible, textarea:focus-visible, .tree-row:focus-visible {
 .ctx-sub { display:none; position:absolute; top:-7px; left:100%; margin-left:3px; }
 .ctx-sub.para-esquerda { left:auto; right:100%; margin:0 3px 0 0; }
 .ctx-item.tem-filhos:hover > .ctx-sub, .ctx-item.tem-filhos:focus-within > .ctx-sub { display:flex; }
+
+/* Área de código: leitura do que está entre cercas ``` no corpo da nota. */
+.code-panel { max-width:880px; }
+.code-panel h3 { font-size:13px; margin:16px 0 10px; }
+.code-area { margin:0 0 12px; border:1px solid var(--line); border-radius:11px; overflow:hidden; background:#101010; }
+.code-area figcaption { display:flex; align-items:center; justify-content:space-between; gap:10px;
+  padding:7px 9px 7px 13px; background:var(--panel-raised); border-bottom:1px solid var(--line); }
+.code-lang { color:var(--muted); font-size:11px; text-transform:uppercase; letter-spacing:1px; font-weight:700; }
+.code-copy { padding:4px 11px; font-size:12px; }
+.code-copy.copiado { border-color:#C77DFF; color:#F2E6FF; background:var(--accent-soft); }
+.code-area pre { margin:0; padding:14px; overflow-x:auto; }
+.code-area code { font-family:ui-monospace,Consolas,"Cascadia Mono",monospace; font-size:13px; line-height:1.65; color:#E6D9F5; white-space:pre; }
+
+/* Linhas da tela de configurações. */
+.cfg-row { display:flex; align-items:center; gap:10px; font-size:14px; cursor:pointer; padding:5px 0; }
+.cfg-row input { width:16px; height:16px; accent-color:var(--accent); cursor:pointer; }
+.cfg-cor { display:flex; align-items:center; justify-content:space-between; gap:12px; font-size:14px; padding:5px 0; }
+.cfg-cor input { width:52px; height:30px; padding:2px; border:1px solid var(--line); border-radius:7px; background:transparent; cursor:pointer; }
+.modal h4 { font-size:12px; text-transform:uppercase; letter-spacing:.8px; color:var(--muted); margin:12px 0 2px; }

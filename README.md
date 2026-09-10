@@ -69,7 +69,7 @@ desligável e sem enviar nada para a nuvem por conta própria. O aplicativo func
 normalmente sem nenhuma IA conectada.
 
 - Servidor MCP por stdio: `npm run mcp`. Não abre porta de rede.
-- Permissões na barra lateral, em **IA e integrações**. Excluir vem desligado.
+- Permissões na barra lateral, em **Configurações › IA e integrações**. Excluir vem desligado.
 - Registro de alterações em `.kuroi/audit.log`, dentro do cofre.
 
 Detalhes em [docs/agent-api.md](docs/agent-api.md) e [docs/mcp.md](docs/mcp.md).

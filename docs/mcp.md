@@ -157,7 +157,7 @@ permissões e a mesma auditoria da Agent API valem aqui.
 Vale saber:
 
 - **Excluir vem desligado por padrão.** `kuroi_delete_note` responde
-  `PERMISSION_DENIED` até você ligar em **IA e integrações** na barra lateral.
+  `PERMISSION_DENIED` até você ligar em **Configurações › IA e integrações**, na barra lateral.
 - **Desligar tudo** é uma caixa na mesma tela: com `enabled: false`, toda
   ferramenta responde `AGENT_DISABLED`.
 - **O agente só alcança o cofre.** Não existe ferramenta de arquivo genérico nem

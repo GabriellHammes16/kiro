@@ -139,8 +139,8 @@ Cada ferramenta declara **risco** e **permissão**.
 A porta de permissão fica no `AgentToolkit`, não na `KuroiAgentApi`. A interface
 gráfica usa a API direto e não é barrada: ali quem age é o próprio usuário.
 
-Configuração em `<cofre>/.kuroi/agent.json`, editável pela tela **IA e
-integrações** na barra lateral:
+Configuração em `<cofre>/.kuroi/agent.json`, editável pela tela **Configurações**,
+seção IA e integrações, na barra lateral:
 
 ```json
 {

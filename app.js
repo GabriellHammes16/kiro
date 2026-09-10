@@ -185,6 +185,7 @@ function renderEditor(){
 <input class="doc-title" id="doc-title" value="${escapeHtml(nota.title)}" placeholder="Sem título" aria-label="Título da nota" />
 <section class="doc-details" id="doc-details" hidden><div class="two-cols"><div class="field"><label for="doc-folder">Pasta</label><select id="doc-folder">${opcoes}</select></div><div class="field"><label for="doc-tags">Tags (separadas por vírgulas)</label><input id="doc-tags" value="${escapeHtml(nota.tags.join(', '))}" placeholder="ideias, estudos" /></div></div><div class="two-cols"><div class="field"><label for="doc-template">Modelo</label><select id="doc-template"><option value="">Escolher modelo…</option>${modelos}</select></div><div class="field"><label for="doc-link">Anexar link</label><div class="add-link"><input id="doc-link" placeholder="Cole um link de aula ou vídeo" /><button type="button" class="secondary" id="doc-link-add">Anexar</button></div></div></div><div class="links-list" id="doc-links"></div></section>
 <textarea class="doc-body" id="doc-body" placeholder="Comece a escrever. Cole links à vontade; [[Nome da nota]] conecta ideias e #tag marca a nota." aria-label="Conteúdo da nota">${escapeHtml(nota.body)}</textarea>
+<section class="code-panel" id="code-panel">${painelDeCodigo(nota.body)}</section>
 <section class="connections" id="connections">${connections(nota,nota.body)}</section>`;
 }
 function estadoDoc(){ const el=$('#doc-state'); if(el) el.textContent=editorDirty?'Não salvo':(editing?.id?'Salvo':'Nova nota'); }
@@ -197,23 +198,66 @@ function bindEditor(){
   const titulo=$('#doc-title'), corpo=$('#doc-body');
   const sujar=()=>{editorDirty=true;estadoDoc();};
   titulo.oninput=()=>{editing.title=titulo.value;sujar();};
-  corpo.oninput=()=>{editing.body=corpo.value;sujar();$('#connections').innerHTML=connections(editing,corpo.value);};
+  corpo.oninput=()=>{editing.body=corpo.value;sujar();$('#connections').innerHTML=connections(editing,corpo.value);$('#code-panel').innerHTML=painelDeCodigo(corpo.value);};
   $('#doc-folder').onchange=e=>{editing.folderId=e.target.value;sujar();};
   $('#doc-tags').oninput=e=>{editing.tags=e.target.value.split(',').map(t=>t.trim().replace(/^#/,'')).filter(Boolean);sujar();};
   $('#doc-template').onchange=e=>{
     if(!e.target.value)return;
     if(corpo.value&&!confirm('Substituir o texto desta nota pelo modelo?')){e.target.value='';return;}
-    corpo.value=templates[e.target.value].body;editing.body=corpo.value;sujar();$('#connections').innerHTML=connections(editing,corpo.value);
+    corpo.value=templates[e.target.value].body;editing.body=corpo.value;sujar();$('#connections').innerHTML=connections(editing,corpo.value);$('#code-panel').innerHTML=painelDeCodigo(corpo.value);
   };
   $('#doc-link-add').onclick=()=>{
     const campo=$('#doc-link'), valor=campo.value.trim();
     if(!Kuroi.safeUrl(valor)){alert('Informe um endereço http:// ou https:// válido.');return;}
     editing.links.push(valor);campo.value='';sujar();desenharLinksDoc();
   };
+  $('#code-panel').addEventListener('click', e => { const b = e.target.closest('.code-copy'); if (b) copiarBloco(b); });
   corpo.addEventListener('contextmenu', e => abrirMenuContexto(e, corpo));
   document.querySelectorAll('[data-editor]').forEach(b=>b.onclick=()=>acaoEditor(b.dataset.editor));
   desenharLinksDoc();estadoDoc();
   (editing.id?corpo:titulo).focus();
+}
+// ---- Blocos de código ----
+// O corpo continua sendo Markdown puro; estas funções só leem as cercas ```
+// e desenham um painel de leitura embaixo do editor, com botão de copiar.
+function areaDeCodigo(area) {
+  const v = area.value, i = area.selectionStart;
+  const sel = v.slice(i, area.selectionEnd);
+  const antes = i === 0 || v.slice(0, i).endsWith('\n\n') ? '' : v.slice(0, i).endsWith('\n') ? '\n' : '\n\n';
+  const miolo = sel ? (sel.endsWith('\n') ? sel : sel + '\n') : '\n';
+  inserirTexto(area, antes + '```\n' + miolo + '```\n');
+  // Com seleção, o cursor fica na cerca de abertura para nomear a linguagem.
+  // Sem seleção, fica na linha vazia de dentro, pronto para digitar o código.
+  const posicao = i + antes.length + (sel ? 3 : 4);
+  area.setSelectionRange(posicao, posicao);
+}
+function blocosDeCodigo(texto) {
+  const achados = [];
+  const cercas = /^```([^\n`]*)\n([\s\S]*?)^```/gm;
+  let achado;
+  while ((achado = cercas.exec(texto))) {
+    achados.push({ linguagem: achado[1].trim(), codigo: achado[2].replace(/\n$/, '') });
+  }
+  return achados;
+}
+function painelDeCodigo(texto) {
+  const blocos = blocosDeCodigo(texto);
+  if (!blocos.length) return '';
+  return `<h3>Blocos de código</h3>${blocos.map(bloco => `<figure class="code-area">
+    <figcaption><span class="code-lang">${escapeHtml(bloco.linguagem || 'texto')}</span><button type="button" class="secondary code-copy">Copiar</button></figcaption>
+    <pre><code>${escapeHtml(bloco.codigo)}</code></pre>
+  </figure>`).join('')}`;
+}
+async function copiarBloco(botao) {
+  const codigo = botao.closest('.code-area').querySelector('code').textContent;
+  try {
+    await navigator.clipboard.writeText(codigo);
+    botao.textContent = 'Copiado';
+    botao.classList.add('copiado');
+    setTimeout(() => { botao.textContent = 'Copiar'; botao.classList.remove('copiado'); }, 1400);
+  } catch {
+    status('O navegador não liberou a área de transferência.', true);
+  }
 }
 // ---- Menu de contexto do corpo da nota ----
 // O corpo é Markdown puro: cada item insere a marcação correspondente.
@@ -289,6 +333,7 @@ function menuDaNota() {
       { rotulo: 'Realce', icone: '▨', acao: a => envolver(a, '==') },
       { separador: true },
       { rotulo: 'Código', icone: '<>', acao: a => envolver(a, '`') },
+      { rotulo: 'Área de código', icone: '▤', acao: areaDeCodigo },
       { rotulo: 'Equação', icone: 'Σ', acao: a => envolver(a, '$') },
       { rotulo: 'Comentário', icone: '%', acao: a => envolver(a, '%%') },
       { separador: true },
@@ -435,41 +480,79 @@ async function showTrash(){
     });
   }catch(error){status(error.message,true);}
 }
+// ---- Aparência ----
+// Preferência de tela, guardada por instalação (localStorage), não no cofre:
+// é ajuste de máquina, não conteúdo que deva viajar junto com as notas.
+const APARENCIA_PADRAO = { sidebar: '#0E0E0E', content: '#0A0A0A' };
+function lerAparencia() {
+  try { return { ...APARENCIA_PADRAO, ...JSON.parse(localStorage.getItem('kuroi.aparencia') || '{}') }; }
+  catch { return { ...APARENCIA_PADRAO }; }
+}
+function aplicarAparencia(valores) {
+  const a = valores || lerAparencia();
+  document.documentElement.style.setProperty('--sidebar-bg', a.sidebar);
+  document.documentElement.style.setProperty('--content-bg', a.content);
+  return a;
+}
+function gravarAparencia(a) {
+  try { localStorage.setItem('kuroi.aparencia', JSON.stringify(a)); } catch { /* janela privada: só aplica na sessão */ }
+  aplicarAparencia(a);
+}
+const CAIXAS = [['read','Ler notas'],['create','Criar notas'],['update','Editar notas'],['delete','Excluir notas (vai para a lixeira)']];
 const agentApi = {
   load: () => window.cadernoDesktop ? window.cadernoDesktop.agentConfig() : api('agent-config'),
   save: parcial => window.cadernoDesktop ? window.cadernoDesktop.saveAgentConfig(parcial) : api('agent-config', parcial),
 };
-const CAIXAS = [['read','Ler notas'],['create','Criar notas'],['update','Editar notas'],['delete','Excluir notas (vai para a lixeira)']];
-// Configuração da camada de agentes. Não liga nem desliga IA nenhuma aqui dentro:
-// só define o que um agente conectado pode fazer com este cofre.
-async function showAgentSettings(){
-  if(busy||!loaded)return;
+// Aparência aplica na hora; as permissões de agente só no botão Salvar.
+async function showSettings() {
+  if (busy || !loaded) return;
   let conf;
-  try{ conf=await agentApi.load(); }catch(error){ status('Não foi possível ler a configuração de agentes: '+error.message,true); return; }
-  const caixa=(id,rotulo,marcado)=>`<label class="ai-row"><input type="checkbox" data-perm="${id}" ${marcado?'checked':''} /><span>${rotulo}</span></label>`;
-  modal('IA e integrações', `<div class="form">
+  try { conf = await agentApi.load(); }
+  catch (error) { status('Não foi possível ler a configuração de agentes: ' + error.message, true); return; }
+  const cores = lerAparencia();
+  const caixa = (id, rotulo, marcado) => `<label class="cfg-row"><input type="checkbox" data-perm="${id}" ${marcado ? 'checked' : ''} /><span>${rotulo}</span></label>`;
+  const cor = (id, rotulo, valor) => `<label class="cfg-cor"><span>${rotulo}</span><input type="color" data-cor="${id}" value="${valor}" /></label>`;
+  modal('Configurações', `<div class="form">
+    <h3>Aparência</h3>
+    ${cor('sidebar', 'Fundo da barra lateral', cores.sidebar)}
+    ${cor('content', 'Fundo da área de texto', cores.content)}
+    <div><button type="button" class="secondary" id="cor-padrao">Restaurar padrão</button></div>
+    <p class="small-muted">A cor muda na hora e vale para esta instalação do Kuroi.</p>
+    <h3>IA e integrações</h3>
     <p class="small-muted">Agentes externos falam com o Kuroi pela Agent API, sempre dentro deste cofre. O Kuroi não envia nada para a nuvem por conta própria.</p>
-    ${caixa('enabled','Permitir que agentes usem este cofre',conf.enabled)}
-    ${caixa('mcp','Servidor MCP habilitado',conf.mcp.enabled)}
-    <h3>Permissões do agente</h3>
-    ${CAIXAS.map(([id,rotulo])=>caixa(id,rotulo,conf.permissions[id])).join('')}
-    ${caixa('confirm','Pedir confirmação para ações destrutivas',conf.requireConfirmationForDestructive)}
-    <p class="small-muted" id="ai-path"></p>
-    <div class="form-actions"><button type="button" class="secondary" id="cancel">Fechar</button><button type="button" class="primary" id="ai-save">Salvar</button></div>
+    ${caixa('enabled', 'Permitir que agentes usem este cofre', conf.enabled)}
+    ${caixa('mcp', 'Servidor MCP habilitado', conf.mcp.enabled)}
+    <h4>Permissões do agente</h4>
+    ${CAIXAS.map(([id, rotulo]) => caixa(id, rotulo, conf.permissions[id])).join('')}
+    ${caixa('confirm', 'Pedir confirmação para ações destrutivas', conf.requireConfirmationForDestructive)}
+    <p class="small-muted">Guardado em .kuroi/agent.json, dentro do cofre.</p>
+    <div class="form-actions"><button type="button" class="secondary" id="cancel">Fechar</button><button type="button" class="primary" id="ai-save">Salvar permissões</button></div>
   </div>`);
-  $('#ai-path').textContent='Guardado em .kuroi/agent.json, dentro do cofre.';
-  $('#cancel').onclick=()=>closeModal(true);
-  $('#ai-save').onclick=async()=>{
-    const marcado=id=>document.querySelector(`[data-perm="${id}"]`).checked;
-    try{
+
+  const corAtual = () => ({
+    sidebar: document.querySelector('[data-cor="sidebar"]').value,
+    content: document.querySelector('[data-cor="content"]').value,
+  });
+  document.querySelectorAll('[data-cor]').forEach(campo => {
+    campo.oninput = () => gravarAparencia(corAtual());
+  });
+  $('#cor-padrao').onclick = () => {
+    gravarAparencia({ ...APARENCIA_PADRAO });
+    document.querySelector('[data-cor="sidebar"]').value = APARENCIA_PADRAO.sidebar;
+    document.querySelector('[data-cor="content"]').value = APARENCIA_PADRAO.content;
+  };
+  $('#cancel').onclick = () => closeModal(true);
+  $('#ai-save').onclick = async () => {
+    const marcado = id => document.querySelector(`[data-perm="${id}"]`).checked;
+    try {
       await agentApi.save({
-        enabled:marcado('enabled'),
-        mcp:{enabled:marcado('mcp')},
-        permissions:Object.fromEntries(CAIXAS.map(([id])=>[id,marcado(id)])),
-        requireConfirmationForDestructive:marcado('confirm'),
+        enabled: marcado('enabled'),
+        mcp: { enabled: marcado('mcp') },
+        permissions: Object.fromEntries(CAIXAS.map(([id]) => [id, marcado(id)])),
+        requireConfirmationForDestructive: marcado('confirm'),
       });
-      closeModal(true); status('Configuração de agentes salva');
-    }catch(error){ status('Não foi possível salvar: '+error.message,true); }
+      closeModal(true); status('Configurações salvas');
+    } catch (error) { status('Não foi possível salvar: ' + error.message, true); }
   };
 }
 document.addEventListener('click',e=>{
@@ -482,7 +565,7 @@ $('#new-note').onclick=()=>{if(loaded&&!busy&&!failed)abrirNota(notaVazia());};
 $('#daily-note').onclick=()=>extraAction('daily');
 $('#reload-vault').onclick=()=>reload(true);
 $('#trash').onclick=showTrash;
-$('#ai-settings').onclick=showAgentSettings;
+$('#settings').onclick=showSettings;
 $('#open-vault').onclick=()=>window.cadernoDesktop?window.cadernoDesktop.openVault():alert(`Seu cofre está em:\n${state.vaultPath||'vault/'}\n\nAbra essa pasta pelo Explorador de Arquivos.`);
 $('#choose-vault').hidden=!window.cadernoDesktop;
 $('#choose-vault').onclick=async()=>{
@@ -511,4 +594,5 @@ document.addEventListener('keydown',e=>{
 window.addEventListener('beforeunload',e=>{if(busy||failed||modalDirty||editorDirty){e.preventDefault();e.returnValue='';}});
 window.addEventListener('focus',()=>reload());
 setInterval(()=>{if(lastDay!==today()){lastDay=today();if(loaded&&!busy)render();}reload();},5000);
+aplicarAparencia();
 reload();
