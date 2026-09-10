@@ -1,6 +1,6 @@
 {
   "name": "kuroi",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "private": true,
   "main": "electron/main.cjs",
   "scripts": {
@@ -34,7 +34,14 @@
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
       "artifactName": "KUROI-Setup-${version}.${ext}"
-    }
+    },
+    "asarUnpack": [
+      "mcp/**",
+      "agent/**",
+      "vault.cjs",
+      "domain.js",
+      "node_modules/**"
+    ]
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.0",

@@ -29,6 +29,31 @@ O servidor escreve `Kuroi MCP ativo. Cofre: <caminho>` em **stderr** e fica
 aguardando. Rodar direto no terminal é normal: um cliente MCP é quem conversa
 com ele pela entrada padrão.
 
+### A partir do aplicativo instalado
+
+Os arquivos do Kuroi ficam empacotados em `app.asar`, e um `node` externo não
+consegue executar nada de dentro de um asar. Por isso a camada de agentes é
+desempacotada na instalação, e o caminho a usar é o de `app.asar.unpacked`:
+
+```
+%LOCALAPPDATA%\Programs\KUROI\resources\app.asar.unpacked\mcp\server.mjs
+```
+
+```json
+{
+  "mcpServers": {
+    "kuroi": {
+      "command": "node",
+      "args": ["C:/Users/voce/AppData/Local/Programs/KUROI/resources/app.asar.unpacked/mcp/server.mjs"]
+    }
+  }
+}
+```
+
+O caminho muda se você escolheu outra pasta durante a instalação. É preciso ter
+o Node instalado na máquina: o Kuroi não expõe o Node embutido do Electron para
+processos externos.
+
 ## Transporte
 
 **stdio apenas.** O servidor não abre porta de rede, não escuta em `0.0.0.0` e
