@@ -23,8 +23,10 @@ function updateCount() { const open = state.tasks.filter(t => !t.done).length; d
 function getNote(id) { return state.notes.find(n => n.id === id); }
 function render() {
   document.querySelectorAll(".nav-item").forEach(x => x.classList.toggle("active", x.dataset.view === currentView));
-  const views = { today: renderToday, notes: renderNotes, tasks: renderTasks, studies: renderFolders, editor: renderEditor };
+  const views = { today: renderToday, notes: renderNotes, tasks: renderTasks, studies: renderCofre, graph: renderGraph };
+  document.querySelector(".app-shell").classList.toggle("cofre-aberto", currentView === "studies");
   const app = document.querySelector("#app");
+  cancelAnimationFrame(grafoRaf); grafoRaf = null;
   app.innerHTML = views[currentView]();
   // Animar só na troca de tela: um redesenho comum não deve piscar.
   if (renderedView !== currentView) { app.classList.remove("view-enter"); void app.offsetWidth; app.classList.add("view-enter"); renderedView = currentView; }
@@ -71,10 +73,31 @@ function toggleFolder(id) {
   clearTimeout(caixa._t);
   caixa._t = setTimeout(() => { if (node.classList.contains("open")) caixa.style.height = "auto"; }, 280);
 }
-function renderFolders() {
-  if (expanded === null) expanded = new Set(state.folders.map(f=>f.id));
-  const corpo = treeMarkup("",0) || '<div class="empty">Crie uma pasta para organizar seus estudos.</div>';
-  return `${head("Aprendizado", "Pastas de estudo", "A árvore do seu cofre. Clique numa pasta para abrir ou fechar.", '<button class="primary" id="add-folder">＋ Nova pasta</button>')}<section class="card tree-panel"><div class="tree-head"><span class="small-muted">${state.folders.length} pasta${state.folders.length===1?"":"s"} · ${state.notes.length} nota${state.notes.length===1?"":"s"}</span><span class="tree-head-actions"><button class="secondary" id="expand-all">Expandir tudo</button><button class="secondary" id="collapse-all">Recolher tudo</button></span></div><div class="tree">${corpo}</div></section>`;
+// Modo cofre: árvore à esquerda, nota à direita, sem a navegação principal.
+// A casinha devolve o usuário à tela inicial, onde a navegação completa vive.
+function renderCofre() {
+  if (expanded === null) expanded = new Set(state.folders.map(f => f.id));
+  const arvore = treeMarkup('', 0) || '<div class="empty">Crie uma pasta para começar.</div>';
+  const direita = editing ? renderEditor() : `<div class="cofre-vazio">
+    <p>Escolha uma nota na árvore ao lado.</p>
+    <button class="secondary" id="add-note-cofre">＋ Nova nota</button>
+  </div>`;
+  return `<div class="cofre">
+  <aside class="cofre-lateral">
+    <header class="cofre-topo">
+      <button class="icon-button" data-cofre="casa" title="Voltar ao início" aria-label="Voltar ao início">⌂</button>
+      <span class="cofre-nome">Cofre</span>
+      <span class="cofre-acoes">
+        <button class="icon-button" id="add-folder" title="Nova pasta">▣</button>
+        <button class="icon-button" id="expand-all" title="Expandir tudo">⌄</button>
+        <button class="icon-button" id="collapse-all" title="Recolher tudo">⌃</button>
+      </span>
+    </header>
+    <div class="tree">${arvore}</div>
+    <footer class="cofre-rodape"><span class="small-muted">${state.folders.length} pasta${state.folders.length === 1 ? '' : 's'} · ${state.notes.length} nota${state.notes.length === 1 ? '' : 's'}</span></footer>
+  </aside>
+  <section class="cofre-nota">${direita}</section>
+</div>`;
 }
 function bindView() {
   document.querySelector('#add-note')?.addEventListener('click',()=>abrirNota(notaVazia()));
@@ -88,7 +111,13 @@ function bindView() {
     const q=Kuroi.normalize(e.target.value);
     document.querySelector('#notes-grid').innerHTML=notesMarkup(state.notes.filter(n=>q.startsWith('#') ? Kuroi.tags(n).some(t=>Kuroi.normalize(t).includes(q.slice(1))) : Kuroi.normalize(n.title+' '+n.body+' '+Kuroi.tags(n).join(' ')).includes(q)));
   });
-  if(currentView==="editor"){bindEditor();return;}
+  if(currentView==="graph"){bindGraph();return;}
+  if(currentView==="studies"){
+    document.querySelector('[data-cofre="casa"]')?.addEventListener('click',()=>irPara('today'));
+    document.querySelector('#add-note-cofre')?.addEventListener('click',()=>abrirNota(notaVazia()));
+    if(editing)bindEditor();
+    return;
+  }
   enhanceView();
 }
 function action(type,id) {
@@ -125,7 +154,7 @@ function folderModal(folder={title:"",description:"",parentId:""}) { modal(folde
   save();closeModal(true);currentView="studies";render();}; }
 let busy=false, failed=false, loaded=false, modalDirty=false, lastDay=today();
 // null = ainda não semeado; na primeira exibição a árvore abre inteira.
-let expanded=null, renderedView=null, editing=null, editorDirty=false;
+let expanded=null, renderedView=null, editing=null, editorDirty=false, grafoRaf=null;
 const notaVazia = (extra={}) => ({title:"",body:"",links:[],tags:[],folderId:"",...extra});
 const $ = selector => document.querySelector(selector);
 const templates={
@@ -162,17 +191,13 @@ function enhanceView(){
     state.notes.unshift({id:uid(),title:body.slice(0,80),body,links:[],tags:['inbox'],updatedAt:Date.now(),folderId:''});await save();
   };
 }
-function connections(note,body){
-  const links=Kuroi.wikiLinks(body).map(link=>{const target=Kuroi.findLinkedNote(state.notes,link.target);return extraButton(target?'open-connection':'create-connection',escapeHtml(link.label)+(target?'':' ＋'),target?.id||link.target,'tag');}).join('');
-  const backlinks=state.notes.filter(n=>n.id!==note.id&&Kuroi.wikiLinks(n.body).some(link=>note.id ? Kuroi.findLinkedNote(state.notes,link.target)?.id===note.id : Kuroi.normalize(link.target)===Kuroi.normalize(note.title)));
-  return `<h3>Links nesta nota</h3><div class="tag-list">${links||'<span class="small-muted">Escreva [[Nome da nota]] para conectar suas ideias.</span>'}</div><h3>Notas que apontam para cá</h3><div class="tag-list">${backlinks.map(n=>extraButton('open-connection',escapeHtml(n.title),n.id,'tag')).join('')||'<span class="small-muted">Ainda não há backlinks.</span>'}</div>`;
-}
 // ---- Editor de documento: a nota ocupa a página inteira, como um processador de texto. ----
 async function abrirNota(nota){
-  if(currentView==='editor'&&editorDirty&&!await salvarNota())return;
+  if(editing&&editorDirty&&!await salvarNota())return;
   editing={...nota,tags:[...(nota.tags||[])],links:[...(nota.links||[])]};
-  editorDirty=false;currentView='editor';render();
+  editorDirty=false;currentView='studies';render();
 }
+async function irPara(destino){ if(editing) return void await sairDoEditor(destino); currentView=destino; render(); }
 async function sairDoEditor(destino){
   if(editorDirty&&!await salvarNota())return false;
   editing=null;currentView=destino;render();return true;
@@ -181,12 +206,11 @@ function renderEditor(){
   const nota=editing, pasta=state.folders.find(f=>f.id===nota.folderId);
   const opcoes=`<option value="">Raiz do cofre</option>`+state.folders.slice().sort(byTitle).map(f=>`<option value="${f.id}" ${f.id===nota.folderId?'selected':''}>${escapeHtml(f.path||f.title)}</option>`).join('');
   const modelos=Object.entries(templates).map(([k,t])=>`<option value="${k}">${escapeHtml(t.title)}</option>`).join('');
-  return `<header class="doc-bar"><div class="crumbs"><button class="linklike" data-editor="voltar">▣ Pastas</button><span>/</span><span>${pasta?escapeHtml(pasta.path||pasta.title):'Raiz do cofre'}</span></div><div class="doc-actions"><span class="small-muted" id="doc-state"></span><button class="secondary" data-editor="detalhes">Detalhes</button>${nota.id?'<button class="secondary" data-editor="lixeira">Mover para lixeira</button>':''}<button class="primary" data-editor="salvar">Salvar</button></div></header>
+  return `<header class="doc-bar"><div class="crumbs"><span>${pasta?escapeHtml(pasta.path||pasta.title):'Raiz do cofre'}</span><span>/</span><span class="crumb-atual">${escapeHtml(nota.title||'Sem título')}</span></div><div class="doc-actions"><span class="small-muted" id="doc-state"></span><button class="secondary" data-editor="detalhes">Detalhes</button><button class="secondary" data-editor="fechar">Fechar</button>${nota.id?'<button class="secondary" data-editor="lixeira">Mover para lixeira</button>':''}<button class="primary" data-editor="salvar">Salvar</button></div></header>
 <input class="doc-title" id="doc-title" value="${escapeHtml(nota.title)}" placeholder="Sem título" aria-label="Título da nota" />
 <section class="doc-details" id="doc-details" hidden><div class="two-cols"><div class="field"><label for="doc-folder">Pasta</label><select id="doc-folder">${opcoes}</select></div><div class="field"><label for="doc-tags">Tags (separadas por vírgulas)</label><input id="doc-tags" value="${escapeHtml(nota.tags.join(', '))}" placeholder="ideias, estudos" /></div></div><div class="two-cols"><div class="field"><label for="doc-template">Modelo</label><select id="doc-template"><option value="">Escolher modelo…</option>${modelos}</select></div><div class="field"><label for="doc-link">Anexar link</label><div class="add-link"><input id="doc-link" placeholder="Cole um link de aula ou vídeo" /><button type="button" class="secondary" id="doc-link-add">Anexar</button></div></div></div><div class="links-list" id="doc-links"></div></section>
 <textarea class="doc-body" id="doc-body" placeholder="Comece a escrever. Cole links à vontade; [[Nome da nota]] conecta ideias e #tag marca a nota." aria-label="Conteúdo da nota">${escapeHtml(nota.body)}</textarea>
-<section class="code-panel" id="code-panel">${painelDeCodigo(nota.body)}</section>
-<section class="connections" id="connections">${connections(nota,nota.body)}</section>`;
+<section class="code-panel" id="code-panel">${painelDeCodigo(nota.body)}</section>`;
 }
 function estadoDoc(){ const el=$('#doc-state'); if(el) el.textContent=editorDirty?'Não salvo':(editing?.id?'Salvo':'Nova nota'); }
 function desenharLinksDoc(){
@@ -198,13 +222,13 @@ function bindEditor(){
   const titulo=$('#doc-title'), corpo=$('#doc-body');
   const sujar=()=>{editorDirty=true;estadoDoc();};
   titulo.oninput=()=>{editing.title=titulo.value;sujar();};
-  corpo.oninput=()=>{editing.body=corpo.value;sujar();$('#connections').innerHTML=connections(editing,corpo.value);$('#code-panel').innerHTML=painelDeCodigo(corpo.value);};
+  corpo.oninput=()=>{editing.body=corpo.value;sujar();$('#code-panel').innerHTML=painelDeCodigo(corpo.value);};
   $('#doc-folder').onchange=e=>{editing.folderId=e.target.value;sujar();};
   $('#doc-tags').oninput=e=>{editing.tags=e.target.value.split(',').map(t=>t.trim().replace(/^#/,'')).filter(Boolean);sujar();};
   $('#doc-template').onchange=e=>{
     if(!e.target.value)return;
     if(corpo.value&&!confirm('Substituir o texto desta nota pelo modelo?')){e.target.value='';return;}
-    corpo.value=templates[e.target.value].body;editing.body=corpo.value;sujar();$('#connections').innerHTML=connections(editing,corpo.value);$('#code-panel').innerHTML=painelDeCodigo(corpo.value);
+    corpo.value=templates[e.target.value].body;editing.body=corpo.value;sujar();$('#code-panel').innerHTML=painelDeCodigo(corpo.value);
   };
   $('#doc-link-add').onclick=()=>{
     const campo=$('#doc-link'), valor=campo.value.trim();
@@ -215,8 +239,227 @@ function bindEditor(){
   corpo.addEventListener('contextmenu', e => abrirMenuContexto(e, corpo));
   document.querySelectorAll('[data-editor]').forEach(b=>b.onclick=()=>acaoEditor(b.dataset.editor));
   desenharLinksDoc();estadoDoc();
-  (editing.id?corpo:titulo).focus();
+  // preventScroll: sem isso, abrir a nota rola o painel e esconde a barra do topo.
+  (editing.id?corpo:titulo).focus({ preventScroll: true });
+  $('.cofre-nota')?.scrollTo(0, 0);
 }
+// ---- Grafo de conexões ----
+// As ligações são derivadas do texto, como no resto do Kuroi: não há índice a
+// manter. Simulação de forças escrita à mão porque a CSP é script-src 'self':
+// nada de biblioteca por CDN, e o app não tem etapa de build.
+const REPULSAO = 5200, MOLA = 0.018, COMPRIMENTO = 95, GRAVIDADE = 0.006, AMORTECIMENTO = 0.86, MAXV = 12;
+
+function grafoDados() {
+  const nos = new Map();
+  const arestas = [];
+  for (const nota of state.notes) {
+    nos.set(nota.id, { id: nota.id, rotulo: nota.title || 'Sem título', existe: true, grau: 0 });
+  }
+  for (const nota of state.notes) {
+    const vistos = new Set();
+    for (const link of Kuroi.wikiLinks(nota.body)) {
+      const alvo = Kuroi.findLinkedNote(state.notes, link.target);
+      const chave = alvo ? alvo.id : `fantasma:${Kuroi.pathKey(link.target)}`;
+      if (chave === nota.id || vistos.has(chave)) continue;
+      vistos.add(chave);
+      // Link para nota inexistente vira nó fantasma: mostra o que você pretendia criar.
+      if (!nos.has(chave)) nos.set(chave, { id: chave, rotulo: link.target, existe: false, grau: 0 });
+      arestas.push({ de: nota.id, para: chave });
+      nos.get(nota.id).grau++;
+      nos.get(chave).grau++;
+    }
+  }
+  return { nos: [...nos.values()], arestas };
+}
+
+function renderGraph() {
+  const { nos, arestas } = grafoDados();
+  const soltas = nos.filter(n => n.existe && !n.grau).length;
+  const fantasmas = nos.filter(n => !n.existe).length;
+  const resumo = `${nos.filter(n => n.existe).length} nota${nos.filter(n => n.existe).length === 1 ? '' : 's'} · ${arestas.length} ligaç${arestas.length === 1 ? 'ão' : 'ões'}`
+    + (soltas ? ` · ${soltas} sem conexão` : '')
+    + (fantasmas ? ` · ${fantasmas} ainda não criada${fantasmas === 1 ? '' : 's'}` : '');
+  const corpo = arestas.length || nos.length
+    ? `<div class="graph-wrap" id="graph-wrap"><svg id="graph-svg" role="img" aria-label="Grafo de conexões entre as notas"></svg></div>`
+    : '<div class="empty">Escreva [[Nome da nota]] em alguma nota para as ligações aparecerem aqui.</div>';
+  return `${head('Conhecimento', 'Grafo', 'Como suas notas se ligam. Clique num ponto para abrir a nota.',
+    '<button class="secondary" id="graph-redo">Reorganizar</button>')}
+<section class="card graph-panel"><div class="graph-head"><span class="small-muted">${resumo}</span></div>${corpo}</section>`;
+}
+
+function bindGraph() {
+  const area = $('#graph-wrap');
+  if (!area) return;
+  const svg = $('#graph-svg');
+  const { nos, arestas } = grafoDados();
+  if (!nos.length) return;
+
+  const largura = area.clientWidth || 800, altura = area.clientHeight || 520;
+  const raio = no => (no.existe ? 6 : 4.5) + Math.min(no.grau, 9) * 1.1;
+  const porId = new Map(nos.map(n => [n.id, n]));
+  const ligacoes = arestas.map(a => ({ a: porId.get(a.de), b: porId.get(a.para) })).filter(l => l.a && l.b);
+  const vizinhos = new Map(nos.map(n => [n.id, new Set()]));
+  for (const l of ligacoes) { vizinhos.get(l.a.id).add(l.b.id); vizinhos.get(l.b.id).add(l.a.id); }
+
+  // Posição inicial em círculo: evita que tudo comece sobreposto no centro.
+  nos.forEach((no, i) => {
+    const angulo = (i / nos.length) * Math.PI * 2;
+    const r = Math.min(largura, altura) * 0.32;
+    no.x = largura / 2 + Math.cos(angulo) * r;
+    no.y = altura / 2 + Math.sin(angulo) * r;
+    no.vx = 0; no.vy = 0;
+  });
+
+  const ns = 'http://www.w3.org/2000/svg';
+  svg.setAttribute('viewBox', `0 0 ${largura} ${altura}`);
+  svg.innerHTML = '';
+  const camera = document.createElementNS(ns, 'g');
+  svg.appendChild(camera);
+  const grupoArestas = document.createElementNS(ns, 'g');
+  const grupoNos = document.createElementNS(ns, 'g');
+  camera.appendChild(grupoArestas);
+  camera.appendChild(grupoNos);
+
+  for (const l of ligacoes) {
+    l.el = document.createElementNS(ns, 'line');
+    l.el.setAttribute('class', 'graph-edge');
+    grupoArestas.appendChild(l.el);
+  }
+  for (const no of nos) {
+    no.el = document.createElementNS(ns, 'g');
+    no.el.setAttribute('class', `graph-node${no.existe ? '' : ' fantasma'}`);
+    const circulo = document.createElementNS(ns, 'circle');
+    circulo.setAttribute('r', raio(no));
+    const texto = document.createElementNS(ns, 'text');
+    texto.setAttribute('y', raio(no) + 13);
+    texto.textContent = no.rotulo.length > 26 ? `${no.rotulo.slice(0, 25)}…` : no.rotulo;
+    no.el.append(circulo, texto);
+    if (no.existe) no.el.addEventListener('click', () => { if (!arrastou) abrirNota(getNote(no.id)); });
+    no.el.addEventListener('pointerenter', () => destacar(no.id));
+    no.el.addEventListener('pointerleave', () => destacar(null));
+    grupoNos.appendChild(no.el);
+  }
+
+  function destacar(id) {
+    for (const no of nos) {
+      no.el.classList.toggle('apagado', Boolean(id) && no.id !== id && !vizinhos.get(id).has(no.id));
+    }
+    for (const l of ligacoes) {
+      l.el.classList.toggle('aceso', Boolean(id) && (l.a.id === id || l.b.id === id));
+      l.el.classList.toggle('apagado', Boolean(id) && l.a.id !== id && l.b.id !== id);
+    }
+  }
+
+  function passo() {
+    for (let i = 0; i < nos.length; i++) {
+      for (let j = i + 1; j < nos.length; j++) {
+        const a = nos[i], b = nos[j];
+        let dx = b.x - a.x, dy = b.y - a.y, d2 = dx * dx + dy * dy;
+        if (d2 < 1) { dx = Math.random() - 0.5; dy = Math.random() - 0.5; d2 = 1; }
+        const d = Math.sqrt(d2), f = REPULSAO / d2;
+        a.vx -= f * dx / d; a.vy -= f * dy / d;
+        b.vx += f * dx / d; b.vy += f * dy / d;
+      }
+    }
+    for (const l of ligacoes) {
+      const dx = l.b.x - l.a.x, dy = l.b.y - l.a.y, d = Math.hypot(dx, dy) || 1;
+      const f = (d - COMPRIMENTO) * MOLA;
+      l.a.vx += f * dx / d; l.a.vy += f * dy / d;
+      l.b.vx -= f * dx / d; l.b.vy -= f * dy / d;
+    }
+    let energia = 0;
+    for (const no of nos) {
+      no.vx = (no.vx + (largura / 2 - no.x) * GRAVIDADE) * AMORTECIMENTO;
+      no.vy = (no.vy + (altura / 2 - no.y) * GRAVIDADE) * AMORTECIMENTO;
+      const v = Math.hypot(no.vx, no.vy);
+      if (v > MAXV) { no.vx = no.vx / v * MAXV; no.vy = no.vy / v * MAXV; }
+      if (no !== arrastando) { no.x += no.vx; no.y += no.vy; }
+      energia += v;
+    }
+    return energia / nos.length;
+  }
+
+  function desenhar() {
+    for (const l of ligacoes) {
+      l.el.setAttribute('x1', l.a.x); l.el.setAttribute('y1', l.a.y);
+      l.el.setAttribute('x2', l.b.x); l.el.setAttribute('y2', l.b.y);
+    }
+    for (const no of nos) no.el.setAttribute('transform', `translate(${no.x} ${no.y})`);
+  }
+
+  const semMovimento = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  let quadros = 0;
+  function animar() {
+    const energia = passo();
+    desenhar();
+    if (++quadros < 600 && energia > 0.12) grafoRaf = requestAnimationFrame(animar);
+    else grafoRaf = null;
+  }
+  function comecar() {
+    cancelAnimationFrame(grafoRaf);
+    quadros = 0;
+    if (semMovimento) { for (let i = 0; i < 400; i++) passo(); desenhar(); }
+    else animar();
+  }
+
+  // Câmera: arrastar o fundo move, roda do mouse aproxima.
+  let escala = 1, deslocX = 0, deslocY = 0;
+  const aplicarCamera = () => camera.setAttribute('transform', `translate(${deslocX} ${deslocY}) scale(${escala})`);
+  let arrastando = null, arrastou = false, ultimo = null;
+  svg.addEventListener('pointerdown', evento => {
+    arrastou = false;
+    ultimo = { x: evento.clientX, y: evento.clientY };
+    const alvo = evento.target.closest('.graph-node');
+    arrastando = alvo ? nos.find(n => n.el === alvo) : null;
+    svg.setPointerCapture(evento.pointerId);
+  });
+  svg.addEventListener('pointermove', evento => {
+    if (!ultimo) return;
+    const dx = evento.clientX - ultimo.x, dy = evento.clientY - ultimo.y;
+    if (Math.abs(dx) > 2 || Math.abs(dy) > 2) arrastou = true;
+    ultimo = { x: evento.clientX, y: evento.clientY };
+    const proporcao = largura / (svg.clientWidth || largura);
+    if (arrastando) {
+      arrastando.x += dx * proporcao / escala;
+      arrastando.y += dy * proporcao / escala;
+      if (!grafoRaf && !semMovimento) animar(); else desenhar();
+    } else {
+      deslocX += dx * proporcao; deslocY += dy * proporcao;
+      aplicarCamera();
+    }
+  });
+  const soltar = evento => { arrastando = null; ultimo = null; try { svg.releasePointerCapture(evento.pointerId); } catch { /* já solto */ } };
+  svg.addEventListener('pointerup', soltar);
+  svg.addEventListener('pointercancel', soltar);
+  svg.addEventListener('wheel', evento => {
+    evento.preventDefault();
+    const antes = escala;
+    escala = Math.max(0.3, Math.min(3, escala * (evento.deltaY < 0 ? 1.12 : 0.89)));
+    // Mantém o ponto sob o cursor parado durante o zoom.
+    const caixa = svg.getBoundingClientRect();
+    const px = (evento.clientX - caixa.left) * (largura / caixa.width);
+    const py = (evento.clientY - caixa.top) * (altura / caixa.height);
+    deslocX = px - (px - deslocX) * (escala / antes);
+    deslocY = py - (py - deslocY) * (escala / antes);
+    aplicarCamera();
+  }, { passive: false });
+
+  $('#graph-redo')?.addEventListener('click', () => {
+    escala = 1; deslocX = 0; deslocY = 0; aplicarCamera();
+    nos.forEach((no, i) => {
+      const angulo = (i / nos.length) * Math.PI * 2 + Math.random() * 0.4;
+      const r = Math.min(largura, altura) * 0.32;
+      no.x = largura / 2 + Math.cos(angulo) * r;
+      no.y = altura / 2 + Math.sin(angulo) * r;
+      no.vx = 0; no.vy = 0;
+    });
+    comecar();
+  });
+
+  aplicarCamera();
+  comecar();
+}
+
 // ---- Blocos de código ----
 // O corpo continua sendo Markdown puro; estas funções só leem as cercas ```
 // e desenham um painel de leitura embaixo do editor, com botão de copiar.
@@ -438,7 +681,7 @@ function abrirMenuContexto(evento, area) {
 }
 async function acaoEditor(tipo){
   if(tipo==='salvar')return void await salvarNota();
-  if(tipo==='voltar')return void await sairDoEditor('studies');
+  if(tipo==='fechar'){ if(editorDirty && !await salvarNota()) return; editing=null; render(); return; }
   if(tipo==='detalhes'){const d=$('#doc-details');d.hidden=!d.hidden;return;}
   if(tipo==='lixeira'){
     if(busy||failed||!loaded||!confirm(`Mover "${editing.title}" para a lixeira?`))return;
@@ -483,10 +726,17 @@ async function showTrash(){
 // ---- Aparência ----
 // Preferência de tela, guardada por instalação (localStorage), não no cofre:
 // é ajuste de máquina, não conteúdo que deva viajar junto com as notas.
-const APARENCIA_PADRAO = { sidebar: '#0E0E0E', content: '#0A0A0A' };
+const APARENCIA_PADRAO = { sidebar: '#1A1A20', content: '#141418' };
+const APARENCIA_ANTIGA = { sidebar: '#0E0E0E', content: '#0A0A0A' };
 function lerAparencia() {
-  try { return { ...APARENCIA_PADRAO, ...JSON.parse(localStorage.getItem('kuroi.aparencia') || '{}') }; }
-  catch { return { ...APARENCIA_PADRAO }; }
+  try {
+    const salvo = JSON.parse(localStorage.getItem('kuroi.aparencia') || '{}');
+    // Quem nunca trocou a cor recebe o padrão novo; escolha própria é respeitada.
+    for (const chave of ['sidebar', 'content']) {
+      if (typeof salvo[chave] === 'string' && salvo[chave].toLowerCase() === APARENCIA_ANTIGA[chave].toLowerCase()) delete salvo[chave];
+    }
+    return { ...APARENCIA_PADRAO, ...salvo };
+  } catch { return { ...APARENCIA_PADRAO }; }
 }
 function aplicarAparencia(valores) {
   const a = valores || lerAparencia();
@@ -558,9 +808,9 @@ async function showSettings() {
 document.addEventListener('click',e=>{
   const extra=e.target.closest('[data-extra]');if(extra){e.preventDefault();extraAction(extra.dataset.extra,extra.dataset.id);return;}
   const el=e.target.closest('[data-action]');if(el){e.preventDefault();action(el.dataset.action,el.dataset.id);return;}
-  const go=e.target.closest('[data-go]');if(go){if(currentView==='editor')sairDoEditor(go.dataset.go);else{currentView=go.dataset.go;render();}}
+  const go=e.target.closest('[data-go]');if(go){irPara(go.dataset.go);}
 });
-document.querySelectorAll('.nav-item').forEach(b=>b.onclick=()=>{if(!loaded)return;if(currentView==='editor')sairDoEditor(b.dataset.view);else{currentView=b.dataset.view;render();}});
+document.querySelectorAll('.nav-item').forEach(b=>b.onclick=()=>{if(loaded)irPara(b.dataset.view);});
 $('#new-note').onclick=()=>{if(loaded&&!busy&&!failed)abrirNota(notaVazia());};
 $('#daily-note').onclick=()=>extraAction('daily');
 $('#reload-vault').onclick=()=>reload(true);
@@ -589,7 +839,7 @@ $('#import-data').onchange=async e=>{
 document.addEventListener('keydown',e=>{
   if(e.key==='Escape')closeModal();
   if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='n'){e.preventDefault();if(loaded&&!failed&&!busy&&!$('#modal-root').firstChild)abrirNota(notaVazia());}
-  if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='s'&&currentView==='editor'){e.preventDefault();salvarNota();}
+  if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='s'&&editing){e.preventDefault();salvarNota();}
 });
 window.addEventListener('beforeunload',e=>{if(busy||failed||modalDirty||editorDirty){e.preventDefault();e.returnValue='';}});
 window.addEventListener('focus',()=>reload());
