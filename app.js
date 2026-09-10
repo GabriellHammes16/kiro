@@ -154,7 +154,7 @@ function folderModal(folder={title:"",description:"",parentId:""}) { modal(folde
   save();closeModal(true);currentView="studies";render();}; }
 let busy=false, failed=false, loaded=false, modalDirty=false, lastDay=today();
 // null = ainda não semeado; na primeira exibição a árvore abre inteira.
-let expanded=null, renderedView=null, editing=null, editorDirty=false, grafoRaf=null;
+let expanded=null, renderedView=null, editing=null, editorDirty=false, grafoRaf=null, modoLeitura=true;
 const notaVazia = (extra={}) => ({title:"",body:"",links:[],tags:[],folderId:"",...extra});
 const $ = selector => document.querySelector(selector);
 const templates={
@@ -195,6 +195,7 @@ function enhanceView(){
 async function abrirNota(nota){
   if(editing&&editorDirty&&!await salvarNota())return;
   editing={...nota,tags:[...(nota.tags||[])],links:[...(nota.links||[])]};
+  modoLeitura=Boolean(editing.id && editing.body.trim());
   editorDirty=false;currentView='studies';render();
 }
 async function irPara(destino){ if(editing) return void await sairDoEditor(destino); currentView=destino; render(); }
@@ -206,13 +207,13 @@ function renderEditor(){
   const nota=editing, pasta=state.folders.find(f=>f.id===nota.folderId);
   const opcoes=`<option value="">Raiz do cofre</option>`+state.folders.slice().sort(byTitle).map(f=>`<option value="${f.id}" ${f.id===nota.folderId?'selected':''}>${escapeHtml(f.path||f.title)}</option>`).join('');
   const modelos=Object.entries(templates).map(([k,t])=>`<option value="${k}">${escapeHtml(t.title)}</option>`).join('');
-  return `<header class="doc-bar"><div class="crumbs"><span>${pasta?escapeHtml(pasta.path||pasta.title):'Raiz do cofre'}</span><span>/</span><span class="crumb-atual">${escapeHtml(nota.title||'Sem título')}</span></div><div class="doc-actions"><span class="small-muted" id="doc-state"></span><button class="secondary" data-editor="detalhes">Detalhes</button><button class="secondary" data-editor="fechar">Fechar</button>${nota.id?'<button class="secondary" data-editor="lixeira">Mover para lixeira</button>':''}<button class="primary" data-editor="salvar">Salvar</button></div></header>
+  return `<header class="doc-bar"><div class="crumbs"><span>${pasta?escapeHtml(pasta.path||pasta.title):'Raiz do cofre'}</span><span>/</span><span class="crumb-atual">${escapeHtml(nota.title||'Sem título')}</span></div><span class="doc-ponto" id="doc-state" title="Alterações não salvas"></span></header>
 <input class="doc-title" id="doc-title" value="${escapeHtml(nota.title)}" placeholder="Sem título" aria-label="Título da nota" />
 <section class="doc-details" id="doc-details" hidden><div class="two-cols"><div class="field"><label for="doc-folder">Pasta</label><select id="doc-folder">${opcoes}</select></div><div class="field"><label for="doc-tags">Tags (separadas por vírgulas)</label><input id="doc-tags" value="${escapeHtml(nota.tags.join(', '))}" placeholder="ideias, estudos" /></div></div><div class="two-cols"><div class="field"><label for="doc-template">Modelo</label><select id="doc-template"><option value="">Escolher modelo…</option>${modelos}</select></div><div class="field"><label for="doc-link">Anexar link</label><div class="add-link"><input id="doc-link" placeholder="Cole um link de aula ou vídeo" /><button type="button" class="secondary" id="doc-link-add">Anexar</button></div></div></div><div class="links-list" id="doc-links"></div></section>
-<textarea class="doc-body" id="doc-body" placeholder="Comece a escrever. Cole links à vontade; [[Nome da nota]] conecta ideias e #tag marca a nota." aria-label="Conteúdo da nota">${escapeHtml(nota.body)}</textarea>
-<section class="code-panel" id="code-panel">${painelDeCodigo(nota.body)}</section>`;
+<div class="md-lido" id="md-lido"${modoLeitura?'':' hidden'}>${renderizarMarkdown(nota.body)}</div>
+<textarea class="doc-body" id="doc-body"${modoLeitura?' hidden':''} placeholder="Comece a escrever. Cole links à vontade; [[Nome da nota]] conecta ideias e #tag marca a nota." aria-label="Conteúdo da nota">${escapeHtml(nota.body)}</textarea>`;
 }
-function estadoDoc(){ const el=$('#doc-state'); if(el) el.textContent=editorDirty?'Não salvo':(editing?.id?'Salvo':'Nova nota'); }
+function estadoDoc(){ $('#doc-state')?.classList.toggle('sujo', editorDirty); }
 function desenharLinksDoc(){
   const caixa=$('#doc-links'); if(!caixa) return;
   caixa.innerHTML=editing.links.map((l,i)=>`<div class="link-row"><a href="${escapeHtml(Kuroi.safeUrl(l)||'#')}" target="_blank" rel="noopener noreferrer">${escapeHtml(l)}</a><button class="icon-button" type="button" data-remove-link="${i}">×</button></div>`).join('');
@@ -222,21 +223,22 @@ function bindEditor(){
   const titulo=$('#doc-title'), corpo=$('#doc-body');
   const sujar=()=>{editorDirty=true;estadoDoc();};
   titulo.oninput=()=>{editing.title=titulo.value;sujar();};
-  corpo.oninput=()=>{editing.body=corpo.value;sujar();$('#code-panel').innerHTML=painelDeCodigo(corpo.value);};
+  corpo.oninput=()=>{editing.body=corpo.value;sujar();};
   $('#doc-folder').onchange=e=>{editing.folderId=e.target.value;sujar();};
   $('#doc-tags').oninput=e=>{editing.tags=e.target.value.split(',').map(t=>t.trim().replace(/^#/,'')).filter(Boolean);sujar();};
   $('#doc-template').onchange=e=>{
     if(!e.target.value)return;
     if(corpo.value&&!confirm('Substituir o texto desta nota pelo modelo?')){e.target.value='';return;}
-    corpo.value=templates[e.target.value].body;editing.body=corpo.value;sujar();$('#code-panel').innerHTML=painelDeCodigo(corpo.value);
+    corpo.value=templates[e.target.value].body;editing.body=corpo.value;sujar();
   };
   $('#doc-link-add').onclick=()=>{
     const campo=$('#doc-link'), valor=campo.value.trim();
     if(!Kuroi.safeUrl(valor)){alert('Informe um endereço http:// ou https:// válido.');return;}
     editing.links.push(valor);campo.value='';sujar();desenharLinksDoc();
   };
-  $('#code-panel').addEventListener('click', e => { const b = e.target.closest('.code-copy'); if (b) copiarBloco(b); });
   corpo.addEventListener('contextmenu', e => abrirMenuContexto(e, corpo));
+  bindLeitura();
+  $('#md-lido')?.addEventListener('contextmenu', e => abrirMenuContexto(e, corpo));
   document.querySelectorAll('[data-editor]').forEach(b=>b.onclick=()=>acaoEditor(b.dataset.editor));
   desenharLinksDoc();estadoDoc();
   // preventScroll: sem isso, abrir a nota rola o painel e esconde a barra do topo.
@@ -460,6 +462,104 @@ function bindGraph() {
   comecar();
 }
 
+// ---- Renderização de Markdown para leitura ----
+// O corpo da nota continua sendo Markdown puro no disco. Isto só desenha.
+// Tudo é escapado antes de qualquer transformação: nada do texto vira HTML.
+const desescapar = t => t.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, '&');
+
+function mdInline(texto) {
+  const guardado = [];
+  const reservar = html => `\u0000${guardado.push(html) - 1}\u0000`;
+  return texto
+    // Código em linha primeiro: o que estiver dentro dele não sofre mais nenhuma troca.
+    .replace(/`([^`\n]+)`/g, (_, c) => reservar(`<code>${c}</code>`))
+    .replace(/\[\[([^\][\n]+)\]\]/g, (_, dentro) => {
+      const [alvoBruto, rotuloBruto] = dentro.split('|');
+      const alvo = alvoBruto.split('#')[0].trim();
+      const rotulo = (rotuloBruto || alvoBruto).trim();
+      const nota = Kuroi.findLinkedNote(state.notes, desescapar(alvo));
+      return reservar(`<a class="wikilink${nota ? '' : ' ausente'}" data-alvo="${alvo}"${nota ? ` data-id="${nota.id}"` : ''} title="${nota ? 'Abrir nota' : 'Nota ainda não criada'}">${rotulo}</a>`);
+    })
+    .replace(/\[([^\][\n]*)\]\(([^)\s]+)\)/g, (inteiro, rotulo, url) => {
+      const limpa = Kuroi.safeUrl(desescapar(url));
+      return limpa ? reservar(`<a href="${limpa}" target="_blank" rel="noopener noreferrer">${rotulo || url}</a>`) : inteiro;
+    })
+    .replace(/\*\*([^\n*]+)\*\*/g, '<strong>$1</strong>')
+    .replace(/(^|[^*])\*([^\n*]+)\*(?!\*)/g, '$1<em>$2</em>')
+    .replace(/~~([^\n~]+)~~/g, '<s>$1</s>')
+    .replace(/==([^\n=]+)==/g, '<mark>$1</mark>')
+    .replace(/%%([^\n%]+)%%/g, '<span class="md-comentario">$1</span>')
+    .replace(/(^|\s)#([\p{L}\p{N}_/-]+)/gu, '$1<span class="md-tag">#$2</span>')
+    .replace(/\u0000(\d+)\u0000/g, (_, i) => guardado[+i]);
+}
+
+/** Converte o Markdown em HTML de leitura, marcando a posição de cada bloco na fonte. */
+function renderizarMarkdown(fonte) {
+  const linhas = fonte.split('\n');
+  const saida = [];
+  let posicao = 0, i = 0;
+  const avancar = n => { for (let k = 0; k < n; k++) posicao += linhas[i + k].length + 1; };
+  const abrir = pos => `data-pos="${pos}"`;
+
+  while (i < linhas.length) {
+    const linha = linhas[i];
+    const inicio = posicao;
+    const cerca = linha.match(/^```([^\n`]*)$/);
+    if (cerca) {
+      const corpo = [];
+      let j = i + 1;
+      while (j < linhas.length && !/^```\s*$/.test(linhas[j])) corpo.push(linhas[j++]);
+      const codigo = escapeHtml(corpo.join('\n'));
+      const linguagem = escapeHtml(cerca[1].trim() || 'texto');
+      saida.push(`<figure class="code-area" ${abrir(inicio)}><figcaption><span class="code-lang">${linguagem}</span><button type="button" class="secondary code-copy">Copiar</button></figcaption><pre><code>${codigo}</code></pre></figure>`);
+      avancar(Math.min(j + 1, linhas.length) - i);
+      i = j + 1;
+      continue;
+    }
+    if (!linha.trim()) { avancar(1); i++; continue; }
+    if (/^(-{3,}|\*{3,})\s*$/.test(linha)) { saida.push(`<hr ${abrir(inicio)} />`); avancar(1); i++; continue; }
+    const titulo = linha.match(/^(#{1,6})\s+(.*)$/);
+    if (titulo) {
+      const nivel = titulo[1].length;
+      saida.push(`<h${nivel} ${abrir(inicio)}>${mdInline(escapeHtml(titulo[2]))}</h${nivel}>`);
+      avancar(1); i++; continue;
+    }
+    if (/^>\s?/.test(linha)) {
+      const corpo = [];
+      let j = i;
+      while (j < linhas.length && /^>\s?/.test(linhas[j])) corpo.push(linhas[j++].replace(/^>\s?/, ''));
+      const destaque = corpo[0]?.match(/^\[!(\w+)\]\s*(.*)$/);
+      const conteudo = destaque ? [destaque[2], ...corpo.slice(1)] : corpo;
+      const rotulo = destaque ? `<span class="md-destaque-tipo">${escapeHtml(destaque[1])}</span>` : '';
+      saida.push(`<blockquote class="${destaque ? 'md-destaque' : ''}" ${abrir(inicio)}>${rotulo}${mdInline(escapeHtml(conteudo.join('\n'))).replace(/\n/g, '<br />')}</blockquote>`);
+      avancar(j - i); i = j; continue;
+    }
+    const item = linha.match(/^(\s*)([-*+]|\d+\.)\s+(.*)$/);
+    if (item) {
+      const numerada = /\d/.test(item[2]);
+      const itens = [];
+      let j = i;
+      while (j < linhas.length) {
+        const atual = linhas[j].match(/^(\s*)([-*+]|\d+\.)\s+(.*)$/);
+        if (!atual || /\d/.test(atual[2]) !== numerada) break;
+        const tarefa = atual[3].match(/^\[([ xX])\]\s*(.*)$/);
+        itens.push(tarefa
+          ? `<li class="md-tarefa"><input type="checkbox" disabled ${/[xX]/.test(tarefa[1]) ? 'checked' : ''} />${mdInline(escapeHtml(tarefa[2]))}</li>`
+          : `<li>${mdInline(escapeHtml(atual[3]))}</li>`);
+        j++;
+      }
+      saida.push(`<${numerada ? 'ol' : 'ul'} ${abrir(inicio)}>${itens.join('')}</${numerada ? 'ol' : 'ul'}>`);
+      avancar(j - i); i = j; continue;
+    }
+    const paragrafo = [];
+    let j = i;
+    while (j < linhas.length && linhas[j].trim() && !/^(#{1,6}\s|>|```|[-*+]\s|\d+\.\s|-{3,}\s*$)/.test(linhas[j])) paragrafo.push(linhas[j++]);
+    saida.push(`<p ${abrir(inicio)}>${mdInline(escapeHtml(paragrafo.join('\n'))).replace(/\n/g, '<br />')}</p>`);
+    avancar(j - i); i = j;
+  }
+  return saida.join('') || '<p class="md-vazio">Nota vazia. Clique para escrever.</p>';
+}
+
 // ---- Blocos de código ----
 // O corpo continua sendo Markdown puro; estas funções só leem as cercas ```
 // e desenham um painel de leitura embaixo do editor, com botão de copiar.
@@ -483,25 +583,65 @@ function blocosDeCodigo(texto) {
   }
   return achados;
 }
-function painelDeCodigo(texto) {
-  const blocos = blocosDeCodigo(texto);
-  if (!blocos.length) return '';
-  return `<h3>Blocos de código</h3>${blocos.map(bloco => `<figure class="code-area">
-    <figcaption><span class="code-lang">${escapeHtml(bloco.linguagem || 'texto')}</span><button type="button" class="secondary code-copy">Copiar</button></figcaption>
-    <pre><code>${escapeHtml(bloco.codigo)}</code></pre>
-  </figure>`).join('')}`;
+// A API moderna exige contexto seguro e gesto do usuário; onde ela é negada,
+// o textarea temporário com execCommand ainda funciona.
+async function copiarTexto(texto) {
+  try { await navigator.clipboard.writeText(texto); return true; } catch { /* tenta o modo antigo */ }
+  const campo = document.createElement('textarea');
+  campo.value = texto;
+  campo.setAttribute('readonly', '');
+  campo.style.cssText = 'position:fixed;top:-1000px;opacity:0';
+  document.body.appendChild(campo);
+  campo.select();
+  let ok = false;
+  try { ok = document.execCommand('copy'); } catch { ok = false; }
+  campo.remove();
+  return ok;
 }
 async function copiarBloco(botao) {
   const codigo = botao.closest('.code-area').querySelector('code').textContent;
-  try {
-    await navigator.clipboard.writeText(codigo);
-    botao.textContent = 'Copiado';
-    botao.classList.add('copiado');
-    setTimeout(() => { botao.textContent = 'Copiar'; botao.classList.remove('copiado'); }, 1400);
-  } catch {
-    status('O navegador não liberou a área de transferência.', true);
+  if (!await copiarTexto(codigo)) return void status('O navegador não liberou a área de transferência.', true);
+  botao.textContent = 'Copiado';
+  botao.classList.add('copiado');
+  setTimeout(() => { botao.textContent = 'Copiar'; botao.classList.remove('copiado'); }, 1400);
+}
+// Leitura e edição da mesma nota. O Markdown continua sendo a fonte no disco;
+// a leitura só desenha, e a edição mostra o texto cru, como o modo fonte do Obsidian.
+function trocarModo(paraLeitura, posicao) {
+  const lido = $('#md-lido'), corpo = $('#doc-body');
+  if (!lido || !corpo) return;
+  modoLeitura = paraLeitura;
+  if (paraLeitura) {
+    lido.innerHTML = renderizarMarkdown(corpo.value);
+    lido.hidden = false; corpo.hidden = true;
+  } else {
+    corpo.hidden = false; lido.hidden = true;
+    corpo.focus({ preventScroll: true });
+    if (Number.isInteger(posicao)) {
+      const alvo = Math.min(posicao, corpo.value.length);
+      corpo.setSelectionRange(alvo, alvo);
+    }
   }
 }
+
+function bindLeitura() {
+  const lido = $('#md-lido');
+  if (!lido) return;
+  lido.addEventListener('click', evento => {
+    const copiar = evento.target.closest('.code-copy');
+    if (copiar) return void copiarBloco(copiar);
+    const link = evento.target.closest('.wikilink');
+    if (link) {
+      evento.preventDefault();
+      const alvo = link.dataset.id ? getNote(link.dataset.id) : notaVazia({ title: link.dataset.alvo });
+      return void abrirNota(alvo);
+    }
+    if (evento.target.closest('a[href]')) return; // link externo abre normalmente
+    const bloco = evento.target.closest('[data-pos]');
+    trocarModo(false, bloco ? Number(bloco.dataset.pos) : undefined);
+  });
+}
+
 // ---- Menu de contexto do corpo da nota ----
 // O corpo é Markdown puro: cada item insere a marcação correspondente.
 // Usa execCommand('insertText') para não destruir a pilha de desfazer do textarea.
@@ -559,7 +699,7 @@ async function colar(area) {
 async function copiarSelecao(area, recortar) {
   const sel = area.value.slice(area.selectionStart, area.selectionEnd);
   if (!sel) return;
-  try { await navigator.clipboard.writeText(sel); } catch { status('Não foi possível copiar.', true); return; }
+  if (!await copiarTexto(sel)) return void status('Não foi possível copiar.', true);
   if (recortar) inserirTexto(area, '');
 }
 const TABELA = '| Coluna | Coluna |\n| --- | --- |\n|  |  |\n';
@@ -623,6 +763,12 @@ function menuDaNota() {
     { rotulo: 'Colar', icone: '⎘', acao: colar },
     { separador: true },
     { rotulo: 'Selecionar tudo', icone: '⬚', acao: a => a.select() },
+    { separador: true },
+    { rotulo: modoLeitura ? 'Editar' : 'Ler', icone: '◑', acao: () => trocarModo(!modoLeitura) },
+    { rotulo: 'Salvar', icone: '⤓', acao: () => salvarNota() },
+    { rotulo: 'Detalhes', icone: '☰', acao: () => acaoEditor('detalhes') },
+    { rotulo: 'Fechar nota', icone: '✕', acao: () => acaoEditor('fechar') },
+    { rotulo: 'Mover para lixeira', icone: '🗑', ativo: () => Boolean(editing?.id), acao: () => acaoEditor('lixeira') },
   ];
 }
 let menuAberto = null;
@@ -837,7 +983,7 @@ $('#import-data').onchange=async e=>{
   }catch(error){status('Importação cancelada: '+error.message,true);}
 };
 document.addEventListener('keydown',e=>{
-  if(e.key==='Escape')closeModal();
+  if(e.key==='Escape'){ if(!$('#modal-root').firstChild && editing && !modoLeitura){e.preventDefault();trocarModo(true);return;} closeModal(); }
   if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='n'){e.preventDefault();if(loaded&&!failed&&!busy&&!$('#modal-root').firstChild)abrirNota(notaVazia());}
   if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='s'&&editing){e.preventDefault();salvarNota();}
 });
