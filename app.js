@@ -767,7 +767,10 @@ function abrirNoFim() {
   fecharBloco();
   const corpo = $('#doc-corpo');
   const ultimo = [...corpo.querySelectorAll(':scope > [data-pos]')].pop();
-  if (ultimo?.tagName === 'P') return abrirBloco(ultimo, Infinity);
+  // Parágrafo que só tem imagem não é continuado: escrever depois dela começa um novo,
+  // em vez de reabrir o ![[...]] da imagem.
+  const soImagem = ultimo?.tagName === 'P' && !ultimo.textContent.trim() && ultimo.querySelector('.md-imagem');
+  if (ultimo?.tagName === 'P' && !soImagem) return abrirBloco(ultimo, Infinity);
   const texto = editing.body;
   const separador = !texto.trim() || texto.endsWith('\n\n') ? '' : texto.endsWith('\n') ? '\n' : '\n\n';
   const campo = montarCampo('');
@@ -863,9 +866,13 @@ async function colarImagens(campo, arquivos) {
   if (!trechos.length || !editing) return;
   // Se o bloco fechou enquanto a imagem era gravada, ela entra no fim da nota.
   const destino = campo.isConnected && blocoAberto?.campo === campo ? campo : abrirNoFim();
-  // Cada imagem na sua própria linha: colada no fim de uma frase, não gruda no texto.
-  const antes = destino.value[destino.selectionStart - 1], depois = destino.value[destino.selectionEnd];
-  inserirTexto(destino, (antes && antes !== '\n' ? '\n' : '') + trechos.join('\n') + (depois && depois !== '\n' ? '\n' : ''));
+  // Cada imagem vira um parágrafo próprio, separado do texto em volta por linha em branco.
+  const texto = destino.value, anterior = texto.slice(0, destino.selectionStart), seguinte = texto.slice(destino.selectionEnd);
+  const antes = !anterior || anterior.endsWith('\n\n') ? '' : anterior.endsWith('\n') ? '\n' : '\n\n';
+  const depois = !seguinte || seguinte.startsWith('\n\n') ? '' : seguinte.startsWith('\n') ? '\n' : '\n\n';
+  inserirTexto(destino, antes + trechos.join('\n\n') + depois);
+  // Fecha o bloco para a imagem aparecer na hora, em vez do ![[...]] cru.
+  fecharBloco();
   status(trechos.length > 1 ? `${trechos.length} imagens coladas` : 'Imagem colada');
 }
 function aoColarOuSoltar(evento) {
