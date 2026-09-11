@@ -50,6 +50,23 @@ function markdown(note, previous = '') {
 const FOLDER_MARKER = '.kuroi-folder.json';
 // Cada gravação copia o cofre inteiro para .history. Sem teto, isso cresce sem fim.
 const HISTORY_LIMIT = 30;
+// Imagens coladas nas notas moram numa pasta marcada na raiz do cofre. A marca tira
+// a pasta da varredura: as imagens não viram pasta na árvore, não entram na revisão
+// (colar não gera conflito com a nota aberta) e não são copiadas para .history a
+// cada salvamento, o que multiplicaria o espaço em disco pelo limite do histórico.
+const ATTACHMENT_MARKER = '.kuroi-anexos';
+const ATTACHMENT_FOLDERS = ['Anexos', 'Anexos do KUROI'];
+const ATTACHMENT_LIMIT = 20 * 1024 * 1024;
+const IMAGE_TYPES = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp', avif: 'image/avif', bmp: 'image/bmp' };
+// Pelo conteúdo, não pelo nome nem pelo tipo declarado. SVG fica de fora: pode carregar script.
+function imageSignature(data) {
+  if (data.length >= 8 && data.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) return 'png';
+  if (data.length >= 3 && data[0] === 0xff && data[1] === 0xd8 && data[2] === 0xff) return 'jpg';
+  if (data.length >= 6 && /^GIF8[79]a$/.test(data.subarray(0, 6).toString('latin1'))) return 'gif';
+  if (data.length >= 12 && data.subarray(0, 4).toString('latin1') === 'RIFF' && data.subarray(8, 12).toString('latin1') === 'WEBP') return 'webp';
+  return null;
+}
+async function pathExists(file) { try { await fs.access(file); return true; } catch { return false; } }
 const visible = name => !name.split('/').some(part => part.startsWith('.'));
 const parentPath = file => path.posix.dirname(file) === '.' ? '' : path.posix.dirname(file);
 const inside = (file, directory) => file === directory || file.startsWith(directory + '/');
@@ -99,6 +116,7 @@ class Vault {
     const walk=async(relative='')=>{
       for(const entry of await fs.readdir(path.join(this.directory,relative),{withFileTypes:true})){
         if(!relative&&(entry.name.startsWith('.')||entry.name==='caderno.json'))continue;
+        if(!relative&&entry.isDirectory()&&await pathExists(path.join(this.directory,entry.name,ATTACHMENT_MARKER)))continue;
         const file=relative?`${relative}/${entry.name}`:entry.name;
         const target=await this.safePath(file);
         if(entry.isDirectory()){directories.push(file);await walk(file);}
@@ -161,6 +179,7 @@ class Vault {
     validateState(input);const before=await this.read();
     if(input.revision!==before.state.revision)throw new Error('O cofre mudou em outro editor. Exporte suas alterações e recarregue antes de salvar.');
     const paths=folderPaths(input.folders), beforeFolders=before.state.folders;
+    for(const folderPath of paths.values())if(!folderPath.includes('/')&&await pathExists(path.join(this.directory,folderPath,ATTACHMENT_MARKER)))throw new Error(`A pasta "${folderPath}" guarda as imagens coladas nas notas. Escolha outro nome.`);
     const owner=file=>beforeFolders.filter(f=>f.diskPath&&inside(file,f.diskPath)).sort((a,b)=>b.diskPath.length-a.diskPath.length)[0];
     const remap=file=>{const f=owner(file);return f?(paths.has(f.id)?paths.get(f.id)+file.slice(f.diskPath.length):null):file;};
     const desired=new Map(), desiredDirs=new Set(), changes=new Map(), used=new Set();
@@ -240,6 +259,43 @@ class Vault {
     await fs.unlink(await this.safePath('.transaction.json'));
     try{await this.tidy(transaction);}catch{/* a faxina não pode falhar um salvamento já aplicado */}
     return (await this.read()).state;
+  }
+  /** Pasta onde vão as imagens coladas: a primeira que está livre ou já é do KUROI. */
+  async attachmentFolder(){
+    for(const name of ATTACHMENT_FOLDERS){
+      const directory=await this.safePath(name);
+      if(!await pathExists(directory)||await pathExists(path.join(directory,ATTACHMENT_MARKER)))return name;
+    }
+    throw new Error('Não há pasta livre para guardar imagens. Renomeie a pasta "Anexos" do cofre.');
+  }
+  /** Guarda uma imagem e devolve o caminho relativo ao cofre, pronto para ![[...]]. */
+  saveAttachment({name='',data}={}){
+    return this.exclusive(async()=>{
+      if(!Buffer.isBuffer(data)||!data.length)throw new Error('Imagem vazia.');
+      if(data.length>ATTACHMENT_LIMIT)throw new Error('Imagem maior que 20 MB.');
+      const extension=imageSignature(data);
+      if(!extension)throw new Error('O arquivo não é uma imagem PNG, JPEG, GIF ou WebP.');
+      const folder=await this.attachmentFolder();
+      // A marca vem antes da imagem: a pasta nunca aparece na varredura sem ela.
+      const marker=await this.safePath(`${folder}/${ATTACHMENT_MARKER}`);
+      if(!await pathExists(marker))await atomicWrite(marker,'Imagens coladas nas notas do KUROI. Esta marca tira a pasta da árvore de notas.\n');
+      const stem=typeof name==='string'?path.basename(name.replace(/\\/g,'/')).replace(/\.[^.]*$/,''):'';
+      const now=new Date(), two=n=>String(n).padStart(2,'0');
+      // "image.png" é o nome genérico que o navegador dá a um print colado.
+      const base=stem&&!/^image$/i.test(stem)?slug(stem):`colado-${now.getFullYear()}${two(now.getMonth()+1)}${two(now.getDate())}-${two(now.getHours())}${two(now.getMinutes())}${two(now.getSeconds())}`;
+      const file=`${folder}/${base}-${randomUUID().slice(0,6)}.${extension}`;
+      await atomicWrite(await this.safePath(file),data);
+      return {path:file};
+    });
+  }
+  /** Lê uma imagem do cofre para exibir. Só extensões de imagem e nada oculto. */
+  async readAttachment(relative){
+    const type=typeof relative==='string'&&relative.includes('.')&&!relative.split('/').some(part=>part.startsWith('.'))&&IMAGE_TYPES[relative.split('.').pop().toLowerCase()];
+    if(!type)throw new Error('Imagem inválida.');
+    const file=await this.safePath(relative);
+    const info=await fs.stat(file);
+    if(!info.isFile()||info.size>ATTACHMENT_LIMIT)throw new Error('Imagem inválida.');
+    return {data:await fs.readFile(file),type};
   }
   /**
    * Chamado só depois que a gravação foi aplicada e o journal removido.

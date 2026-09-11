@@ -6,6 +6,9 @@ outputs/
 # Cofre pessoal: notas do usuário, não versionar
 vault/
 
+# Cofre de exemplo do npm run dev: recriado por npm run dev:reset
+dev-vault/
+
 # Resíduo de teste manual da interface
 work/ui-test-vault/
 

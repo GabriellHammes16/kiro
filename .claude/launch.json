@@ -2,6 +2,12 @@
   "version": "0.0.1",
   "configurations": [
     {
+      "name": "kuroi-dev",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["--watch", "server.mjs", "--dev"],
+      "port": 4180
+    },
+    {
       "name": "kuroi",
       "runtimeExecutable": "node",
       "runtimeArgs": ["server.mjs"],

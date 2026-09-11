@@ -82,10 +82,12 @@
     return validateState(data);
   }
   const normalize = value => String(value).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
-  const wikiLinks = body => [...body.matchAll(/\[\[([^\]\n]+)\]\]/g)].map(match => ({ target: match[1].split('|')[0].split('#')[0].trim(), label: (match[1].split('|')[1] || match[1]).trim() }));
+  const isImagePath = value => /\.(png|jpe?g|gif|webp|avif|bmp)$/i.test(value.trim());
+  // ![[imagem.png]] embute uma imagem; não é ligação entre notas, então fica fora do grafo e dos backlinks.
+  const wikiLinks = body => [...body.matchAll(/(!?)\[\[([^\]\n]+)\]\]/g)].filter(match => !(match[1] && isImagePath(match[2].split('|')[0]))).map(match => ({ target: match[2].split('|')[0].split('#')[0].trim(), label: (match[2].split('|')[1] || match[2]).trim() }));
   const tags = note => [...new Set([...(note.tags || []), ...[...note.body.matchAll(/(?:^|\s)#([\p{L}\p{N}_/-]+)/gu)].map(m => m[1])])];
   const findLinkedNote = (notes, target) => notes.find(n => normalize(n.title) === normalize(target) || normalize((n.file || '').replace(/\.md$/i, '')) === normalize(target) || normalize((n.file || '').split('/').pop().replace(/\.md$/i, '')) === normalize(target));
-  const api = { localDate, safeUrl, validateState, normalize, wikiLinks, tags, findLinkedNote, validFolderName, folderPaths, descendants, upgradeBackup, pathKey };
+  const api = { localDate, safeUrl, validateState, normalize, isImagePath, wikiLinks, tags, findLinkedNote, validFolderName, folderPaths, descendants, upgradeBackup, pathKey };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Kuroi = api;
 })(globalThis);

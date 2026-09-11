@@ -9,6 +9,22 @@ Notas em Markdown, conexões entre ideias, estudos, tarefas e rotina. Funciona o
 - Testes: `npm test`.
 - Instalador Windows: `npm run build:win`.
 
+## Desenvolver pela versão web
+
+O navegador e o desktop rodam o mesmo `index.html`, `app.js` e `styles.css`. Por isso a interface pode ser ajustada no navegador e só compilada quando estiver pronta.
+
+1. `npm run dev` e abra http://localhost:4180.
+2. Edite. `styles.css` troca na hora, sem recarregar a página; `app.js`, `index.html` e `domain.js` recarregam a página, salvando antes a nota que estiver aberta. Mudanças em `server.mjs`, `vault.cjs` ou `agent/` reiniciam o servidor, e a página recarrega sozinha.
+3. `npm test`.
+4. `npm run desktop:dev` para conferir na janela do Electron, com o mesmo cofre de exemplo.
+5. `npm run build:win` gera o instalador.
+
+O modo de desenvolvimento usa `dev-vault/`, um cofre de exemplo com pastas aninhadas, links que existem e que não existem, blocos de código, destaques e tarefas. Ele nunca abre o cofre pessoal. `npm run dev:reset` apaga e recria esse cofre. Para testar com outra pasta, defina `KUROI_VAULT`; nesse caso nada de exemplo é criado nela.
+
+A recarga ao vivo só existe com `--dev`: o `npm start` não a oferece, e `dev/` e `dev-vault/` ficam fora do instalador.
+
+O que só existe no desktop: **Escolher outro cofre** e abrir a pasta do cofre no Explorador de Arquivos.
+
 No desktop, o cofre padrão fica em `Documentos/KUROI/vault`. **Escolher outro cofre** abre uma pasta existente ou vazia e lembra a escolha. Essa ação troca o cofre aberto; não transfere os arquivos do anterior. Para transferir, copie a pasta inteira com o aplicativo fechado.
 
 No navegador, o padrão é `vault/` neste projeto. Para abrir outra pasta no PowerShell:
@@ -61,6 +77,14 @@ Cada arquivo é gravado por substituição atômica. Um registro `.transaction.j
 O histórico guarda os 30 salvamentos mais recentes; os mais antigos são apagados ao final de cada gravação. A lixeira não é apagada automaticamente. Nenhum dos dois substitui uma cópia em outro disco. O backup JSON exportado inclui as notas ativas e os dados auxiliares, mas não o histórico e a lixeira; copie a pasta inteira para preservar tudo.
 
 Importações são validadas antes de alterar o estado. Elas substituem os dados ativos; notas removidas vão para a lixeira e o cofre anterior fica no histórico. A API do navegador aceita até 20 MB por salvamento.
+
+## Imagens
+
+Cole um print com **Ctrl+V** ou arraste uma imagem para dentro da nota. A imagem é gravada no cofre, na pasta `Anexos/`, e a nota recebe `![[Anexos/nome.png]]`, o mesmo formato do Obsidian. Passe o mouse sobre a imagem e arraste a bolinha do canto para mudar o tamanho; a largura fica no texto, como `![[Anexos/nome.png|320]]`.
+
+Aceita PNG, JPEG, GIF e WebP de até 20 MB. SVG não é aceito, porque pode carregar código.
+
+`Anexos/` tem um arquivo `.kuroi-anexos` que a identifica. Com ele, a pasta não aparece na árvore, colar uma imagem não entra em conflito com a nota aberta e as imagens não são copiadas para `.history` a cada salvamento. Em troca, o histórico e a lixeira não guardam imagens: apagar o `![[...]]` da nota não apaga o arquivo, e uma imagem apagada da pasta não volta. Se o cofre já tiver uma pasta `Anexos` sua, as imagens vão para `Anexos do KUROI`.
 
 ## Agentes de IA (opcional)
 

@@ -7,9 +7,13 @@ import agentModule from './agent/index.cjs';
 
 const { Vault } = vaultModule;
 const root = dirname(fileURLToPath(import.meta.url));
-const port = Number(process.env.PORT || 4173);
-const vaultDirectory = process.env.KUROI_VAULT || join(root, 'vault');
+// --dev: cofre de exemplo, recarga ao vivo e porta própria, para rodar junto do npm start.
+const dev = process.argv.includes('--dev');
+const port = Number(process.env.PORT || (dev ? 4180 : 4173));
+const vaultDirectory = process.env.KUROI_VAULT || join(root, dev ? 'dev-vault' : 'vault');
 const vault = new Vault(vaultDirectory);
+const devTools = dev ? (await import('./dev/devtools.mjs')).createDevTools(root) : null;
+if (dev && !process.env.KUROI_VAULT) await (await import('./dev/seed.cjs')).default.semearSeVazio(vaultDirectory);
 const agentConfig = new agentModule.AgentConfig(vaultDirectory);
 const publicFiles = { '/': ['index.html', 'text/html'], '/index.html': ['index.html', 'text/html'], '/app.js': ['app.js', 'text/javascript'], '/domain.js': ['domain.js', 'text/javascript'], '/styles.css': ['styles.css', 'text/css'], '/kuroi-logo-transparent.png': ['kuroi-logo-transparent.png', 'image/png'] };
 const allowedHosts = new Set([`localhost:${port}`, `127.0.0.1:${port}`]);
@@ -39,10 +43,33 @@ createServer(async (request, response) => {
       for await (const chunk of request) { size += chunk.length; if (size > 20 * 1024 * 1024) return send(response, 413, { error: 'Backup maior que 20 MB.' }); chunks.push(chunk); }
       return send(response, 200, await vault.save(JSON.parse(Buffer.concat(chunks).toString('utf8'))));
     }
-    const file = publicFiles[request.url];
+    if (devTools && request.url === '/dev/events' && request.method === 'GET') return devTools.eventos(request, response);
+    if (devTools && request.url === '/dev/reload.js' && request.method === 'GET') {
+      response.writeHead(200, { 'Content-Type': 'text/javascript; charset=utf-8', 'Cache-Control': 'no-store' });
+      return response.end(await devTools.script());
+    }
+    if (request.url === '/api/anexo' && request.method === 'POST') {
+      // O tipo declarado só filtra o pedido; o Vault confere a imagem pelo conteúdo.
+      if (!['image/png', 'image/jpeg', 'image/gif', 'image/webp'].includes(request.headers['content-type']?.split(';')[0])) return send(response, 415, { error: 'Envie uma imagem PNG, JPEG, GIF ou WebP.' });
+      let tamanho = 0; const partes = [];
+      for await (const parte of request) { tamanho += parte.length; if (tamanho > 20 * 1024 * 1024) return send(response, 413, { error: 'Imagem maior que 20 MB.' }); partes.push(parte); }
+      let nome = ''; try { nome = decodeURIComponent(request.headers['x-kuroi-nome'] || ''); } catch { /* nome ilegível: a imagem recebe um nome gerado */ }
+      return send(response, 200, await vault.saveAttachment({ name: nome, data: Buffer.concat(partes) }));
+    }
+    // Sem a query: a recarga de estilo pede styles.css?v=<hora> para furar o cache.
+    const rota = new URL(request.url, 'http://localhost').pathname;
+    if (request.method === 'GET' && rota.startsWith('/anexo/')) {
+      try {
+        const { data, type } = await vault.readAttachment(rota.slice('/anexo/'.length).split('/').map(decodeURIComponent).join('/'));
+        response.writeHead(200, { 'Content-Type': type, 'Cache-Control': 'no-cache', 'Content-Security-Policy': "default-src 'none'" });
+        return response.end(data);
+      } catch { return send(response, 404, { error: 'Imagem não encontrada.' }); }
+    }
+    const file = publicFiles[rota];
     if (request.method !== 'GET' || !file) return send(response, 404, { error: 'Não encontrado.' });
-    const body = await readFile(join(root, file[0]));
+    let body = await readFile(join(root, file[0]));
+    if (devTools && file[0] === 'index.html') body = devTools.injetar(body.toString('utf8'));
     response.writeHead(200, { 'Content-Type': `${file[1]}; charset=utf-8`, 'Cache-Control': 'no-cache' });
     response.end(body);
   } catch (error) { send(response, 400, { error: error.message }); }
-}).listen(port, '127.0.0.1', () => console.log(`KUROI em http://localhost:${port}`));
+}).listen(port, '127.0.0.1', () => console.log(dev ? `KUROI em desenvolvimento: http://localhost:${port} · cofre ${vaultDirectory}` : `KUROI em http://localhost:${port}`));

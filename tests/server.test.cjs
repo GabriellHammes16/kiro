@@ -41,3 +41,44 @@ test('servidor restringe acesso e persiste o cofre pela API', async t => {
   assert.equal(volta.notes.length,1);
   assert.equal(volta.notes[0].body,'Conteúdo');
 });
+
+test('modo de desenvolvimento injeta a recarga ao vivo; o normal não a expõe', async t => {
+  const raiz=path.join(__dirname,'..');
+  const iniciar=async(args)=>{
+    const directory=await fs.mkdtemp(path.join(os.tmpdir(),'kuroi-dev-'));
+    const port=14000+Math.floor(Math.random()*20000);
+    const child=spawn(process.execPath,['server.mjs',...args],{cwd:raiz,env:{...process.env,PORT:String(port),KUROI_VAULT:directory},windowsHide:true});
+    t.after(async()=>{
+      if(child.exitCode===null){const stopped=new Promise(resolve=>child.once('exit',resolve));child.kill();await stopped;}
+      await fs.rm(directory,{recursive:true,force:true});
+    });
+    await new Promise((resolve,reject)=>{
+      const timeout=setTimeout(()=>reject(new Error('Servidor não iniciou')),8000);
+      child.stdout.once('data',()=>{clearTimeout(timeout);resolve();});
+      child.once('exit',code=>{clearTimeout(timeout);reject(new Error(`Servidor terminou: ${code}`));});
+    });
+    return {base:`http://127.0.0.1:${port}`,directory};
+  };
+
+  const normal=await iniciar([]);
+  assert.doesNotMatch(await (await fetch(normal.base+'/')).text(),/dev\/reload\.js/);
+  assert.equal((await fetch(normal.base+'/dev/reload.js')).status,404);
+  assert.equal((await fetch(normal.base+'/dev/events')).status,404);
+
+  const dev=await iniciar(['--dev']);
+  assert.match(await (await fetch(dev.base+'/')).text(),/<script src="\/dev\/reload\.js"><\/script>/);
+  assert.equal((await fetch(dev.base+'/dev/reload.js')).status,200);
+  // a troca de estilo pede styles.css?v=<hora>
+  assert.equal((await fetch(dev.base+'/styles.css?v=123')).status,200);
+  const eventos=new AbortController();
+  const resposta=await fetch(dev.base+'/dev/events',{signal:eventos.signal});
+  assert.match(resposta.headers.get('content-type'),/text\/event-stream/);
+  const leitor=resposta.body.getReader();
+  assert.match(new TextDecoder().decode((await leitor.read()).value),/^event: boot\ndata: \w+/);
+  eventos.abort();
+  // com KUROI_VAULT apontado, o modo dev não semeia exemplo em pasta alheia
+  assert.deepEqual(await fs.readdir(dev.directory).then(n=>n.filter(x=>!x.startsWith('.'))),[]);
+  // o que o instalador empacota nunca inclui as ferramentas de desenvolvimento
+  const {build}=require('../package.json');
+  assert.ok(build.files.includes('!dev/**')&&build.files.includes('!dev-vault/**'));
+});

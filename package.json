@@ -5,8 +5,11 @@
   "main": "electron/main.cjs",
   "scripts": {
     "start": "node server.mjs",
+    "dev": "node --watch server.mjs --dev",
+    "dev:reset": "node dev/seed.cjs --reset",
     "test": "node --test tests/*.test.cjs",
     "desktop": "electron .",
+    "desktop:dev": "electron . --dev-vault",
     "mcp": "node mcp/server.mjs",
     "build:win": "electron-builder --win nsis"
   },
@@ -19,6 +22,8 @@
     "files": [
       "**/*",
       "!vault/**",
+      "!dev/**",
+      "!dev-vault/**",
       "!work/**",
       "!outputs/**",
       "!tests/**",

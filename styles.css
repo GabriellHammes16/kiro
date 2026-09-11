@@ -146,7 +146,7 @@ select:focus-visible, textarea:focus-visible, .tree-row:focus-visible {
   outline: 2px solid #C77DFF; outline-offset: 2px;
 }
 /* Escrever não precisa de moldura: o cursor já mostra onde o foco está. */
-.doc-title:focus, .doc-title:focus-visible, .doc-body:focus, .doc-body:focus-visible { outline: none; }
+.doc-title:focus, .doc-title:focus-visible, .bloco-editor:focus, .bloco-editor:focus-visible { outline: none; }
 
 /* Entrada da tela, só quando a view muda de fato. */
 @keyframes viewEnter { from { opacity:0; transform:translateY(9px); } to { opacity:1; transform:none; } }
@@ -189,16 +189,21 @@ select:focus-visible, textarea:focus-visible, .tree-row:focus-visible {
 .crumbs span:last-child { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .linklike { background:none; border:0; padding:0; color:#C77DFF; font-size:13px; font-weight:650; }
 .linklike:hover { color:#F2E6FF; }
-.doc-bar, .doc-title, .doc-details, .doc-body, #connections { max-width:880px; }
+.doc-details { max-width:880px; }
 .doc-title { display:block; width:100%; background:transparent; border:0; border-bottom:1px solid transparent;
   color:var(--ink); font-size:32px; font-weight:750; letter-spacing:-1.1px; padding:2px 0 10px; outline:none; }
 .doc-title:focus { border-bottom-color:var(--line); }
 .doc-title::placeholder { color:#4a4a4a; }
 .doc-details { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:16px; margin:8px 0 14px; display:grid; gap:12px; }
-.doc-body { display:block; width:100%; min-height:56vh; background:transparent; border:0; outline:none;
-  color:var(--ink); font-size:16px; line-height:1.8; padding:10px 0 26px; resize:vertical; font-family:inherit; }
-.doc-body::placeholder { color:#4a4a4a; }
-@media (max-width:780px) { .doc-title { font-size:25px; } .doc-body { min-height:48vh; } }
+/* Corpo da nota: sempre desenhado, ocupando a página. O bloco clicado vira um
+   campo com a mesma tipografia do texto: sem moldura, sem alça de redimensionar
+   e sem rolagem própria — ele cresce junto com o que se escreve. */
+.doc-corpo { flex:1 0 auto; font-size:16px; line-height:1.8; padding:10px 0 26px; cursor:text; }
+.doc-corpo:empty::before { content:attr(data-vazio); color:#4a4a4a; pointer-events:none; }
+.bloco-editor { display:block; width:100%; margin:0 0 14px; padding:0; border:0; outline:none; background:transparent;
+  color:var(--ink); font:inherit; line-height:inherit; letter-spacing:inherit; resize:none; overflow:hidden; white-space:pre-wrap; }
+.bloco-editor.bloco-codigo { font-family:ui-monospace,Consolas,monospace; font-size:13px; line-height:1.6; }
+@media (max-width:780px) { .doc-title { font-size:25px; } }
 
 /* Tela "IA e integrações": caixas de permissão. */
 .ai-row { display:flex; align-items:center; gap:10px; font-size:14px; cursor:pointer; padding:5px 0; }
@@ -262,45 +267,63 @@ select:focus-visible, textarea:focus-visible, .tree-row:focus-visible {
 .graph-node:hover text { fill:#F2E6FF; }
 .graph-node.apagado { opacity:.2; }
 
-/* Modo cofre: árvore e nota lado a lado, sem a navegação principal. */
+/* Modo cofre: a nota ocupa a página e a árvore fica discreta à esquerda, recolhível. */
 .app-shell.cofre-aberto > .sidebar { display:none; }
 .app-shell.cofre-aberto > .content { padding:0; }
+/* Sem a navegação principal, a barra de status começa logo depois da árvore. */
+.app-shell.cofre-aberto ~ #save-status { left:236px; right:0; transition:left .2s ease; }
 .cofre { display:flex; align-items:stretch; min-height:100vh; }
-.cofre-lateral { flex:0 0 268px; display:flex; flex-direction:column; min-width:0;
-  background:var(--sidebar-bg,#1A1A20); border-right:1px solid var(--line); }
-.cofre-topo { display:flex; align-items:center; gap:8px; padding:12px 10px; border-bottom:1px solid var(--line); }
-.cofre-nome { flex:1; font-size:12px; text-transform:uppercase; letter-spacing:1.2px; color:var(--muted); font-weight:700; }
-.cofre-acoes { display:flex; gap:2px; }
-.cofre-lateral .tree { flex:1; overflow-y:auto; padding:8px 6px; }
-.cofre-rodape { padding:9px 12px; border-top:1px solid var(--line); }
-.cofre-nota { flex:1 1 0; min-width:0; padding:34px clamp(24px,4vw,60px) 70px; overflow-y:auto; max-height:100vh; }
+.cofre-lateral { flex:0 0 236px; display:flex; flex-direction:column; min-width:0; height:100vh; position:sticky; top:0; overflow:hidden;
+  background:transparent; border-right:1px solid rgba(255,255,255,.05); transition:flex-basis .2s ease; }
+.cofre-topo { display:flex; align-items:center; gap:6px; padding:12px 10px 8px; }
+.cofre-nome { flex:1; font-size:11px; text-transform:uppercase; letter-spacing:1.4px; color:var(--muted); font-weight:600; opacity:.7; }
+/* Ações da árvore e a seta de esconder só aparecem quando o mouse chega nela. */
+.cofre-acoes { display:flex; gap:0; }
+.cofre-acoes, .cofre-alternar { opacity:0; transition:opacity .15s ease; }
+.cofre-lateral:hover :is(.cofre-acoes, .cofre-alternar), .cofre-lateral:focus-within :is(.cofre-acoes, .cofre-alternar) { opacity:1; }
+@media (hover:none) { .cofre-acoes, .cofre-alternar { opacity:1; } }
+/* Recolhida: sobra uma faixa estreita com a casinha. Clicar na faixa ou na seta reabre. */
+.app-shell.lateral-recolhida .cofre-lateral { flex-basis:48px; cursor:pointer; }
+.app-shell.lateral-recolhida .cofre-topo { flex-direction:column; padding:12px 0 8px; }
+.app-shell.lateral-recolhida :is(.cofre-nome, .cofre-acoes, .cofre-rodape), .app-shell.lateral-recolhida .cofre-lateral .tree { display:none; }
+.app-shell.cofre-aberto.lateral-recolhida ~ #save-status { left:48px; }
+.cofre-lateral .tree { flex:1; overflow-y:auto; padding:2px 6px 8px; }
+.cofre-lateral .tree-row { font-size:13px; padding-top:4px; padding-bottom:4px; color:var(--muted); }
+.cofre-lateral .tree-row:hover { color:var(--ink); }
+.cofre-lateral .tree-folder > .tree-name { font-weight:600; }
+.cofre-lateral .tree-meta { display:none; }
+.cofre-rodape { padding:8px 12px; opacity:.6; }
+.cofre-nota { flex:1 1 0; min-width:0; height:100vh; overflow-y:auto; display:flex; flex-direction:column;
+  padding:34px clamp(28px,5vw,72px) 40px; }
 .cofre-vazio { display:flex; flex-direction:column; align-items:center; justify-content:center;
   gap:14px; min-height:60vh; color:var(--muted); text-align:center; }
 .crumb-atual { color:var(--ink); font-weight:650; }
 @media (max-width:780px) {
   .cofre { flex-direction:column; min-height:auto; }
-  .cofre-lateral { flex:none; border-right:0; border-bottom:1px solid var(--line); max-height:44vh; }
-  .cofre-nota { max-height:none; padding:22px 16px 60px; }
+  .cofre-lateral { flex:none; height:auto; position:static; border-right:0; border-bottom:1px solid var(--line); max-height:44vh; }
+  .app-shell.lateral-recolhida .cofre-topo { flex-direction:row; padding:8px 10px; }
+  .app-shell.cofre-aberto ~ #save-status, .app-shell.cofre-aberto.lateral-recolhida ~ #save-status { left:0; }
+  .cofre-nota { height:auto; padding:22px 16px 60px; }
+  .doc-corpo { min-height:50vh; }
   .app-shell.cofre-aberto > .sidebar { display:none; }
 }
 
-/* Leitura da nota: Markdown desenhado, com os blocos no lugar em que foram escritos. */
-.md-lido { max-width:880px; font-size:16px; line-height:1.8; padding:10px 0 26px; cursor:text; min-height:40vh; }
-.md-lido > *:first-child { margin-top:0; }
-.md-lido h1,.md-lido h2,.md-lido h3,.md-lido h4 { line-height:1.3; margin:26px 0 10px; letter-spacing:-.4px; }
-.md-lido h1 { font-size:26px; } .md-lido h2 { font-size:21px; } .md-lido h3 { font-size:17px; } .md-lido h4 { font-size:15px; }
-.md-lido p { margin:0 0 14px; }
-.md-lido ul,.md-lido ol { margin:0 0 14px; padding-left:24px; }
-.md-lido li { margin:4px 0; }
-.md-lido li.md-tarefa { list-style:none; margin-left:-20px; display:flex; gap:9px; align-items:flex-start; }
-.md-lido li.md-tarefa input { margin-top:5px; accent-color:var(--accent); }
-.md-lido blockquote { margin:0 0 14px; padding:10px 16px; border-left:3px solid var(--accent); background:rgba(157,78,221,.07); border-radius:0 8px 8px 0; }
-.md-lido blockquote.md-destaque { border-left-color:#C77DFF; }
+/* Markdown desenhado, com os blocos no lugar em que foram escritos. */
+.doc-corpo > *:first-child { margin-top:0; }
+.doc-corpo h1,.doc-corpo h2,.doc-corpo h3,.doc-corpo h4 { line-height:1.3; margin:26px 0 10px; letter-spacing:-.4px; }
+.doc-corpo h1 { font-size:26px; } .doc-corpo h2 { font-size:21px; } .doc-corpo h3 { font-size:17px; } .doc-corpo h4 { font-size:15px; }
+.doc-corpo p { margin:0 0 14px; }
+.doc-corpo ul,.doc-corpo ol { margin:0 0 14px; padding-left:24px; }
+.doc-corpo li { margin:4px 0; }
+.doc-corpo li.md-tarefa { list-style:none; margin-left:-20px; display:flex; gap:9px; align-items:flex-start; }
+.doc-corpo li.md-tarefa input { margin-top:5px; accent-color:var(--accent); }
+.doc-corpo blockquote { margin:0 0 14px; padding:10px 16px; border-left:3px solid var(--accent); background:rgba(157,78,221,.07); border-radius:0 8px 8px 0; }
+.doc-corpo blockquote.md-destaque { border-left-color:#C77DFF; }
 .md-destaque-tipo { display:block; font-size:11px; text-transform:uppercase; letter-spacing:1px; color:#C77DFF; font-weight:700; margin-bottom:5px; }
-.md-lido hr { border:0; border-top:1px solid var(--line); margin:22px 0; }
-.md-lido code { font-family:ui-monospace,Consolas,monospace; font-size:.9em; background:#16161B; border:1px solid var(--line); border-radius:5px; padding:1px 5px; }
-.md-lido .code-area code { background:transparent; border:0; padding:0; font-size:13px; }
-.md-lido mark { background:rgba(199,125,255,.28); color:#F2E6FF; border-radius:3px; padding:0 3px; }
+.doc-corpo hr { border:0; border-top:1px solid var(--line); margin:22px 0; }
+.doc-corpo code { font-family:ui-monospace,Consolas,monospace; font-size:.9em; background:#16161B; border:1px solid var(--line); border-radius:5px; padding:1px 5px; }
+.doc-corpo .code-area code { background:transparent; border:0; padding:0; font-size:13px; }
+.doc-corpo mark { background:rgba(199,125,255,.28); color:#F2E6FF; border-radius:3px; padding:0 3px; }
 .md-comentario { color:#6a6a76; font-style:italic; }
 .md-tag { color:#C77DFF; }
 .md-vazio { color:var(--muted); font-style:italic; }
@@ -308,7 +331,20 @@ select:focus-visible, textarea:focus-visible, .tree-row:focus-visible {
 .wikilink { color:#C77DFF; cursor:pointer; text-decoration:none; border-bottom:1px solid rgba(199,125,255,.32); }
 .wikilink:hover { color:#F2E6FF; border-bottom-color:#C77DFF; }
 .wikilink.ausente { color:#8d7aa0; border-bottom-style:dashed; }
-.md-lido a[href] { color:#C77DFF; }
+.doc-corpo a[href] { color:#C77DFF; }
 /* Pendência de gravação: um ponto, no lugar da barra de botões. */
 .doc-ponto { width:7px; height:7px; border-radius:50%; background:transparent; flex:0 0 auto; transition:background .2s ease; }
 .doc-ponto.sujo { background:#C77DFF; }
+
+
+/* Imagens coladas nas notas: cabem na largura da nota; a bolinha no canto redimensiona. */
+.md-imagem { position:relative; display:inline-block; max-width:100%; vertical-align:bottom; line-height:0; border-radius:6px; }
+.md-imagem img { display:block; max-width:100%; height:auto; border-radius:6px; }
+.md-alca { position:absolute; right:-5px; bottom:-5px; width:14px; height:14px; border-radius:50%; background:#C77DFF; border:2px solid var(--content-bg,#141418); cursor:nwse-resize; opacity:0; transition:opacity .15s ease; }
+.md-imagem:hover .md-alca, .md-imagem.redimensionando .md-alca { opacity:1; }
+.md-imagem:hover, .md-imagem.redimensionando { outline:1px solid rgba(199,125,255,.45); outline-offset:2px; }
+.md-imagem.redimensionando { user-select:none; }
+@media (hover:none) { .md-alca { opacity:1; } }
+.md-imagem.quebrada { line-height:1.4; padding:6px 10px; border:1px dashed var(--line); color:var(--muted); font-size:13px; }
+.md-imagem.quebrada img, .md-imagem.quebrada .md-alca { display:none; }
+.md-imagem.quebrada::before { content:"Imagem não encontrada: " attr(data-nome); }
