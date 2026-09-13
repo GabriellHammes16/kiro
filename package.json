@@ -11,7 +11,8 @@
     "desktop": "electron .",
     "desktop:dev": "electron . --dev-vault",
     "mcp": "node mcp/server.mjs",
-    "build:win": "electron-builder --win nsis"
+    "build:win": "electron-builder --win nsis",
+    "review-graph": "node scripts/build-review-graph.mjs"
   },
   "build": {
     "appId": "com.kuroi.local",
@@ -23,6 +24,7 @@
       "**/*",
       "!vault/**",
       "!dev/**",
+      "!scripts/**",
       "!dev-vault/**",
       "!work/**",
       "!outputs/**",

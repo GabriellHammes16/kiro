@@ -86,6 +86,24 @@ Aceita PNG, JPEG, GIF e WebP de até 20 MB. SVG não é aceito, porque pode carr
 
 `Anexos/` tem um arquivo `.kuroi-anexos` que a identifica. Com ele, a pasta não aparece na árvore, colar uma imagem não entra em conflito com a nota aberta e as imagens não são copiadas para `.history` a cada salvamento. Em troca, o histórico e a lixeira não guardam imagens: apagar o `![[...]]` da nota não apaga o arquivo, e uma imagem apagada da pasta não volta. Se o cofre já tiver uma pasta `Anexos` sua, as imagens vão para `Anexos do KUROI`.
 
+## Equações
+
+`$x^2$` desenha a fórmula na linha; `$$` numa linha sozinha abre um bloco de equação, fechado por outro `$$`. É a mesma notação do Obsidian, e os dois estão no menu do botão direito, em **Formatar** e **Inserir**.
+
+Quem desenha é o [KaTeX](https://katex.org), embarcado em `vendor/katex/` (cerca de 600 KB, licença MIT, em `vendor/katex/LICENSE.txt`). Nada é buscado na internet. Uma fórmula com erro aparece em laranja, com o texto original visível — nunca some da nota.
+
+Texto colado aos cifrões é o que vira fórmula, então `R$ 5 e R$ 10` continua sendo dinheiro.
+
+## Fontes
+
+O aplicativo embarca as próprias fontes, em `fonts/`, e nunca busca fonte na internet: a aparência é a mesma em qualquer máquina, com ou sem rede.
+
+- **IBM Plex Sans** na interface — feita para telas e tamanhos pequenos.
+- **Literata** no texto das notas — desenhada para leitura longa em tela.
+- **IBM Plex Mono** nos blocos de código.
+
+São arquivos `woff2` só com os caracteres latinos, cerca de 450 KB no total. As três estão sob a SIL Open Font License, que permite redistribuí-las junto do aplicativo; as licenças ficam em `fonts/LICENSE-ibm-plex.txt` e `fonts/LICENSE-literata.txt`.
+
 ## Agentes de IA (opcional)
 
 O Kuroi expõe uma camada controlada para agentes de IA lerem e escreverem no cofre,

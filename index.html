@@ -5,29 +5,30 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: kuroi-anexo:; object-src 'none'; base-uri 'none'" />
     <title>KUROI</title>
+    <link rel="stylesheet" href="vendor/katex/katex.min.css" />
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
     <div class="app-shell">
       <aside class="sidebar">
         <div class="brand"><img class="brand-logo" src="kuroi-logo-transparent.png" alt="Logo KUROI" /><span>KUROI</span></div>
-        <button class="new-note" id="new-note">＋ Nova nota</button>
-        <button class="quiet-button" id="daily-note">▣ Nota diária</button>
+        <button class="new-note" id="new-note"><span class="rotulo-icone" data-icone="mais"></span> Nova nota</button>
+        <button class="quiet-button" id="daily-note"><span class="rotulo-icone" data-icone="calendario"></span> Nota diária</button>
         <nav aria-label="Navegação principal">
-          <button class="nav-item active" data-view="today"><span>☀</span> Hoje</button>
-          <button class="nav-item" data-view="notes"><span>▤</span> Notas</button>
-          <button class="nav-item" data-view="tasks"><span>✓</span> Tarefas <b id="task-count"></b></button>
-          <button class="nav-item" data-view="studies"><span>▣</span> Pastas</button>
-          <button class="nav-item" data-view="graph"><span>⁂</span> Grafo</button>
+          <button class="nav-item active" data-view="today"><span class="rotulo-icone" data-icone="hoje"></span> Hoje</button>
+          <button class="nav-item" data-view="notes"><span class="rotulo-icone" data-icone="notas"></span> Notas</button>
+          <button class="nav-item" data-view="tasks"><span class="rotulo-icone" data-icone="tarefas"></span> Tarefas <b id="task-count"></b></button>
+          <button class="nav-item" data-view="studies"><span class="rotulo-icone" data-icone="pastas"></span> Pastas</button>
+          <button class="nav-item" data-view="graph"><span class="rotulo-icone" data-icone="grafo"></span> Grafo</button>
         </nav>
         <div class="sidebar-bottom">
-          <button class="quiet-button" id="export-data">⇩ Exportar dados</button>
-          <label class="quiet-button import-label">⇧ Importar dados<input type="file" id="import-data" accept="application/json" /></label>
-          <button class="quiet-button" id="open-vault">▣ Abrir pasta do cofre</button>
-          <button class="quiet-button" id="choose-vault">Escolher outro cofre</button>
-          <button class="quiet-button" id="trash">Lixeira</button>
-          <button class="quiet-button" id="settings">Configurações</button>
-          <button class="quiet-button" id="reload-vault">Recarregar cofre</button>
+          <button class="quiet-button" id="export-data"><span class="rotulo-icone" data-icone="exportar"></span> Exportar dados</button>
+          <label class="quiet-button import-label"><span class="rotulo-icone" data-icone="importar"></span> Importar dados<input type="file" id="import-data" accept="application/json" /></label>
+          <button class="quiet-button" id="open-vault"><span class="rotulo-icone" data-icone="pasta-aberta"></span> Abrir pasta do cofre</button>
+          <button class="quiet-button" id="choose-vault"><span class="rotulo-icone" data-icone="pastas"></span> Escolher outro cofre</button>
+          <button class="quiet-button" id="trash"><span class="rotulo-icone" data-icone="lixeira"></span> Lixeira</button>
+          <button class="quiet-button" id="settings"><span class="rotulo-icone" data-icone="detalhes"></span> Configurações</button>
+          <button class="quiet-button" id="reload-vault"><span class="rotulo-icone" data-icone="recarregar"></span> Recarregar cofre</button>
           <p id="vault-path">Carregando cofre…</p>
         </div>
       </aside>
@@ -35,6 +36,7 @@
     </div>
     <div id="modal-root"></div>
     <div id="save-status" role="status" aria-live="polite">Carregando…</div>
+    <script src="vendor/katex/katex.min.js"></script>
     <script src="domain.js"></script>
     <script src="app.js"></script>
   </body>

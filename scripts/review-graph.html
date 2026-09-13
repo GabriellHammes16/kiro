@@ -1,0 +1,238 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>KUROI · Grafo de revisão</title>
+<style>
+  :root { --fundo:#131317; --painel:#1b1b21; --linha:#2c2c35; --texto:#ecebf2; --apagado:#9b9aa8; --roxo:#c77dff; }
+  * { box-sizing:border-box; }
+  body { margin:0; height:100vh; display:grid; grid-template-columns:300px 1fr 320px; background:var(--fundo); color:var(--texto);
+    font:13px/1.45 "IBM Plex Sans","Segoe UI",system-ui,sans-serif; overflow:hidden; }
+  aside { background:var(--painel); border-color:var(--linha); border-style:solid; border-width:0 1px 0 0; overflow-y:auto; padding:16px; }
+  aside.detalhe { border-width:0 0 0 1px; }
+  h1 { font-size:15px; margin:0 0 2px; letter-spacing:.2px; }
+  h2 { font-size:11px; text-transform:uppercase; letter-spacing:1.1px; color:var(--apagado); margin:18px 0 8px; font-weight:600; }
+  .sub { color:var(--apagado); font-size:12px; }
+  .numeros { display:grid; grid-template-columns:repeat(3,1fr); gap:6px; margin-top:12px; }
+  .numeros div { background:#23232b; border-radius:8px; padding:8px; }
+  .numeros b { display:block; font-size:17px; }
+  .numeros span { color:var(--apagado); font-size:11px; }
+  input[type=search] { width:100%; background:#23232b; border:1px solid var(--linha); color:var(--texto); border-radius:7px; padding:7px 9px; font:inherit; }
+  label.opcao { display:flex; align-items:center; gap:8px; padding:3px 0; cursor:pointer; }
+  .bolinha { width:10px; height:10px; border-radius:50%; flex:0 0 auto; }
+  .cobertura { margin-left:auto; color:var(--apagado); font-size:11px; font-variant-numeric:tabular-nums; }
+  ul { list-style:none; margin:0; padding:0; }
+  li button { all:unset; display:block; width:100%; padding:4px 6px; border-radius:6px; cursor:pointer; color:var(--texto); font-size:12px;
+    overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  li button:hover, li button:focus-visible { background:#2a2a34; outline:none; }
+  li button small { color:var(--apagado); }
+  canvas { width:100%; height:100%; display:block; cursor:grab; }
+  canvas.arrastando { cursor:grabbing; }
+  .vazio { color:var(--apagado); margin-top:40px; text-align:center; }
+  .etiqueta { display:inline-block; font-size:11px; padding:1px 7px; border-radius:10px; background:#2a2a34; margin:2px 4px 2px 0; }
+  .etiqueta.nao { background:rgba(255,120,120,.14); color:#ffaaaa; }
+  .etiqueta.sim { background:rgba(87,204,153,.14); color:#8fe3be; }
+  .raio { background:rgba(199,125,255,.12); border:1px solid rgba(199,125,255,.3); border-radius:8px; padding:8px 10px; margin-top:10px; font-size:12px; }
+  .legenda { position:absolute; left:312px; bottom:10px; color:var(--apagado); font-size:11px; pointer-events:none; }
+</style>
+</head>
+<body>
+<aside>
+  <h1>Grafo de revisão</h1>
+  <div class="sub" id="gerado"></div>
+  <div class="numeros" id="numeros"></div>
+  <h2>Procurar</h2>
+  <input type="search" id="busca" placeholder="função ou arquivo…" />
+  <h2>Camadas</h2>
+  <div id="camadas"></div>
+  <h2>Mostrar</h2>
+  <label class="opcao"><input type="checkbox" id="verArquivos" /> Nós de arquivo</label>
+  <label class="opcao"><input type="checkbox" id="verReferencias" checked /> Referências (callbacks)</label>
+  <label class="opcao"><input type="checkbox" id="soSemTeste" /> Só o que nenhum teste alcança</label>
+  <h2>Mais dependidas</h2><ul id="listaDependidas"></ul>
+  <h2>Maiores funções</h2><ul id="listaMaiores"></ul>
+  <h2>Sem uso</h2><ul id="listaSemUso"></ul>
+  <h2>Fora dos testes</h2><ul id="listaForaTestes"></ul>
+</aside>
+<main style="position:relative;min-width:0"><canvas id="tela"></canvas></main>
+<aside class="detalhe" id="detalhe"><div class="vazio">Clique num ponto para ver quem ele chama,<br>quem depende dele e o alcance de uma mudança.</div></aside>
+<div class="legenda">roda: zoom · arrastar fundo: mover · arrastar ponto: soltar ali · anel tracejado: nenhum teste alcança</div>
+
+<script>
+const DADOS = /*__DADOS__*/null;
+const CORES = { interface:'#c77dff', dominio:'#57cc99', persistencia:'#4ea8de', servidor:'#ffb703', agentes:'#f72585', electron:'#ff8c42', dev:'#8d8d9c', testes:'#6c6c78', fronteira:'#ffffff' };
+const NOMES = { interface:'Interface', dominio:'Domínio', persistencia:'Persistência', servidor:'Servidor', agentes:'Agentes / MCP', electron:'Electron', dev:'Desenvolvimento', testes:'Testes', fronteira:'Fronteiras (IPC/HTTP/MCP)' };
+const TESTAVEIS = new Set(['dominio', 'persistencia', 'servidor', 'agentes']);
+const $ = s => document.querySelector(s);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;' }[c]));
+
+const porId = new Map(DADOS.nos.map(n => [n.id, n]));
+const saem = new Map(), entram = new Map();
+for (const a of DADOS.arestas) {
+  if (!porId.has(a.de) || !porId.has(a.para)) continue;
+  (saem.get(a.de) || saem.set(a.de, []).get(a.de)).push(a);
+  (entram.get(a.para) || entram.set(a.para, []).get(a.para)).push(a);
+}
+
+// ---- Cabeçalho e listas ----
+$('#gerado').textContent = 'gerado em ' + new Date(DADOS.gerado).toLocaleString('pt-BR');
+const r = DADOS.resumo;
+$('#numeros').innerHTML = `<div><b>${r.arquivos}</b><span>arquivos</span></div><div><b>${r.funcoes}</b><span>funções</span></div><div><b>${r.arestas}</b><span>ligações</span></div>`;
+const ativas = new Set(Object.keys(CORES).filter(c => c !== 'testes'));
+$('#camadas').innerHTML = Object.keys(CORES).map(c => `<label class="opcao"><input type="checkbox" data-camada="${c}" ${ativas.has(c) ? 'checked' : ''}/><span class="bolinha" style="background:${CORES[c]}"></span>${NOMES[c]}<span class="cobertura">${r.coberturaPorCamada[c] ? r.coberturaPorCamada[c] + ' testado' : ''}</span></label>`).join('');
+const idPorRotulo = rotulo => { const m = rotulo.match(/^(.+?) \((.+?):(\d+)\)/); return m && DADOS.nos.find(n => n.nome === m[1] && n.arquivo === m[2] && String(n.linha) === m[3])?.id; };
+function lista(alvo, itens) {
+  $(alvo).innerHTML = itens.length ? itens.map(t => `<li><button data-ir="${esc(idPorRotulo(t) || '')}">${esc(t)}</button></li>`).join('') : '<li class="sub">nada</li>';
+}
+lista('#listaDependidas', r.maisDependidas); lista('#listaMaiores', r.maiores); lista('#listaSemUso', r.semUso); lista('#listaForaTestes', r.foraDosTestes);
+document.addEventListener('click', e => { const b = e.target.closest('[data-ir]'); if (b && b.dataset.ir) selecionar(b.dataset.ir, true); });
+
+// ---- Simulação ----
+const tela = $('#tela'), ctx = tela.getContext('2d');
+let largura = 0, altura = 0, escala = 1, dx = 0, dy = 0, dpr = window.devicePixelRatio || 1;
+let visiveis = [], ligacoes = [], selecionado = null, alcance = new Set(), sobre = null, busca = '';
+const raio = n => n.tipo === 'arquivo' ? 9 : n.tipo === 'fronteira' ? 7 : 3.5 + Math.sqrt(n.chamadoPor) * 1.6;
+function medir() {
+  const caixa = tela.getBoundingClientRect();
+  largura = caixa.width; altura = caixa.height;
+  tela.width = largura * dpr; tela.height = altura * dpr;
+}
+function filtrar() {
+  const verArquivos = $('#verArquivos').checked, verRef = $('#verReferencias').checked, soSemTeste = $('#soSemTeste').checked;
+  visiveis = DADOS.nos.filter(n => ativas.has(n.camada) && (verArquivos || n.tipo !== 'arquivo') && (!soSemTeste || (TESTAVEIS.has(n.camada) && !n.testado && n.tipo !== 'arquivo')));
+  const ids = new Set(visiveis.map(n => n.id));
+  ligacoes = DADOS.arestas.filter(a => ids.has(a.de) && ids.has(a.para) && a.tipo !== 'importa' && (verRef || a.tipo !== 'referencia')).map(a => ({ ...a, a: porId.get(a.de), b: porId.get(a.para) }));
+  for (const n of visiveis) if (n.x === undefined) {
+    const ang = Math.random() * Math.PI * 2, dist = 80 + Math.random() * 260;
+    n.x = Math.cos(ang) * dist; n.y = Math.sin(ang) * dist; n.vx = 0; n.vy = 0;
+  }
+  alfa = 1;
+}
+let alfa = 1, arrastado = null;
+function passo() {
+  const lista = visiveis, total = lista.length;
+  for (let i = 0; i < total; i++) {
+    const a = lista[i];
+    for (let j = i + 1; j < total; j++) {
+      const b = lista[j];
+      let ddx = b.x - a.x, ddy = b.y - a.y, d2 = ddx * ddx + ddy * ddy || 0.01;
+      if (d2 > 250000) continue;
+      const f = 900 / d2 * alfa, d = Math.sqrt(d2);
+      a.vx -= f * ddx / d; a.vy -= f * ddy / d; b.vx += f * ddx / d; b.vy += f * ddy / d;
+    }
+  }
+  for (const l of ligacoes) {
+    const ddx = l.b.x - l.a.x, ddy = l.b.y - l.a.y, d = Math.hypot(ddx, ddy) || 1;
+    const alvo = l.tipo === 'atravessa' ? 90 : 55, f = (d - alvo) * 0.02 * alfa;
+    l.a.vx += f * ddx / d; l.a.vy += f * ddy / d; l.b.vx -= f * ddx / d; l.b.vy -= f * ddy / d;
+  }
+  for (const n of visiveis) {
+    n.vx = (n.vx - n.x * 0.0025 * alfa) * 0.82; n.vy = (n.vy - n.y * 0.0025 * alfa) * 0.82;
+    if (n !== arrastado) { n.x += n.vx; n.y += n.vy; }
+  }
+  alfa = Math.max(0, alfa * 0.992);
+}
+
+// ---- Desenho ----
+function desenhar() {
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, largura, altura);
+  ctx.translate(largura / 2 + dx, altura / 2 + dy);
+  ctx.scale(escala, escala);
+  const foco = selecionado ? new Set([selecionado, ...alcance, ...(saem.get(selecionado) || []).map(a => a.para)]) : null;
+  const vizinhosSobre = sobre ? new Set([sobre, ...(saem.get(sobre) || []).map(a => a.para), ...(entram.get(sobre) || []).map(a => a.de)]) : null;
+  const casa = n => busca && (n.nome.toLowerCase().includes(busca) || n.arquivo.toLowerCase().includes(busca));
+  for (const l of ligacoes) {
+    const acesa = (foco && foco.has(l.a.id) && foco.has(l.b.id)) || (vizinhosSobre && (l.a.id === sobre || l.b.id === sobre));
+    ctx.strokeStyle = acesa ? 'rgba(199,125,255,.75)' : l.tipo === 'atravessa' ? 'rgba(255,255,255,.14)' : 'rgba(150,150,170,.09)';
+    ctx.lineWidth = (acesa ? 1.4 : 0.7) / escala;
+    ctx.setLineDash(l.tipo === 'referencia' ? [3 / escala, 3 / escala] : []);
+    ctx.beginPath(); ctx.moveTo(l.a.x, l.a.y); ctx.lineTo(l.b.x, l.b.y); ctx.stroke();
+  }
+  ctx.setLineDash([]);
+  for (const n of visiveis) {
+    const apagado = (foco && !foco.has(n.id)) || (busca && !casa(n));
+    ctx.globalAlpha = apagado ? 0.16 : 1;
+    const rr = raio(n);
+    ctx.fillStyle = CORES[n.camada] || '#999';
+    ctx.beginPath();
+    if (n.tipo === 'fronteira') { ctx.moveTo(n.x, n.y - rr); ctx.lineTo(n.x + rr, n.y); ctx.lineTo(n.x, n.y + rr); ctx.lineTo(n.x - rr, n.y); ctx.closePath(); }
+    else if (n.tipo === 'arquivo') ctx.rect(n.x - rr, n.y - rr, rr * 2, rr * 2);
+    else ctx.arc(n.x, n.y, rr, 0, Math.PI * 2);
+    ctx.fill();
+    if (TESTAVEIS.has(n.camada) && !n.testado && n.tipo !== 'arquivo') {
+      ctx.strokeStyle = '#ff7b7b'; ctx.lineWidth = 1.2 / escala; ctx.setLineDash([2 / escala, 2 / escala]);
+      ctx.beginPath(); ctx.arc(n.x, n.y, rr + 3 / escala + 1, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
+    }
+    if (n.id === selecionado) { ctx.strokeStyle = '#fff'; ctx.lineWidth = 2 / escala; ctx.beginPath(); ctx.arc(n.x, n.y, rr + 4, 0, Math.PI * 2); ctx.stroke(); }
+    const mostrarRotulo = !apagado && (escala > 1.4 || n.tipo !== 'funcao' && n.tipo !== 'seta' && n.tipo !== 'metodo' || n.chamadoPor >= 8 || n.id === sobre || n.id === selecionado || (foco && foco.has(n.id)) || casa(n));
+    if (mostrarRotulo) {
+      ctx.fillStyle = '#d9d8e3'; ctx.font = `${11 / escala}px "IBM Plex Sans", system-ui`; ctx.textAlign = 'center';
+      ctx.fillText(n.tipo === 'arquivo' ? n.nome : n.nome.length > 28 ? n.nome.slice(0, 27) + '…' : n.nome, n.x, n.y + rr + 12 / escala);
+    }
+  }
+  ctx.globalAlpha = 1;
+}
+function quadro() { if (alfa > 0.005 || arrastado) passo(); desenhar(); requestAnimationFrame(quadro); }
+
+// ---- Seleção e alcance de mudança ----
+// "Alcance" = tudo que depende, direta ou indiretamente, do ponto escolhido: o que pode
+// quebrar se ele mudar. Segue as ligações ao contrário (quem chama, quem referencia).
+function selecionar(id, centralizar) {
+  selecionado = id;
+  alcance = new Set();
+  for (const fila = [id]; fila.length;) for (const a of entram.get(fila.pop()) || []) if (!alcance.has(a.de)) { alcance.add(a.de); fila.push(a.de); }
+  const n = porId.get(id);
+  if (centralizar && n.x !== undefined) { dx = -n.x * escala; dy = -n.y * escala; }
+  const itens = (arestas, lado) => arestas.length ? arestas.map(a => { const o = porId.get(a[lado]); return `<li><button data-ir="${esc(o.id)}">${esc(o.nome)} <small>${esc(o.arquivo)}${o.linha ? ':' + o.linha : ''} · ${a.tipo}</small></button></li>`; }).join('') : '<li class="sub">nenhum</li>';
+  const testesQueAlcancam = [...alcance].filter(x => porId.get(x)?.camada === 'testes').length;
+  const afetados = [...alcance].map(x => porId.get(x)).filter(o => o && !['arquivo', 'fronteira'].includes(o.tipo) && o.camada !== 'testes');
+  $('#detalhe').innerHTML = `
+    <h1>${esc(n.nome)}</h1>
+    <div class="sub">${esc(NOMES[n.camada] || n.camada)}${n.arquivo ? ' · ' + esc(n.arquivo) + ':' + n.linha : ''}${n.linhas ? ' · ' + n.linhas + ' linhas' : ''}</div>
+    <div style="margin-top:8px">${n.tipo === 'arquivo' || n.tipo === 'fronteira' ? '' : TESTAVEIS.has(n.camada) || n.camada === 'interface' || n.camada === 'electron' ? `<span class="etiqueta ${n.testado ? 'sim' : 'nao'}">${n.testado ? 'algum teste alcança' : 'nenhum teste alcança'}</span>` : ''}<span class="etiqueta">${n.tipo}</span></div>
+    <div class="raio"><b>Alcance de uma mudança:</b> ${afetados.length} função(ões) dependem disto, direta ou indiretamente, em ${new Set(afetados.map(o => o.arquivo)).size} arquivo(s)${testesQueAlcancam ? `; ${testesQueAlcancam} arquivo(s) de teste passam por aqui` : ''}.</div>
+    <h2>Chama (${(saem.get(id) || []).length})</h2><ul>${itens(saem.get(id) || [], 'para')}</ul>
+    <h2>Depende disto (${(entram.get(id) || []).length})</h2><ul>${itens(entram.get(id) || [], 'de')}</ul>`;
+}
+
+// ---- Interação ----
+function noEm(px, py) {
+  const x = (px - largura / 2 - dx) / escala, y = (py - altura / 2 - dy) / escala;
+  let melhor = null, melhorD = Infinity;
+  for (const n of visiveis) { const d = Math.hypot(n.x - x, n.y - y); if (d < raio(n) + 5 / escala && d < melhorD) { melhor = n; melhorD = d; } }
+  return melhor;
+}
+let pressionado = null, moveu = false;
+tela.addEventListener('pointerdown', e => { pressionado = { x: e.offsetX, y: e.offsetY }; moveu = false; arrastado = noEm(e.offsetX, e.offsetY); tela.setPointerCapture(e.pointerId); tela.classList.add('arrastando'); });
+tela.addEventListener('pointermove', e => {
+  if (!pressionado) { const n = noEm(e.offsetX, e.offsetY); sobre = n ? n.id : null; tela.title = n ? `${n.nome}${n.arquivo ? ' — ' + n.arquivo + ':' + n.linha : ''}` : ''; return; }
+  const mx = e.offsetX - pressionado.x, my = e.offsetY - pressionado.y;
+  if (Math.abs(mx) + Math.abs(my) > 3) moveu = true;
+  if (arrastado) { arrastado.x += mx / escala; arrastado.y += my / escala; arrastado.vx = arrastado.vy = 0; alfa = Math.max(alfa, 0.3); }
+  else { dx += mx; dy += my; }
+  pressionado = { x: e.offsetX, y: e.offsetY };
+});
+tela.addEventListener('pointerup', e => {
+  if (!moveu) { const n = noEm(e.offsetX, e.offsetY); if (n) selecionar(n.id, false); else { selecionado = null; alcance = new Set(); } }
+  pressionado = null; arrastado = null; tela.classList.remove('arrastando');
+});
+tela.addEventListener('wheel', e => {
+  e.preventDefault();
+  const antes = escala; escala = Math.min(6, Math.max(0.15, escala * (e.deltaY < 0 ? 1.12 : 0.89)));
+  const px = e.offsetX - largura / 2, py = e.offsetY - altura / 2;
+  dx = px - (px - dx) * (escala / antes); dy = py - (py - dy) * (escala / antes);
+}, { passive: false });
+$('#camadas').addEventListener('change', e => { const c = e.target.dataset.camada; if (!c) return; e.target.checked ? ativas.add(c) : ativas.delete(c); filtrar(); });
+for (const id of ['#verArquivos', '#verReferencias', '#soSemTeste']) $(id).addEventListener('change', filtrar);
+$('#busca').addEventListener('input', e => {
+  busca = e.target.value.trim().toLowerCase();
+  const achado = busca && visiveis.find(n => n.nome.toLowerCase() === busca) || (busca && visiveis.find(n => n.nome.toLowerCase().includes(busca)));
+  if (achado && e.target.value.length > 2) selecionar(achado.id, true);
+});
+addEventListener('resize', medir);
+medir(); filtrar(); for (let i = 0; i < 250; i++) passo(); requestAnimationFrame(quadro);
+</script>
+</body>
+</html>

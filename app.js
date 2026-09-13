@@ -26,6 +26,7 @@ function render() {
   const views = { today: renderToday, notes: renderNotes, tasks: renderTasks, studies: renderCofre, graph: renderGraph };
   document.querySelector(".app-shell").classList.toggle("cofre-aberto", currentView === "studies");
   document.querySelector(".app-shell").classList.toggle("lateral-recolhida", lateralRecolhida);
+  document.querySelector(".app-shell").classList.toggle("grafo-aberto", currentView === "graph");
   const app = document.querySelector("#app");
   cancelAnimationFrame(grafoRaf); grafoRaf = null;
   app.innerHTML = views[currentView]();
@@ -35,27 +36,86 @@ function render() {
 }
 function head(eyebrow, title, description, action="") { return `<header class="page-head"><div><p class="eyebrow">${eyebrow}</p><h1>${title}</h1><p class="subhead">${description}</p></div>${action}</header>`; }
 function check(done, action, id) { return `<button class="check ${done ? "done" : ""}" aria-label="Marcar como ${done ? "não concluído" : "concluído"}" data-action="${action}" data-id="${id}"></button>`; }
-function taskRow(task) { return `<div class="task-item">${check(task.done,"toggle-task",task.id)}<div class="task-title">${escapeHtml(task.title)}<div class="task-info">${dateLabel(task.due)}${task.noteId && getNote(task.noteId) ? ` · ${escapeHtml(getNote(task.noteId).title)}` : ""}</div></div>${task.priority === "Alta" ? '<span class="priority">Alta</span>' : ""}<div class="task-actions"><button class="icon-button" data-action="edit-task" data-id="${task.id}" title="Editar">✎</button><button class="icon-button" data-action="delete-task" data-id="${task.id}" title="Excluir">×</button></div></div>`; }
-function renderToday() { const routineDone = state.routine.filter(r=>r.date===today() && r.done).length; const urgent = state.tasks.filter(t => !t.done && t.due <= today()); const recent = [...state.notes].sort((a,b)=>b.updatedAt-a.updatedAt).slice(0,3); return `${head("Seu espaço pessoal", "Bom dia", `${formatDate(today())}. Um passo de cada vez.`)}<div class="today-grid"><div class="stack"><section class="card"><div class="card-head"><h2>Rotina de hoje</h2><span class="small-muted">${routineDone}/${state.routine.length}</span></div>${state.routine.map(r=>`<div class="routine-item">${check(r.date===today() && r.done,"toggle-routine",r.id)}<span class="routine-title">${escapeHtml(r.title)}</span></div>`).join("")}<div class="progress"><div style="width:${state.routine.length ? routineDone/state.routine.length*100 : 0}%"></div></div></section><section class="card"><div class="card-head"><h2>Notas recentes</h2><a data-go="notes">Ver todas</a></div>${recent.map(n=>`<div class="routine-item"><span class="brand-mark">◈</span><span class="routine-title">${escapeHtml(n.title)}</span><button class="icon-button" data-action="edit-note" data-id="${n.id}">›</button></div>`).join("") || '<div class="empty">Nenhuma nota ainda.</div>'}</section></div><div class="stack"><section class="card"><div class="card-head"><h2>Para fazer agora</h2><a data-go="tasks">Ver tarefas</a></div>${urgent.map(taskRow).join("") || '<div class="empty">Nada urgente. Ótimo momento para avançar nos estudos.</div>'}</section><section class="card"><div class="card-head"><h2>Estudos</h2><a data-go="studies">Abrir área</a></div>${state.folders.slice(0,3).map(f=>{const total=state.notes.filter(n=>n.folderId===f.id).length;return `<div class="routine-item"><span class="brand-mark">◈</span><span class="routine-title">${escapeHtml(f.path||f.title)}</span><span class="small-muted">${total} nota${total===1?"":"s"}</span></div>`;}).join("") || '<div class="empty">Nenhuma pasta ainda.</div>'}</section></div></div>`; }
-function renderNotes() { return `${head("Biblioteca", "Notas", "Escreva, revise e mantenha suas referências perto.", '<button class="primary" id="add-note">＋ Nova nota</button>')}<div class="toolbar"><input class="search" id="note-search" placeholder="Buscar texto ou #tag…" /></div><section class="notes-grid" id="notes-grid">${notesMarkup(state.notes)}</section>`; }
-function notesMarkup(notes) { return notes.length ? [...notes].sort((a,b)=>b.updatedAt-a.updatedAt).map(n=>{const folder=state.folders.find(f=>f.id===n.folderId);return `<article class="note-card" data-action="edit-note" data-id="${n.id}"><h2>${escapeHtml(n.title || "Sem título")}</h2><p>${escapeHtml(n.body.slice(0,160) || "Nota vazia")}</p><div class="note-meta">${folder ? `▣ ${escapeHtml(folder.path||folder.title)} · ` : ""}${Kuroi.tags(n).map(t=>`#${escapeHtml(t)}`).join(" ")} · ${n.links.length} link${n.links.length === 1 ? "" : "s"} · atualizado ${new Intl.DateTimeFormat("pt-BR",{day:"2-digit",month:"short"}).format(n.updatedAt)}</div></article>`;}).join("") : '<div class="empty">Crie sua primeira nota para começar.</div>'; }
-function renderTasks() { const open = state.tasks.filter(t=>!t.done).sort((a,b)=>a.due.localeCompare(b.due)); const done = state.tasks.filter(t=>t.done); return `${head("Organização", "Tarefas", "Concentre-se no que realmente importa hoje.", '<button class="primary" id="add-task">＋ Nova tarefa</button>')}<div class="task-layout"><section class="card"><div class="task-group"><h2>Em aberto</h2>${open.map(taskRow).join("") || '<div class="empty">Tudo concluído por aqui.</div>'}</div><div class="task-group"><h2>Concluídas</h2>${done.map(taskRow).join("") || '<div class="empty">As tarefas concluídas aparecerão aqui.</div>'}</div></section><aside class="card"><h2>Seu foco</h2><p class="subhead">Você tem <strong>${open.length}</strong> tarefa${open.length===1?"":"s"} em aberto.</p><div class="progress"><div style="width:${state.tasks.length ? done.length/state.tasks.length*100 : 0}%"></div></div><p class="small-muted">${done.length} de ${state.tasks.length} concluídas</p></aside></div>`; }
+function taskRow(task) { return `<div class="task-item">${check(task.done,"toggle-task",task.id)}<div class="task-title">${escapeHtml(task.title)}<div class="task-info">${dateLabel(task.due)}${task.noteId && getNote(task.noteId) ? ` · ${escapeHtml(getNote(task.noteId).title)}` : ""}</div></div>${task.priority === "Alta" ? '<span class="priority">Alta</span>' : ""}<div class="task-actions"><button class="icon-button" data-action="edit-task" data-id="${task.id}" title="Editar">${icone('renomear')}</button><button class="icon-button" data-action="delete-task" data-id="${task.id}" title="Excluir">${icone('lixeira')}</button></div></div>`; }
+function renderToday() { const routineDone = state.routine.filter(r=>r.date===today() && r.done).length; const urgent = state.tasks.filter(t => !t.done && t.due <= today()); const recent = [...state.notes].sort((a,b)=>b.updatedAt-a.updatedAt).slice(0,3); return `${head("Seu espaço pessoal", "Bom dia", `${formatDate(today())}. Um passo de cada vez.`)}<div class="today-grid"><div class="stack"><section class="card"><div class="card-head"><h2>Rotina de hoje</h2><span class="small-muted">${routineDone}/${state.routine.length}</span></div>${state.routine.map(r=>`<div class="routine-item">${check(r.date===today() && r.done,"toggle-routine",r.id)}<span class="routine-title">${escapeHtml(r.title)}</span></div>`).join("")}<div class="progress"><div style="width:${state.routine.length ? routineDone/state.routine.length*100 : 0}%"></div></div></section><section class="card"><div class="card-head"><h2>Notas recentes</h2><a data-go="notes">Ver todas</a></div>${recent.map(n=>`<div class="routine-item"><span class="brand-mark">${icone('nota')}</span><span class="routine-title">${escapeHtml(n.title)}</span><button class="icon-button" data-action="edit-note" data-id="${n.id}">›</button></div>`).join("") || '<div class="empty">Nenhuma nota ainda.</div>'}</section></div><div class="stack"><section class="card"><div class="card-head"><h2>Para fazer agora</h2><a data-go="tasks">Ver tarefas</a></div>${urgent.map(taskRow).join("") || '<div class="empty">Nada urgente. Ótimo momento para avançar nos estudos.</div>'}</section><section class="card"><div class="card-head"><h2>Estudos</h2><a data-go="studies">Abrir área</a></div>${state.folders.slice(0,3).map(f=>{const total=state.notes.filter(n=>n.folderId===f.id).length;return `<div class="routine-item"><span class="brand-mark">${icone('nota')}</span><span class="routine-title">${escapeHtml(f.path||f.title)}</span><span class="small-muted">${total} nota${total===1?"":"s"}</span></div>`;}).join("") || '<div class="empty">Nenhuma pasta ainda.</div>'}</section></div></div>`; }
+function renderNotes() { return `${head("Biblioteca", "Notas", "Escreva, revise e mantenha suas referências perto.", `<button class="primary" id="add-note">${icone('mais')} Nova nota</button>`)}<div class="toolbar"><input class="search" id="note-search" placeholder="Buscar texto ou #tag…" /></div><section class="notes-grid" id="notes-grid">${notesMarkup(state.notes)}</section>`; }
+function notesMarkup(notes) { return notes.length ? [...notes].sort((a,b)=>b.updatedAt-a.updatedAt).map(n=>{const folder=state.folders.find(f=>f.id===n.folderId);return `<article class="note-card" data-action="edit-note" data-id="${n.id}"><h2>${escapeHtml(n.title || "Sem título")}</h2><p>${escapeHtml(n.body.slice(0,160) || "Nota vazia")}</p><div class="note-meta">${folder ? `${icone('pastas')} ${escapeHtml(folder.path||folder.title)} · ` : ""}${Kuroi.tags(n).map(t=>`#${escapeHtml(t)}`).join(" ")} · ${n.links.length} link${n.links.length === 1 ? "" : "s"} · atualizado ${new Intl.DateTimeFormat("pt-BR",{day:"2-digit",month:"short"}).format(n.updatedAt)}</div></article>`;}).join("") : '<div class="empty">Crie sua primeira nota para começar.</div>'; }
+function renderTasks() { const open = state.tasks.filter(t=>!t.done).sort((a,b)=>a.due.localeCompare(b.due)); const done = state.tasks.filter(t=>t.done); return `${head("Organização", "Tarefas", "Concentre-se no que realmente importa hoje.", `<button class="primary" id="add-task">${icone('mais')} Nova tarefa</button>`)}<div class="task-layout"><section class="card"><div class="task-group"><h2>Em aberto</h2>${open.map(taskRow).join("") || '<div class="empty">Tudo concluído por aqui.</div>'}</div><div class="task-group"><h2>Concluídas</h2>${done.map(taskRow).join("") || '<div class="empty">As tarefas concluídas aparecerão aqui.</div>'}</div></section><aside class="card"><h2>Seu foco</h2><p class="subhead">Você tem <strong>${open.length}</strong> tarefa${open.length===1?"":"s"} em aberto.</p><div class="progress"><div style="width:${state.tasks.length ? done.length/state.tasks.length*100 : 0}%"></div></div><p class="small-muted">${done.length} de ${state.tasks.length} concluídas</p></aside></div>`; }
 const byTitle = (a,b) => a.title.localeCompare(b.title,'pt-BR',{numeric:true});
 const childFolders = id => state.folders.filter(f=>(f.parentId||"")===id).sort(byTitle);
 const folderNotes = id => state.notes.filter(n=>(n.folderId||"")===id).sort(byTitle);
 // Árvore no estilo de um explorador de arquivos: pastas aninhadas, notas como folhas.
+// ---- Ícones ----
+// Desenho vetorial no lugar de emoji e símbolos de texto: mesma grade de 24, mesma
+// espessura de traço, e a cor vem do texto em volta (currentColor), então o ícone
+// acompanha hover, foco e tema sem regra extra.
+const TRACOS = {
+  hoje: '<circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M4.6 4.6l1.4 1.4M18 18l1.4 1.4M2.5 12h2M19.5 12h2M4.6 19.4 6 18M18 6l1.4-1.4"/>',
+  notas: '<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9 13h6M9 17h4"/>',
+  tarefas: '<path d="M4 7.2 5.4 8.6 8 6M4 16.2 5.4 17.6 8 15"/><path d="M11 7h9M11 17h9"/>',
+  pastas: '<path d="M3.5 7a2 2 0 0 1 2-2h3.1a2 2 0 0 1 1.5.7L11.4 7h7.1a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z"/>',
+  'pasta-aberta': '<path d="M3.5 7a2 2 0 0 1 2-2h3.1a2 2 0 0 1 1.5.7L11.4 7h7.1a2 2 0 0 1 2 2v1.5"/><path d="M3.6 10.5h17.1l-2 7.2a2 2 0 0 1-1.9 1.3H6.2a2 2 0 0 1-1.9-1.4z"/>',
+  'pasta-nova': '<path d="M3.5 7a2 2 0 0 1 2-2h3.1a2 2 0 0 1 1.5.7L11.4 7h7.1a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z"/><path d="M12 10.5v5M9.5 13h5"/>',
+  grafo: '<circle cx="6" cy="7" r="2.3"/><circle cx="18" cy="8" r="2.3"/><circle cx="11" cy="17.6" r="2.3"/><path d="M8.2 7.6 15.8 8.4M7.2 9.1l2.7 6.4M16.5 10.1l-4 5.5"/>',
+  nota: '<path d="M12 3.6 20.4 12 12 20.4 3.6 12z"/>',
+  mais: '<path d="M12 5.5v13M5.5 12h13"/>',
+  calendario: '<rect x="3.5" y="5.5" width="17" height="14.5" rx="2"/><path d="M8 3.5v4M16 3.5v4M3.5 10.5h17"/>',
+  exportar: '<path d="M12 4v10M8.2 10.8 12 14.5l3.8-3.7"/><path d="M5 16.5V18a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-1.5"/>',
+  importar: '<path d="M12 14.5v-10M8.2 7.7 12 4l3.8 3.7"/><path d="M5 16.5V18a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-1.5"/>',
+  recarregar: '<path d="M19.5 12a7.5 7.5 0 1 1-2.2-5.3"/><path d="M19.5 4.5V9h-4.5"/>',
+  casa: '<path d="M4 10.6 12 4l8 6.6"/><path d="M6.2 9.8V19a1 1 0 0 0 1 1h9.6a1 1 0 0 0 1-1V9.8"/><path d="M10 20v-5h4v5"/>',
+  expandir: '<path d="M7 7 12 11.5 17 7M7 13 12 17.5 17 13"/>',
+  recolher: '<path d="M7 17 12 12.5 17 17M7 11 12 6.5 17 11"/>',
+  esquerda: '<path d="M14 5.5 7.5 12 14 18.5"/>',
+  direita: '<path d="M10 5.5 16.5 12 10 18.5"/>',
+  fechar: '<path d="M6.5 6.5 17.5 17.5M17.5 6.5 6.5 17.5"/>',
+  lixeira: '<path d="M4 7h16M9.5 7V5.2A1.2 1.2 0 0 1 10.7 4h2.6a1.2 1.2 0 0 1 1.2 1.2V7"/><path d="M6.8 7 7.6 19a1.5 1.5 0 0 0 1.5 1.4h5.8A1.5 1.5 0 0 0 16.4 19L17.2 7"/>',
+  renomear: '<path d="M4 20h4l10.3-10.3a2.4 2.4 0 1 0-3.4-3.4L4.6 16.6z"/><path d="M13.6 7.2 16.8 10.4"/>',
+  link: '<path d="M10.2 13.8a3.6 3.6 0 0 0 5.1 0l2.6-2.6a3.6 3.6 0 1 0-5.1-5.1l-1.2 1.2"/><path d="M13.8 10.2a3.6 3.6 0 0 0-5.1 0l-2.6 2.6a3.6 3.6 0 1 0 5.1 5.1l1.2-1.2"/>',
+  'link-externo': '<path d="M14 4.5h5.5V10"/><path d="M19.5 4.5 11.5 12.5"/><path d="M18 14v4.5a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-10a2 2 0 0 1 2-2h4.5"/>',
+  'ir-para': '<path d="M4.5 12h13M12.5 7l5 5-5 5"/>',
+  texto: '<path d="m5 19 6-14 6 14M7.6 14h6.8"/>',
+  titulo: '<path d="M6 5v14M18 5v14M6 12h12"/>',
+  paragrafo: '<path d="M13 5v14M17.5 5v14"/><path d="M13 5h-3.2a3.6 3.6 0 0 0 0 7.2H13"/>',
+  'lista-marcadores': '<path d="M9.5 7h10.5M9.5 12h10.5M9.5 17h10.5"/><circle cx="5.2" cy="7" r="1.1"/><circle cx="5.2" cy="12" r="1.1"/><circle cx="5.2" cy="17" r="1.1"/>',
+  'lista-numerada': '<path d="M10 7h10M10 12h10M10 17h10"/><path d="M4 6.2 5.6 5.4V10M4 14.6h2.6L4 18h2.8"/>',
+  'lista-tarefas': '<path d="M11 7.5h9M11 16.5h9"/><path d="M4 7.4 5.3 8.7 7.8 6.2M4 16.4l1.3 1.3 2.5-2.5"/>',
+  destaque: '<path d="M9.5 6.5h-3a2 2 0 0 0-2 2v3h5z"/><path d="M19.5 6.5h-3a2 2 0 0 0-2 2v3h5z"/><path d="M9.5 11.5c0 3.4-1.6 5.2-4.5 5.9M19.5 11.5c0 3.4-1.6 5.2-4.5 5.9"/>',
+  realce: '<path d="M5 18.5h4.5l8.2-8.2a2.4 2.4 0 1 0-3.4-3.4L5 15.4z"/><path d="M4 21h6.5"/>',
+  codigo: '<path d="M9 7.5 4.5 12 9 16.5M15 7.5 19.5 12 15 16.5"/>',
+  'codigo-bloco': '<rect x="3.5" y="5" width="17" height="14" rx="2"/><path d="M9.2 9.8 7 12l2.2 2.2M14.8 9.8 17 12l-2.2 2.2"/>',
+  tabela: '<rect x="3.5" y="5" width="17" height="14" rx="2"/><path d="M3.5 10h17M9.6 10v9M15.2 10v9"/>',
+  regua: '<path d="M4 12h16"/>',
+  comentario: '<path d="M20 11.5a7 7 0 0 1-7 7H8.6L4 21.5l1.1-4.3A7 7 0 1 1 20 11.5z"/>',
+  limpar: '<path d="M6 19.5h12"/><path d="M10 19.5 4.9 14.4a1.6 1.6 0 0 1 0-2.3l6.7-6.7a1.6 1.6 0 0 1 2.3 0l4.3 4.3a1.6 1.6 0 0 1 0 2.3l-7.5 7.5z"/>',
+  rodape: '<path d="m4 18 4.8-11L13.5 18M6 14.4h5.6"/><circle cx="18" cy="8" r="2.2"/>',
+  cortar: '<circle cx="6.2" cy="6.6" r="2.2"/><circle cx="6.2" cy="17.4" r="2.2"/><path d="M8.1 7.8 19 18.4M19 5.6 8.1 16.2"/>',
+  copiar: '<rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5.6 15H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h9a1 1 0 0 1 1 1v.6"/>',
+  colar: '<path d="M9.2 5.5H7a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-11a2 2 0 0 0-2-2h-2.2"/><rect x="9.2" y="3.5" width="5.6" height="4" rx="1.2"/>',
+  selecionar: '<path d="M5 8.5V6.8A1.8 1.8 0 0 1 6.8 5H8.5M15.5 5h1.7A1.8 1.8 0 0 1 19 6.8v1.7M19 15.5v1.7a1.8 1.8 0 0 1-1.8 1.8h-1.7M8.5 19H6.8A1.8 1.8 0 0 1 5 17.2v-1.7"/>',
+  salvar: '<path d="M5 6.5A1.5 1.5 0 0 1 6.5 5h9L19 8.5V18a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 5 18z"/><path d="M8.5 5v4.5h6M8.5 19.5v-5h7v5"/>',
+  detalhes: '<path d="M4.5 8h8M17 8h2.5M4.5 16h3M12 16h7.5"/><circle cx="14.5" cy="8" r="2.2"/><circle cx="9.5" cy="16" r="2.2"/>',
+};
+const icone = (nome, classe = '') => `<svg class="icone${classe ? ' ' + classe : ''}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">${TRACOS[nome] || ''}</svg>`;
+// Ícones do HTML fixo: o marcador data-icone vira desenho quando o app abre.
+function desenharIconesFixos() {
+  for (const alvo of document.querySelectorAll('[data-icone]')) {
+    if (!alvo.querySelector('svg')) alvo.insertAdjacentHTML('afterbegin', icone(alvo.dataset.icone));
+  }
+}
+
 function treeMarkup(parentId, depth) {
   if (depth > 20) return ""; // guarda contra ciclo, mesmo que validateState já recuse
   const folders = childFolders(parentId).map(folder => {
     const open = expanded.has(folder.id);
     const temFilhos = childFolders(folder.id).length || folderNotes(folder.id).length;
-    const tools = `<span class="tree-tools"><button class="icon-button" data-action="new-note-folder" data-id="${folder.id}" title="Nova nota nesta pasta">＋</button><button class="icon-button" data-action="new-subfolder" data-id="${folder.id}" title="Nova subpasta">▣</button><button class="icon-button" data-action="edit-folder" data-id="${folder.id}" title="Renomear ou mover">✎</button><button class="icon-button" data-action="delete-folder" data-id="${folder.id}" title="Excluir">×</button></span>`;
+    const tools = `<span class="tree-tools"><button class="icon-button" data-action="new-note-folder" data-id="${folder.id}" title="Nova nota nesta pasta">${icone('mais')}</button><button class="icon-button" data-action="new-subfolder" data-id="${folder.id}" title="Nova subpasta">${icone('pasta-nova')}</button><button class="icon-button" data-action="edit-folder" data-id="${folder.id}" title="Renomear ou mover">${icone('renomear')}</button><button class="icon-button" data-action="delete-folder" data-id="${folder.id}" title="Excluir">${icone('lixeira')}</button></span>`;
     // Filhos ficam sempre no DOM: abrir e fechar vira transição de CSS, sem redesenhar.
-    return `<div class="tree-node${open?" open":""}" data-id="${folder.id}"><div class="tree-row tree-folder" data-action="toggle-folder" data-id="${folder.id}" style="--depth:${depth}"${folder.description?` title="${escapeHtml(folder.description)}"`:""}><span class="twisty">${temFilhos?"›":""}</span><span class="tree-name">${escapeHtml(folder.title)}</span>${tools}</div><div class="tree-children"><div class="tree-children-inner">${treeMarkup(folder.id,depth+1)}</div></div></div>`;
+    return `<div class="tree-node${open?" open":""}" data-id="${folder.id}"><div class="tree-row tree-folder" data-action="toggle-folder" data-id="${folder.id}" style="--depth:${depth}"${folder.description?` title="${escapeHtml(folder.description)}"`:""}><span class="twisty">${temFilhos?icone('direita'):""}</span><span class="tree-icone">${icone('pastas')}</span><span class="tree-name">${escapeHtml(folder.title)}</span>${tools}</div><div class="tree-children"><div class="tree-children-inner">${treeMarkup(folder.id,depth+1)}</div></div></div>`;
   }).join("");
   const notes = folderNotes(parentId).map(note => {
     const tags = Kuroi.tags(note).slice(0,2).map(t=>`#${escapeHtml(t)}`).join(" ");
-    return `<div class="tree-row tree-note" data-action="edit-note" data-id="${note.id}" style="--depth:${depth}"><span class="twisty"></span><span class="tree-name">${escapeHtml(note.title||"Sem título")}</span><span class="tree-meta">${tags}</span></div>`;
+    return `<div class="tree-row tree-note${editing?.id === note.id ? " ativa" : ""}" data-action="edit-note" data-id="${note.id}" style="--depth:${depth}"><span class="twisty"></span><span class="tree-icone">${icone('nota')}</span><span class="tree-name">${escapeHtml(note.title||"Sem título")}</span><span class="tree-meta">${tags}</span></div>`;
   }).join("");
   return folders + notes;
 }
@@ -79,7 +139,7 @@ function toggleFolder(id) {
 let lateralRecolhida = (() => { try { return localStorage.getItem('kuroi.lateralRecolhida') === '1'; } catch { return false; } })();
 function botaoLateral() {
   const acao = lateralRecolhida ? 'Mostrar barra lateral' : 'Esconder barra lateral';
-  return `<button class="icon-button cofre-alternar" data-cofre="alternar" title="${acao}" aria-label="${acao}" aria-expanded="${!lateralRecolhida}">${lateralRecolhida ? '›' : '‹'}</button>`;
+  return `<button class="icon-button cofre-alternar" data-cofre="alternar" title="${acao}" aria-label="${acao}" aria-expanded="${!lateralRecolhida}">${icone(lateralRecolhida ? 'direita' : 'esquerda')}</button>`;
 }
 function alternarLateral() {
   lateralRecolhida = !lateralRecolhida;
@@ -92,7 +152,7 @@ function alternarLateral() {
   modelo.innerHTML = botaoLateral();
   const novo = modelo.content.firstElementChild;
   for (const nome of ['title', 'aria-label', 'aria-expanded']) botao.setAttribute(nome, novo.getAttribute(nome));
-  botao.textContent = novo.textContent;
+  botao.innerHTML = novo.innerHTML;
 }
 // Modo cofre: árvore à esquerda, nota à direita, sem a navegação principal.
 // A casinha devolve o usuário à tela inicial, onde a navegação completa vive.
@@ -101,17 +161,17 @@ function renderCofre() {
   const arvore = treeMarkup('', 0) || '<div class="empty">Crie uma pasta para começar.</div>';
   const direita = editing ? renderEditor() : `<div class="cofre-vazio">
     <p>Escolha uma nota na árvore ao lado.</p>
-    <button class="secondary" id="add-note-cofre">＋ Nova nota</button>
+    <button class="secondary" id="add-note-cofre">${icone('mais')} Nova nota</button>
   </div>`;
   return `<div class="cofre">
   <aside class="cofre-lateral">
     <header class="cofre-topo">
-      <button class="icon-button" data-cofre="casa" title="Voltar ao início" aria-label="Voltar ao início">⌂</button>
+      <button class="icon-button" data-cofre="casa" title="Voltar ao início" aria-label="Voltar ao início">${icone('casa')}</button>
       <span class="cofre-nome">Cofre</span>
       <span class="cofre-acoes">
-        <button class="icon-button" id="add-folder" title="Nova pasta">▣</button>
-        <button class="icon-button" id="expand-all" title="Expandir tudo">⌄</button>
-        <button class="icon-button" id="collapse-all" title="Recolher tudo">⌃</button>
+        <button class="icon-button" id="add-folder" title="Nova pasta">${icone('pasta-nova')}</button>
+        <button class="icon-button" id="expand-all" title="Expandir tudo">${icone('expandir')}</button>
+        <button class="icon-button" id="collapse-all" title="Recolher tudo">${icone('recolher')}</button>
       </span>
       ${botaoLateral()}
     </header>
@@ -163,7 +223,7 @@ function deleteFolder(id) {
   state.folders=state.folders.filter(f=>!ids.has(f.id));
   save();render();
 }
-function modal(title, body) { modalDirty=false; document.querySelector("#modal-root").innerHTML=`<div class="modal-backdrop"><section class="modal" role="dialog" aria-modal="true"><header class="modal-head"><h2>${title}</h2><button class="icon-button" id="close-modal">×</button></header>${body}</section></div>`; document.querySelector(".modal").addEventListener("input",()=>modalDirty=true); document.querySelector(".modal").addEventListener("change",()=>modalDirty=true); document.querySelector("#close-modal").onclick=()=>closeModal(); document.querySelector(".modal-backdrop").onclick=e=>{if(e.target===e.currentTarget)closeModal();}; }
+function modal(title, body) { modalDirty=false; document.querySelector("#modal-root").innerHTML=`<div class="modal-backdrop"><section class="modal" role="dialog" aria-modal="true"><header class="modal-head"><h2>${title}</h2><button class="icon-button" id="close-modal" title="Fechar" aria-label="Fechar">${icone('fechar')}</button></header>${body}</section></div>`; document.querySelector(".modal").addEventListener("input",()=>modalDirty=true); document.querySelector(".modal").addEventListener("change",()=>modalDirty=true); document.querySelector("#close-modal").onclick=()=>closeModal(); document.querySelector(".modal-backdrop").onclick=e=>{if(e.target===e.currentTarget)closeModal();}; }
 function closeModal(force=false){ if(!force && (busy || (modalDirty && !confirm('Descartar as alterações deste formulário?'))))return false; document.querySelector('#modal-root').innerHTML='';modalDirty=false;return true; }
 function taskModal(task={title:"",due:today(),priority:"Média",noteId:""}) { modal(task.id?"Editar tarefa":"Nova tarefa", `<form class="form" id="task-form"><div class="field"><label>Tarefa</label><input name="title" required value="${escapeHtml(task.title)}" placeholder="O que precisa ser feito?" /></div><div class="two-cols"><div class="field"><label>Data</label><input name="due" type="date" value="${task.due}" required /></div><div class="field"><label>Prioridade</label><select name="priority">${["Baixa","Média","Alta"].map(p=>`<option ${p===task.priority?"selected":""}>${p}</option>`).join("")}</select></div></div><div class="field"><label>Nota associada (opcional)</label><select name="noteId"><option value="">Nenhuma</option>${state.notes.map(n=>`<option value="${n.id}" ${n.id===task.noteId?"selected":""}>${escapeHtml(n.title)}</option>`).join("")}</select></div><div class="form-actions"><button type="button" class="secondary" id="cancel">Cancelar</button><button class="primary">Salvar tarefa</button></div></form>`);document.querySelector("#cancel").onclick=()=>closeModal();document.querySelector("#task-form").onsubmit=e=>{e.preventDefault();const f=new FormData(e.currentTarget);const saved={...task,id:task.id||uid(),title:f.get("title"),due:f.get("due"),priority:f.get("priority"),noteId:f.get("noteId"),done:task.done||false};state.tasks=task.id?state.tasks.map(t=>t.id===task.id?saved:t):[saved,...state.tasks];save();closeModal(true);render();}; }
 function folderModal(folder={title:"",description:"",parentId:""}) { modal(folder.id?"Editar pasta":"Nova pasta de estudo", `<form class="form" id="folder-form"><div class="field"><label>Nome da pasta</label><input name="title" required value="${escapeHtml(folder.title)}" placeholder="Ex.: JAVA, Inglês, programação" /><small class="small-muted">Vira uma pasta de verdade no cofre: sem &lt; &gt; : " / \\ | ? * e sem ponto ou espaço no início ou no final.</small></div><div class="field"><label>Dentro de</label><select name="parentId"><option value="">Raiz do cofre</option>${state.folders.filter(f=>!(folder.id?Kuroi.descendants(state.folders,folder.id):new Set()).has(f.id)).sort(byTitle).map(f=>`<option value="${f.id}" ${f.id===(folder.parentId||"")?"selected":""}>${escapeHtml(f.path||f.title)}</option>`).join("")}</select></div><div class="field"><label>Descrição</label><textarea name="description" placeholder="Qual é seu objetivo com esta pasta?">${escapeHtml(folder.description||"")}</textarea></div><div class="form-actions"><button type="button" class="secondary" id="cancel">Cancelar</button><button class="primary">Salvar pasta</button></div></form>`);document.querySelector("#cancel").onclick=()=>closeModal();document.querySelector("#folder-form").onsubmit=e=>{e.preventDefault();const f=new FormData(e.currentTarget);const title=f.get("title").trim();
@@ -209,7 +269,7 @@ function enhanceView(){
   if(currentView!=='today')return;
   $('.page-head').insertAdjacentHTML('beforeend',extraButton('daily','Abrir nota diária','','primary'));
   $('.page-head').insertAdjacentHTML('afterend','<section class="card capture"><form id="capture-form"><label for="capture-text">Captura rápida</label><div class="add-link"><input id="capture-text" required placeholder="Uma ideia, uma pergunta, algo para lembrar…" /><button class="primary">Guardar</button></div></form></section>');
-  $('.card-head').insertAdjacentHTML('beforeend',extraButton('add-routine','＋','','icon-button'));
+  $('.card-head').insertAdjacentHTML('beforeend',extraButton('add-routine',icone('mais'),'','icon-button'));
   $('#capture-form').onsubmit=async e=>{
     e.preventDefault();if(busy||failed)return;const body=$('#capture-text').value.trim();if(!body)return;
     state.notes.unshift({id:uid(),title:body.slice(0,80),body,links:[],tags:['inbox'],updatedAt:Date.now(),folderId:''});await save();
@@ -219,6 +279,7 @@ function enhanceView(){
 async function abrirNota(nota){
   if(editing&&editorDirty&&!await salvarNota())return;
   editing={...nota,tags:[...(nota.tags||[])],links:[...(nota.links||[])]};
+  if(editing.id)ultimaNota=editing.id; // centro do grafo local
   editorDirty=false;currentView='studies';render();
 }
 async function irPara(destino){ if(editing) return void await sairDoEditor(destino); currentView=destino; render(); }
@@ -238,7 +299,7 @@ function renderEditor(){
 function estadoDoc(){ $('#doc-state')?.classList.toggle('sujo', editorDirty); }
 function desenharLinksDoc(){
   const caixa=$('#doc-links'); if(!caixa) return;
-  caixa.innerHTML=editing.links.map((l,i)=>`<div class="link-row"><a href="${escapeHtml(Kuroi.safeUrl(l)||'#')}" target="_blank" rel="noopener noreferrer">${escapeHtml(l)}</a><button class="icon-button" type="button" data-remove-link="${i}">×</button></div>`).join('');
+  caixa.innerHTML=editing.links.map((l,i)=>`<div class="link-row"><a href="${escapeHtml(Kuroi.safeUrl(l)||'#')}" target="_blank" rel="noopener noreferrer">${escapeHtml(l)}</a><button class="icon-button" type="button" data-remove-link="${i}" title="Remover link" aria-label="Remover link">${icone('fechar')}</button></div>`).join('');
   caixa.querySelectorAll('[data-remove-link]').forEach(b=>b.onclick=()=>{editing.links.splice(+b.dataset.removeLink,1);editorDirty=true;estadoDoc();desenharLinksDoc();});
 }
 function bindEditor(){
@@ -278,138 +339,290 @@ function bindEditor(){
 // As ligações são derivadas do texto, como no resto do Kuroi: não há índice a
 // manter. Simulação de forças escrita à mão porque a CSP é script-src 'self':
 // nada de biblioteca por CDN, e o app não tem etapa de build.
-const REPULSAO = 5200, MOLA = 0.018, COMPRIMENTO = 95, GRAVIDADE = 0.006, AMORTECIMENTO = 0.86, MAXV = 12;
+// As opções da tela ficam no navegador, como a aparência: são preferência de
+// visualização, não dado do cofre.
+const GRAFO_PADRAO = {
+  busca: '', etiquetas: false, anexos: false, somenteExistentes: false, orfaos: true,
+  setas: false, rotulos: 0.6, tamanho: 1, grossura: 1,
+  centripeta: 0.5, repulsao: 1, forcaLinks: 1, distancia: 95,
+  local: false, profundidade: 1,
+  grupos: [], painel: false, secoes: { filtros: true, grupos: true, tela: true, forcas: true },
+};
+const CORES_DE_GRUPO = ['#4EA8DE', '#57CC99', '#FFB703', '#FF6B6B', '#F72585', '#C77DFF'];
+const FILTROS = ['etiquetas', 'anexos', 'somenteExistentes', 'orfaos', 'local', 'profundidade'];
+// A nota aberta mais recentemente é o centro do grafo local.
+let ultimaNota = null;
+let grafoOpcoes = { ...GRAFO_PADRAO, ...(() => { try { return JSON.parse(localStorage.getItem('kuroi.grafo') || '{}'); } catch { return {}; } })() };
+let grafoObservador = null, grafoResize = null;
+function gravarGrafoOpcoes() {
+  try { localStorage.setItem('kuroi.grafo', JSON.stringify(grafoOpcoes)); } catch { /* janela privada: vale só nesta sessão */ }
+}
+const valorDoGrafo = (nome, valor) => ['distancia', 'profundidade'].includes(nome) ? String(Math.round(valor)) : Number(valor).toFixed(2);
 
-function grafoDados() {
-  const nos = new Map();
-  const arestas = [];
-  for (const nota of state.notes) {
-    nos.set(nota.id, { id: nota.id, rotulo: nota.title || 'Sem título', existe: true, grau: 0 });
-  }
+function grafoDados(op = grafoOpcoes) {
+  const nos = new Map(), arestas = [];
+  const ligar = (de, para) => { arestas.push({ de, para }); nos.get(de).grau++; nos.get(para).grau++; nos.get(para).entradas++; };
+  for (const nota of state.notes) nos.set(nota.id, { id: nota.id, rotulo: nota.title || 'Sem título', tipo: 'nota', grau: 0, entradas: 0, procura: `${nota.title || ''} ${Kuroi.tags(nota).join(' ')}` });
   for (const nota of state.notes) {
     const vistos = new Set();
     for (const link of Kuroi.wikiLinks(nota.body)) {
       const alvo = Kuroi.findLinkedNote(state.notes, link.target);
       const chave = alvo ? alvo.id : `fantasma:${Kuroi.pathKey(link.target)}`;
-      if (chave === nota.id || vistos.has(chave)) continue;
+      if (chave === nota.id || vistos.has(chave) || (!alvo && op.somenteExistentes)) continue;
       vistos.add(chave);
       // Link para nota inexistente vira nó fantasma: mostra o que você pretendia criar.
-      if (!nos.has(chave)) nos.set(chave, { id: chave, rotulo: link.target, existe: false, grau: 0 });
-      arestas.push({ de: nota.id, para: chave });
-      nos.get(nota.id).grau++;
-      nos.get(chave).grau++;
+      if (!nos.has(chave)) nos.set(chave, { id: chave, rotulo: link.target, tipo: 'fantasma', grau: 0, entradas: 0 });
+      ligar(nota.id, chave);
+    }
+    if (op.etiquetas) for (const etiqueta of Kuroi.tags(nota)) {
+      const chave = `etiqueta:${Kuroi.pathKey(etiqueta)}`;
+      if (vistos.has(chave)) continue;
+      vistos.add(chave);
+      if (!nos.has(chave)) nos.set(chave, { id: chave, rotulo: `#${etiqueta}`, tipo: 'etiqueta', grau: 0, entradas: 0 });
+      ligar(nota.id, chave);
+    }
+    if (op.anexos) for (const achado of imagensNaFonte(nota.body)) {
+      const chave = `anexo:${Kuroi.pathKey(achado.imagem.caminho)}`;
+      if (vistos.has(chave)) continue;
+      vistos.add(chave);
+      if (!nos.has(chave)) nos.set(chave, { id: chave, rotulo: achado.imagem.caminho.split('/').pop(), tipo: 'anexo', grau: 0, entradas: 0 });
+      ligar(nota.id, chave);
     }
   }
-  return { nos: [...nos.values()], arestas };
+  let lista = [...nos.values()];
+  // Grafo local: parte da última nota aberta e caminha pelas ligações.
+  if (op.local && nos.has(ultimaNota)) {
+    const alcance = new Set([ultimaNota]);
+    let borda = new Set([ultimaNota]);
+    for (let salto = 0; salto < op.profundidade; salto++) {
+      const proxima = new Set();
+      for (const aresta of arestas) {
+        if (borda.has(aresta.de) && !alcance.has(aresta.para)) { alcance.add(aresta.para); proxima.add(aresta.para); }
+        if (borda.has(aresta.para) && !alcance.has(aresta.de)) { alcance.add(aresta.de); proxima.add(aresta.de); }
+      }
+      borda = proxima;
+    }
+    lista = lista.filter(no => alcance.has(no.id));
+  }
+  if (!op.orfaos) lista = lista.filter(no => no.grau > 0);
+  const vivos = new Set(lista.map(no => no.id));
+  return { nos: lista, arestas: arestas.filter(a => vivos.has(a.de) && vivos.has(a.para)) };
+}
+
+const grafoChave = (nome, rotulo) =>
+  `<label class="grafo-linha"><span>${rotulo}</span><input type="checkbox" data-opcao="${nome}"${grafoOpcoes[nome] ? ' checked' : ''} /><span class="interruptor" aria-hidden="true"></span></label>`;
+const grafoFaixa = (nome, rotulo, min, max, passo) =>
+  `<div class="grafo-faixa"><div class="grafo-faixa-topo"><span>${rotulo}</span><span class="small-muted" data-valor="${nome}">${valorDoGrafo(nome, grafoOpcoes[nome])}</span></div>` +
+  `<input type="range" data-opcao="${nome}" min="${min}" max="${max}" step="${passo}" value="${grafoOpcoes[nome]}" aria-label="${rotulo}" /></div>`;
+
+const grafoSecao = (chave, titulo, conteudo, acoes = '') => {
+  const aberta = grafoOpcoes.secoes?.[chave] !== false;
+  return `<section class="grafo-secao${aberta ? ' aberta' : ''}" data-secao="${chave}">
+      <h3><button type="button" class="grafo-secao-botao" data-alternar="${chave}" aria-expanded="${aberta}">${icone('direita', 'grafo-seta')}<span>${titulo}</span></button>${acoes}</h3>
+      <div class="grafo-secao-corpo">${conteudo}</div>
+    </section>`;
+};
+
+// Quantas notas o filtro deixou e, no grafo local, em volta de quem.
+function textoDoResumo(nos, ligacoes) {
+  const notas = nos.filter(no => no.tipo === 'nota').length;
+  const centro = grafoOpcoes.local ? state.notes.find(nota => nota.id === ultimaNota) : null;
+  const volta = grafoOpcoes.local
+    ? (centro ? `ao redor de “${centro.title}” · ` : 'abra uma nota para centrar o grafo · ')
+    : '';
+  return `${volta}${notas} nota${notas === 1 ? '' : 's'} · ${ligacoes.length} ligaç${ligacoes.length === 1 ? 'ão' : 'ões'}`;
 }
 
 function renderGraph() {
   const { nos, arestas } = grafoDados();
-  const soltas = nos.filter(n => n.existe && !n.grau).length;
-  const fantasmas = nos.filter(n => !n.existe).length;
-  const resumo = `${nos.filter(n => n.existe).length} nota${nos.filter(n => n.existe).length === 1 ? '' : 's'} · ${arestas.length} ligaç${arestas.length === 1 ? 'ão' : 'ões'}`
-    + (soltas ? ` · ${soltas} sem conexão` : '')
-    + (fantasmas ? ` · ${fantasmas} ainda não criada${fantasmas === 1 ? '' : 's'}` : '');
-  const corpo = arestas.length || nos.length
-    ? `<div class="graph-wrap" id="graph-wrap"><svg id="graph-svg" role="img" aria-label="Grafo de conexões entre as notas"></svg></div>`
-    : '<div class="empty">Escreva [[Nome da nota]] em alguma nota para as ligações aparecerem aqui.</div>';
-  return `${head('Conhecimento', 'Grafo', 'Como suas notas se ligam. Clique num ponto para abrir a nota.',
-    '<button class="secondary" id="graph-redo">Reorganizar</button>')}
-<section class="card graph-panel"><div class="graph-head"><span class="small-muted">${resumo}</span></div>${corpo}</section>`;
+  const resumo = escapeHtml(textoDoResumo(nos, arestas));
+  const vazio = state.notes.length
+    ? ''
+    : '<div class="grafo-vazio">Escreva [[Nome da nota]] em alguma nota para as ligações aparecerem aqui.</div>';
+  return `<div class="grafo-tela${grafoOpcoes.painel ? '' : ' sem-painel'}" id="grafo-tela">
+  <svg id="graph-svg" role="img" aria-label="Grafo de conexões entre as notas"></svg>
+  ${vazio}
+  <span class="grafo-resumo small-muted">${resumo}</span>
+  <button class="icon-button grafo-abrir" id="grafo-abrir" title="Mostrar opções" aria-label="Mostrar opções">${icone('detalhes')}</button>
+  <aside class="grafo-painel" id="grafo-painel" aria-label="Opções do grafo">
+    ${grafoSecao('filtros', 'Filtros', `
+      <input class="grafo-busca" type="search" data-opcao="busca" value="${escapeHtml(grafoOpcoes.busca)}" placeholder="Procurar notas…" aria-label="Procurar notas" />
+      ${grafoChave('etiquetas', 'Etiquetas')}
+      ${grafoChave('anexos', 'Anexos')}
+      ${grafoChave('somenteExistentes', 'Apenas notas existentes')}
+      ${grafoChave('orfaos', 'Órfãs')}
+      ${grafoChave('local', 'Somente ao redor da nota aberta')}
+      ${grafoFaixa('profundidade', 'Passos a partir dela', 1, 3, 1)}`,
+      `<span class="grafo-topo-acoes">
+        <button class="icon-button" id="grafo-restaurar" title="Voltar ao padrão" aria-label="Voltar ao padrão">${icone('recarregar')}</button>
+        <button class="icon-button" id="grafo-fechar" title="Esconder opções" aria-label="Esconder opções">${icone('fechar')}</button>
+      </span>`)}
+    ${grafoSecao('grupos', 'Grupos', `
+      <div id="grafo-grupos"></div>
+      <button class="secondary" id="grafo-novo-grupo">Criar novo grupo</button>`)}
+    ${grafoSecao('tela', 'Tela', `
+      ${grafoChave('setas', 'Setas')}
+      ${grafoFaixa('rotulos', 'Limite dos rótulos', 0, 2, 0.05)}
+      ${grafoFaixa('tamanho', 'Tamanho dos pontos', 0.4, 2.5, 0.05)}
+      ${grafoFaixa('grossura', 'Grossura dos links', 0.3, 3, 0.05)}
+      <button class="secondary" id="grafo-animar">Animar</button>`)}
+    ${grafoSecao('forcas', 'Forças', `
+      ${grafoFaixa('centripeta', 'Força centrípeta', 0, 2, 0.02)}
+      ${grafoFaixa('repulsao', 'Força de repulsão', 0.1, 4, 0.05)}
+      ${grafoFaixa('forcaLinks', 'Força dos links', 0, 3, 0.05)}
+      ${grafoFaixa('distancia', 'Distância dos links', 40, 400, 5)}`)}
+  </aside>
+</div>`;
 }
 
 function bindGraph() {
-  const area = $('#graph-wrap');
-  if (!area) return;
-  const svg = $('#graph-svg');
-  const { nos, arestas } = grafoDados();
-  if (!nos.length) return;
-
-  const largura = area.clientWidth || 800, altura = area.clientHeight || 520;
-  const raio = no => (no.existe ? 6 : 4.5) + Math.min(no.grau, 9) * 1.1;
-  const porId = new Map(nos.map(n => [n.id, n]));
-  const ligacoes = arestas.map(a => ({ a: porId.get(a.de), b: porId.get(a.para) })).filter(l => l.a && l.b);
-  const vizinhos = new Map(nos.map(n => [n.id, new Set()]));
-  for (const l of ligacoes) { vizinhos.get(l.a.id).add(l.b.id); vizinhos.get(l.b.id).add(l.a.id); }
-
-  // Posição inicial em círculo: evita que tudo comece sobreposto no centro.
-  nos.forEach((no, i) => {
-    const angulo = (i / nos.length) * Math.PI * 2;
-    const r = Math.min(largura, altura) * 0.32;
-    no.x = largura / 2 + Math.cos(angulo) * r;
-    no.y = altura / 2 + Math.sin(angulo) * r;
-    no.vx = 0; no.vy = 0;
-  });
-
+  const svg = $('#graph-svg'), tela = $('#grafo-tela');
+  if (!svg || !tela) return;
   const ns = 'http://www.w3.org/2000/svg';
-  svg.setAttribute('viewBox', `0 0 ${largura} ${altura}`);
-  svg.innerHTML = '';
-  const camera = document.createElementNS(ns, 'g');
-  svg.appendChild(camera);
-  const grupoArestas = document.createElementNS(ns, 'g');
-  const grupoNos = document.createElementNS(ns, 'g');
-  camera.appendChild(grupoArestas);
-  camera.appendChild(grupoNos);
+  const semMovimento = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const AMORTECIMENTO = 0.86, MAXV = 12;
+  let largura = 800, altura = 520, nos = [], ligacoes = [], vizinhos = new Map();
+  let camera = null, grupoArestas = null, grupoNos = null;
+  let escala = 1, deslocX = 0, deslocY = 0;
+  let arrastando = null, arrastou = false, ultimo = null, quadros = 0, alfa = 1;
 
-  for (const l of ligacoes) {
-    l.el = document.createElementNS(ns, 'line');
-    l.el.setAttribute('class', 'graph-edge');
-    grupoArestas.appendChild(l.el);
-  }
-  for (const no of nos) {
-    no.el = document.createElementNS(ns, 'g');
-    no.el.setAttribute('class', `graph-node${no.existe ? '' : ' fantasma'}`);
-    const circulo = document.createElementNS(ns, 'circle');
-    circulo.setAttribute('r', raio(no));
-    const texto = document.createElementNS(ns, 'text');
-    texto.setAttribute('y', raio(no) + 13);
-    texto.textContent = no.rotulo.length > 26 ? `${no.rotulo.slice(0, 25)}…` : no.rotulo;
-    no.el.append(circulo, texto);
-    if (no.existe) no.el.addEventListener('click', () => { if (!arrastou) abrirNota(getNote(no.id)); });
-    no.el.addEventListener('pointerenter', () => destacar(no.id));
-    no.el.addEventListener('pointerleave', () => destacar(null));
-    grupoNos.appendChild(no.el);
-  }
+  // Tamanho pelo número de links recebidos: as notas mais citadas ficam maiores.
+  // Raiz quadrada para que uma nota muito citada não vire um disco gigante.
+  const raio = no => (4.5 + Math.sqrt(no.entradas || 0) * 3.4) * grafoOpcoes.tamanho;
+  // "procura", não "texto": no.texto é o elemento <text> do rótulo, criado no desenho.
+  const procuravel = no => Kuroi.normalize(no.procura || no.rotulo);
+  const corDoNo = no => grafoOpcoes.grupos.find(g => g.consulta.trim() && procuravel(no).includes(Kuroi.normalize(g.consulta)))?.cor || '';
 
+  function medir() {
+    largura = Math.max(320, tela.clientWidth);
+    altura = Math.max(260, tela.clientHeight);
+    svg.setAttribute('viewBox', `0 0 ${largura} ${altura}`);
+  }
+  function espalhar(embaralhar) {
+    nos.forEach((no, i) => {
+      if (!embaralhar && Number.isFinite(no.x)) return;
+      const angulo = (i / nos.length) * Math.PI * 2 + (embaralhar ? Math.random() * 0.5 : 0);
+      const r = Math.min(largura, altura) * 0.32;
+      no.x = largura / 2 + Math.cos(angulo) * r;
+      no.y = altura / 2 + Math.sin(angulo) * r;
+      no.vx = 0; no.vy = 0;
+    });
+  }
   function destacar(id) {
-    for (const no of nos) {
-      no.el.classList.toggle('apagado', Boolean(id) && no.id !== id && !vizinhos.get(id).has(no.id));
-    }
+    for (const no of nos) no.el.classList.toggle('apagado', Boolean(id) && no.id !== id && !vizinhos.get(id).has(no.id));
     for (const l of ligacoes) {
       l.el.classList.toggle('aceso', Boolean(id) && (l.a.id === id || l.b.id === id));
       l.el.classList.toggle('apagado', Boolean(id) && l.a.id !== id && l.b.id !== id);
     }
   }
+  // Aparência sem refazer o desenho: tamanho, cor, grossura, setas, busca e rótulos.
+  function pintar() {
+    const busca = Kuroi.normalize(grafoOpcoes.busca.trim());
+    for (const no of nos) {
+      const r = raio(no);
+      no.circulo.setAttribute('r', r);
+      no.alvo.setAttribute('r', r + 9);
+      no.texto.setAttribute('y', r + 13);
+      no.circulo.style.fill = corDoNo(no);
+      no.el.classList.toggle('filtrado', Boolean(busca) && !procuravel(no).includes(busca));
+    }
+    for (const l of ligacoes) {
+      // Estilo embutido, não atributo: o atributo perde para a regra .graph-edge do CSS.
+      l.el.style.strokeWidth = `${(1.2 * grafoOpcoes.grossura).toFixed(2)}px`;
+      if (grafoOpcoes.setas) l.el.setAttribute('marker-end', 'url(#grafo-seta)');
+      else l.el.removeAttribute('marker-end');
+    }
+    svg.classList.toggle('sem-rotulos', escala < grafoOpcoes.rotulos);
+  }
+  function montar() {
+    const dados = grafoDados();
+    nos = dados.nos;
+    const porId = new Map(nos.map(no => [no.id, no]));
+    ligacoes = dados.arestas.map(a => ({ a: porId.get(a.de), b: porId.get(a.para) })).filter(l => l.a && l.b);
+    vizinhos = new Map(nos.map(no => [no.id, new Set()]));
+    for (const l of ligacoes) { vizinhos.get(l.a.id).add(l.b.id); vizinhos.get(l.b.id).add(l.a.id); }
+    // O resumo é refeito a cada filtro, junto com o desenho.
+    const linhaResumo = $('.grafo-resumo');
+    if (linhaResumo) linhaResumo.textContent = textoDoResumo(nos, ligacoes);
+    medir();
+    espalhar(false);
+    svg.innerHTML = '<defs><marker id="grafo-seta" viewBox="0 0 8 8" refX="9" refY="4" markerWidth="5" markerHeight="5" orient="auto"><path d="M0 0 8 4 0 8z" fill="#4a4a56" /></marker></defs>';
+    camera = document.createElementNS(ns, 'g');
+    grupoArestas = document.createElementNS(ns, 'g');
+    grupoNos = document.createElementNS(ns, 'g');
+    camera.append(grupoArestas, grupoNos);
+    svg.appendChild(camera);
+    for (const l of ligacoes) {
+      l.el = document.createElementNS(ns, 'line');
+      l.el.setAttribute('class', 'graph-edge');
+      grupoArestas.appendChild(l.el);
+    }
+    for (const no of nos) {
+      no.el = document.createElementNS(ns, 'g');
+      no.el.setAttribute('class', `graph-node tipo-${no.tipo}`);
+      no.alvo = document.createElementNS(ns, 'circle');
+      no.alvo.setAttribute('class', 'graph-hit');
+      no.circulo = document.createElementNS(ns, 'circle');
+      no.texto = document.createElementNS(ns, 'text');
+      no.texto.textContent = no.rotulo.length > 26 ? `${no.rotulo.slice(0, 25)}…` : no.rotulo;
+      no.el.append(no.alvo, no.circulo, no.texto);
+      if (no.tipo === 'nota') no.el.addEventListener('click', () => { if (!arrastou) abrirNota(getNote(no.id)); });
+      no.el.addEventListener('pointerenter', () => destacar(no.id));
+      no.el.addEventListener('pointerleave', () => destacar(null));
+      grupoNos.appendChild(no.el);
+    }
+    pintar();
+    aplicarCamera();
+    comecar();
+  }
 
+  // Um passo da simulação. As três forças do painel agem juntas, todas medidas
+  // pelo alfa: ele começa em 1 e decai, então o desenho se acomoda em vez de
+  // vibrar para sempre. Arrastar um nó reacende o alfa.
   function passo() {
+    const repulsao = 5200 * grafoOpcoes.repulsao, mola = 0.018 * grafoOpcoes.forcaLinks;
+    const comprimento = grafoOpcoes.distancia, gravidade = 0.012 * grafoOpcoes.centripeta;
+    const raios = nos.map(raio);
     for (let i = 0; i < nos.length; i++) {
       for (let j = i + 1; j < nos.length; j++) {
         const a = nos[i], b = nos[j];
         let dx = b.x - a.x, dy = b.y - a.y, d2 = dx * dx + dy * dy;
         if (d2 < 1) { dx = Math.random() - 0.5; dy = Math.random() - 0.5; d2 = 1; }
-        const d = Math.sqrt(d2), f = REPULSAO / d2;
+        const d = Math.sqrt(d2), f = repulsao / d2 * alfa;
         a.vx -= f * dx / d; a.vy -= f * dy / d;
         b.vx += f * dx / d; b.vy += f * dy / d;
+        // Encostaram: afasta na hora, metade do caminho para cada lado. É o que
+        // impede dois pontos de ficarem um por cima do outro com a repulsão fraca.
+        const minimo = raios[i] + raios[j] + 6;
+        if (d < minimo) {
+          const empurrao = (minimo - d) / 2, ux = dx / d, uy = dy / d;
+          if (a !== arrastando) { a.x -= ux * empurrao; a.y -= uy * empurrao; }
+          if (b !== arrastando) { b.x += ux * empurrao; b.y += uy * empurrao; }
+        }
       }
     }
     for (const l of ligacoes) {
       const dx = l.b.x - l.a.x, dy = l.b.y - l.a.y, d = Math.hypot(dx, dy) || 1;
-      const f = (d - COMPRIMENTO) * MOLA;
+      const f = (d - comprimento) * mola * alfa;
       l.a.vx += f * dx / d; l.a.vy += f * dy / d;
       l.b.vx -= f * dx / d; l.b.vy -= f * dy / d;
     }
-    let energia = 0;
+    let energia = 0, somaX = 0, somaY = 0;
     for (const no of nos) {
-      no.vx = (no.vx + (largura / 2 - no.x) * GRAVIDADE) * AMORTECIMENTO;
-      no.vy = (no.vy + (altura / 2 - no.y) * GRAVIDADE) * AMORTECIMENTO;
+      no.vx = (no.vx + (largura / 2 - no.x) * gravidade * alfa) * AMORTECIMENTO;
+      no.vy = (no.vy + (altura / 2 - no.y) * gravidade * alfa) * AMORTECIMENTO;
       const v = Math.hypot(no.vx, no.vy);
       if (v > MAXV) { no.vx = no.vx / v * MAXV; no.vy = no.vy / v * MAXV; }
       if (no !== arrastando) { no.x += no.vx; no.y += no.vy; }
-      energia += v;
+      energia += v; somaX += no.x; somaY += no.y;
     }
-    return energia / nos.length;
+    // Recentraliza o conjunto inteiro em vez de apertar cada ponto contra o meio:
+    // o desenho fica na tela sem achatar quem está na borda.
+    const desvioX = somaX / nos.length - largura / 2, desvioY = somaY / nos.length - altura / 2;
+    for (const no of nos) if (no !== arrastando) { no.x -= desvioX * 0.08; no.y -= desvioY * 0.08; }
+    alfa *= 0.985;
+    return nos.length ? energia / nos.length : 0;
   }
-
   function desenhar() {
     for (const l of ligacoes) {
       l.el.setAttribute('x1', l.a.x); l.el.setAttribute('y1', l.a.y);
@@ -417,31 +630,34 @@ function bindGraph() {
     }
     for (const no of nos) no.el.setAttribute('transform', `translate(${no.x} ${no.y})`);
   }
-
-  const semMovimento = matchMedia('(prefers-reduced-motion: reduce)').matches;
-  let quadros = 0;
   function animar() {
     const energia = passo();
     desenhar();
-    if (++quadros < 600 && energia > 0.12) grafoRaf = requestAnimationFrame(animar);
+    if (alfa > 0.02 && energia > 0.05 && ++quadros < 3000) grafoRaf = requestAnimationFrame(animar);
     else grafoRaf = null;
   }
   function comecar() {
     cancelAnimationFrame(grafoRaf);
-    quadros = 0;
+    // Rede de segurança: se a janela mudou de tamanho sem que o aviso chegasse,
+    // a medida certa entra aqui, antes de a simulação recomeçar.
+    medir();
+    quadros = 0; alfa = 1;
+    if (!nos.length) return;
     if (semMovimento) { for (let i = 0; i < 400; i++) passo(); desenhar(); }
     else animar();
   }
 
   // Câmera: arrastar o fundo move, roda do mouse aproxima.
-  let escala = 1, deslocX = 0, deslocY = 0;
-  const aplicarCamera = () => camera.setAttribute('transform', `translate(${deslocX} ${deslocY}) scale(${escala})`);
-  let arrastando = null, arrastou = false, ultimo = null;
+  const aplicarCamera = () => {
+    camera?.setAttribute('transform', `translate(${deslocX} ${deslocY}) scale(${escala})`);
+    svg.classList.toggle('sem-rotulos', escala < grafoOpcoes.rotulos);
+  };
   svg.addEventListener('pointerdown', evento => {
     arrastou = false;
     ultimo = { x: evento.clientX, y: evento.clientY };
     const alvo = evento.target.closest('.graph-node');
-    arrastando = alvo ? nos.find(n => n.el === alvo) : null;
+    arrastando = alvo ? nos.find(no => no.el === alvo) : null;
+    if (arrastando) { arrastando.vx = 0; arrastando.vy = 0; destacar(arrastando.id); comecar(); }
     svg.setPointerCapture(evento.pointerId);
   });
   svg.addEventListener('pointermove', evento => {
@@ -453,13 +669,21 @@ function bindGraph() {
     if (arrastando) {
       arrastando.x += dx * proporcao / escala;
       arrastando.y += dy * proporcao / escala;
-      if (!grafoRaf && !semMovimento) animar(); else desenhar();
+      // Zerar a velocidade evita que o nó saia voando ao ser solto, e reiniciar a
+      // contagem de quadros mantém os vizinhos acompanhando enquanto se arrasta.
+      // Zerar a velocidade evita que o nó saia voando ao ser solto; reiniciar a
+      // contagem de quadros mantém o grafo se reorganizando durante todo o arraste.
+      arrastando.vx = 0; arrastando.vy = 0; quadros = 0; alfa = Math.max(alfa, 0.45);
+      // Dois passos a cada movimento: os vizinhos se reorganizam junto com a mão,
+      // sem depender do próximo quadro de animação.
+      passo(); passo(); desenhar();
+      if (!grafoRaf && !semMovimento) animar();
     } else {
       deslocX += dx * proporcao; deslocY += dy * proporcao;
       aplicarCamera();
     }
   });
-  const soltar = evento => { arrastando = null; ultimo = null; try { svg.releasePointerCapture(evento.pointerId); } catch { /* já solto */ } };
+  const soltar = evento => { if (arrastando) { arrastando.vx = 0; arrastando.vy = 0; destacar(null); comecar(); } arrastando = null; ultimo = null; try { svg.releasePointerCapture(evento.pointerId); } catch { /* já solto */ } };
   svg.addEventListener('pointerup', soltar);
   svg.addEventListener('pointercancel', soltar);
   svg.addEventListener('wheel', evento => {
@@ -475,20 +699,68 @@ function bindGraph() {
     aplicarCamera();
   }, { passive: false });
 
-  $('#graph-redo')?.addEventListener('click', () => {
-    escala = 1; deslocX = 0; deslocY = 0; aplicarCamera();
-    nos.forEach((no, i) => {
-      const angulo = (i / nos.length) * Math.PI * 2 + Math.random() * 0.4;
-      const r = Math.min(largura, altura) * 0.32;
-      no.x = largura / 2 + Math.cos(angulo) * r;
-      no.y = altura / 2 + Math.sin(angulo) * r;
-      no.vx = 0; no.vy = 0;
+  // Painel de opções.
+  const painel = $('#grafo-painel');
+  const mostrarPainel = mostrar => { grafoOpcoes.painel = mostrar; gravarGrafoOpcoes(); tela.classList.toggle('sem-painel', !mostrar); medir(); };
+  $('#grafo-abrir').onclick = () => mostrarPainel(true);
+  $('#grafo-fechar').onclick = () => mostrarPainel(false);
+  $('#grafo-restaurar').onclick = () => { grafoOpcoes = { ...GRAFO_PADRAO, painel: grafoOpcoes.painel }; gravarGrafoOpcoes(); render(); };
+  $('#grafo-animar').onclick = () => { escala = 1; deslocX = 0; deslocY = 0; aplicarCamera(); espalhar(true); comecar(); };
+  for (const campo of painel.querySelectorAll('[data-opcao]')) {
+    campo.addEventListener('input', () => {
+      const nome = campo.dataset.opcao;
+      grafoOpcoes[nome] = campo.type === 'checkbox' ? campo.checked : campo.type === 'range' ? Number(campo.value) : campo.value;
+      gravarGrafoOpcoes();
+      painel.querySelector(`[data-valor="${nome}"]`) && (painel.querySelector(`[data-valor="${nome}"]`).textContent = valorDoGrafo(nome, grafoOpcoes[nome]));
+      // Filtro muda quem está no grafo; o resto é só aparência ou força.
+      if (FILTROS.includes(nome)) montar();
+      else if (nome === 'busca' || nome === 'rotulos') pintar();
+      else { pintar(); comecar(); }
     });
-    comecar();
+  }
+  function desenharGrupos() {
+    const caixa = $('#grafo-grupos');
+    caixa.innerHTML = grafoOpcoes.grupos.map((grupo, i) =>
+      `<div class="grafo-grupo"><button class="grafo-cor" data-cor="${i}" style="background:${grupo.cor}" title="Trocar a cor" aria-label="Trocar a cor"></button>` +
+      `<input data-grupo="${i}" value="${escapeHtml(grupo.consulta)}" placeholder="palavra do título" aria-label="Palavra do grupo" />` +
+      `<button class="icon-button" data-remover="${i}" title="Remover grupo" aria-label="Remover grupo">${icone('fechar')}</button></div>`).join('');
+    for (const campo of caixa.querySelectorAll('[data-grupo]')) campo.addEventListener('input', () => {
+      grafoOpcoes.grupos[+campo.dataset.grupo].consulta = campo.value; gravarGrafoOpcoes(); pintar();
+    });
+    for (const bolinha of caixa.querySelectorAll('[data-cor]')) bolinha.addEventListener('click', () => {
+      const grupo = grafoOpcoes.grupos[+bolinha.dataset.cor];
+      grupo.cor = CORES_DE_GRUPO[(CORES_DE_GRUPO.indexOf(grupo.cor) + 1) % CORES_DE_GRUPO.length];
+      bolinha.style.background = grupo.cor; gravarGrafoOpcoes(); pintar();
+    });
+    for (const botao of caixa.querySelectorAll('[data-remover]')) botao.addEventListener('click', () => {
+      grafoOpcoes.grupos.splice(+botao.dataset.remover, 1); gravarGrafoOpcoes(); desenharGrupos(); pintar();
+    });
+  }
+  $('#grafo-novo-grupo').onclick = () => {
+    grafoOpcoes.grupos.push({ consulta: '', cor: CORES_DE_GRUPO[grafoOpcoes.grupos.length % CORES_DE_GRUPO.length] });
+    gravarGrafoOpcoes(); desenharGrupos();
+    $('#grafo-grupos .grafo-grupo:last-child input')?.focus();
+  };
+  desenharGrupos();
+  for (const botao of painel.querySelectorAll('[data-alternar]')) botao.addEventListener('click', () => {
+    const secao = painel.querySelector(`[data-secao="${botao.dataset.alternar}"]`);
+    const aberta = !secao.classList.contains('aberta');
+    secao.classList.toggle('aberta', aberta);
+    botao.setAttribute('aria-expanded', String(aberta));
+    grafoOpcoes.secoes = { ...grafoOpcoes.secoes, [botao.dataset.alternar]: aberta };
+    gravarGrafoOpcoes();
   });
 
-  aplicarCamera();
-  comecar();
+  // A tela acompanha a janela: redimensionar recentraliza em vez de cortar o grafo.
+  // O observador cobre mudanças de layout (esconder o painel, por exemplo), mas só
+  // é avisado quando a página está sendo desenhada; o evento da janela chega sempre.
+  grafoObservador?.disconnect();
+  grafoObservador = new ResizeObserver(() => { medir(); comecar(); });
+  grafoObservador.observe(tela);
+  if (grafoResize) window.removeEventListener('resize', grafoResize);
+  grafoResize = () => { if ($('#graph-svg') === svg) { medir(); comecar(); } };
+  window.addEventListener('resize', grafoResize);
+  montar();
 }
 
 // ---- Renderização de Markdown para leitura ----
@@ -524,12 +796,27 @@ function imagensNaFonte(fonte) {
     .filter(achado => achado.imagem);
 }
 
+// ---- Equações ----
+// O KaTeX desenha; ele vem embarcado em vendor/katex e não é buscado na internet.
+// Sem ele, a fórmula continua visível como texto em vez de sumir da nota.
+function matematica(fonte, bloco) {
+  if (typeof katex === 'undefined') return `<code>${escapeHtml(fonte)}</code>`;
+  try {
+    return katex.renderToString(fonte, { displayMode: bloco, throwOnError: false, output: 'html', strict: false, trust: false });
+  } catch (erro) {
+    return `<span class="math-erro" title="${escapeHtml(erro.message)}">${escapeHtml(fonte)}</span>`;
+  }
+}
+
 function mdInline(texto) {
   const guardado = [];
   const reservar = html => `\u0000${guardado.push(html) - 1}\u0000`;
   return texto
     // Código em linha primeiro: o que estiver dentro dele não sofre mais nenhuma troca.
     .replace(/`([^`\n]+)`/g, (_, c) => reservar(`<code>${c}</code>`))
+    // $x^2$: equação na linha. O texto precisa estar colado aos cifrões, senão
+    // "R$ 5 e R$ 10" viraria fórmula.
+    .replace(/\$([^\s$](?:[^$\n]*[^\s$])?)\$/g, (_, tex) => reservar(matematica(desescapar(tex), false)))
     // ![[caminho|largura]]: imagem do cofre, com alça para redimensionar. Antes dos
     // links, para o [[...]] de dentro não virar ligação entre notas.
     .replace(/!\[\[([^\][\n]+)\]\]/g, (inteiro, dentro) => {
@@ -582,6 +869,21 @@ function renderizarMarkdown(fonte, base = 0) {
       i = j + 1;
       continue;
     }
+    // $$ … $$: equação em bloco, desenhada no lugar em que foi escrita.
+    const equacao = linha.match(/^\$\$(.*)$/);
+    if (equacao) {
+      const corpo = [];
+      let j;
+      const numaLinha = equacao[1].trim();
+      if (numaLinha.endsWith('$$') && numaLinha.length > 2) { corpo.push(numaLinha.slice(0, -2)); j = i + 1; }
+      else {
+        j = i + 1;
+        while (j < linhas.length && !/^\$\$\s*$/.test(linhas[j])) corpo.push(linhas[j++]);
+        j = Math.min(j + 1, linhas.length);
+      }
+      saida.push(`<div class="math-bloco" ${abrir(inicio, j)}>${matematica(corpo.join('\n').trim(), true)}</div>`);
+      avancar(j - i); i = j; continue;
+    }
     if (!linha.trim()) { avancar(1); i++; continue; }
     if (/^(-{3,}|\*{3,})\s*$/.test(linha)) { saida.push(`<hr ${abrir(inicio, i + 1)} />`); avancar(1); i++; continue; }
     const titulo = linha.match(/^(#{1,6})\s+(.*)$/);
@@ -604,14 +906,18 @@ function renderizarMarkdown(fonte, base = 0) {
     if (item) {
       const numerada = /\d/.test(item[2]);
       const itens = [];
-      let j = i;
+      let j = i, linhaDoItem = inicio;
       while (j < linhas.length) {
         const atual = linhas[j].match(/^(\s*)([-*+]|\d+\.)\s+(.*)$/);
         if (!atual || /\d/.test(atual[2]) !== numerada) break;
+        // Cada item guarda o trecho da sua linha: clicar num item abre só aquela
+        // linha, e o resto da lista continua desenhado.
+        const marca = `data-pos="${base + linhaDoItem}" data-fim="${base + linhaDoItem + linhas[j].length}"`;
         const tarefa = atual[3].match(/^\[([ xX])\]\s*(.*)$/);
         itens.push(tarefa
-          ? `<li class="md-tarefa"><input type="checkbox" disabled ${/[xX]/.test(tarefa[1]) ? 'checked' : ''} />${mdInline(escapeHtml(tarefa[2]))}</li>`
-          : `<li>${mdInline(escapeHtml(atual[3]))}</li>`);
+          ? `<li class="md-tarefa" ${marca}><input type="checkbox" ${/[xX]/.test(tarefa[1]) ? 'checked' : ''} aria-label="Concluída" />${mdInline(escapeHtml(tarefa[2]))}</li>`
+          : `<li ${marca}>${mdInline(escapeHtml(atual[3]))}</li>`);
+        linhaDoItem += linhas[j].length + 1;
         j++;
       }
       saida.push(`<${numerada ? 'ol' : 'ul'} ${abrir(inicio, j)}>${itens.join('')}</${numerada ? 'ol' : 'ul'}>`);
@@ -629,8 +935,8 @@ function renderizarMarkdown(fonte, base = 0) {
 }
 
 // ---- Blocos de código ----
-// O corpo continua sendo Markdown puro; estas funções só leem as cercas ```
-// e desenham o bloco no lugar em que foi escrito, com botão de copiar.
+// O corpo continua sendo Markdown puro: a área de código só insere as cercas ```,
+// e o botão de copiar lê o bloco já desenhado.
 function areaDeCodigo(area) {
   const v = area.value, i = area.selectionStart;
   const sel = v.slice(i, area.selectionEnd);
@@ -641,15 +947,6 @@ function areaDeCodigo(area) {
   // Sem seleção, fica na linha vazia de dentro, pronto para digitar o código.
   const posicao = i + antes.length + (sel ? 3 : 4);
   area.setSelectionRange(posicao, posicao);
-}
-function blocosDeCodigo(texto) {
-  const achados = [];
-  const cercas = /^```([^\n`]*)\n([\s\S]*?)^```/gm;
-  let achado;
-  while ((achado = cercas.exec(texto))) {
-    achados.push({ linguagem: achado[1].trim(), codigo: achado[2].replace(/\n$/, '') });
-  }
-  return achados;
 }
 // A API moderna exige contexto seguro e gesto do usuário; onde ela é negada,
 // o textarea temporário com execCommand ainda funciona.
@@ -690,9 +987,10 @@ const ajustarAltura = campo => { campo.style.height = 'auto'; campo.style.height
 function deslocarBlocos(depoisDe, delta) {
   if (!delta) return;
   for (const bloco of $('#doc-corpo').querySelectorAll('[data-pos]')) {
-    if (Number(bloco.dataset.pos) <= depoisDe) continue;
-    bloco.dataset.pos = Number(bloco.dataset.pos) + delta;
-    bloco.dataset.fim = Number(bloco.dataset.fim) + delta;
+    const pos = Number(bloco.dataset.pos), fim = Number(bloco.dataset.fim);
+    if (pos > depoisDe) { bloco.dataset.pos = pos + delta; bloco.dataset.fim = fim + delta; }
+    // A lista em volta do item em edição cresce junto com ele.
+    else if (fim >= depoisDe) bloco.dataset.fim = fim + delta;
   }
 }
 
@@ -742,9 +1040,15 @@ function fecharBloco() {
   if (!bloco) return;
   blocoAberto = null;
   if (!bloco.campo.isConnected) return;
+  // Item de lista: redesenha a lista inteira, porque a linha editada pode ter
+  // deixado de ser item — ou virado outro tipo de bloco.
+  const lista = bloco.item?.parentElement.closest('[data-pos]');
+  const alvo = lista || bloco.campo;
+  const inicio = lista ? Number(lista.dataset.pos) : bloco.inicio;
+  const fonte = lista ? editing.body.slice(inicio, Number(lista.dataset.fim)) : bloco.campo.value;
   const molde = document.createElement('template');
-  molde.innerHTML = renderizarMarkdown(bloco.campo.value, bloco.inicio);
-  bloco.campo.replaceWith(molde.content);
+  molde.innerHTML = renderizarMarkdown(fonte, inicio);
+  alvo.replaceWith(molde.content);
 }
 
 function abrirBloco(elemento, cursor = Infinity) {
@@ -758,8 +1062,9 @@ function abrirBloco(elemento, cursor = Infinity) {
     Object.assign(campo.style, { fontSize: estilo.fontSize, fontWeight: estilo.fontWeight, lineHeight: estilo.lineHeight });
   }
   if (elemento.classList.contains('code-area')) campo.classList.add('bloco-codigo');
-  elemento.replaceWith(campo);
-  return ativarCampo(campo, { inicio, tamanho: fim - inicio, separador: '' }, cursor);
+  const item = elemento.tagName === 'LI' ? elemento : null;
+  if (item) item.replaceChildren(campo); else elemento.replaceWith(campo);
+  return ativarCampo(campo, { inicio, tamanho: fim - inicio, separador: '', item }, cursor);
 }
 
 // Clique abaixo do texto: continua o último parágrafo, ou começa um novo no fim.
@@ -830,8 +1135,15 @@ function teclaNoBloco(evento) {
   // Só troca de bloco com o cursor já na ponta: dentro do texto a seta continua
   // andando pelas linhas, inclusive as quebradas pela largura da página.
   if (campo.selectionStart !== (subir ? 0 : campo.value.length)) return;
-  let vizinho = subir ? campo.previousElementSibling : campo.nextElementSibling;
+  const referencia = blocoAberto?.item || campo;
+  let vizinho = subir ? referencia.previousElementSibling : referencia.nextElementSibling;
   while (vizinho && !vizinho.dataset.pos) vizinho = subir ? vizinho.previousElementSibling : vizinho.nextElementSibling;
+  if (!vizinho && blocoAberto?.item) {
+    const lista = blocoAberto.item.parentElement.closest('[data-pos]');
+    vizinho = subir ? lista?.previousElementSibling : lista?.nextElementSibling;
+  }
+  // Caindo numa lista, a edição começa pelo item da ponta, não pela lista toda.
+  if (/^(UL|OL)$/.test(vizinho?.tagName)) vizinho = subir ? vizinho.lastElementChild : vizinho.firstElementChild;
   if (!vizinho) return;
   evento.preventDefault();
   abrirBloco(vizinho, subir ? Infinity : 0);
@@ -935,26 +1247,80 @@ function gravarLarguraDaImagem(bloco, indice, largura) {
   editorDirty = true; estadoDoc();
 }
 
+// Clicar na imagem abre ela inteira sobre a nota; Esc ou um clique fecham. O
+// Markdown da imagem continua a um clique do botão direito, como nos outros blocos.
+let telaDeImagem = null;
+const aoTeclarNaImagem = evento => {
+  if (evento.key !== 'Escape') return;
+  // Em captura e parando aqui: o Esc fecha a imagem sem mexer no resto da tela.
+  evento.preventDefault();
+  evento.stopPropagation();
+  fecharImagemInteira();
+};
+function abrirImagemInteira(fonte, nome) {
+  fecharImagemInteira();
+  telaDeImagem = document.createElement('div');
+  telaDeImagem.className = 'tela-imagem';
+  telaDeImagem.tabIndex = -1;
+  telaDeImagem.innerHTML = `<img src="${escapeHtml(fonte)}" alt="${escapeHtml(nome || '')}" /><span class="tela-dica">Esc para fechar</span>`;
+  telaDeImagem.addEventListener('click', fecharImagemInteira);
+  document.body.appendChild(telaDeImagem);
+  document.body.classList.add('com-imagem-inteira');
+  telaDeImagem.focus({ preventScroll: true });
+  document.addEventListener('keydown', aoTeclarNaImagem, true);
+}
+function fecharImagemInteira() {
+  if (!telaDeImagem) return;
+  telaDeImagem.remove();
+  telaDeImagem = null;
+  document.body.classList.remove('com-imagem-inteira');
+  document.removeEventListener('keydown', aoTeclarNaImagem, true);
+}
+
+// Marcar e desmarcar uma tarefa é trocar [ ] por [x] na linha, como no Obsidian.
+function marcarTarefa(caixa) {
+  const inicio = Number(caixa.closest('[data-pos]')?.dataset.pos);
+  if (!Number.isInteger(inicio)) return;
+  fecharBloco();
+  const item = $('#doc-corpo').querySelector(`[data-pos="${inicio}"]`);
+  if (!item) return;
+  const linha = editing.body.slice(inicio, Number(item.dataset.fim));
+  const trocada = linha.replace(/^(\s*(?:[-*+]|\d+\.)\s+\[)([ xX])(\])/, (_, antes, marca, depois) => antes + (marca === ' ' ? 'x' : ' ') + depois);
+  if (trocada === linha) return;
+  editing.body = editing.body.slice(0, inicio) + trocada + editing.body.slice(inicio + linha.length);
+  const alvo = item.parentElement.closest('[data-pos]') || item;
+  const molde = document.createElement('template');
+  molde.innerHTML = renderizarMarkdown(editing.body.slice(Number(alvo.dataset.pos), Number(alvo.dataset.fim)), Number(alvo.dataset.pos));
+  alvo.replaceWith(molde.content);
+  editorDirty = true; estadoDoc();
+}
+
 function bindCorpo(corpo) {
   corpo.addEventListener('mousedown', evento => {
     if (evento.button === 1) return;
     const alca = evento.target.closest('.md-alca');
     if (alca && evento.button === 0) { evento.preventDefault(); return void redimensionarImagem(alca, evento); }
+    // A caixa de tarefa se vira sozinha; o item não entra em edição por causa dela.
+    if (evento.target.closest('.md-tarefa input')) return;
     if (blocoAberto?.campo === evento.target) return; // dentro do campo aberto: comportamento normal
     // Links e o botão Copiar agem no click. Segurar o foco evita que o bloco aberto
     // feche e mude a altura da página entre apertar e soltar o botão do mouse.
-    if (evento.button === 0 && evento.target.closest('a, button')) return void evento.preventDefault();
+    if (evento.button === 0 && evento.target.closest('a, button, .md-imagem img')) return void evento.preventDefault();
     evento.preventDefault();
     abrirNoPonto(evento);
   });
   corpo.addEventListener('click', evento => {
     const copiar = evento.target.closest('.code-copy');
     if (copiar) return void copiarBloco(copiar);
+    const imagem = evento.target.closest('.md-imagem img');
+    if (imagem) { evento.preventDefault(); return void abrirImagemInteira(imagem.src, imagem.alt); }
     const link = evento.target.closest('.wikilink');
     if (link) { evento.preventDefault(); seguirWikilink(link); }
   });
   // O botão direito já abriu o bloco no mousedown; o menu age sobre ele.
   corpo.addEventListener('contextmenu', evento => abrirMenuContexto(evento, blocoAberto?.campo ?? abrirNoPonto(evento)));
+  // change cobre mouse e teclado (espaço na caixa focada).
+  corpo.addEventListener('change', evento => { if (evento.target.matches('.md-tarefa input[type="checkbox"]')) marcarTarefa(evento.target); });
   corpo.addEventListener('dragover', evento => { if (evento.dataTransfer?.types.includes('Files')) evento.preventDefault(); });
   // Solto sobre o texto desenhado: abre o bloco no ponto e insere lá.
   corpo.addEventListener('drop', evento => {
@@ -1048,24 +1414,24 @@ function menuDaNota() {
   const destino = wikilinkNoCursor(blocoAberto?.campo);
   return [
     ...(destino ? [
-      { rotulo: `Ir para "${destino.alvo}"`, icone: '↦', acao: () => abrirNota(destino.nota || notaVazia({ title: destino.alvo })) },
+      { rotulo: `Ir para "${destino.alvo}"`, icone: icone('ir-para'), acao: () => abrirNota(destino.nota || notaVazia({ title: destino.alvo })) },
       { separador: true },
     ] : []),
-    { rotulo: 'Adicionar link', icone: '🔗', acao: a => envolver(a, '[[', ']]') },
-    { rotulo: 'Adicionar link externo', icone: '↗', acao: linkExterno },
+    { rotulo: 'Adicionar link', icone: icone('link'), acao: a => envolver(a, '[[', ']]') },
+    { rotulo: 'Adicionar link externo', icone: icone('link-externo'), acao: linkExterno },
     { separador: true },
-    { rotulo: 'Formatar', icone: '✎', filhos: [
+    { rotulo: 'Formatar', icone: icone('renomear'), filhos: [
       { rotulo: 'Negrito', icone: 'B', acao: a => envolver(a, '**') },
       { rotulo: 'Itálico', icone: 'I', acao: a => envolver(a, '*') },
       { rotulo: 'Riscado', icone: 'S', acao: a => envolver(a, '~~') },
-      { rotulo: 'Realce', icone: '▨', acao: a => envolver(a, '==') },
+      { rotulo: 'Realce', icone: icone('realce'), acao: a => envolver(a, '==') },
       { separador: true },
-      { rotulo: 'Código', icone: '<>', acao: a => envolver(a, '`') },
-      { rotulo: 'Área de código', icone: '▤', acao: areaDeCodigo },
+      { rotulo: 'Código', icone: icone('codigo'), acao: a => envolver(a, '`') },
+      { rotulo: 'Área de código', icone: icone('codigo-bloco'), acao: areaDeCodigo },
       { rotulo: 'Equação', icone: 'Σ', acao: a => envolver(a, '$') },
-      { rotulo: 'Comentário', icone: '%', acao: a => envolver(a, '%%') },
+      { rotulo: 'Comentário', icone: icone('comentario'), acao: a => envolver(a, '%%') },
       { separador: true },
-      { rotulo: 'Limpar formatação', icone: '⌫', acao: a => {
+      { rotulo: 'Limpar formatação', icone: icone('limpar'), acao: a => {
         const i = a.selectionStart, sel = a.value.slice(i, a.selectionEnd);
         if (!sel) return;
         const limpo = sel.replace(/\*\*|~~|==|%%|[*`$]/g, '');
@@ -1073,20 +1439,20 @@ function menuDaNota() {
         a.setSelectionRange(i, i + limpo.length);
       } },
     ] },
-    { rotulo: 'Parágrafo', icone: '¶', filhos: [
-      { rotulo: 'Texto normal', acao: a => porLinha(a, semPrefixo) },
+    { rotulo: 'Parágrafo', icone: icone('paragrafo'), filhos: [
+      { rotulo: 'Texto normal', icone: icone('texto'), acao: a => porLinha(a, semPrefixo) },
       { separador: true },
-      { rotulo: 'Título 1', acao: a => prefixar(a, '# ') },
-      { rotulo: 'Título 2', acao: a => prefixar(a, '## ') },
-      { rotulo: 'Título 3', acao: a => prefixar(a, '### ') },
+      { rotulo: 'Título 1', icone: icone('titulo'), acao: a => prefixar(a, '# ') },
+      { rotulo: 'Título 2', icone: icone('titulo'), acao: a => prefixar(a, '## ') },
+      { rotulo: 'Título 3', icone: icone('titulo'), acao: a => prefixar(a, '### ') },
       { separador: true },
-      { rotulo: 'Lista com marcadores', acao: a => prefixar(a, '- ') },
-      { rotulo: 'Lista numerada', acao: a => { let n = 0; porLinha(a, l => (++n) + '. ' + semPrefixo(l)); } },
-      { rotulo: 'Lista de tarefas', acao: a => prefixar(a, '- [ ] ') },
-      { rotulo: 'Citação', acao: a => prefixar(a, '> ') },
+      { rotulo: 'Lista com marcadores', icone: icone('lista-marcadores'), acao: a => prefixar(a, '- ') },
+      { rotulo: 'Lista numerada', icone: icone('lista-numerada'), acao: a => { let n = 0; porLinha(a, l => (++n) + '. ' + semPrefixo(l)); } },
+      { rotulo: 'Lista de tarefas', icone: icone('lista-tarefas'), acao: a => prefixar(a, '- [ ] ') },
+      { rotulo: 'Citação', icone: icone('destaque'), acao: a => prefixar(a, '> ') },
     ] },
-    { rotulo: 'Inserir', icone: '＋', filhos: [
-      { rotulo: 'Nota de rodapé', icone: 'a1', acao: a => {
+    { rotulo: 'Inserir', icone: icone('mais'), filhos: [
+      { rotulo: 'Nota de rodapé', icone: icone('rodape'), acao: a => {
         const n = (a.value.match(/\[\^(\d+)\]/g) || []).length + 1;
         inserirTexto(a, '[^' + n + ']');
         const fim = a.selectionStart;
@@ -1095,24 +1461,24 @@ function menuDaNota() {
         inserirTexto(a, rodape);
         a.setSelectionRange(fim, fim);
       } },
-      { rotulo: 'Tabela', icone: '▦', acao: a => inserirBloco(a, TABELA) },
-      { rotulo: 'Destaque', icone: '❝', acao: a => inserirBloco(a, '> [!note]\n> ') },
-      { rotulo: 'Régua horizontal', icone: '—', acao: a => inserirBloco(a, '---\n') },
+      { rotulo: 'Tabela', icone: icone('tabela'), acao: a => inserirBloco(a, TABELA) },
+      { rotulo: 'Destaque', icone: icone('destaque'), acao: a => inserirBloco(a, '> [!note]\n> ') },
+      { rotulo: 'Régua horizontal', icone: icone('regua'), acao: a => inserirBloco(a, '---\n') },
       { separador: true },
-      { rotulo: 'Bloco de código', icone: '<>', acao: a => { inserirBloco(a, '```\n\n```\n'); const p = a.selectionStart - 5; a.setSelectionRange(p, p); } },
+      { rotulo: 'Bloco de código', icone: icone('codigo-bloco'), acao: a => { inserirBloco(a, '```\n\n```\n'); const p = a.selectionStart - 5; a.setSelectionRange(p, p); } },
       { rotulo: 'Equação em bloco', icone: 'Σ', acao: a => { inserirBloco(a, '$$\n\n$$\n'); const p = a.selectionStart - 4; a.setSelectionRange(p, p); } },
     ] },
     { separador: true },
-    { rotulo: 'Cortar', icone: '✂', ativo: temSelecao, acao: a => copiarSelecao(a, true) },
-    { rotulo: 'Copiar', icone: '⧉', ativo: temSelecao, acao: a => copiarSelecao(a, false) },
-    { rotulo: 'Colar', icone: '⎘', acao: colar },
+    { rotulo: 'Cortar', icone: icone('cortar'), ativo: temSelecao, acao: a => copiarSelecao(a, true) },
+    { rotulo: 'Copiar', icone: icone('copiar'), ativo: temSelecao, acao: a => copiarSelecao(a, false) },
+    { rotulo: 'Colar', icone: icone('colar'), acao: colar },
     { separador: true },
-    { rotulo: 'Selecionar tudo', icone: '⬚', acao: a => a.select() },
+    { rotulo: 'Selecionar tudo', icone: icone('selecionar'), acao: a => a.select() },
     { separador: true },
-    { rotulo: 'Salvar', icone: '⤓', acao: () => salvarNota() },
-    { rotulo: 'Detalhes', icone: '☰', acao: () => acaoEditor('detalhes') },
-    { rotulo: 'Fechar nota', icone: '✕', acao: () => acaoEditor('fechar') },
-    { rotulo: 'Mover para lixeira', icone: '🗑', ativo: () => Boolean(editing?.id), acao: () => acaoEditor('lixeira') },
+    { rotulo: 'Salvar', icone: icone('salvar'), acao: () => salvarNota() },
+    { rotulo: 'Detalhes', icone: icone('detalhes'), acao: () => acaoEditor('detalhes') },
+    { rotulo: 'Fechar nota', icone: icone('fechar'), acao: () => acaoEditor('fechar') },
+    { rotulo: 'Mover para lixeira', icone: icone('lixeira'), ativo: () => Boolean(editing?.id), acao: () => acaoEditor('lixeira') },
   ];
 }
 let menuAberto = null;
@@ -1137,7 +1503,8 @@ function montarNivel(itens, area) {
     linha.type = 'button';
     linha.className = 'ctx-item' + (item.filhos ? ' tem-filhos' : '');
     linha.disabled = !habilitado;
-    linha.innerHTML = '<span class="ctx-icone">' + escapeHtml(item.icone || '') + '</span><span class="ctx-rotulo">' + escapeHtml(item.rotulo) + '</span>' + (item.filhos ? '<span class="ctx-seta">›</span>' : '');
+    const desenho = item.icone && item.icone.startsWith('<svg') ? item.icone : escapeHtml(item.icone || '');
+    linha.innerHTML = '<span class="ctx-icone">' + desenho + '</span><span class="ctx-rotulo">' + escapeHtml(item.rotulo) + '</span>' + (item.filhos ? '<span class="ctx-seta">›</span>' : '');
     if (item.filhos) {
       const sub = montarNivel(item.filhos, area);
       sub.classList.add('ctx-sub');
@@ -1197,10 +1564,6 @@ async function salvarNota(){
 async function extraAction(type,id){
   if(busy||failed||!loaded)return;
   if(type==='daily')abrirNota(state.notes.find(n=>n.title===today())||notaVazia({title:today(),body:templates.daily.body,tags:['diario']}));
-  if(type==='open-connection'||type==='create-connection'){
-    if(!closeModal())return;
-    abrirNota(type==='open-connection'?getNote(id):notaVazia({title:id}));
-  }
   if(type==='add-routine'){
     modal('Novo hábito','<form id="routine-form" class="form"><div class="field"><label for="routine-title">Qual hábito você quer acompanhar?</label><input id="routine-title" required /></div><button class="primary">Adicionar hábito</button></form>');
     $('#routine-form').onsubmit=async e=>{e.preventDefault();state.routine.push({id:uid(),title:$('#routine-title').value,date:today(),done:false});if(await save())closeModal(true);};
@@ -1218,7 +1581,7 @@ async function showTrash(){
     const detalhe=i=>i.kind==='folder'
       ? `pasta · ${i.noteCount} nota${i.noteCount===1?'':'s'}${i.folderCount>1?` · ${i.folderCount-1} subpasta${i.folderCount===2?'':'s'}`:''}`
       : 'nota';
-    modal('Lixeira', itens.length ? itens.map(i=>`<div class="routine-item"><span class="brand-mark">${i.kind==='folder'?'▣':'◈'}</span><span class="routine-title">${escapeHtml(i.title)}<div class="task-info">${detalhe(i)} · removido em ${quando(i.deletedAt)}</div></span><button class="secondary" data-restore="${escapeHtml(i.entryId)}">Restaurar</button></div>`).join('') : '<p>A lixeira está vazia.</p>');
+    modal('Lixeira', itens.length ? itens.map(i=>`<div class="routine-item"><span class="brand-mark">${icone(i.kind==='folder'?'pastas':'nota')}</span><span class="routine-title">${escapeHtml(i.title)}<div class="task-info">${detalhe(i)} · removido em ${quando(i.deletedAt)}</div></span><button class="secondary" data-restore="${escapeHtml(i.entryId)}">Restaurar</button></div>`).join('') : '<p>A lixeira está vazia.</p>');
     document.querySelectorAll('[data-restore]').forEach(b=>b.onclick=async()=>{
       if(busy||failed)return;
       setBusy(true);status('Restaurando…');
@@ -1352,6 +1715,7 @@ document.addEventListener('keydown',e=>{
 });
 window.addEventListener('beforeunload',e=>{if(busy||failed||modalDirty||editorDirty){e.preventDefault();e.returnValue='';}});
 window.addEventListener('focus',()=>reload());
-setInterval(()=>{if(lastDay!==today()){lastDay=today();if(loaded&&!busy)render();}reload();},5000);
+setInterval(()=>{if(document.hidden)return;if(lastDay!==today()){lastDay=today();if(loaded&&!busy)render();}reload();},5000);
+desenharIconesFixos();
 aplicarAparencia();
 reload();

@@ -65,6 +65,24 @@ createServer(async (request, response) => {
         return response.end(data);
       } catch { return send(response, 404, { error: 'Imagem não encontrada.' }); }
     }
+    // KaTeX embarcado: só os três tipos de arquivo que a página pede.
+    const katex = rota.match(/^\/vendor\/katex\/(katex\.min\.(?:js|css)|fonts\/KaTeX_[A-Za-z-]+\.woff2)$/);
+    if (request.method === 'GET' && katex) {
+      try {
+        const corpo = await readFile(join(root, 'vendor', 'katex', ...katex[1].split('/')));
+        const tipo = katex[1].endsWith('.js') ? 'text/javascript' : katex[1].endsWith('.css') ? 'text/css' : 'font/woff2';
+        response.writeHead(200, { 'Content-Type': `${tipo}; charset=utf-8`, 'Cache-Control': 'max-age=86400' });
+        return response.end(corpo);
+      } catch { return send(response, 404, { error: 'Arquivo não encontrado.' }); }
+    }
+    // Fontes embarcadas: nome fixo, sem caminho, e só .woff2 de dentro de fonts/.
+    if (request.method === 'GET' && /^\/fonts\/[a-z0-9-]+\.woff2$/.test(rota)) {
+      try {
+        const corpo = await readFile(join(root, 'fonts', rota.slice('/fonts/'.length)));
+        response.writeHead(200, { 'Content-Type': 'font/woff2', 'Cache-Control': 'max-age=86400' });
+        return response.end(corpo);
+      } catch { return send(response, 404, { error: 'Fonte não encontrada.' }); }
+    }
     const file = publicFiles[rota];
     if (request.method !== 'GET' || !file) return send(response, 404, { error: 'Não encontrado.' });
     let body = await readFile(join(root, file[0]));
