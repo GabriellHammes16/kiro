@@ -282,23 +282,23 @@ async function moverNota(id, folderId) {
   await save();
 }
 const bolinha = cor => `<svg class="icone" viewBox="0 0 24 24"><circle cx="12" cy="12" r="7" style="fill:${cor ? `var(--cor-pasta)` : 'none'};stroke:var(--muted)" data-cor-pasta="${cor}"/></svg>`;
+// As ações buscam a nota ou a pasta na hora do clique: a releitura do cofre a cada 5 s troca
+// os objetos de state, e alterar a cópia de quando o menu abriu não seria gravado.
 function menuDaArvore(linha) {
-  const id = linha.dataset.id;
+  const id = linha.dataset.id, pastaAtual = () => state.folders.find(f => f.id === id);
   if (linha.classList.contains('tree-note')) {
-    const nota = getNote(id);
     const destinos = [{ id: '', rotulo: 'Raiz do cofre' }, ...state.folders.slice().sort((a, b) => (a.path || a.title).localeCompare(b.path || b.title, 'pt-BR')).map(f => ({ id: f.id, rotulo: f.path || f.title }))];
     return [
-      { rotulo: 'Abrir', icone: icone('nota'), acao: () => abrirNota(nota) },
-      { rotulo: 'Mover para', icone: icone('pastas'), filhos: destinos.map(d => ({ rotulo: d.rotulo, icone: icone(d.id ? 'pastas' : 'casa'), ativo: () => (nota.folderId || '') !== d.id, acao: () => moverNota(id, d.id) })) },
+      { rotulo: 'Abrir', icone: icone('nota'), acao: () => getNote(id) && abrirNota(getNote(id)) },
+      { rotulo: 'Mover para', icone: icone('pastas'), filhos: destinos.map(d => ({ rotulo: d.rotulo, icone: icone(d.id ? 'pastas' : 'casa'), ativo: () => (getNote(id)?.folderId || '') !== d.id, acao: () => moverNota(id, d.id) })) },
     ];
   }
-  const pasta = state.folders.find(f => f.id === id);
   return [
     { rotulo: 'Nova nota aqui', icone: icone('mais'), acao: () => abrirNota(notaVazia({ folderId: id })) },
     { rotulo: 'Nova subpasta', icone: icone('pasta-nova'), acao: () => folderModal({ title: '', description: '', parentId: id }) },
     { separador: true },
-    { rotulo: 'Renomear ou mover', icone: icone('renomear'), acao: () => folderModal(pasta) },
-    { rotulo: 'Cor', icone: icone('realce'), filhos: ['', ...Kuroi.FOLDER_COLORS].map(cor => ({ rotulo: NOMES_DE_COR[cor], icone: bolinha(cor), ativo: () => (pasta.color || '') !== cor, acao: () => { pasta.color = cor; save(); } })) },
+    { rotulo: 'Renomear ou mover', icone: icone('renomear'), acao: () => pastaAtual() && folderModal(pastaAtual()) },
+    { rotulo: 'Cor', icone: icone('realce'), filhos: ['', ...Kuroi.FOLDER_COLORS].map(cor => ({ rotulo: NOMES_DE_COR[cor], icone: bolinha(cor), ativo: () => (pastaAtual()?.color || '') !== cor, acao: () => { const pasta = pastaAtual(); if (pasta) { pasta.color = cor; save(); } } })) },
     { separador: true },
     { rotulo: 'Excluir pasta', icone: icone('lixeira'), acao: () => deleteFolder(id) },
   ];
@@ -1857,11 +1857,13 @@ async function showSettings() {
   const cor = (id, rotulo, valor) => `<label class="cfg-cor"><span>${rotulo}</span><input type="color" data-cor="${id}" value="${valor}" /></label>`;
   modal('Configurações', `<div class="form">
     <h3>Aparência</h3>
+    <div class="cfg-aparencia">
     ${cor('sidebar', 'Fundo da barra lateral', cores.sidebar)}
     ${cor('content', 'Fundo da área de texto', cores.content)}
     <div class="field"><span class="rotulo-campo" id="acento-rotulo">Cor de destaque (botões, ícones e links)</span><div class="amostras" role="radiogroup" aria-labelledby="acento-rotulo">${ACENTOS.map(([hex, nome]) => `<label class="amostra" style="--cor-pasta:${hex}" title="${nome}"><input type="radio" name="acento" value="${hex}" ${hex.toLowerCase() === cores.acento.toLowerCase() ? 'checked' : ''} /><span class="sr-only">${nome}</span></label>`).join('')}<label class="cfg-cor amostra-livre" title="Outra cor"><span class="sr-only">Outra cor</span><input type="color" data-cor="acento" value="${cores.acento}" /></label></div><p class="small-muted" id="acento-aviso" hidden>Essa cor tem pouco contraste com o fundo: textos e ícones podem ficar difíceis de ler.</p></div>
     <div><button type="button" class="secondary" id="cor-padrao">Restaurar padrão</button></div>
     <p class="small-muted">A cor muda na hora e vale para esta instalação do Kuroi.</p>
+    </div>
     <h3>IA e integrações</h3>
     <p class="small-muted">Agentes externos falam com o Kuroi pela Agent API, sempre dentro deste cofre. O Kuroi não envia nada para a nuvem por conta própria.</p>
     ${caixa('enabled', 'Permitir que agentes usem este cofre', conf.enabled)}
@@ -1878,6 +1880,9 @@ async function showSettings() {
     content: document.querySelector('[data-cor="content"]').value,
     acento: document.querySelector('[data-cor="acento"]').value,
   });
+  // A aparência já é gravada ao mudar: não conta como alteração pendente do formulário,
+  // senão fechar a janela pergunta se quer descartar algo que não se perde.
+  for (const tipo of ['input', 'change']) $('.cfg-aparencia').addEventListener(tipo, e => e.stopPropagation());
   const avisar = () => { const a = lerAparencia(); $('#acento-aviso').hidden = contraste(a.acento, a.content) >= 3; };
   document.querySelectorAll('input[name="acento"]').forEach(r => r.onchange = () => { document.querySelector('[data-cor="acento"]').value = r.value; gravarAparencia(corAtual()); avisar(); });
   avisar();
