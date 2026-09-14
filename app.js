@@ -37,7 +37,7 @@ function render() {
 function head(eyebrow, title, description, action="") { return `<header class="page-head"><div><p class="eyebrow">${eyebrow}</p><h1>${title}</h1><p class="subhead">${description}</p></div>${action}</header>`; }
 function check(done, action, id) { return `<button class="check ${done ? "done" : ""}" aria-label="Marcar como ${done ? "não concluído" : "concluído"}" data-action="${action}" data-id="${id}"></button>`; }
 function taskRow(task) { return `<div class="task-item">${check(task.done,"toggle-task",task.id)}<div class="task-title">${escapeHtml(task.title)}<div class="task-info">${dateLabel(task.due)}${task.noteId && getNote(task.noteId) ? ` · ${linkDaNota(getNote(task.noteId))}` : ""}</div></div>${task.priority === "Alta" ? '<span class="priority">Alta</span>' : ""}<div class="task-actions"><button class="icon-button" data-action="edit-task" data-id="${task.id}" title="Editar">${icone('renomear')}</button><button class="icon-button" data-action="delete-task" data-id="${task.id}" title="Excluir">${icone('lixeira')}</button></div></div>`; }
-function renderToday() { const routineDone = state.routine.filter(r=>r.date===today() && r.done).length; const urgent = state.tasks.filter(t => !t.done && t.due <= today()); const recent = [...state.notes].sort((a,b)=>b.updatedAt-a.updatedAt).slice(0,3); return `${head("Seu espaço pessoal", "Bom dia", `${formatDate(today())}. Um passo de cada vez.`)}<div class="today-grid"><div class="stack"><section class="card"><div class="card-head"><h2>Rotina de hoje</h2><span class="small-muted">${routineDone}/${state.routine.length}</span></div>${state.routine.map(r=>`<div class="routine-item">${check(r.date===today() && r.done,"toggle-routine",r.id)}<span class="routine-title">${escapeHtml(r.title)}</span></div>`).join("")}<div class="progress"><div style="width:${state.routine.length ? routineDone/state.routine.length*100 : 0}%"></div></div></section><section class="card"><div class="card-head"><h2>Notas recentes</h2><a data-go="notes">Ver todas</a></div>${recent.map(n=>`<div class="routine-item"><span class="brand-mark">${icone('nota')}</span><span class="routine-title">${escapeHtml(n.title)}</span><button class="icon-button" data-action="edit-note" data-id="${n.id}">›</button></div>`).join("") || '<div class="empty">Nenhuma nota ainda.</div>'}</section></div><div class="stack"><section class="card"><div class="card-head"><h2>Para fazer agora</h2><a data-go="tasks">Ver tarefas</a></div>${urgent.map(taskRow).join("") || '<div class="empty">Nada urgente. Ótimo momento para avançar nos estudos.</div>'}</section><section class="card"><div class="card-head"><h2>Estudos</h2><a data-go="studies">Abrir área</a></div>${state.folders.slice(0,3).map(f=>{const total=state.notes.filter(n=>n.folderId===f.id).length;return `<div class="routine-item"><span class="brand-mark pasta-chip"${f.color?` data-cor-pasta="${f.color}"`:""}>${icone('pastas')}</span><span class="routine-title">${escapeHtml(f.path||f.title)}</span><span class="small-muted">${total} nota${total===1?"":"s"}</span></div>`;}).join("") || '<div class="empty">Nenhuma pasta ainda.</div>'}</section></div></div>`; }
+function renderToday() { const routineDone = state.routine.filter(r=>r.date===today() && r.done).length; const urgent = state.tasks.filter(t => !t.done && t.due <= today()); const recent = [...state.notes].sort((a,b)=>b.updatedAt-a.updatedAt).slice(0,3); return `${head("Seu espaço pessoal", "Bom dia", `${formatDate(today())}. Um passo de cada vez.`)}<div class="today-grid"><div class="stack"><section class="card"><div class="card-head"><h2>Rotina de hoje</h2><span class="small-muted">${routineDone}/${state.routine.length}</span></div>${state.routine.map(r=>`<div class="routine-item">${check(r.date===today() && r.done,"toggle-routine",r.id)}<span class="routine-title">${escapeHtml(r.title)}</span></div>`).join("")}<div class="progress"><div style="width:${state.routine.length ? routineDone/state.routine.length*100 : 0}%"></div></div></section><section class="card"><div class="card-head"><h2>Notas recentes</h2><a data-go="notes">Ver todas</a></div>${recent.map(n=>`<div class="routine-item"><span class="brand-mark">${icone('nota')}</span><span class="routine-title">${escapeHtml(n.title)}</span><button class="icon-button" data-action="edit-note" data-id="${n.id}" aria-label="Abrir nota">${icone('direita')}</button></div>`).join("") || '<div class="empty">Nenhuma nota ainda.</div>'}</section></div><div class="stack"><section class="card"><div class="card-head"><h2>Para fazer agora</h2><a data-go="tasks">Ver tarefas</a></div>${urgent.map(taskRow).join("") || '<div class="empty">Nada urgente. Ótimo momento para avançar nos estudos.</div>'}</section><section class="card"><div class="card-head"><h2>Estudos</h2><a data-go="studies">Abrir área</a></div>${state.folders.slice(0,3).map(f=>{const total=state.notes.filter(n=>n.folderId===f.id).length;return `<div class="routine-item"><span class="brand-mark pasta-chip"${f.color?` data-cor-pasta="${f.color}"`:""}>${icone('pastas')}</span><span class="routine-title">${escapeHtml(f.path||f.title)}</span><span class="small-muted">${total} nota${total===1?"":"s"}</span></div>`;}).join("") || '<div class="empty">Nenhuma pasta ainda.</div>'}</section></div></div>`; }
 function renderNotes() { return `${head("Biblioteca", "Notas", "Escreva, revise e mantenha suas referências perto.", `<button class="primary" id="add-note">${icone('mais')} Nova nota</button>`)}<div class="toolbar"><input class="search" id="note-search" placeholder="Buscar texto ou #tag…" /></div><section class="notes-grid" id="notes-grid">${notesMarkup(state.notes)}</section>`; }
 const linkDaNota = nota => `<a class="task-nota" data-action="edit-note" data-id="${nota.id}">${escapeHtml(nota.title || "Sem título")}</a>`;
 // Prévia do card: o texto que a nota mostra, sem a sintaxe do Markdown.
@@ -365,12 +365,12 @@ async function tirarDaCaixa(id,folderId){
   if(folderId&&expanded)expanded.add(folderId);
   await save();
 }
-const extraButton=(action,label,id='',cls='secondary')=>`<button type="button" class="${cls}" data-extra="${action}" data-id="${escapeHtml(id)}">${label}</button>`;
+const extraButton=(action,label,id='',cls='secondary',nome='')=>`<button type="button" class="${cls}" data-extra="${action}" data-id="${escapeHtml(id)}"${nome?` aria-label="${nome}" title="${nome}"`:''}>${label}</button>`;
 function enhanceView(){
   if(currentView!=='today')return;
   $('.page-head').insertAdjacentHTML('beforeend',extraButton('daily','Abrir nota diária','','primary'));
   $('.page-head').insertAdjacentHTML('afterend','<section class="card capture"><form id="capture-form"><label for="capture-text">Captura rápida</label><div class="add-link"><input id="capture-text" required placeholder="Uma ideia, uma pergunta, algo para lembrar…" /><button class="primary">Guardar</button></div></form></section>');
-  $('.card-head').insertAdjacentHTML('beforeend',extraButton('add-routine',icone('mais'),'','icon-button'));
+  $('.card-head').insertAdjacentHTML('beforeend',extraButton('add-routine',icone('mais'),'','icon-button','Novo hábito'));
   $('.capture').insertAdjacentHTML('afterend',cardCaixaDeEntrada());
   $('.today-grid > .stack:last-child')?.insertAdjacentHTML('beforeend',cardParaRevisar());
   $('#capture-form').onsubmit=async e=>{
@@ -1853,27 +1853,33 @@ async function showSettings() {
   try { conf = await agentApi.load(); }
   catch (error) { status('Não foi possível ler a configuração de agentes: ' + error.message, true); return; }
   const cores = lerAparencia();
-  const caixa = (id, rotulo, marcado) => `<label class="cfg-row"><input type="checkbox" data-perm="${id}" ${marcado ? 'checked' : ''} /><span>${rotulo}</span></label>`;
-  const cor = (id, rotulo, valor) => `<label class="cfg-cor"><span>${rotulo}</span><input type="color" data-cor="${id}" value="${valor}" /></label>`;
-  modal('Configurações', `<div class="form">
-    <h3>Aparência</h3>
-    <div class="cfg-aparencia">
-    ${cor('sidebar', 'Fundo da barra lateral', cores.sidebar)}
-    ${cor('content', 'Fundo da área de texto', cores.content)}
-    <div class="field"><span class="rotulo-campo" id="acento-rotulo">Cor de destaque (botões, ícones e links)</span><div class="amostras" role="radiogroup" aria-labelledby="acento-rotulo">${ACENTOS.map(([hex, nome]) => `<label class="amostra" style="--cor-pasta:${hex}" title="${nome}"><input type="radio" name="acento" value="${hex}" ${hex.toLowerCase() === cores.acento.toLowerCase() ? 'checked' : ''} /><span class="sr-only">${nome}</span></label>`).join('')}<label class="cfg-cor amostra-livre" title="Outra cor"><span class="sr-only">Outra cor</span><input type="color" data-cor="acento" value="${cores.acento}" /></label></div><p class="small-muted" id="acento-aviso" hidden>Essa cor tem pouco contraste com o fundo: textos e ícones podem ficar difíceis de ler.</p></div>
-    <div><button type="button" class="secondary" id="cor-padrao">Restaurar padrão</button></div>
-    <p class="small-muted">A cor muda na hora e vale para esta instalação do Kuroi.</p>
-    </div>
-    <h3>IA e integrações</h3>
-    <p class="small-muted">Agentes externos falam com o Kuroi pela Agent API, sempre dentro deste cofre. O Kuroi não envia nada para a nuvem por conta própria.</p>
-    ${caixa('enabled', 'Permitir que agentes usem este cofre', conf.enabled)}
-    ${caixa('mcp', 'Servidor MCP habilitado', conf.mcp.enabled)}
-    <h4>Permissões do agente</h4>
-    ${CAIXAS.map(([id, rotulo]) => caixa(id, rotulo, conf.permissions[id])).join('')}
-    ${caixa('confirm', 'Pedir confirmação para ações destrutivas', conf.requireConfirmationForDestructive)}
-    <p class="small-muted">Guardado em .kuroi/agent.json, dentro do cofre.</p>
-    <div class="form-actions"><button type="button" class="secondary" id="cancel">Fechar</button><button type="button" class="primary" id="ai-save">Salvar permissões</button></div>
+  const texto = (titulo, detalhe = '', id = '') => `<span class="cfg-texto"><span class="cfg-titulo"${id ? ` id="${id}"` : ''}>${titulo}</span>${detalhe ? `<span class="small-muted">${detalhe}</span>` : ''}</span>`;
+  const chave = (id, titulo, marcado, detalhe = '', extra = '') => `<label class="cfg-linha cfg-chave ${extra}">${texto(titulo, detalhe)}<input type="checkbox" data-perm="${id}" ${marcado ? 'checked' : ''} /><span class="interruptor" aria-hidden="true"></span></label>`;
+  const cor = (id, titulo, valor) => `<div class="cfg-linha">${texto(titulo)}<label class="cor-ponto" title="Escolher cor"><input type="color" data-cor="${id}" value="${valor}" aria-label="${titulo}" /></label></div>`;
+  const DETALHES = { read: 'Buscar e ler o conteúdo das notas.', create: 'Criar notas e pastas novas.', update: 'Alterar texto, título, etiquetas e pasta.', delete: 'A nota vai para a lixeira e pode ser restaurada.' };
+  modal('Configurações', `<div class="cfg">
+    <section class="cfg-grupo cfg-aparencia">
+      <header class="cfg-grupo-topo">${texto('Aparência', 'Muda na hora e vale só para esta instalação.')}<button type="button" class="secondary cfg-pequeno" id="cor-padrao">${icone('recarregar')} Restaurar padrão</button></header>
+      ${cor('sidebar', 'Fundo da barra lateral', cores.sidebar)}
+      ${cor('content', 'Fundo da área de texto', cores.content)}
+      <div class="cfg-linha cfg-linha-coluna">${texto('Cor de destaque', 'Botões, ícones, links e o grafo.', 'acento-rotulo')}
+        <div class="amostras" role="radiogroup" aria-labelledby="acento-rotulo">${ACENTOS.map(([hex, nome]) => `<label class="amostra" style="--cor-pasta:${hex}" title="${nome}"><input type="radio" name="acento" value="${hex}" ${hex.toLowerCase() === cores.acento.toLowerCase() ? 'checked' : ''} /><span class="sr-only">${nome}</span></label>`).join('')}<label class="cor-ponto cor-livre" title="Outra cor"><input type="color" data-cor="acento" value="${cores.acento}" aria-label="Outra cor de destaque" /></label></div>
+        <p class="cfg-aviso" id="acento-aviso" hidden>Essa cor tem pouco contraste com o fundo: textos e ícones podem ficar difíceis de ler.</p>
+      </div>
+    </section>
+    <section class="cfg-grupo">
+      <header class="cfg-grupo-topo">${texto('IA e integrações', 'Agentes externos usam a Agent API, sempre dentro deste cofre. O Kuroi não envia nada para a nuvem por conta própria.')}</header>
+      ${chave('enabled', 'Permitir agentes neste cofre', conf.enabled, 'Liga o acesso para programas como o Claude Desktop.')}
+      ${chave('mcp', 'Servidor MCP', conf.mcp.enabled, 'Conexão local pelo stdio, sem abrir porta de rede.', 'cfg-depende')}
+      <h4 class="cfg-subtitulo cfg-depende">O que o agente pode fazer</h4>
+      ${CAIXAS.map(([id, rotulo]) => chave(id, rotulo.replace(/ \(.*\)$/, ''), conf.permissions[id], DETALHES[id], 'cfg-depende')).join('')}
+      ${chave('confirm', 'Confirmar ações destrutivas', conf.requireConfirmationForDestructive, 'Pede confirmação antes de excluir.', 'cfg-depende')}
+      <p class="small-muted cfg-rodape">Guardado em <code>.kuroi/agent.json</code>, dentro do cofre.</p>
+    </section>
+    <div class="form-actions cfg-acoes"><button type="button" class="secondary" id="cancel">Fechar</button><button type="button" class="primary" id="ai-save" disabled>Salvar permissões</button></div>
   </div>`);
+  // Salvar só faz sentido depois de mexer nas permissões.
+  document.querySelectorAll('[data-perm]').forEach(c => c.addEventListener('change', () => { $('#ai-save').disabled = false; }));
 
   const corAtual = () => ({
     sidebar: document.querySelector('[data-cor="sidebar"]').value,
