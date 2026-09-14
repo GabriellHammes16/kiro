@@ -28,7 +28,7 @@ function render() {
   document.querySelector(".app-shell").classList.toggle("lateral-recolhida", lateralRecolhida);
   document.querySelector(".app-shell").classList.toggle("grafo-aberto", currentView === "graph");
   const app = document.querySelector("#app");
-  cancelAnimationFrame(grafoRaf); grafoRaf = null;
+  cancelAnimationFrame(grafoRaf); grafoRaf = null; fecharSugestoes();
   app.innerHTML = views[currentView]();
   // Animar só na troca de tela: um redesenho comum não deve piscar.
   if (renderedView !== currentView) { app.classList.remove("view-enter"); void app.offsetWidth; app.classList.add("view-enter"); renderedView = currentView; }
@@ -36,11 +36,58 @@ function render() {
 }
 function head(eyebrow, title, description, action="") { return `<header class="page-head"><div><p class="eyebrow">${eyebrow}</p><h1>${title}</h1><p class="subhead">${description}</p></div>${action}</header>`; }
 function check(done, action, id) { return `<button class="check ${done ? "done" : ""}" aria-label="Marcar como ${done ? "não concluído" : "concluído"}" data-action="${action}" data-id="${id}"></button>`; }
-function taskRow(task) { return `<div class="task-item">${check(task.done,"toggle-task",task.id)}<div class="task-title">${escapeHtml(task.title)}<div class="task-info">${dateLabel(task.due)}${task.noteId && getNote(task.noteId) ? ` · ${escapeHtml(getNote(task.noteId).title)}` : ""}</div></div>${task.priority === "Alta" ? '<span class="priority">Alta</span>' : ""}<div class="task-actions"><button class="icon-button" data-action="edit-task" data-id="${task.id}" title="Editar">${icone('renomear')}</button><button class="icon-button" data-action="delete-task" data-id="${task.id}" title="Excluir">${icone('lixeira')}</button></div></div>`; }
-function renderToday() { const routineDone = state.routine.filter(r=>r.date===today() && r.done).length; const urgent = state.tasks.filter(t => !t.done && t.due <= today()); const recent = [...state.notes].sort((a,b)=>b.updatedAt-a.updatedAt).slice(0,3); return `${head("Seu espaço pessoal", "Bom dia", `${formatDate(today())}. Um passo de cada vez.`)}<div class="today-grid"><div class="stack"><section class="card"><div class="card-head"><h2>Rotina de hoje</h2><span class="small-muted">${routineDone}/${state.routine.length}</span></div>${state.routine.map(r=>`<div class="routine-item">${check(r.date===today() && r.done,"toggle-routine",r.id)}<span class="routine-title">${escapeHtml(r.title)}</span></div>`).join("")}<div class="progress"><div style="width:${state.routine.length ? routineDone/state.routine.length*100 : 0}%"></div></div></section><section class="card"><div class="card-head"><h2>Notas recentes</h2><a data-go="notes">Ver todas</a></div>${recent.map(n=>`<div class="routine-item"><span class="brand-mark">${icone('nota')}</span><span class="routine-title">${escapeHtml(n.title)}</span><button class="icon-button" data-action="edit-note" data-id="${n.id}">›</button></div>`).join("") || '<div class="empty">Nenhuma nota ainda.</div>'}</section></div><div class="stack"><section class="card"><div class="card-head"><h2>Para fazer agora</h2><a data-go="tasks">Ver tarefas</a></div>${urgent.map(taskRow).join("") || '<div class="empty">Nada urgente. Ótimo momento para avançar nos estudos.</div>'}</section><section class="card"><div class="card-head"><h2>Estudos</h2><a data-go="studies">Abrir área</a></div>${state.folders.slice(0,3).map(f=>{const total=state.notes.filter(n=>n.folderId===f.id).length;return `<div class="routine-item"><span class="brand-mark">${icone('nota')}</span><span class="routine-title">${escapeHtml(f.path||f.title)}</span><span class="small-muted">${total} nota${total===1?"":"s"}</span></div>`;}).join("") || '<div class="empty">Nenhuma pasta ainda.</div>'}</section></div></div>`; }
+function taskRow(task) { return `<div class="task-item">${check(task.done,"toggle-task",task.id)}<div class="task-title">${escapeHtml(task.title)}<div class="task-info">${dateLabel(task.due)}${task.noteId && getNote(task.noteId) ? ` · ${linkDaNota(getNote(task.noteId))}` : ""}</div></div>${task.priority === "Alta" ? '<span class="priority">Alta</span>' : ""}<div class="task-actions"><button class="icon-button" data-action="edit-task" data-id="${task.id}" title="Editar">${icone('renomear')}</button><button class="icon-button" data-action="delete-task" data-id="${task.id}" title="Excluir">${icone('lixeira')}</button></div></div>`; }
+function renderToday() { const routineDone = state.routine.filter(r=>r.date===today() && r.done).length; const urgent = state.tasks.filter(t => !t.done && t.due <= today()); const recent = [...state.notes].sort((a,b)=>b.updatedAt-a.updatedAt).slice(0,3); return `${head("Seu espaço pessoal", "Bom dia", `${formatDate(today())}. Um passo de cada vez.`)}<div class="today-grid"><div class="stack"><section class="card"><div class="card-head"><h2>Rotina de hoje</h2><span class="small-muted">${routineDone}/${state.routine.length}</span></div>${state.routine.map(r=>`<div class="routine-item">${check(r.date===today() && r.done,"toggle-routine",r.id)}<span class="routine-title">${escapeHtml(r.title)}</span></div>`).join("")}<div class="progress"><div style="width:${state.routine.length ? routineDone/state.routine.length*100 : 0}%"></div></div></section><section class="card"><div class="card-head"><h2>Notas recentes</h2><a data-go="notes">Ver todas</a></div>${recent.map(n=>`<div class="routine-item"><span class="brand-mark">${icone('nota')}</span><span class="routine-title">${escapeHtml(n.title)}</span><button class="icon-button" data-action="edit-note" data-id="${n.id}">›</button></div>`).join("") || '<div class="empty">Nenhuma nota ainda.</div>'}</section></div><div class="stack"><section class="card"><div class="card-head"><h2>Para fazer agora</h2><a data-go="tasks">Ver tarefas</a></div>${urgent.map(taskRow).join("") || '<div class="empty">Nada urgente. Ótimo momento para avançar nos estudos.</div>'}</section><section class="card"><div class="card-head"><h2>Estudos</h2><a data-go="studies">Abrir área</a></div>${state.folders.slice(0,3).map(f=>{const total=state.notes.filter(n=>n.folderId===f.id).length;return `<div class="routine-item"><span class="brand-mark pasta-chip"${f.color?` data-cor-pasta="${f.color}"`:""}>${icone('pastas')}</span><span class="routine-title">${escapeHtml(f.path||f.title)}</span><span class="small-muted">${total} nota${total===1?"":"s"}</span></div>`;}).join("") || '<div class="empty">Nenhuma pasta ainda.</div>'}</section></div></div>`; }
 function renderNotes() { return `${head("Biblioteca", "Notas", "Escreva, revise e mantenha suas referências perto.", `<button class="primary" id="add-note">${icone('mais')} Nova nota</button>`)}<div class="toolbar"><input class="search" id="note-search" placeholder="Buscar texto ou #tag…" /></div><section class="notes-grid" id="notes-grid">${notesMarkup(state.notes)}</section>`; }
-function notesMarkup(notes) { return notes.length ? [...notes].sort((a,b)=>b.updatedAt-a.updatedAt).map(n=>{const folder=state.folders.find(f=>f.id===n.folderId);return `<article class="note-card" data-action="edit-note" data-id="${n.id}"><h2>${escapeHtml(n.title || "Sem título")}</h2><p>${escapeHtml(n.body.slice(0,160) || "Nota vazia")}</p><div class="note-meta">${folder ? `${icone('pastas')} ${escapeHtml(folder.path||folder.title)} · ` : ""}${Kuroi.tags(n).map(t=>`#${escapeHtml(t)}`).join(" ")} · ${n.links.length} link${n.links.length === 1 ? "" : "s"} · atualizado ${new Intl.DateTimeFormat("pt-BR",{day:"2-digit",month:"short"}).format(n.updatedAt)}</div></article>`;}).join("") : '<div class="empty">Crie sua primeira nota para começar.</div>'; }
-function renderTasks() { const open = state.tasks.filter(t=>!t.done).sort((a,b)=>a.due.localeCompare(b.due)); const done = state.tasks.filter(t=>t.done); return `${head("Organização", "Tarefas", "Concentre-se no que realmente importa hoje.", `<button class="primary" id="add-task">${icone('mais')} Nova tarefa</button>`)}<div class="task-layout"><section class="card"><div class="task-group"><h2>Em aberto</h2>${open.map(taskRow).join("") || '<div class="empty">Tudo concluído por aqui.</div>'}</div><div class="task-group"><h2>Concluídas</h2>${done.map(taskRow).join("") || '<div class="empty">As tarefas concluídas aparecerão aqui.</div>'}</div></section><aside class="card"><h2>Seu foco</h2><p class="subhead">Você tem <strong>${open.length}</strong> tarefa${open.length===1?"":"s"} em aberto.</p><div class="progress"><div style="width:${state.tasks.length ? done.length/state.tasks.length*100 : 0}%"></div></div><p class="small-muted">${done.length} de ${state.tasks.length} concluídas</p></aside></div>`; }
+const linkDaNota = nota => `<a class="task-nota" data-action="edit-note" data-id="${nota.id}">${escapeHtml(nota.title || "Sem título")}</a>`;
+// Prévia do card: o texto que a nota mostra, sem a sintaxe do Markdown.
+function textoPlano(md) {
+  return md
+    .replace(/```[\s\S]*?(?:```|$)/g, ' ').replace(/\$\$[\s\S]*?\$\$/g, ' ')
+    .replace(/!\[\[[^\]\n]*\]\]/g, '').replace(/\[\[([^\]|\n]+)\|([^\]\n]+)\]\]/g, '$2').replace(/\[\[([^\]\n]+)\]\]/g, '$1')
+    .replace(/!?\[([^\]\n]*)\]\([^)\n]*\)/g, '$1')
+    .replace(/^[ \t]*(?:>[ \t]*)+(?:\[![^\]\n]*\][+-]?)?/gm, '')
+    .replace(/^[ \t]*(?:#{1,6}|[-*+](?:[ \t]+\[[ xX]\])?|\d+\.)[ \t]+/gm, '')
+    .replace(/\*\*|__|~~|`|==/g, '').replace(/\s+/g, ' ').trim();
+}
+function notesMarkup(notes) { return notes.length ? [...notes].sort((a,b)=>b.updatedAt-a.updatedAt).map(n=>{
+  const folder=state.folders.find(f=>f.id===n.folderId);
+  const ligacoes=new Set(Kuroi.wikiLinks(n.body).map(l=>Kuroi.normalize(l.target))).size;
+  const meta=[
+    folder && `<span class="pasta-chip"${folder.color?` data-cor-pasta="${folder.color}"`:""}>${icone('pastas')} ${escapeHtml(folder.path||folder.title)}</span>`,
+    Kuroi.tags(n).map(t=>`#${escapeHtml(t)}`).join(" "),
+    ligacoes && `${ligacoes} ${ligacoes===1?"ligação":"ligações"}`,
+    n.links.length && `${n.links.length} link${n.links.length===1?"":"s"} externo${n.links.length===1?"":"s"}`,
+    ...(()=>{const dia=d=>new Intl.DateTimeFormat("pt-BR",{day:"numeric",month:"short"}).format(d);
+      if(!n.createdAt)return [`atualizado ${dia(n.updatedAt)}`];
+      return [`criada ${dia(n.createdAt)}`,new Date(n.createdAt).toDateString()!==new Date(n.updatedAt).toDateString()&&`atualizada ${dia(n.updatedAt)}`];})()
+  ].filter(Boolean).join(" · ");
+  return `<article class="note-card" data-action="edit-note" data-id="${n.id}"><h2>${escapeHtml(n.title || "Sem título")}</h2><p>${escapeHtml(textoPlano(n.body).slice(0,220) || "Nota vazia")}</p><div class="note-meta">${meta}</div></article>`;
+}).join("") : '<div class="empty">Crie sua primeira nota para começar.</div>'; }
+// Caixas "- [ ]" escritas dentro das notas, com a posição da linha para marcar sem abrir a nota.
+function tarefasDasNotas() {
+  const achadas = [];
+  for (const nota of state.notes) {
+    let pos = 0, cerca = false;
+    for (const linha of nota.body.split('\n')) {
+      if (/^\s*(```|~~~)/.test(linha)) cerca = !cerca;
+      const m = !cerca && linha.match(/^\s*(?:[-*+]|\d+\.)\s+\[([ xX])\]\s+(.+)$/);
+      if (m) achadas.push({ nota, pos, feita: m[1] !== ' ', texto: textoPlano(m[2]) });
+      pos += linha.length + 1;
+    }
+  }
+  return achadas;
+}
+function marcarTarefaDaNota(chave) {
+  const [id, pos] = [chave.slice(0, chave.lastIndexOf(':')), Number(chave.slice(chave.lastIndexOf(':') + 1))];
+  const nota = getNote(id); if (!nota) return;
+  const fim = nota.body.indexOf('\n', pos), linha = nota.body.slice(pos, fim < 0 ? undefined : fim);
+  const trocada = linha.replace(/^(\s*(?:[-*+]|\d+\.)\s+\[)([ xX])(\])/, (_, a, marca, b) => a + (marca === ' ' ? 'x' : ' ') + b);
+  if (trocada === linha) return; // a nota mudou desde o desenho: não mexe em outra linha
+  state.notes = state.notes.map(n => n.id === id ? { ...n, body: n.body.slice(0, pos) + trocada + n.body.slice(pos + linha.length), updatedAt: Date.now() } : n);
+  save(); render();
+}
+function renderTasks() { const open = state.tasks.filter(t=>!t.done).sort((a,b)=>a.due.localeCompare(b.due)); const done = state.tasks.filter(t=>t.done); const dasNotas = tarefasDasNotas().filter(t=>!t.feita); return `${head("Organização", "Tarefas", "Concentre-se no que realmente importa hoje.", `<button class="primary" id="add-task">${icone('mais')} Nova tarefa</button>`)}<div class="task-layout"><section class="card"><div class="task-group"><h2>Em aberto</h2>${open.map(taskRow).join("") || '<div class="empty">Tudo concluído por aqui.</div>'}</div>${dasNotas.length ? `<div class="task-group"><h2>Nas notas</h2>${dasNotas.map(t=>`<div class="task-item">${check(false,"toggle-note-task",`${t.nota.id}:${t.pos}`)}<div class="task-title">${escapeHtml(t.texto)}<div class="task-info">${linkDaNota(t.nota)}</div></div></div>`).join("")}</div>` : ""}<div class="task-group"><h2>Concluídas</h2>${done.map(taskRow).join("") || '<div class="empty">As tarefas concluídas aparecerão aqui.</div>'}</div></section><aside class="card"><h2>Seu foco</h2><p class="subhead">Você tem <strong>${open.length}</strong> tarefa${open.length===1?"":"s"} em aberto.</p><div class="progress"><div style="width:${state.tasks.length ? done.length/state.tasks.length*100 : 0}%"></div></div><p class="small-muted">${done.length} de ${state.tasks.length} concluídas</p></aside></div>`; }
 const byTitle = (a,b) => a.title.localeCompare(b.title,'pt-BR',{numeric:true});
 const childFolders = id => state.folders.filter(f=>(f.parentId||"")===id).sort(byTitle);
 const folderNotes = id => state.notes.filter(n=>(n.folderId||"")===id).sort(byTitle);
@@ -111,11 +158,11 @@ function treeMarkup(parentId, depth) {
     const temFilhos = childFolders(folder.id).length || folderNotes(folder.id).length;
     const tools = `<span class="tree-tools"><button class="icon-button" data-action="new-note-folder" data-id="${folder.id}" title="Nova nota nesta pasta">${icone('mais')}</button><button class="icon-button" data-action="new-subfolder" data-id="${folder.id}" title="Nova subpasta">${icone('pasta-nova')}</button><button class="icon-button" data-action="edit-folder" data-id="${folder.id}" title="Renomear ou mover">${icone('renomear')}</button><button class="icon-button" data-action="delete-folder" data-id="${folder.id}" title="Excluir">${icone('lixeira')}</button></span>`;
     // Filhos ficam sempre no DOM: abrir e fechar vira transição de CSS, sem redesenhar.
-    return `<div class="tree-node${open?" open":""}" data-id="${folder.id}"><div class="tree-row tree-folder" data-action="toggle-folder" data-id="${folder.id}" style="--depth:${depth}"${folder.description?` title="${escapeHtml(folder.description)}"`:""}><span class="twisty">${temFilhos?icone('direita'):""}</span><span class="tree-icone">${icone('pastas')}</span><span class="tree-name">${escapeHtml(folder.title)}</span>${tools}</div><div class="tree-children"><div class="tree-children-inner">${treeMarkup(folder.id,depth+1)}</div></div></div>`;
+    return `<div class="tree-node${open?" open":""}" data-id="${folder.id}"${folder.color?` data-cor-pasta="${folder.color}"`:""}><div class="tree-row tree-folder" data-action="toggle-folder" data-id="${folder.id}" style="--depth:${depth}"${folder.description?` title="${escapeHtml(folder.description)}"`:""}><span class="twisty">${temFilhos?icone('direita'):""}</span><span class="tree-icone">${icone('pastas')}</span><span class="tree-name" title="${escapeHtml(folder.title)}">${escapeHtml(folder.title)}</span>${tools}</div><div class="tree-children"><div class="tree-children-inner">${treeMarkup(folder.id,depth+1)}</div></div></div>`;
   }).join("");
   const notes = folderNotes(parentId).map(note => {
     const tags = Kuroi.tags(note).slice(0,2).map(t=>`#${escapeHtml(t)}`).join(" ");
-    return `<div class="tree-row tree-note${editing?.id === note.id ? " ativa" : ""}" data-action="edit-note" data-id="${note.id}" style="--depth:${depth}"><span class="twisty"></span><span class="tree-icone">${icone('nota')}</span><span class="tree-name">${escapeHtml(note.title||"Sem título")}</span><span class="tree-meta">${tags}</span></div>`;
+    return `<div class="tree-row tree-note${editing?.id === note.id ? " ativa" : ""}" draggable="true" data-action="edit-note" data-id="${note.id}" style="--depth:${depth}"><span class="twisty"></span><span class="tree-icone">${icone('nota')}</span><span class="tree-name" title="${escapeHtml(note.title||"Sem título")}">${escapeHtml(note.title||"Sem título")}</span><span class="tree-meta">${tags}</span></div>`;
   }).join("");
   return folders + notes;
 }
@@ -213,7 +260,7 @@ function action(type,id) {
     return;
   }
   if (busy || failed || !loaded) return;
-  if(type==="new-subfolder") folderModal({title:"",description:"",parentId:id}); if(type==="toggle-routine"){const r=state.routine.find(x=>x.id===id);r.done=r.date===today()?!r.done:true;r.date=today();save();render();} if(type==="toggle-task"){const t=state.tasks.find(x=>x.id===id);t.done=!t.done;save();render();} if(type==="edit-note") abrirNota(getNote(id)); if(type==="new-note-folder") abrirNota(notaVazia({folderId:id})); if(type==="edit-task") taskModal(state.tasks.find(x=>x.id===id)); if(type==="edit-folder") folderModal(state.folders.find(x=>x.id===id)); if(type==="delete-task"){state.tasks=state.tasks.filter(x=>x.id!==id);save();render();} if(type==="delete-folder") deleteFolder(id); }
+  if(type==="new-subfolder") folderModal({title:"",description:"",parentId:id}); if(type==="toggle-routine"){const r=state.routine.find(x=>x.id===id);r.done=r.date===today()?!r.done:true;r.date=today();save();render();} if(type==="toggle-task"){const t=state.tasks.find(x=>x.id===id);t.done=!t.done;save();render();} if(type==="toggle-note-task") marcarTarefaDaNota(id); if(type==="edit-note") abrirNota(getNote(id)); if(type==="new-note-folder") abrirNota(notaVazia({folderId:id})); if(type==="edit-task") taskModal(state.tasks.find(x=>x.id===id)); if(type==="edit-folder") folderModal(state.folders.find(x=>x.id===id)); if(type==="delete-task"){state.tasks=state.tasks.filter(x=>x.id!==id);save();render();} if(type==="delete-folder") deleteFolder(id); }
 // Excluir uma pasta leva junto suas subpastas; as notas continuam no cofre, na raiz.
 function deleteFolder(id) {
   const ids=Kuroi.descendants(state.folders,id);
@@ -223,14 +270,48 @@ function deleteFolder(id) {
   state.folders=state.folders.filter(f=>!ids.has(f.id));
   save();render();
 }
+// Mover nota entre pastas: pelo arrastar na árvore ou pelo menu do botão direito.
+async function moverNota(id, folderId) {
+  if (busy || failed || !loaded) return;
+  const nota = getNote(id);
+  if (!nota || (nota.folderId || '') === folderId) return;
+  if (folderId && expanded) expanded.add(folderId);
+  // A nota aberta leva junto o que ainda não foi salvo.
+  if (editing?.id === id) { editing.folderId = folderId; editorDirty = true; await salvarNota(); return; }
+  state.notes = state.notes.map(n => n.id === id ? { ...n, folderId, updatedAt: Date.now() } : n);
+  await save();
+}
+const bolinha = cor => `<svg class="icone" viewBox="0 0 24 24"><circle cx="12" cy="12" r="7" style="fill:${cor ? `var(--cor-pasta)` : 'none'};stroke:var(--muted)" data-cor-pasta="${cor}"/></svg>`;
+function menuDaArvore(linha) {
+  const id = linha.dataset.id;
+  if (linha.classList.contains('tree-note')) {
+    const nota = getNote(id);
+    const destinos = [{ id: '', rotulo: 'Raiz do cofre' }, ...state.folders.slice().sort((a, b) => (a.path || a.title).localeCompare(b.path || b.title, 'pt-BR')).map(f => ({ id: f.id, rotulo: f.path || f.title }))];
+    return [
+      { rotulo: 'Abrir', icone: icone('nota'), acao: () => abrirNota(nota) },
+      { rotulo: 'Mover para', icone: icone('pastas'), filhos: destinos.map(d => ({ rotulo: d.rotulo, icone: icone(d.id ? 'pastas' : 'casa'), ativo: () => (nota.folderId || '') !== d.id, acao: () => moverNota(id, d.id) })) },
+    ];
+  }
+  const pasta = state.folders.find(f => f.id === id);
+  return [
+    { rotulo: 'Nova nota aqui', icone: icone('mais'), acao: () => abrirNota(notaVazia({ folderId: id })) },
+    { rotulo: 'Nova subpasta', icone: icone('pasta-nova'), acao: () => folderModal({ title: '', description: '', parentId: id }) },
+    { separador: true },
+    { rotulo: 'Renomear ou mover', icone: icone('renomear'), acao: () => folderModal(pasta) },
+    { rotulo: 'Cor', icone: icone('realce'), filhos: ['', ...Kuroi.FOLDER_COLORS].map(cor => ({ rotulo: NOMES_DE_COR[cor], icone: bolinha(cor), ativo: () => (pasta.color || '') !== cor, acao: () => { pasta.color = cor; save(); } })) },
+    { separador: true },
+    { rotulo: 'Excluir pasta', icone: icone('lixeira'), acao: () => deleteFolder(id) },
+  ];
+}
 function modal(title, body) { modalDirty=false; document.querySelector("#modal-root").innerHTML=`<div class="modal-backdrop"><section class="modal" role="dialog" aria-modal="true"><header class="modal-head"><h2>${title}</h2><button class="icon-button" id="close-modal" title="Fechar" aria-label="Fechar">${icone('fechar')}</button></header>${body}</section></div>`; document.querySelector(".modal").addEventListener("input",()=>modalDirty=true); document.querySelector(".modal").addEventListener("change",()=>modalDirty=true); document.querySelector("#close-modal").onclick=()=>closeModal(); document.querySelector(".modal-backdrop").onclick=e=>{if(e.target===e.currentTarget)closeModal();}; }
 function closeModal(force=false){ if(!force && (busy || (modalDirty && !confirm('Descartar as alterações deste formulário?'))))return false; document.querySelector('#modal-root').innerHTML='';modalDirty=false;return true; }
 function taskModal(task={title:"",due:today(),priority:"Média",noteId:""}) { modal(task.id?"Editar tarefa":"Nova tarefa", `<form class="form" id="task-form"><div class="field"><label>Tarefa</label><input name="title" required value="${escapeHtml(task.title)}" placeholder="O que precisa ser feito?" /></div><div class="two-cols"><div class="field"><label>Data</label><input name="due" type="date" value="${task.due}" required /></div><div class="field"><label>Prioridade</label><select name="priority">${["Baixa","Média","Alta"].map(p=>`<option ${p===task.priority?"selected":""}>${p}</option>`).join("")}</select></div></div><div class="field"><label>Nota associada (opcional)</label><select name="noteId"><option value="">Nenhuma</option>${state.notes.map(n=>`<option value="${n.id}" ${n.id===task.noteId?"selected":""}>${escapeHtml(n.title)}</option>`).join("")}</select></div><div class="form-actions"><button type="button" class="secondary" id="cancel">Cancelar</button><button class="primary">Salvar tarefa</button></div></form>`);document.querySelector("#cancel").onclick=()=>closeModal();document.querySelector("#task-form").onsubmit=e=>{e.preventDefault();const f=new FormData(e.currentTarget);const saved={...task,id:task.id||uid(),title:f.get("title"),due:f.get("due"),priority:f.get("priority"),noteId:f.get("noteId"),done:task.done||false};state.tasks=task.id?state.tasks.map(t=>t.id===task.id?saved:t):[saved,...state.tasks];save();closeModal(true);render();}; }
-function folderModal(folder={title:"",description:"",parentId:""}) { modal(folder.id?"Editar pasta":"Nova pasta de estudo", `<form class="form" id="folder-form"><div class="field"><label>Nome da pasta</label><input name="title" required value="${escapeHtml(folder.title)}" placeholder="Ex.: JAVA, Inglês, programação" /><small class="small-muted">Vira uma pasta de verdade no cofre: sem &lt; &gt; : " / \\ | ? * e sem ponto ou espaço no início ou no final.</small></div><div class="field"><label>Dentro de</label><select name="parentId"><option value="">Raiz do cofre</option>${state.folders.filter(f=>!(folder.id?Kuroi.descendants(state.folders,folder.id):new Set()).has(f.id)).sort(byTitle).map(f=>`<option value="${f.id}" ${f.id===(folder.parentId||"")?"selected":""}>${escapeHtml(f.path||f.title)}</option>`).join("")}</select></div><div class="field"><label>Descrição</label><textarea name="description" placeholder="Qual é seu objetivo com esta pasta?">${escapeHtml(folder.description||"")}</textarea></div><div class="form-actions"><button type="button" class="secondary" id="cancel">Cancelar</button><button class="primary">Salvar pasta</button></div></form>`);document.querySelector("#cancel").onclick=()=>closeModal();document.querySelector("#folder-form").onsubmit=e=>{e.preventDefault();const f=new FormData(e.currentTarget);const title=f.get("title").trim();
+const NOMES_DE_COR = { "":"Sem cor", azul:"Azul", verde:"Verde", amarelo:"Amarelo", laranja:"Laranja", vermelho:"Vermelho", rosa:"Rosa", roxo:"Roxo", cinza:"Cinza" };
+function folderModal(folder={title:"",description:"",parentId:""}) { modal(folder.id?"Editar pasta":"Nova pasta de estudo", `<form class="form" id="folder-form"><div class="field"><label>Nome da pasta</label><input name="title" required value="${escapeHtml(folder.title)}" placeholder="Ex.: JAVA, Inglês, programação" /><small class="small-muted">Vira uma pasta de verdade no cofre: sem &lt; &gt; : " / \\ | ? * e sem ponto ou espaço no início ou no final.</small></div><div class="field"><label>Dentro de</label><select name="parentId"><option value="">Raiz do cofre</option>${state.folders.filter(f=>!(folder.id?Kuroi.descendants(state.folders,folder.id):new Set()).has(f.id)).sort(byTitle).map(f=>`<option value="${f.id}" ${f.id===(folder.parentId||"")?"selected":""}>${escapeHtml(f.path||f.title)}</option>`).join("")}</select></div><div class="field"><span class="rotulo-campo" id="cor-pasta-rotulo">Cor</span><div class="amostras" role="radiogroup" aria-labelledby="cor-pasta-rotulo">${["",...Kuroi.FOLDER_COLORS].map(cor=>`<label class="amostra" data-cor-pasta="${cor}" title="${NOMES_DE_COR[cor]}"><input type="radio" name="color" value="${cor}" ${cor===(folder.color||"")?"checked":""} /><span class="sr-only">${NOMES_DE_COR[cor]}</span></label>`).join("")}</div></div><div class="field"><label>Descrição</label><textarea name="description" placeholder="Qual é seu objetivo com esta pasta?">${escapeHtml(folder.description||"")}</textarea></div><div class="form-actions"><button type="button" class="secondary" id="cancel">Cancelar</button><button class="primary">Salvar pasta</button></div></form>`);document.querySelector("#cancel").onclick=()=>closeModal();document.querySelector("#folder-form").onsubmit=e=>{e.preventDefault();const f=new FormData(e.currentTarget);const title=f.get("title").trim();
   // Validar aqui evita que um nome inválido bloqueie a janela no salvamento.
   if(!Kuroi.validFolderName(title)){alert('Nome de pasta inválido. Evite < > : " / \\ | ? * , nomes reservados do Windows e ponto ou espaço no início ou no final.');return;}
   const parentId=f.get("parentId")||"";
-  const saved={...folder,id:folder.id||uid(),title,parentId,description:f.get("description")};
+  const saved={...folder,id:folder.id||uid(),title,parentId,description:f.get("description"),color:Kuroi.folderColor(f.get("color"))};
   if(state.folders.some(x=>x.id!==saved.id&&(x.parentId||"")===parentId&&Kuroi.pathKey(x.title)===Kuroi.pathKey(title))){alert("Já existe uma pasta com esse nome neste local.");return;}
   state.folders=folder.id?state.folders.map(x=>x.id===folder.id?saved:x):[saved,...state.folders];
   // Deixar visível o que acabou de ser criado ou movido.
@@ -254,15 +335,35 @@ function status(message,error=false){$('#save-status').textContent=message;$('#s
 function setBusy(value){busy=value;document.body.classList.toggle('saving',value);$('.app-shell').inert=value;$('#modal-root').inert=value;}
 async function reload(manual=false){
   if(busy||(!manual&&(failed||editorDirty||$('#modal-root').firstChild)))return;
-  if(manual&&(failed||modalDirty)&&!confirm('Recarregar descarta alterações ainda não salvas nesta janela. Exporte seus dados ou copie o texto antes de continuar. Recarregar?'))return;
+  if(manual&&(failed||modalDirty||editorDirty)&&!confirm('Recarregar descarta alterações ainda não salvas nesta janela. Exporte seus dados ou copie o texto antes de continuar. Recarregar?'))return;
   setBusy(true);
   try{
     const saved=await loadFromVault();Kuroi.validateState(saved);
     const changed=state.revision!==saved.revision||!loaded;
     state=saved;loaded=true;failed=false;$('#vault-path').textContent=state.vaultPath;
+    // Recarregar de propósito descarta a edição: a nota aberta volta ao que está no cofre.
+    if(manual&&editing){const n=editing.id&&getNote(editing.id);editing=n?{...n,tags:[...(n.tags||[])],links:[...(n.links||[])]}:null;editorDirty=false;if(!editing)currentView='today';}
     if(manual)closeModal(true);if(changed||manual)render();status('Cofre atualizado');
   }catch(error){status('Não foi possível ler o cofre: '+error.message,true);}
   finally{setBusy(false);}
+}
+const itemQueAbre=n=>`<div class="routine-item"><span class="brand-mark">${icone('nota')}</span><a class="routine-title" data-action="edit-note" data-id="${n.id}">${escapeHtml(n.title||'Sem título')}</a></div>`;
+function cardCaixaDeEntrada(){
+  const notas=state.notes.filter(Kuroi.inInbox).sort((a,b)=>(b.createdAt??b.updatedAt)-(a.createdAt??a.updatedAt));
+  return `<section class="card caixa-entrada"><div class="card-head"><h2>Caixa de entrada</h2><span class="small-muted">${notas.length}</span></div>${notas.map(n=>`<div class="routine-item"><span class="brand-mark">${icone('nota')}</span><a class="routine-title" data-action="edit-note" data-id="${n.id}">${escapeHtml(n.title||'Sem título')}</a>${extraButton('inbox-mover',`${icone('pastas')} Mover para`,n.id)}${extraButton('inbox-arquivar','Arquivar',n.id)}</div>`).join('')||'<div class="empty">Nada pendente. Tudo organizado.</div>'}</section>`;
+}
+function cardParaRevisar(){
+  const {loose,forgotten}=Kuroi.toReview(state.notes);
+  if(!loose.length&&!forgotten.length)return '';
+  const lista=(titulo,notas)=>notas.length?`<h3 class="revisar-titulo">${titulo}</h3>${notas.map(itemQueAbre).join('')}`:'';
+  return `<section class="card para-revisar"><div class="card-head"><h2>Para revisar</h2></div>${lista('Soltas',loose)}${lista('Esquecidas',forgotten)}</section>`;
+}
+// Tirar da caixa de entrada (e, se vier uma pasta, mover para ela) numa gravação só.
+async function tirarDaCaixa(id,folderId){
+  if(busy||failed||!loaded)return;
+  state.notes=state.notes.map(n=>n.id===id?{...Kuroi.withoutInbox(n),...(folderId===undefined?{}:{folderId}),updatedAt:Date.now()}:n);
+  if(folderId&&expanded)expanded.add(folderId);
+  await save();
 }
 const extraButton=(action,label,id='',cls='secondary')=>`<button type="button" class="${cls}" data-extra="${action}" data-id="${escapeHtml(id)}">${label}</button>`;
 function enhanceView(){
@@ -270,9 +371,11 @@ function enhanceView(){
   $('.page-head').insertAdjacentHTML('beforeend',extraButton('daily','Abrir nota diária','','primary'));
   $('.page-head').insertAdjacentHTML('afterend','<section class="card capture"><form id="capture-form"><label for="capture-text">Captura rápida</label><div class="add-link"><input id="capture-text" required placeholder="Uma ideia, uma pergunta, algo para lembrar…" /><button class="primary">Guardar</button></div></form></section>');
   $('.card-head').insertAdjacentHTML('beforeend',extraButton('add-routine',icone('mais'),'','icon-button'));
+  $('.capture').insertAdjacentHTML('afterend',cardCaixaDeEntrada());
+  $('.today-grid > .stack:last-child')?.insertAdjacentHTML('beforeend',cardParaRevisar());
   $('#capture-form').onsubmit=async e=>{
     e.preventDefault();if(busy||failed)return;const body=$('#capture-text').value.trim();if(!body)return;
-    state.notes.unshift({id:uid(),title:body.slice(0,80),body,links:[],tags:['inbox'],updatedAt:Date.now(),folderId:''});await save();
+    state.notes.unshift({id:uid(),title:(textoPlano(body.split('\n')[0]).replace(/(^|\s)#(?=[\p{L}\p{N}_/-])/gu,'$1')||body).slice(0,80),body,links:[],tags:['inbox'],createdAt:Date.now(),updatedAt:Date.now(),folderId:''});await save();
   };
 }
 // ---- Editor de documento: a nota ocupa a página inteira, como um processador de texto. ----
@@ -294,7 +397,18 @@ function renderEditor(){
   return `<header class="doc-bar"><div class="crumbs"><span>${pasta?escapeHtml(pasta.path||pasta.title):'Raiz do cofre'}</span><span>/</span><span class="crumb-atual">${escapeHtml(nota.title||'Sem título')}</span></div><span class="doc-ponto" id="doc-state" title="Alterações não salvas"></span></header>
 <input class="doc-title" id="doc-title" value="${escapeHtml(nota.title)}" placeholder="Sem título" aria-label="Título da nota" />
 <section class="doc-details" id="doc-details" hidden><div class="two-cols"><div class="field"><label for="doc-folder">Pasta</label><select id="doc-folder">${opcoes}</select></div><div class="field"><label for="doc-tags">Tags (separadas por vírgulas)</label><input id="doc-tags" value="${escapeHtml(nota.tags.join(', '))}" placeholder="ideias, estudos" /></div></div><div class="two-cols"><div class="field"><label for="doc-template">Modelo</label><select id="doc-template"><option value="">Escolher modelo…</option>${modelos}</select></div><div class="field"><label for="doc-link">Anexar link</label><div class="add-link"><input id="doc-link" placeholder="Cole um link de aula ou vídeo" /><button type="button" class="secondary" id="doc-link-add">Anexar</button></div></div></div><div class="links-list" id="doc-links"></div></section>
-<div class="doc-corpo" id="doc-corpo" data-vazio="Clique para escrever. [[Nome da nota]] conecta ideias e #tag marca a nota.">${renderizarMarkdown(nota.body)}</div>`;
+<div class="doc-corpo" id="doc-corpo" data-vazio="Clique para escrever. [[Nome da nota]] conecta ideias e #tag marca a nota.">${renderizarMarkdown(nota.body)}</div>${renderMencoes(nota)}`;
+}
+// Quem cita esta nota, com a linha do [[link]] como trecho. Nota ainda não salva não tem quem a cite.
+function renderMencoes(nota){
+  if(!nota.id)return '';
+  const citam=Kuroi.mentions(state.notes,nota); if(!citam.length)return '';
+  const resolve=l=>Kuroi.findLinkedNote(state.notes,l.target)?.id===nota.id;
+  const itens=citam.map(n=>{
+    const linha=n.body.split('\n').find(l=>Kuroi.wikiLinks(l).some(resolve))||'';
+    return `<div class="mencao">${linkDaNota(n)}<span class="small-muted">${escapeHtml(textoPlano(linha).slice(0,160))}</span></div>`;
+  }).join('');
+  return `<section class="doc-mencoes"><h2 class="small-muted">Mencionada em (${citam.length})</h2>${itens}</section>`;
 }
 function estadoDoc(){ $('#doc-state')?.classList.toggle('sujo', editorDirty); }
 function desenharLinksDoc(){
@@ -346,7 +460,7 @@ const GRAFO_PADRAO = {
   setas: false, rotulos: 0.6, tamanho: 1, grossura: 1,
   centripeta: 0.5, repulsao: 1, forcaLinks: 1, distancia: 95,
   local: false, profundidade: 1,
-  grupos: [], painel: false, secoes: { filtros: true, grupos: true, tela: true, forcas: true },
+  corSolta: '#FFFFFF', grupos: [], painel: false, secoes: { filtros: true, grupos: true, tela: true, forcas: true },
 };
 const CORES_DE_GRUPO = ['#4EA8DE', '#57CC99', '#FFB703', '#FF6B6B', '#F72585', '#C77DFF'];
 const FILTROS = ['etiquetas', 'anexos', 'somenteExistentes', 'orfaos', 'local', 'profundidade'];
@@ -359,10 +473,15 @@ function gravarGrafoOpcoes() {
 }
 const valorDoGrafo = (nome, valor) => ['distancia', 'profundidade'].includes(nome) ? String(Math.round(valor)) : Number(valor).toFixed(2);
 
+// Subpasta sem cor herda a cor da pasta de cima.
+function corDaPasta(id) {
+  for (let f = state.folders.find(x => x.id === id), i = 0; f && i < 50; f = state.folders.find(x => x.id === f.parentId), i++) if (f.color) return f.color;
+  return '';
+}
 function grafoDados(op = grafoOpcoes) {
   const nos = new Map(), arestas = [];
   const ligar = (de, para) => { arestas.push({ de, para }); nos.get(de).grau++; nos.get(para).grau++; nos.get(para).entradas++; };
-  for (const nota of state.notes) nos.set(nota.id, { id: nota.id, rotulo: nota.title || 'Sem título', tipo: 'nota', grau: 0, entradas: 0, procura: `${nota.title || ''} ${Kuroi.tags(nota).join(' ')}` });
+  for (const nota of state.notes) nos.set(nota.id, { id: nota.id, rotulo: nota.title || 'Sem título', tipo: 'nota', pasta: corDaPasta(nota.folderId), grau: 0, entradas: 0, procura: `${nota.title || ''} ${Kuroi.tags(nota).join(' ')}` });
   for (const nota of state.notes) {
     const vistos = new Set();
     for (const link of Kuroi.wikiLinks(nota.body)) {
@@ -465,6 +584,7 @@ function renderGraph() {
       ${grafoFaixa('rotulos', 'Limite dos rótulos', 0, 2, 0.05)}
       ${grafoFaixa('tamanho', 'Tamanho dos pontos', 0.4, 2.5, 0.05)}
       ${grafoFaixa('grossura', 'Grossura dos links', 0.3, 3, 0.05)}
+      <label class="grafo-linha"><span>Notas sem cor de pasta</span><input type="color" class="grafo-cor-solta" data-opcao="corSolta" value="${corValida(grafoOpcoes.corSolta) ? grafoOpcoes.corSolta : GRAFO_PADRAO.corSolta}" aria-label="Cor das notas sem cor de pasta" /></label>
       <button class="secondary" id="grafo-animar">Animar</button>`)}
     ${grafoSecao('forcas', 'Forças', `
       ${grafoFaixa('centripeta', 'Força centrípeta', 0, 2, 0.02)}
@@ -518,6 +638,7 @@ function bindGraph() {
   // Aparência sem refazer o desenho: tamanho, cor, grossura, setas, busca e rótulos.
   function pintar() {
     const busca = Kuroi.normalize(grafoOpcoes.busca.trim());
+    tela.style.setProperty('--grafo-solta', corValida(grafoOpcoes.corSolta) ? grafoOpcoes.corSolta : GRAFO_PADRAO.corSolta);
     for (const no of nos) {
       const r = raio(no);
       no.circulo.setAttribute('r', r);
@@ -560,6 +681,7 @@ function bindGraph() {
     for (const no of nos) {
       no.el = document.createElementNS(ns, 'g');
       no.el.setAttribute('class', `graph-node tipo-${no.tipo}`);
+      if (no.pasta) no.el.setAttribute('data-cor-pasta', no.pasta);
       no.alvo = document.createElementNS(ns, 'circle');
       no.alvo.setAttribute('class', 'graph-hit');
       no.circulo = document.createElementNS(ns, 'circle');
@@ -714,7 +836,7 @@ function bindGraph() {
       painel.querySelector(`[data-valor="${nome}"]`) && (painel.querySelector(`[data-valor="${nome}"]`).textContent = valorDoGrafo(nome, grafoOpcoes[nome]));
       // Filtro muda quem está no grafo; o resto é só aparência ou força.
       if (FILTROS.includes(nome)) montar();
-      else if (nome === 'busca' || nome === 'rotulos') pintar();
+      else if (['busca', 'rotulos', 'corSolta'].includes(nome)) pintar();
       else { pintar(); comecar(); }
     });
   }
@@ -976,6 +1098,14 @@ async function copiarBloco(botao) {
 // sair dele, o bloco volta a ser desenhado. É o Live Preview do Obsidian.
 // blocoAberto = { campo, inicio, tamanho, separador }: onde o campo está na fonte.
 
+// Sai da nota pelo fluxo normal (salva se preciso) e filtra a tela Notas pela etiqueta.
+async function buscarEtiqueta(texto) {
+  await irPara('notes');
+  const busca = !editing && $('#note-search');
+  if (!busca) return;
+  busca.value = texto;
+  busca.dispatchEvent(new Event('input'));
+}
 function seguirWikilink(link) {
   const alvo = link.dataset.id ? getNote(link.dataset.id) : notaVazia({ title: link.dataset.alvo });
   return abrirNota(alvo);
@@ -1000,8 +1130,10 @@ function montarCampo(valor) {
   campo.value = valor;
   campo.rows = 1;
   campo.setAttribute('aria-label', 'Conteúdo da nota');
-  campo.addEventListener('input', () => aoDigitar(campo));
+  campo.addEventListener('input', () => { aoDigitar(campo); atualizarSugestoes(campo); });
   campo.addEventListener('keydown', teclaNoBloco);
+  campo.addEventListener('click', () => atualizarSugestoes(campo));
+  campo.addEventListener('keyup', evento => { if (/^(ArrowLeft|ArrowRight|Home|End)$/.test(evento.key)) atualizarSugestoes(campo); });
   campo.addEventListener('paste', aoColarOuSoltar);
   campo.addEventListener('drop', aoColarOuSoltar);
   // Adiado: um prompt do menu tira o foco por um instante e o devolve. Só fecha
@@ -1036,6 +1168,7 @@ function aoDigitar(campo) {
 }
 
 function fecharBloco() {
+  fecharSugestoes();
   const bloco = blocoAberto;
   if (!bloco) return;
   blocoAberto = null;
@@ -1127,6 +1260,7 @@ function cursorNoBloco(bloco, evento) {
 
 function teclaNoBloco(evento) {
   const campo = evento.currentTarget;
+  if (sugestao?.campo === campo && teclaNaSugestao(evento)) return;
   if (evento.key === 'Escape') { evento.preventDefault(); evento.stopPropagation(); fecharBloco(); return; }
   if (evento.key !== 'ArrowUp' && evento.key !== 'ArrowDown') return;
   if (evento.shiftKey || evento.altKey || evento.ctrlKey || evento.metaKey) return;
@@ -1147,6 +1281,69 @@ function teclaNoBloco(evento) {
   if (!vizinho) return;
   evento.preventDefault();
   abrirBloco(vizinho, subir ? Infinity : 0);
+}
+
+// ---- Sugestões de [[link]] ----
+// A lista não toma o foco: o teclado continua no campo e teclaNoBloco a consulta primeiro.
+let sugestao = null; // { campo, lista, titulos, indice, inicio }
+function fecharSugestoes() { sugestao?.lista.remove(); sugestao = null; }
+// A lista é fixa na tela: se a página rolar, fecha em vez de ficar longe do cursor.
+document.addEventListener('scroll', () => { if (sugestao) fecharSugestoes(); }, true);
+function atualizarSugestoes(campo) {
+  const cursor = campo.selectionStart, antes = campo.value.slice(0, cursor);
+  const consulta = cursor === campo.selectionEnd ? Kuroi.linkQuery(antes.slice(antes.lastIndexOf('\n') + 1)) : null;
+  const titulos = consulta === null ? [] : Kuroi.linkSuggestions(state.notes.filter(n => n.id !== editing?.id), consulta);
+  if (!titulos.length) return fecharSugestoes();
+  let lista = sugestao?.lista;
+  if (!lista) {
+    lista = document.createElement('div');
+    lista.className = 'ctx-menu sugestoes-link';
+    lista.setAttribute('role', 'listbox');
+    lista.addEventListener('mousedown', e => e.preventDefault());
+    lista.addEventListener('click', e => { const item = e.target.closest('[data-i]'); if (item) inserirSugestao(+item.dataset.i); });
+    document.body.appendChild(lista);
+  }
+  sugestao = { campo, lista, titulos, indice: 0, inicio: cursor - consulta.length };
+  desenharSugestoes();
+  const { left, top, altura } = posicaoDoCursor(campo);
+  const cabeAbaixo = top + altura + lista.offsetHeight < window.innerHeight - 8;
+  lista.style.left = Math.max(8, Math.min(left, window.innerWidth - lista.offsetWidth - 8)) + 'px';
+  lista.style.top = (cabeAbaixo ? top + altura + 4 : top - lista.offsetHeight - 4) + 'px';
+}
+function desenharSugestoes() {
+  const { lista, titulos, indice } = sugestao;
+  lista.innerHTML = titulos.map((t, i) => `<button type="button" class="ctx-item${i === indice ? ' marcada' : ''}" data-i="${i}" role="option" aria-selected="${i === indice}"><span class="ctx-rotulo">${escapeHtml(t)}</span></button>`).join('');
+  lista.querySelector('.marcada')?.scrollIntoView({ block: 'nearest' });
+}
+function inserirSugestao(i) {
+  const { campo, titulos, inicio } = sugestao;
+  fecharSugestoes();
+  campo.setSelectionRange(inicio, campo.selectionStart);
+  inserirTexto(campo, titulos[i] + ']]'); // dispara input: aoDigitar marca a nota como alterada
+}
+function teclaNaSugestao(evento) {
+  if (evento.ctrlKey || evento.altKey || evento.metaKey) return false;
+  const { key } = evento, total = sugestao.titulos.length;
+  if (key === 'ArrowDown' || key === 'ArrowUp') { sugestao.indice = (sugestao.indice + (key === 'ArrowDown' ? 1 : total - 1)) % total; desenharSugestoes(); }
+  else if (key === 'Enter' || key === 'Tab') inserirSugestao(sugestao.indice);
+  else if (key === 'Escape') fecharSugestoes();
+  else return false;
+  evento.preventDefault(); evento.stopPropagation();
+  return true;
+}
+// Div espelho com a mesma caixa e fonte do campo: o fim do texto antes do cursor é onde o cursor está.
+function posicaoDoCursor(campo) {
+  const estilo = getComputedStyle(campo), espelho = document.createElement('div');
+  for (const p of ['boxSizing', 'width', 'padding', 'border', 'font', 'letterSpacing', 'lineHeight', 'tabSize', 'textIndent']) espelho.style[p] = estilo[p];
+  Object.assign(espelho.style, { position: 'fixed', top: '0', left: '0', visibility: 'hidden', whiteSpace: 'pre-wrap', overflowWrap: 'break-word' });
+  espelho.textContent = campo.value.slice(0, campo.selectionStart);
+  const marca = espelho.appendChild(document.createElement('span'));
+  marca.textContent = '​';
+  document.body.appendChild(espelho);
+  const caixa = campo.getBoundingClientRect();
+  const posicao = { left: caixa.left + marca.offsetLeft, top: caixa.top + marca.offsetTop, altura: marca.offsetHeight };
+  espelho.remove();
+  return posicao;
 }
 
 // ---- Colar, arrastar e redimensionar imagens ----
@@ -1305,7 +1502,7 @@ function bindCorpo(corpo) {
     if (blocoAberto?.campo === evento.target) return; // dentro do campo aberto: comportamento normal
     // Links e o botão Copiar agem no click. Segurar o foco evita que o bloco aberto
     // feche e mude a altura da página entre apertar e soltar o botão do mouse.
-    if (evento.button === 0 && evento.target.closest('a, button, .md-imagem img')) return void evento.preventDefault();
+    if (evento.button === 0 && evento.target.closest('a, button, .md-imagem img, .md-tag')) return void evento.preventDefault();
     evento.preventDefault();
     abrirNoPonto(evento);
   });
@@ -1314,6 +1511,8 @@ function bindCorpo(corpo) {
     if (copiar) return void copiarBloco(copiar);
     const imagem = evento.target.closest('.md-imagem img');
     if (imagem) { evento.preventDefault(); return void abrirImagemInteira(imagem.src, imagem.alt); }
+    const etiqueta = evento.target.closest('.md-tag');
+    if (etiqueta) return void buscarEtiqueta(etiqueta.textContent);
     const link = evento.target.closest('.wikilink');
     if (link) { evento.preventDefault(); seguirWikilink(link); }
   });
@@ -1524,10 +1723,10 @@ function montarNivel(itens, area) {
   }
   return nivel;
 }
-function abrirMenuContexto(evento, area) {
+function abrirMenuContexto(evento, area, itens = menuDaNota()) {
   evento.preventDefault();
   fecharMenuContexto();
-  const menu = montarNivel(menuDaNota(), area);
+  const menu = montarNivel(itens, area);
   menu.style.visibility = 'hidden';
   document.body.appendChild(menu);
   const largura = menu.offsetWidth, altura = menu.offsetHeight;
@@ -1553,7 +1752,7 @@ async function salvarNota(){
   if(!editing.title.trim()){status('Dê um título à nota antes de salvar.',true);$('#doc-title')?.focus();return false;}
   // Salvar redesenha a nota; quem estava digitando volta para o mesmo ponto.
   const retomar=blocoAberto&&document.activeElement===blocoAberto.campo?{inicio:blocoAberto.inicio,cursor:blocoAberto.campo.selectionStart}:null;
-  const salva={...editing,id:editing.id||uid(),title:editing.title.trim(),updatedAt:Date.now()};
+  const salva={...editing,id:editing.id||uid(),title:editing.title.trim(),createdAt:editing.createdAt||Date.now(),updatedAt:Date.now()};
   state.notes=editing.id?state.notes.map(n=>n.id===editing.id?salva:n):[salva,...state.notes];
   editing=salva;
   if(!await save())return false;
@@ -1563,6 +1762,12 @@ async function salvarNota(){
 }
 async function extraAction(type,id){
   if(busy||failed||!loaded)return;
+  if(type==='inbox-arquivar')tirarDaCaixa(id);
+  if(type==='inbox-mover'){
+    const r=document.querySelector(`[data-extra="inbox-mover"][data-id="${CSS.escape(id)}"]`).getBoundingClientRect();
+    const pastas=state.folders.slice().sort((a,b)=>(a.path||a.title).localeCompare(b.path||b.title,'pt-BR'));
+    abrirMenuContexto({preventDefault(){},clientX:r.left,clientY:r.bottom},document.body,pastas.length?pastas.map(f=>({rotulo:f.path||f.title,icone:icone('pastas'),acao:()=>tirarDaCaixa(id,f.id)})):[{rotulo:'Nenhuma pasta ainda',icone:icone('pastas'),ativo:()=>false,acao:()=>{}}]);
+  }
   if(type==='daily')abrirNota(state.notes.find(n=>n.title===today())||notaVazia({title:today(),body:templates.daily.body,tags:['diario']}));
   if(type==='add-routine'){
     modal('Novo hábito','<form id="routine-form" class="form"><div class="field"><label for="routine-title">Qual hábito você quer acompanhar?</label><input id="routine-title" required /></div><button class="primary">Adicionar hábito</button></form>');
@@ -1598,7 +1803,15 @@ async function showTrash(){
 // ---- Aparência ----
 // Preferência de tela, guardada por instalação (localStorage), não no cofre:
 // é ajuste de máquina, não conteúdo que deva viajar junto com as notas.
-const APARENCIA_PADRAO = { sidebar: '#1A1A20', content: '#141418' };
+const APARENCIA_PADRAO = { sidebar: '#1A1A20', content: '#141418', acento: '#C77DFF' };
+const ACENTOS = [['#C77DFF','Roxo'],['#4EA8DE','Azul'],['#4CC9F0','Ciano'],['#57CC99','Verde'],['#FFD166','Amarelo'],['#FF9F43','Laranja'],['#FF7EB6','Rosa'],['#FF6B6B','Vermelho']];
+// Luminância relativa (WCAG): decide o texto sobre o botão e avisa quando a cor some no fundo escuro.
+function luminancia(hex) {
+  const [r, g, b] = [1, 3, 5].map(i => { const v = parseInt(hex.slice(i, i + 2), 16) / 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; });
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+const contraste = (a, b) => { const [x, y] = [luminancia(a), luminancia(b)].sort((m, n) => n - m); return (x + 0.05) / (y + 0.05); };
+const corValida = v => typeof v === 'string' && /^#[0-9a-f]{6}$/i.test(v);
 const APARENCIA_ANTIGA = { sidebar: '#0E0E0E', content: '#0A0A0A' };
 function lerAparencia() {
   try {
@@ -1614,6 +1827,14 @@ function aplicarAparencia(valores) {
   const a = valores || lerAparencia();
   document.documentElement.style.setProperty('--sidebar-bg', a.sidebar);
   document.documentElement.style.setProperty('--content-bg', a.content);
+  const raiz = document.documentElement.style, acento = corValida(a.acento) ? a.acento : APARENCIA_PADRAO.acento;
+  if (acento.toLowerCase() === APARENCIA_PADRAO.acento.toLowerCase()) ['--acento', '--acento-forte', '--acento-escuro', '--acento-texto'].forEach(p => raiz.removeProperty(p));
+  else {
+    raiz.setProperty('--acento', acento);
+    raiz.setProperty('--acento-forte', `color-mix(in srgb, ${acento} 78%, black)`);
+    raiz.setProperty('--acento-escuro', `color-mix(in srgb, ${acento} 64%, black)`);
+    raiz.setProperty('--acento-texto', contraste(acento, '#000000') >= contraste(acento, '#FFFFFF') ? '#111114' : '#FFFFFF');
+  }
   return a;
 }
 function gravarAparencia(a) {
@@ -1638,6 +1859,7 @@ async function showSettings() {
     <h3>Aparência</h3>
     ${cor('sidebar', 'Fundo da barra lateral', cores.sidebar)}
     ${cor('content', 'Fundo da área de texto', cores.content)}
+    <div class="field"><span class="rotulo-campo" id="acento-rotulo">Cor de destaque (botões, ícones e links)</span><div class="amostras" role="radiogroup" aria-labelledby="acento-rotulo">${ACENTOS.map(([hex, nome]) => `<label class="amostra" style="--cor-pasta:${hex}" title="${nome}"><input type="radio" name="acento" value="${hex}" ${hex.toLowerCase() === cores.acento.toLowerCase() ? 'checked' : ''} /><span class="sr-only">${nome}</span></label>`).join('')}<label class="cfg-cor amostra-livre" title="Outra cor"><span class="sr-only">Outra cor</span><input type="color" data-cor="acento" value="${cores.acento}" /></label></div><p class="small-muted" id="acento-aviso" hidden>Essa cor tem pouco contraste com o fundo: textos e ícones podem ficar difíceis de ler.</p></div>
     <div><button type="button" class="secondary" id="cor-padrao">Restaurar padrão</button></div>
     <p class="small-muted">A cor muda na hora e vale para esta instalação do Kuroi.</p>
     <h3>IA e integrações</h3>
@@ -1654,14 +1876,21 @@ async function showSettings() {
   const corAtual = () => ({
     sidebar: document.querySelector('[data-cor="sidebar"]').value,
     content: document.querySelector('[data-cor="content"]').value,
+    acento: document.querySelector('[data-cor="acento"]').value,
   });
+  const avisar = () => { const a = lerAparencia(); $('#acento-aviso').hidden = contraste(a.acento, a.content) >= 3; };
+  document.querySelectorAll('input[name="acento"]').forEach(r => r.onchange = () => { document.querySelector('[data-cor="acento"]').value = r.value; gravarAparencia(corAtual()); avisar(); });
+  avisar();
   document.querySelectorAll('[data-cor]').forEach(campo => {
-    campo.oninput = () => gravarAparencia(corAtual());
+    campo.oninput = () => { if (campo.dataset.cor === 'acento') document.querySelectorAll('input[name="acento"]').forEach(r => r.checked = r.value.toLowerCase() === campo.value.toLowerCase()); gravarAparencia(corAtual()); avisar(); };
   });
   $('#cor-padrao').onclick = () => {
     gravarAparencia({ ...APARENCIA_PADRAO });
     document.querySelector('[data-cor="sidebar"]').value = APARENCIA_PADRAO.sidebar;
     document.querySelector('[data-cor="content"]').value = APARENCIA_PADRAO.content;
+    document.querySelector('[data-cor="acento"]').value = APARENCIA_PADRAO.acento;
+    document.querySelectorAll('input[name="acento"]').forEach(r => r.checked = r.value === APARENCIA_PADRAO.acento);
+    avisar();
   };
   $('#cancel').onclick = () => closeModal(true);
   $('#ai-save').onclick = async () => {
@@ -1677,6 +1906,28 @@ async function showSettings() {
     } catch (error) { status('Não foi possível salvar: ' + error.message, true); }
   };
 }
+// Árvore: botão direito abre o menu da nota ou da pasta; arrastar uma nota para uma pasta a move.
+document.addEventListener('contextmenu',e=>{
+  const linha=e.target.closest('.tree-row');
+  if(!linha||!loaded||busy||failed)return;
+  abrirMenuContexto(e,document.body,menuDaArvore(linha));
+});
+// Soltar sobre uma nota vale como soltar na pasta dela; fora das pastas, é a raiz.
+const alvoDaSoltura=e=>{const no=e.target.closest?.('.tree-node');return no?no.querySelector(':scope > .tree-folder'):e.target.closest?.('.tree');};
+const limparSoltura=(exceto)=>document.querySelectorAll('.soltar-aqui').forEach(x=>x!==exceto&&x.classList.remove('soltar-aqui'));
+document.addEventListener('dragstart',e=>{const nota=e.target.closest?.('.tree-note');if(!nota)return;e.dataTransfer.setData('text/kuroi-nota',nota.dataset.id);e.dataTransfer.effectAllowed='move';});
+document.addEventListener('dragover',e=>{
+  if(!e.dataTransfer.types.includes('text/kuroi-nota'))return;
+  const alvo=alvoDaSoltura(e);limparSoltura(alvo);if(!alvo)return;
+  e.preventDefault();e.dataTransfer.dropEffect='move';alvo.classList.add('soltar-aqui');
+});
+document.addEventListener('dragend',()=>limparSoltura());
+document.addEventListener('drop',e=>{
+  const id=e.dataTransfer.getData('text/kuroi-nota');const alvo=id&&alvoDaSoltura(e);
+  limparSoltura();
+  if(!alvo)return;
+  e.preventDefault();moverNota(id,alvo.classList.contains('tree-folder')?alvo.dataset.id:'');
+});
 document.addEventListener('click',e=>{
   const extra=e.target.closest('[data-extra]');if(extra){e.preventDefault();extraAction(extra.dataset.extra,extra.dataset.id);return;}
   const el=e.target.closest('[data-action]');if(el){e.preventDefault();action(el.dataset.action,el.dataset.id);return;}
@@ -1685,6 +1936,7 @@ document.addEventListener('click',e=>{
 document.querySelectorAll('.nav-item').forEach(b=>b.onclick=()=>{if(loaded)irPara(b.dataset.view);});
 $('#new-note').onclick=()=>{if(loaded&&!busy&&!failed)abrirNota(notaVazia());};
 $('#daily-note').onclick=()=>extraAction('daily');
+$('#go-note').onclick=irParaNota;
 $('#reload-vault').onclick=()=>reload(true);
 $('#trash').onclick=showTrash;
 $('#settings').onclick=showSettings;
@@ -1708,8 +1960,31 @@ $('#import-data').onchange=async e=>{
     if(await save())status('Backup importado e salvo');
   }catch(error){status('Importação cancelada: '+error.message,true);}
 };
+// Ctrl+O: achar uma nota pelo título sem tirar a mão do teclado.
+function irParaNota(){
+  if(!loaded||failed||busy||$('#modal-root').firstChild)return;
+  modal('Ir para nota','<div class="form"><input class="search ir-busca" id="ir-busca" placeholder="Digite o título da nota…" autocomplete="off" aria-label="Buscar nota" /><div class="ir-lista" id="ir-lista" role="listbox"></div></div>');
+  const campo=$('#ir-busca'), lista=$('#ir-lista'); let achadas=[], marcada=0;
+  const desenhar=()=>{
+    const q=Kuroi.normalize(campo.value.trim());
+    const pontos=n=>{const t=Kuroi.normalize(n.title||'');return !q?1:t.startsWith(q)?3:t.includes(q)?2:Kuroi.normalize(n.body).includes(q)?1:0;};
+    achadas=state.notes.map(n=>[pontos(n),n]).filter(([p])=>p).sort((a,b)=>b[0]-a[0]||b[1].updatedAt-a[1].updatedAt).slice(0,12).map(([,n])=>n);
+    marcada=Math.min(marcada,Math.max(achadas.length-1,0));
+    lista.innerHTML=achadas.map((n,i)=>{const p=state.folders.find(f=>f.id===n.folderId);return `<button type="button" class="ir-item${i===marcada?' marcada':''}" data-i="${i}" role="option" aria-selected="${i===marcada}"><span>${escapeHtml(n.title||'Sem título')}</span><small>${p?escapeHtml(p.path||p.title):''}</small></button>`;}).join('')||'<div class="empty">Nenhuma nota encontrada.</div>';
+  };
+  const abrir=n=>{if(n&&closeModal(true))abrirNota(n);};
+  // Digitar a busca não é alteração de formulário: não pedir confirmação ao fechar.
+  campo.addEventListener('input',e=>{e.stopPropagation();marcada=0;desenhar();});
+  campo.addEventListener('keydown',e=>{
+    if((e.key==='ArrowDown'||e.key==='ArrowUp')&&achadas.length){e.preventDefault();marcada=(marcada+(e.key==='ArrowDown'?1:achadas.length-1))%achadas.length;desenhar();lista.querySelector('.marcada')?.scrollIntoView({block:'nearest'});}
+    if(e.key==='Enter'){e.preventDefault();abrir(achadas[marcada]);}
+  });
+  lista.addEventListener('click',e=>{const b=e.target.closest('[data-i]');if(b)abrir(achadas[+b.dataset.i]);});
+  desenhar();campo.focus();
+}
 document.addEventListener('keydown',e=>{
   if(e.key==='Escape') closeModal();
+  if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='o'){e.preventDefault();irParaNota();}
   if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='n'){e.preventDefault();if(loaded&&!failed&&!busy&&!$('#modal-root').firstChild)abrirNota(notaVazia());}
   if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='s'&&editing){e.preventDefault();salvarNota();}
 });

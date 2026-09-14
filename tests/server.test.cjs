@@ -28,6 +28,7 @@ test('servidor restringe acesso e persiste o cofre pela API', async t => {
   assert.equal((await fetch(base+'/fonts/nao-existe.woff2')).status,404);
   assert.equal((await fetch(base+'/vendor/katex/katex.min.js')).status,200);
   assert.equal((await fetch(base+'/vendor/katex/fonts/KaTeX_Main-Regular.woff2')).status,200);
+  assert.equal((await fetch(base+'/vendor/katex/fonts/KaTeX_Size1-Regular.woff2')).status,200);
   assert.equal((await fetch(base+'/vendor/katex/package.json')).status,404);
   assert.equal((await fetch(base+'/api/state',{headers:{Origin:'https://evil.example'}})).status,403);
   assert.equal((await fetch(base+'/api/state',{method:'POST',headers:{'Content-Type':'text/plain'},body:'{}'})).status,415);

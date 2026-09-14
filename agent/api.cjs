@@ -147,12 +147,13 @@ class KuroiAgentApi {
   }
 
   async #datas(nota) {
-    if (!nota.file) return { createdAt: null, modifiedAt: new Date(nota.updatedAt).toISOString() };
+    const createdAt = nota.createdAt ? new Date(nota.createdAt).toISOString() : null;
+    if (!nota.file) return { createdAt, modifiedAt: new Date(nota.updatedAt).toISOString() };
     try {
       const info = await fs.stat(await this.vault.safePath(nota.file));
-      return { createdAt: new Date(info.birthtimeMs).toISOString(), modifiedAt: new Date(info.mtimeMs).toISOString() };
+      return { createdAt: createdAt || new Date(info.birthtimeMs).toISOString(), modifiedAt: new Date(info.mtimeMs).toISOString() };
     } catch {
-      return { createdAt: null, modifiedAt: new Date(nota.updatedAt).toISOString() };
+      return { createdAt, modifiedAt: new Date(nota.updatedAt).toISOString() };
     }
   }
 
@@ -163,8 +164,22 @@ class KuroiAgentApi {
       title: nota.title,
       folder: this.#caminhoDaPasta(state, nota.folderId),
       tags: tagsDaNota(nota),
+      createdAt: nota.createdAt ? new Date(nota.createdAt).toISOString() : null,
       modifiedAt: new Date(nota.updatedAt).toISOString(),
     };
+  }
+
+  // since/until em dias locais (AAAA-MM-DD): a nota entra se foi criada ou alterada no período.
+  #noPeriodo(args) {
+    const dia = (valor, campo, fim) => {
+      if (valor === undefined || valor === null || valor === '') return fim ? Infinity : -Infinity;
+      const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(valor));
+      if (!m) throw new AgentError('INVALID_INPUT', `${campo} deve estar no formato AAAA-MM-DD.`);
+      return fim ? new Date(+m[1], m[2] - 1, +m[3], 23, 59, 59, 999).getTime() : new Date(+m[1], m[2] - 1, +m[3]).getTime();
+    };
+    const inicio = dia(args.since, 'since', false), fim = dia(args.until, 'until', true);
+    const dentro = t => Number.isFinite(t) && t >= inicio && t <= fim;
+    return nota => dentro(nota.createdAt ?? nota.updatedAt) || dentro(nota.updatedAt);
   }
 
   #limite(valor, padrao) {
@@ -187,7 +202,7 @@ class KuroiAgentApi {
       if (duplicada) {
         throw new AgentError('NOTE_EXISTS', `Já existe a nota "${titulo}" em "${segmentos.join('/') || 'raiz do cofre'}". Use update_note para alterá-la.`, { id: duplicada.id, path: duplicada.file });
       }
-      state.notes.push({ id, title: titulo, body: conteudo, links: [], tags: etiquetas, folderId, updatedAt: Date.now() });
+      state.notes.push({ id, title: titulo, body: conteudo, links: [], tags: etiquetas, folderId, createdAt: Date.now(), updatedAt: Date.now() });
       return { criadas };
     });
 
@@ -322,7 +337,7 @@ class KuroiAgentApi {
     const state = await this.load();
     const limite = this.#limite(args.limit, 50);
     const deslocamento = Math.max(0, Number.isInteger(args.offset) ? args.offset : 0);
-    let notas = state.notes;
+    let notas = state.notes.filter(this.#noPeriodo(args));
     if (args.folder !== undefined && args.folder !== null && String(args.folder).trim()) {
       const folderId = this.#acharPasta(state, folderSegments(args.folder));
       notas = notas.filter(n => (n.folderId || '') === folderId);
@@ -363,7 +378,7 @@ class KuroiAgentApi {
     const alvo = normalize(consulta);
 
     const achados = [];
-    for (const nota of state.notes) {
+    for (const nota of state.notes.filter(this.#noPeriodo(args))) {
       const titulo = normalize(nota.title);
       const caminho = normalize(nota.file || '');
       const etiquetas = tagsDaNota(nota).map(normalize);

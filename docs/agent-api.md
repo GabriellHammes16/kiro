@@ -82,8 +82,8 @@ Nomes sem prefixo. A camada MCP publica os mesmos com `kuroi_` na frente.
 | `update_note` | write | update | `replace`, `append` ou `prepend`; também muda título, tags e pasta. |
 | `delete_note` | destructive | delete | Move para a lixeira e devolve `trashEntryId`. |
 | `restore_note` | write | update | Restaura da lixeira pelo `trashEntryId`. |
-| `list_notes` | read | read | Lista notas, filtrando por pasta e paginando. |
-| `search_notes` | read | read | Busca em título, caminho, tags e corpo, com trechos. |
+| `list_notes` | read | read | Lista notas, filtrando por pasta e período (`since`/`until`, AAAA-MM-DD) e paginando. |
+| `search_notes` | read | read | Busca em título, caminho, tags e corpo, com trechos. Aceita período (`since`/`until`). |
 | `move_note` | write | update | Move a nota para outra pasta. |
 | `get_recent_notes` | read | read | Notas alteradas mais recentemente. |
 | `get_daily_note` | read | read | Nota do dia; não cria nada. |

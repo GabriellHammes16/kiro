@@ -1,7 +1,7 @@
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const { createHash, randomUUID } = require('node:crypto');
-const { validateState, upgradeBackup, folderPaths, descendants, pathKey } = require('./domain.js');
+const { validateState, upgradeBackup, folderPaths, descendants, pathKey, folderColor } = require('./domain.js');
 const yaml = require('js-yaml');
 
 const hash = value => createHash('sha256').update(value).digest('hex');
@@ -25,7 +25,8 @@ function frontmatter(header) {
   if (typeof fields !== 'object' || Array.isArray(fields)) throw new Error('Metadados Markdown inválidos.');
   return fields;
 }
-function parseMarkdown(raw, file, mtime, legacy = {}) {
+const validDate = value => Number.isFinite(value) && value > 0 && value <= 8.64e15;
+function parseMarkdown(raw, file, mtime, legacy = {}, birthtime) {
   const normalized = raw.replace(/\r\n/g, '\n');
   const header = normalized.match(/^---\n([\s\S]*?)\n---(?:\n|$)/);
   const fields = frontmatter(header);
@@ -36,6 +37,8 @@ function parseMarkdown(raw, file, mtime, legacy = {}) {
     body, links: Array.isArray(fields.links) ? fields.links : [],
     tags: Array.isArray(fields.tags) ? fields.tags : typeof fields.tags === 'string' ? fields.tags.replace(/^\[|\]$/g, '').split(',').map(t => t.trim()).filter(Boolean) : [],
     folderId: fields.folderId || legacy.folderId || '', updatedAt: mtime, file,
+    // Nota antiga sem o campo: a data do arquivo basta para exibir; só grava quando a nota mudar.
+    createdAt: [fields.createdAt, legacy.createdAt, birthtime].find(validDate) ?? mtime,
   };
   return note;
 }
@@ -43,7 +46,7 @@ function markdown(note, previous = '') {
   const header = previous.replace(/\r\n/g, '\n').match(/^---\n([\s\S]*?)\n---(?:\n|$)/);
   const fields = frontmatter(header);
   delete fields.pasta;
-  const metadata = { ...fields, 'caderno-id': note.id, title: note.title, links: note.links, tags: note.tags || [], folderId: note.folderId || '', updatedAt: note.updatedAt };
+  const metadata = { ...fields, 'caderno-id': note.id, title: note.title, links: note.links, tags: note.tags || [], folderId: note.folderId || '', ...(note.createdAt !== undefined && { createdAt: note.createdAt }), updatedAt: note.updatedAt };
   return `---\n${yaml.dump(metadata, { schema: yaml.CORE_SCHEMA, lineWidth: -1, noRefs: true })}---\n\n${note.body}\n`;
 }
 
@@ -120,7 +123,7 @@ class Vault {
         const file=relative?`${relative}/${entry.name}`:entry.name;
         const target=await this.safePath(file);
         if(entry.isDirectory()){directories.push(file);await walk(file);}
-        else if(entry.isFile())files.set(file,{data:await fs.readFile(target),mtime:(await fs.stat(target)).mtimeMs});
+        else if(entry.isFile()){const info=await fs.stat(target);files.set(file,{data:await fs.readFile(target),mtime:info.mtimeMs,birthtime:info.birthtimeMs});}
       }
     };
     await walk();return {files,directories};
@@ -133,14 +136,14 @@ class Vault {
     if(data.formatVersion&&![2,3].includes(data.formatVersion))throw new Error('Versão do cofre não suportada.');
     const {files,directories}=await this.scan();
     const legacy=data.formatVersion?[]:validateState(data).notes;
-    const notes=[...files].filter(([file])=>visible(file)&&/\.md$/i.test(file)).map(([file,value])=>parseMarkdown(value.data.toString('utf8'),file,value.mtime,legacy.find(n=>file===`Notas/${(n.file||'').replace(/\\/g,'/')}`)||{}));
+    const notes=[...files].filter(([file])=>visible(file)&&/\.md$/i.test(file)).map(([file,value])=>parseMarkdown(value.data.toString('utf8'),file,value.mtime,legacy.find(n=>file===`Notas/${(n.file||'').replace(/\\/g,'/')}`)||{},value.birthtime));
     for(const n of legacy)if(!notes.some(x=>x.id===n.id))notes.push({...n,file:undefined});
     const folders=[], byDisk=new Map();
     for(const diskPath of directories.filter(visible).sort((a,b)=>a.split('/').length-b.split('/').length)){
       const marker=files.get(`${diskPath}/${FOLDER_MARKER}`);
       const cached=(data.folders||[]).find(f=>f.path===diskPath);
       const id=marker?JSON.parse(marker.data.toString('utf8')).id:cached?.id||`folder-${hash(diskPath).slice(0,32)}`;
-      const folder={id,title:path.posix.basename(diskPath),parentId:byDisk.get(parentPath(diskPath))?.id||'',diskPath,description:cached?.description||''};
+      const folder={id,title:path.posix.basename(diskPath),parentId:byDisk.get(parentPath(diskPath))?.id||'',diskPath,description:cached?.description||'',color:folderColor(cached?.color)};
       folders.push(folder);byDisk.set(diskPath,folder);
     }
     if(data.formatVersion!==3){
@@ -220,7 +223,7 @@ class Vault {
       put(note.file,equal&&identified?previous:markdown(note,previous));
     }
     for(const folder of input.folders)put(`${paths.get(folder.id)}/${FOLDER_MARKER}`,JSON.stringify({id:folder.id}));
-    const metadata=JSON.stringify({formatVersion:3,tasks:input.tasks,routine:input.routine,folders:input.folders.map(f=>({id:f.id,title:f.title,parentId:f.parentId||'',path:paths.get(f.id),description:f.description||''}))},null,2);
+    const metadata=JSON.stringify({formatVersion:3,tasks:input.tasks,routine:input.routine,folders:input.folders.map(f=>({id:f.id,title:f.title,parentId:f.parentId||'',path:paths.get(f.id),description:f.description||'',color:folderColor(f.color)}))},null,2);
     put('caderno.json',metadata);
     for(const file of desired.keys()){
       await this.safePath(file);let parent=parentPath(file);while(parent){desiredDirs.add(parent);parent=parentPath(parent);}

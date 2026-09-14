@@ -19,6 +19,7 @@
     }
     for (const n of value.notes) {
       if (!text(n.body) || !Array.isArray(n.links) || !n.links.every(text) || !Number.isFinite(n.updatedAt) || Math.abs(n.updatedAt) > 8.64e15) fail();
+      if (n.createdAt !== undefined && (!Number.isFinite(n.createdAt) || Math.abs(n.createdAt) > 8.64e15)) fail();
       if (n.tags !== undefined && (!Array.isArray(n.tags) || !n.tags.every(text))) fail();
       if (n.file !== undefined && (!text(n.file) || /(^[\\/]|:|(^|[\\/])\.\.([\\/]|$))/.test(n.file) || !/\.md$/i.test(n.file))) fail();
       if (n.folderId && !id(n.folderId)) fail();
@@ -87,7 +88,34 @@
   const wikiLinks = body => [...body.matchAll(/(!?)\[\[([^\]\n]+)\]\]/g)].filter(match => !(match[1] && isImagePath(match[2].split('|')[0]))).map(match => ({ target: match[2].split('|')[0].split('#')[0].trim(), label: (match[2].split('|')[1] || match[2]).trim() }));
   const tags = note => [...new Set([...(note.tags || []), ...[...note.body.matchAll(/(?:^|\s)#([\p{L}\p{N}_/-]+)/gu)].map(m => m[1])])];
   const findLinkedNote = (notes, target) => notes.find(n => normalize(n.title) === normalize(target) || normalize((n.file || '').replace(/\.md$/i, '')) === normalize(target) || normalize((n.file || '').split('/').pop().replace(/\.md$/i, '')) === normalize(target));
-  const api = { localDate, safeUrl, validateState, normalize, isImagePath, wikiLinks, tags, findLinkedNote, validFolderName, folderPaths, descendants, upgradeBackup, pathKey };
+  // Notas que citam `note` com [[...]]; a própria nota não conta.
+  const mentions = (notes, note) => notes.filter(n => n.id !== note.id && wikiLinks(n.body).some(l => findLinkedNote(notes, l.target)?.id === note.id));
+  const inInbox = note => tags(note).includes('inbox');
+  // Arquivar tira só a etiqueta: o token #inbox some com o espaço que o separava, o resto do texto fica igual.
+  const withoutInbox = note => ({ ...note, tags: (note.tags || []).filter(t => t !== 'inbox'), body: note.body.replace(/^#inbox(?![\p{L}\p{N}_/-])[ \t]*|[ \t]+#inbox(?![\p{L}\p{N}_/-])/gmu, '') });
+  // Para revisar: "soltas" não se ligam a nada e ninguém as cita; "esquecidas" estão paradas há mais de 30 dias.
+  // ponytail: menções recebidas varrem todas as notas (O(n²) no pior caso); indexar alvos se o cofre ficar grande.
+  const toReview = (notes, now = Date.now(), limit = 5) => {
+    const cited = new Set(notes.flatMap(n => wikiLinks(n.body).map(l => findLinkedNote(notes, l.target)?.id).filter(id => id && id !== n.id)));
+    // Diárias e capturas pendentes já têm lugar próprio no Hoje: ficam fora das duas listas.
+    const revisavel = n => !inInbox(n) && !/^\d{4}-\d{2}-\d{2}$/.test(n.title);
+    const loose = notes.filter(n => revisavel(n) && !n.folderId && !wikiLinks(n.body).length && !cited.has(n.id)).slice(0, limit);
+    const forgotten = notes.filter(n => revisavel(n) && now - n.updatedAt > 30 * 864e5).sort((a, b) => a.updatedAt - b.updatedAt).slice(0, limit);
+    return { loose, forgotten };
+  };
+  // Texto digitado depois de um [[ ainda aberto na linha do cursor; null fora de um link e em ![[ (imagem).
+  const linkQuery = before => before.match(/(?<!!)\[\[([^\[\]\n]*)$/)?.[1] ?? null;
+  // Títulos que começam com o texto vêm antes dos que só o contêm.
+  const linkSuggestions = (notes, query, limit = 8) => {
+    const q = normalize(query.trim());
+    const titulos = [...new Set(notes.map(n => n.title).filter(Boolean))];
+    const comeca = titulos.filter(t => normalize(t).startsWith(q));
+    return [...comeca, ...titulos.filter(t => !comeca.includes(t) && normalize(t).includes(q))].slice(0, limit);
+  };
+  // Cores de pasta são nomes de uma paleta fixa: nada de CSS livre vindo do arquivo do cofre.
+  const FOLDER_COLORS = ['azul', 'verde', 'amarelo', 'laranja', 'vermelho', 'rosa', 'roxo', 'cinza'];
+  const folderColor = value => FOLDER_COLORS.includes(value) ? value : '';
+  const api = { FOLDER_COLORS, folderColor, localDate, safeUrl, validateState, normalize, isImagePath, wikiLinks, tags, findLinkedNote, mentions, inInbox, withoutInbox, toReview, linkQuery, linkSuggestions, validFolderName, folderPaths, descendants, upgradeBackup, pathKey };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Kuroi = api;
 })(globalThis);

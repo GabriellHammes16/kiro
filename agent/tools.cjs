@@ -12,6 +12,10 @@
 const { AgentError } = require('./security.cjs');
 const { validate } = require('./schema.cjs');
 
+const PERIODO = {
+  since: { type: 'string', pattern: '^\\d{4}-\\d{2}-\\d{2}$', description: 'Só notas criadas ou alteradas a partir deste dia (AAAA-MM-DD, fuso local). Para "ontem", use since e until com a data de ontem. A data de hoje vem em get_daily_note sem argumentos.' },
+  until: { type: 'string', pattern: '^\\d{4}-\\d{2}-\\d{2}$', description: 'Só notas criadas ou alteradas até o fim deste dia (AAAA-MM-DD, fuso local).' },
+};
 const alvoNota = { id: { type: 'string', description: 'Id da nota. Use este ou "path".' }, path: { type: 'string', description: 'Caminho da nota relativo ao cofre, terminando em .md. Nunca um caminho absoluto.' } };
 
 const FERRAMENTAS = [
@@ -92,11 +96,12 @@ const FERRAMENTAS = [
     name: 'list_notes',
     risk: 'read',
     permission: 'read',
-    description: 'Lista notas do cofre, da mais recente para a mais antiga. Aceita filtrar por pasta e paginar.',
+    description: 'Lista notas do cofre, da mais recente para a mais antiga. Aceita filtrar por pasta e por período (since/until), e paginar. Use com since/until para perguntas como "o que anotei ontem".',
     inputSchema: {
       type: 'object',
       properties: {
         folder: { type: 'string', description: 'Restringe a esta pasta, relativa ao cofre.' },
+        ...PERIODO,
         limit: { type: 'integer', minimum: 1, maximum: 200, default: 50 },
         offset: { type: 'integer', minimum: 0, default: 0 },
       },
@@ -108,11 +113,12 @@ const FERRAMENTAS = [
     name: 'search_notes',
     risk: 'read',
     permission: 'read',
-    description: 'Busca textual no cofre por título, caminho, tags e conteúdo, sem diferenciar maiúsculas nem acentos. Devolve trechos relevantes de cada nota encontrada. Use antes de read_note quando não souber onde a informação está.',
+    description: 'Busca textual no cofre por título, caminho, tags e conteúdo, sem diferenciar maiúsculas nem acentos. Devolve trechos relevantes de cada nota encontrada. Use antes de read_note quando não souber onde a informação está. Aceita período (since/until) para perguntas como "o que anotei ontem sobre X".',
     inputSchema: {
       type: 'object',
       properties: {
         query: { type: 'string', minLength: 1, description: 'Texto procurado.' },
+        ...PERIODO,
         limit: { type: 'integer', minimum: 1, maximum: 200, default: 20 },
       },
       required: ['query'],

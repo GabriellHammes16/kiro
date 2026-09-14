@@ -216,3 +216,22 @@ test('restaurar pasta cujas notas foram movidas não duplica as notas', async t 
   // anexos, que não são notas, voltam para dentro da pasta
   await fs.access(path.join(vault.directory,'Estudos/anexo.txt'));
 });
+test('cor da pasta sobrevive a salvar, renomear e reabrir; cor fora da paleta é descartada', async t => {
+  const vault=await setup(t);let state=await seed(vault);
+  state.folders=[{id:'f-azul',title:'Java',parentId:'',description:'',color:'azul'},{id:'f-ruim',title:'Outra',parentId:'',description:'',color:'red;background:url(x)'}];
+  state=await vault.save(state);
+  state.folders.find(f=>f.id==='f-azul').title='Programação';state=await vault.save(state);
+  const reaberto=await new Vault(vault.directory).load();
+  assert.equal(reaberto.folders.find(f=>f.id==='f-azul').color,'azul');
+  assert.equal(reaberto.folders.find(f=>f.id==='f-ruim').color,'');
+});
+test('createdAt sobrevive à reabertura; nota antiga sem o campo recebe uma data válida', async t => {
+  const vault=await setup(t);const criada=Date.UTC(2026,8,2);
+  const state=await seed(vault,[note({createdAt:criada})]);
+  assert.match(await fs.readFile(path.join(vault.directory,state.notes[0].file),'utf8'),/^createdAt: /m);
+  assert.equal((await new Vault(vault.directory).load()).notes[0].createdAt,criada);
+  await fs.writeFile(path.join(vault.directory,'antiga.md'),'---\ntitle: Antiga\n---\n\nSem data de criação\n');
+  const antiga=(await new Vault(vault.directory).load()).notes.find(n=>n.title==='Antiga');
+  assert.ok(Number.isFinite(antiga.createdAt)&&antiga.createdAt>0);
+  assert.doesNotMatch(await fs.readFile(path.join(vault.directory,'antiga.md'),'utf8'),/createdAt/);
+});

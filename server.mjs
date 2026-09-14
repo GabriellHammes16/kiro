@@ -66,7 +66,7 @@ createServer(async (request, response) => {
       } catch { return send(response, 404, { error: 'Imagem não encontrada.' }); }
     }
     // KaTeX embarcado: só os três tipos de arquivo que a página pede.
-    const katex = rota.match(/^\/vendor\/katex\/(katex\.min\.(?:js|css)|fonts\/KaTeX_[A-Za-z-]+\.woff2)$/);
+    const katex = rota.match(/^\/vendor\/katex\/(katex\.min\.(?:js|css)|fonts\/KaTeX_[A-Za-z0-9-]+\.woff2)$/);
     if (request.method === 'GET' && katex) {
       try {
         const corpo = await readFile(join(root, 'vendor', 'katex', ...katex[1].split('/')));

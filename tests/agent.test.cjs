@@ -291,7 +291,7 @@ test('nota da IA é indistinguível de nota feita à mão', async t => {
   const doAgente = await toolkit.call('create_note', { title: 'Do agente', folder: 'Mix', content: 'corpo', tags: ['t'] }, cliente);
   // criada como a interface cria: mexendo no estado e salvando pelo Vault
   const state = await vault.load();
-  state.notes.push({ id: 'manual-1', title: 'Do usuário', body: 'corpo', links: [], tags: ['t'], folderId: state.folders.find(f => f.title === 'Mix').id, updatedAt: Date.now() });
+  state.notes.push({ id: 'manual-1', title: 'Do usuário', body: 'corpo', links: [], tags: ['t'], folderId: state.folders.find(f => f.title === 'Mix').id, createdAt: Date.now(), updatedAt: Date.now() });
   const depois = await vault.save(state);
   const manual = depois.notes.find(n => n.id === 'manual-1');
 
@@ -303,4 +303,16 @@ test('nota da IA é indistinguível de nota feita à mão', async t => {
   // e o agente enxerga a nota feita à mão como qualquer outra
   const lida = await toolkit.call('read_note', { path: manual.file }, cliente);
   assert.equal(lida.title, 'Do usuário');
+});
+
+test('list_notes e search_notes filtram por período (since/until em dias locais)', async t => {
+  const { toolkit } = await montar(t);
+  await toolkit.call('create_note', { title: 'Java hoje', content: 'Anotei sobre streams em Java.' }, cliente);
+  const d = new Date(), dia = x => `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`;
+  const hoje = dia(d), ontem = dia(new Date(d.getFullYear(), d.getMonth(), d.getDate() - 1)), amanha = dia(new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1));
+  assert.equal((await toolkit.call('list_notes', { since: hoje, until: hoje }, cliente)).total, 1);
+  assert.equal((await toolkit.call('list_notes', { since: ontem, until: ontem }, cliente)).total, 0);
+  assert.equal((await toolkit.call('search_notes', { query: 'java', since: hoje }, cliente)).total, 1);
+  assert.equal((await toolkit.call('search_notes', { query: 'java', since: amanha }, cliente)).total, 0);
+  await assert.rejects(toolkit.call('list_notes', { since: '14/09/2026' }, cliente), codigo('INVALID_INPUT'));
 });
