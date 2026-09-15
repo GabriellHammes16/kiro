@@ -8,6 +8,7 @@ import { join } from 'node:path';
 // (server.mjs, vault.cjs, agent/) ficam com o node --watch, que reinicia o processo.
 const OBSERVADOS = new Map([
   ['styles.css', 'css'],
+  ['temas.css', 'reload'],
   ['app.js', 'reload'],
   ['index.html', 'reload'],
   ['domain.js', 'reload'],

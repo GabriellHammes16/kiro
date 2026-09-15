@@ -42,6 +42,7 @@ Dependências de produção: apenas `@modelcontextprotocol/sdk` e `js-yaml`.
 ```
 app.js          interface inteira (telas, editor, grafo, hábitos, menus), cerca de 2.200 linhas
 styles.css      estilos (tema escuro, escala de medidas em variáveis CSS)
+temas.css       variáveis de cada tema e regras das skins
 index.html      casca da página (barra lateral + <main id="app">)
 domain.js       regras puras compartilhadas entre navegador e Node: validação, links, menções,
                 hábitos (frequência, sequência, estatísticas), caixa de entrada, revisão
@@ -137,7 +138,9 @@ updatedAt: 1789189555996
 - Arrastar pontos, zoom e pan.
 
 ### Configurações (4 abas)
-- **Personalização:** cores de fundo e cor de destaque da interface (8 prontas + livre), com aviso de contraste.
+- **Personalização:** **temas** (7 Clássicos + 11 Anime, todos com contraste de 4,5:1) e **Personalizado** (cores de fundo e destaque manuais, com aviso de contraste); **skins** mudam cantos, espaços, bordas e fonte (Padrão, Minimal, Compacto, Terminal, Suave, Sharp, Neon, Paper).
+  - Guardado em `localStorage['kuroi.aparencia']` como `{ tema, skin, sidebar, content, acento }`; `domain.js` valida (`aparenciaValida`, migra o formato antigo) e `app.js` põe as classes `tema-<id>`/`skin-<id>` no `<html>`.
+  - As variáveis de cada tema e as regras das skins ficam em `temas.css` (carregado depois de `styles.css`); aplicar é na hora, sem recarregar.
 - **Sistema:** caminho do cofre, abrir pasta, trocar de cofre, recarregar, exportar/importar backup JSON, lixeira.
 - **Integrações:** permissões dos agentes de IA (ler, criar, editar, excluir, confirmar ações destrutivas, ligar/desligar MCP).
 - **Atalhos:** lista dos atalhos de teclado.

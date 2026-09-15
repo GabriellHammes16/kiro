@@ -207,7 +207,45 @@
   // Cores de pasta são nomes de uma paleta fixa: nada de CSS livre vindo do arquivo do cofre.
   const FOLDER_COLORS = ['azul', 'verde', 'amarelo', 'laranja', 'vermelho', 'rosa', 'roxo', 'cinza'];
   const folderColor = value => FOLDER_COLORS.includes(value) ? value : '';
-  const api = { FOLDER_COLORS, folderColor, habitStats, habitDays, withHabits, validFrequency, localDate, safeUrl, validateState, normalize, isImagePath, wikiLinks, tags, findLinkedNote, mentions, inInbox, withoutInbox, toReview, linkQuery, linkSuggestions, validFolderName, folderPaths, descendants, upgradeBackup, pathKey };
+  // ---- Aparência: temas, skins e cores manuais (preferência da instalação, em localStorage) ----
+  const TEMAS = [
+    ['escuro-classico', 'Escuro Clássico', 'classicos'], ['escuro-azul', 'Escuro Azul', 'classicos'], ['escuro-verde', 'Escuro Verde', 'classicos'],
+    ['escuro-ambar', 'Escuro Âmbar', 'classicos'], ['alto-contraste', 'Alto Contraste', 'classicos'], ['meia-noite', 'Meia-noite', 'classicos'], ['floresta', 'Floresta', 'classicos'],
+    ['neon-tokyo', 'Neon Tokyo', 'anime'], ['sakura-night', 'Sakura Night', 'anime'], ['shonen-fire', 'Shonen Fire', 'anime'], ['studio-ghibli', 'Studio Ghibli', 'anime'],
+    ['evangelion', 'Evangelion', 'anime'], ['sailor-moon', 'Sailor Moon', 'anime'], ['violet-evergarden', 'Violet Evergarden', 'anime'], ['demon-blood', 'Demon Blood', 'anime'],
+    ['cyber-lain', 'Cyber Lain', 'anime'], ['makoto-shinkai', 'Makoto Shinkai', 'anime'], ['jojo-stand', 'JoJo Stand', 'anime'],
+  ];
+  const SKINS = [
+    ['padrao', 'Padrão', 'O visual de sempre.'], ['minimal', 'Minimal', 'Menos bordas, mais respiro.'], ['compacto', 'Compacto', 'Mais coisa na tela.'],
+    ['terminal', 'Terminal', 'Fonte mono e cantos retos.'], ['suave', 'Suave', 'Cantos redondos e sombras leves.'], ['sharp', 'Sharp', 'Cantos retos, bordas marcadas.'],
+    ['neon', 'Neon', 'Brilho sutil no destaque.'], ['paper', 'Paper', 'Textura de papel ilustrado.'],
+  ];
+  const APARENCIA_PADRAO = Object.freeze({ tema: 'escuro-classico', skin: 'padrao', sidebar: '#1A1A20', content: '#141418', acento: '#C77DFF' });
+  const corValida = v => text(v) && /^#[0-9a-f]{6}$/i.test(v);
+  // Luminância relativa e razão de contraste (WCAG).
+  function luminancia(hex) {
+    const [r, g, b] = [1, 3, 5].map(i => { const v = parseInt(hex.slice(i, i + 2), 16) / 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; });
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  }
+  const contraste = (a, b) => { const [x, y] = [luminancia(a), luminancia(b)].sort((m, n) => n - m); return (x + 0.05) / (y + 0.05); };
+  // Sempre devolve um objeto completo; o que vier estranho do localStorage vira padrão.
+  function aparenciaValida(salvo) {
+    const s = salvo && typeof salvo === 'object' && !Array.isArray(salvo) ? salvo : {};
+    const ANTIGA = { sidebar: '#0e0e0e', content: '#0a0a0a' };
+    const cores = {};
+    for (const chave of ['sidebar', 'content', 'acento']) {
+      const v = corValida(s[chave]) && s[chave].toLowerCase() !== ANTIGA[chave] ? s[chave] : APARENCIA_PADRAO[chave];
+      cores[chave] = v;
+    }
+    // Salvo de antes dos temas: cor própria vira "personalizado"; quem nunca mexeu fica no clássico.
+    const tema = s.tema === 'personalizado' || TEMAS.some(([id]) => id === s.tema) ? s.tema
+      : s.tema === undefined && ['sidebar', 'content', 'acento'].some(k => cores[k].toLowerCase() !== APARENCIA_PADRAO[k].toLowerCase()) ? 'personalizado'
+      : APARENCIA_PADRAO.tema;
+    const skin = SKINS.some(([id]) => id === s.skin) ? s.skin : APARENCIA_PADRAO.skin;
+    return { tema, skin, ...cores };
+  }
+  const classesDaAparencia = a => { const v = aparenciaValida(a); return [`tema-${v.tema}`, `skin-${v.skin}`]; };
+  const api = { TEMAS, SKINS, APARENCIA_PADRAO, luminancia, contraste, corValida, aparenciaValida, classesDaAparencia, FOLDER_COLORS, folderColor,habitStats, habitDays, withHabits, validFrequency, localDate, safeUrl, validateState, normalize, isImagePath, wikiLinks, tags, findLinkedNote, mentions, inInbox, withoutInbox, toReview, linkQuery, linkSuggestions, validFolderName, folderPaths, descendants, upgradeBackup, pathKey };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Kuroi = api;
 })(globalThis);

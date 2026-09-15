@@ -300,6 +300,26 @@ const TRACOS = {
   selecionar: '<path d="M5 8.5V6.8A1.8 1.8 0 0 1 6.8 5H8.5M15.5 5h1.7A1.8 1.8 0 0 1 19 6.8v1.7M19 15.5v1.7a1.8 1.8 0 0 1-1.8 1.8h-1.7M8.5 19H6.8A1.8 1.8 0 0 1 5 17.2v-1.7"/>',
   salvar: '<path d="M5 6.5A1.5 1.5 0 0 1 6.5 5h9L19 8.5V18a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 5 18z"/><path d="M8.5 5v4.5h6M8.5 19.5v-5h7v5"/>',
   detalhes: '<path d="M4.5 8h8M17 8h2.5M4.5 16h3M12 16h7.5"/><circle cx="14.5" cy="8" r="2.2"/><circle cx="9.5" cy="16" r="2.2"/>',
+  // Temas (cards de Aparência): um desenho por tema; os de anime são homenagens em traço, sem logos.
+  'tema-escuro-classico': '<path d="M19 14.8A7.8 7.8 0 1 1 9.2 5a6.2 6.2 0 0 0 9.8 9.8z"/>',
+  'tema-escuro-azul': '<path d="M12 3.5c3.3 4.1 5.8 7.2 5.8 10.6a5.8 5.8 0 0 1-11.6 0C6.2 10.7 8.7 7.6 12 3.5z"/>',
+  'tema-escuro-verde': '<path d="M5.5 18.5C4.5 10.5 9.5 5 19.5 4.5 19 14.5 13.5 19.5 5.5 18.5z"/><path d="M4 20l9-9"/>',
+  'tema-escuro-ambar': '<path d="M6.5 3.5h11M6.5 20.5h11"/><path d="M8 3.5c0 5 4 5.5 4 8.5s-4 3.5-4 8.5M16 3.5c0 5-4 5.5-4 8.5s4 3.5 4 8.5"/><path d="M9.8 18.6h4.4" stroke-width="2.5"/>',
+  'tema-alto-contraste': '<circle cx="12" cy="12" r="8.5"/><path d="M12 3.5a8.5 8.5 0 0 1 0 17z" fill="currentColor"/>',
+  'tema-meia-noite': '<path d="M15.5 17.2A6.8 6.8 0 1 1 8 8a5.4 5.4 0 0 0 7.5 9.2z"/><path d="M17.5 3.5v4.5M15.25 5.75h4.5"/><circle cx="20" cy="11.5" r=".8" fill="currentColor"/>',
+  'tema-floresta': '<path d="M12 3.5 7 10h2.8L5.5 15.5h13L14.2 10H17z"/><path d="M12 15.5v5"/>',
+  'tema-personalizado': '<path d="M12 3.5a8.5 8.5 0 0 0 0 17c1.1 0 1.8-.7 1.8-1.7 0-1.2-1-1.6-1-2.6 0-.9.7-1.6 1.7-1.6h2.1a3.9 3.9 0 0 0 3.9-3.9C20.5 6.9 16.7 3.5 12 3.5z"/><circle cx="7.8" cy="12" r="1.1" fill="currentColor"/><circle cx="10" cy="7.6" r="1.1" fill="currentColor"/><circle cx="15" cy="7.8" r="1.1" fill="currentColor"/>',
+  'tema-neon-tokyo': '<path d="M3.5 20.5h17"/><path d="M5 20.5V11h4M9 20.5V5.5h5v15M14 20.5V12h5v8.5"/><path d="M15.5 4.5h2.5v5.5h-2.5" stroke-width="1.5"/>',
+  'tema-sakura-night': '<path d="M12 12C9.4 10 8.6 7.3 9.8 4.4L12 5.8l2.2-1.4c1.2 2.9.4 5.6-2.2 7.6z"/><path d="M12 12C9.4 10 8.6 7.3 9.8 4.4L12 5.8l2.2-1.4c1.2 2.9.4 5.6-2.2 7.6z" transform="rotate(72 12 12)"/><path d="M12 12C9.4 10 8.6 7.3 9.8 4.4L12 5.8l2.2-1.4c1.2 2.9.4 5.6-2.2 7.6z" transform="rotate(144 12 12)"/><path d="M12 12C9.4 10 8.6 7.3 9.8 4.4L12 5.8l2.2-1.4c1.2 2.9.4 5.6-2.2 7.6z" transform="rotate(216 12 12)"/><path d="M12 12C9.4 10 8.6 7.3 9.8 4.4L12 5.8l2.2-1.4c1.2 2.9.4 5.6-2.2 7.6z" transform="rotate(288 12 12)"/>',
+  'tema-shonen-fire': '<path d="M12 21a6.2 6.2 0 0 1-6.2-6.2c0-3.1 1.9-4.6 2.1-7.6 1.6 1 2.6 2.5 2.7 4.1.4-3.2 2.1-5.8 4.6-7.8-.2 3.6 3 5.7 3 10.8A6.2 6.2 0 0 1 12 21z"/><path d="M12 21c-1.7 0-2.9-1.2-2.9-2.9 0-1.6 1.4-2.5 1.9-4.1 1.6 1 3 2.3 3 4.2 0 1.6-.8 2.8-2 2.8z"/>',
+  'tema-studio-ghibli': '<path d="M12 4l1.8 2.3 2.7-1 .3 2.9 2.7.7-1.3 2.5 2 2.1-2.5 1.4.6 2.8-2.9-.1-1.1 2.7-2.3-1.7-2.3 1.7-1.1-2.7-2.9.1.6-2.8-2.5-1.4 2-2.1-1.3-2.5 2.7-.7.3-2.9 2.7 1z"/><circle cx="9.9" cy="12.3" r="1.3"/><circle cx="14.1" cy="12.3" r="1.3"/>',
+  'tema-evangelion': '<path d="M8.4 4.4 12 6.5v4.2l-3.6 2.1-3.6-2.1V6.5zM15.6 4.4l3.6 2.1v4.2l-3.6 2.1-3.6-2.1M12 10.7l3.6 2.1V17L12 19.1 8.4 17v-4.2"/>',
+  'tema-sailor-moon': '<path d="M5 8a7 7 0 0 0 14 0 9 9 0 0 1-14 0z"/><path d="M12 15v4"/><circle cx="12" cy="20.6" r="1.2"/><path d="M12 3.8l.6 1.6 1.7.1-1.3 1 .4 1.6-1.4-.8-1.4.8.4-1.6-1.3-1 1.7-.1z" fill="currentColor" stroke-width="1"/>',
+  'tema-violet-evergarden': '<rect x="3.5" y="10" width="12.5" height="9.5" rx="1.5"/><path d="m3.8 11 6 4.3 6-4.3"/><path d="M20.5 3.5c-4.2.8-7.2 3.6-8.2 7.4 3.6-.9 6.7-3.6 8.2-7.4zM17.5 6.5l-5.5 5.5"/>',
+  'tema-demon-blood': '<path d="M20.5 3.5C18 8 14.6 11.6 10.6 13.4"/><path d="M7.6 11.4l5 5"/><path d="M10.1 13.9 4 20"/><path d="M6.6 17.4l.9.9" stroke-width="2.6"/>',
+  'tema-cyber-lain': '<path d="M3.5 4.5Q12 10.5 20.5 4.5M3.5 8Q12 13.5 20.5 8"/><path d="m5.5 14 3 2.5-3 2.5M11.5 19h6"/>',
+  'tema-makoto-shinkai': '<path d="M3.5 19.5h6l2-2 2 2h7"/><circle cx="7.5" cy="12" r="2"/><path d="M9.2 10.9 19.5 4.5M9.5 12.4l11-2.9"/><circle cx="17" cy="14" r=".7" fill="currentColor"/>',
+  'tema-jojo-stand': '<path d="M12 4.4l2.1 5.7 6.1.2-4.8 3.8 1.7 5.9-5.1-3.4-5.1 3.4 1.7-5.9-4.8-3.8 6.1-.2z"/><path d="M3.5 3.5l1.8 1.8M20.5 3.5l-1.8 1.8"/>',
 };
 const icone = (nome, classe = '') => `<svg class="icone${classe ? ' ' + classe : ''}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">${TRACOS[nome] || ''}</svg>`;
 // Ícones do HTML fixo: o marcador data-icone vira desenho quando o app abre.
@@ -1971,31 +1991,24 @@ async function showTrash(){
 // ---- Aparência ----
 // Preferência de tela, guardada por instalação (localStorage), não no cofre:
 // é ajuste de máquina, não conteúdo que deva viajar junto com as notas.
-const APARENCIA_PADRAO = { sidebar: '#1A1A20', content: '#141418', acento: '#C77DFF' };
+const { APARENCIA_PADRAO, TEMAS, SKINS, contraste, corValida } = Kuroi;
 const ACENTOS = [['#C77DFF','Roxo'],['#4EA8DE','Azul'],['#4CC9F0','Ciano'],['#57CC99','Verde'],['#FFD166','Amarelo'],['#FF9F43','Laranja'],['#FF7EB6','Rosa'],['#FF6B6B','Vermelho']];
-// Luminância relativa (WCAG): decide o texto sobre o botão e avisa quando a cor some no fundo escuro.
-function luminancia(hex) {
-  const [r, g, b] = [1, 3, 5].map(i => { const v = parseInt(hex.slice(i, i + 2), 16) / 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; });
-  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
-}
-const contraste = (a, b) => { const [x, y] = [luminancia(a), luminancia(b)].sort((m, n) => n - m); return (x + 0.05) / (y + 0.05); };
-const corValida = v => typeof v === 'string' && /^#[0-9a-f]{6}$/i.test(v);
-const APARENCIA_ANTIGA = { sidebar: '#0E0E0E', content: '#0A0A0A' };
 function lerAparencia() {
-  try {
-    const salvo = JSON.parse(localStorage.getItem('kuroi.aparencia') || '{}');
-    // Quem nunca trocou a cor recebe o padrão novo; escolha própria é respeitada.
-    for (const chave of ['sidebar', 'content']) {
-      if (typeof salvo[chave] === 'string' && salvo[chave].toLowerCase() === APARENCIA_ANTIGA[chave].toLowerCase()) delete salvo[chave];
-    }
-    return { ...APARENCIA_PADRAO, ...salvo };
-  } catch { return { ...APARENCIA_PADRAO }; }
+  try { return Kuroi.aparenciaValida(JSON.parse(localStorage.getItem('kuroi.aparencia') || '{}')); } catch { return Kuroi.aparenciaValida({}); }
 }
 function aplicarAparencia(valores) {
-  const a = valores || lerAparencia();
-  document.documentElement.style.setProperty('--sidebar-bg', a.sidebar);
-  document.documentElement.style.setProperty('--content-bg', a.content);
-  const raiz = document.documentElement.style, acento = corValida(a.acento) ? a.acento : APARENCIA_PADRAO.acento;
+  const a = Kuroi.aparenciaValida(valores || lerAparencia());
+  const html = document.documentElement, raiz = html.style;
+  html.classList.remove(...[...html.classList].filter(c => /^(tema|skin)-/.test(c)));
+  html.classList.add(...Kuroi.classesDaAparencia(a));
+  // Tema pronto traz as próprias variáveis (temas.css); só o Personalizado usa as cores manuais inline.
+  if (a.tema !== 'personalizado') {
+    ['--sidebar-bg', '--content-bg', '--acento', '--acento-forte', '--acento-escuro', '--acento-texto'].forEach(p => raiz.removeProperty(p));
+    return a;
+  }
+  raiz.setProperty('--sidebar-bg', a.sidebar);
+  raiz.setProperty('--content-bg', a.content);
+  const acento = a.acento;
   if (acento.toLowerCase() === APARENCIA_PADRAO.acento.toLowerCase()) ['--acento', '--acento-forte', '--acento-escuro', '--acento-texto'].forEach(p => raiz.removeProperty(p));
   else {
     raiz.setProperty('--acento', acento);
@@ -2015,7 +2028,7 @@ const agentApi = {
   save: parcial => window.cadernoDesktop ? window.cadernoDesktop.saveAgentConfig(parcial) : api('agent-config', parcial),
 };
 // Aparência aplica na hora; as permissões de agente só no botão Salvar.
-const ABAS_CFG = [['personalizacao', 'Personalização'], ['sistema', 'Sistema'], ['integracoes', 'Integrações'], ['atalhos', 'Atalhos']];
+const ABAS_CFG = [['personalizacao', 'Personalização', 'realce'], ['sistema', 'Sistema', 'pasta-aberta'], ['integracoes', 'Integrações', 'link'], ['atalhos', 'Atalhos', 'codigo']];
 let abaDasConfiguracoes = 'personalizacao';
 const ATALHOS = [
   ['Ctrl + Espaço', 'Captura rápida', 'De qualquer tela, direto para a caixa de entrada.'],
@@ -2034,19 +2047,31 @@ async function showSettings(aba = abaDasConfiguracoes) {
   const texto = (titulo, detalhe = '', id = '') => `<span class="cfg-texto"><span class="cfg-titulo"${id ? ` id="${id}"` : ''}>${titulo}</span>${detalhe ? `<span class="small-muted">${detalhe}</span>` : ''}</span>`;
   const chave = (id, titulo, marcado, detalhe = '', extra = '') => `<label class="cfg-linha cfg-chave ${extra}">${texto(titulo, detalhe)}<input type="checkbox" data-perm="${id}" ${marcado ? 'checked' : ''} /><span class="interruptor" aria-hidden="true"></span></label>`;
   const cor = (id, titulo, valor) => `<div class="cfg-linha">${texto(titulo)}<label class="cor-ponto" title="Escolher cor"><input type="color" data-cor="${id}" value="${valor}" aria-label="${titulo}" /></label></div>`;
+  const estiloPersonalizado = a => `--sidebar-bg:${a.sidebar};--content-bg:${a.content};--acento:${a.acento}`;
+  const opcaoTema = ([id, nome]) => `<label class="tema-opcao tema-${id}"${id === 'personalizado' ? ` style="${estiloPersonalizado(cores)}"` : ''}><input type="radio" name="tema" value="${id}" class="sr-only" ${cores.tema === id ? 'checked' : ''} /><span class="tema-amostra" aria-hidden="true"><i class="tema-lateral"></i><span class="tema-tela"><b></b><b></b><em></em></span>${icone(`tema-${id}`, 'tema-icone')}</span><span class="tema-nome">${nome}</span></label>`;
   const botao = (id, rotulo, nomeIcone) => `<button type="button" class="secondary cfg-pequeno" id="${id}">${icone(nomeIcone)} ${rotulo}</button>`;
   const DETALHES = { read: 'Buscar e ler o conteúdo das notas.', create: 'Criar notas e pastas novas.', update: 'Alterar texto, título, etiquetas e pasta.', delete: 'A nota vai para a lixeira e pode ser restaurada.' };
   if (!ABAS_CFG.some(([id]) => id === aba)) aba = 'personalizacao';
   const painel = (id, conteudo) => `<div class="cfg-painel" data-painel="${id}" role="tabpanel" id="painel-${id}" aria-labelledby="aba-${id}" ${id === aba ? '' : 'hidden'}>${conteudo}</div>`;
   modal('Configurações', `<div class="cfg">
-    <div class="cfg-abas" role="tablist" aria-label="Seções das configurações">${ABAS_CFG.map(([id, rotulo]) => `<button type="button" role="tab" class="cfg-aba" id="aba-${id}" data-aba="${id}" aria-controls="painel-${id}" aria-selected="${id === aba}" tabindex="${id === aba ? 0 : -1}">${rotulo}</button>`).join('')}</div>
+    <nav class="cfg-abas" role="tablist" aria-orientation="vertical" aria-label="Seções das configurações">${ABAS_CFG.map(([id, rotulo, nomeIcone]) => `<button type="button" role="tab" class="cfg-aba" id="aba-${id}" data-aba="${id}" aria-controls="painel-${id}" aria-selected="${id === aba}" tabindex="${id === aba ? 0 : -1}">${icone(nomeIcone)}<span>${rotulo}</span></button>`).join('')}</nav>
+    <div class="cfg-conteudo">
     ${painel('personalizacao', `<section class="cfg-grupo cfg-aparencia">
       <header class="cfg-grupo-topo">${texto('Aparência', 'Muda na hora e vale só para esta instalação.')}<button type="button" class="secondary cfg-pequeno" id="cor-padrao">${icone('recarregar')} Restaurar padrão</button></header>
+      <div class="cfg-linha cfg-linha-coluna">${texto('Tema', '', 'tema-rotulo')}
+        ${[['classicos', 'Clássicos'], ['anime', 'Anime']].map(([grupo, titulo]) => `<div class="temas-grupo"><h4 class="cfg-subtitulo">${titulo}</h4><div class="temas" role="radiogroup" aria-labelledby="tema-rotulo">${TEMAS.filter(t => t[2] === grupo).map(opcaoTema).join('')}</div></div>`).join('')}
+        <div class="temas-grupo"><div class="temas">${opcaoTema(['personalizado', 'Personalizado'])}</div></div>
+      </div>
+      <div class="cfg-personalizado" id="cfg-personalizado" ${cores.tema === 'personalizado' ? '' : 'hidden'}>
       ${cor('sidebar', 'Fundo da barra lateral', cores.sidebar)}
       ${cor('content', 'Fundo da área de texto', cores.content)}
       <div class="cfg-linha cfg-linha-coluna">${texto('Cor de destaque', 'Botões, ícones, links e o grafo.', 'acento-rotulo')}
         <div class="amostras" role="radiogroup" aria-labelledby="acento-rotulo">${ACENTOS.map(([hex, nome]) => `<label class="amostra" style="--cor-pasta:${hex}" title="${nome}"><input type="radio" name="acento" value="${hex}" ${hex.toLowerCase() === cores.acento.toLowerCase() ? 'checked' : ''} /><span class="sr-only">${nome}</span></label>`).join('')}<label class="cor-ponto cor-livre" title="Outra cor"><input type="color" data-cor="acento" value="${cores.acento}" aria-label="Outra cor de destaque" /></label></div>
         <p class="cfg-aviso" id="acento-aviso" hidden>Essa cor tem pouco contraste com o fundo: textos e ícones podem ficar difíceis de ler.</p>
+      </div>
+      </div>
+      <div class="cfg-linha cfg-linha-coluna">${texto('Skin', '', 'skin-rotulo')}
+        <div class="skins" role="radiogroup" aria-labelledby="skin-rotulo">${SKINS.map(([id, nome, desc]) => `<label class="skin-opcao"><input type="radio" name="skin" value="${id}" class="sr-only" ${cores.skin === id ? 'checked' : ''} /><span class="skin-nome">${nome}</span><span class="skin-desc">${desc}</span></label>`).join('')}</div>
       </div>
     </section>`)}
     ${painel('sistema', `<section class="cfg-grupo">
@@ -2076,6 +2101,7 @@ async function showSettings(aba = abaDasConfiguracoes) {
       <header class="cfg-grupo-topo">${texto('Atalhos', 'Para fazer as coisas sem tirar a mão do teclado.')}</header>
       ${ATALHOS.map(([tecla, titulo, detalhe]) => `<div class="cfg-linha">${texto(titulo, detalhe)}<kbd class="atalho">${tecla}</kbd></div>`).join('')}
     </section>`)}
+    </div>
   </div>`);
 
   // Abas: clique ou setas esquerda/direita; a última aberta volta na próxima vez.
@@ -2088,32 +2114,44 @@ async function showSettings(aba = abaDasConfiguracoes) {
   abas.forEach((b, i) => {
     b.onclick = () => mostrar(b.dataset.aba);
     b.onkeydown = e => {
-      if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
-      const alvo = abas[(i + (e.key === 'ArrowRight' ? 1 : abas.length - 1)) % abas.length];
+      const proxima = e.key === 'ArrowDown' || e.key === 'ArrowRight', anterior = e.key === 'ArrowUp' || e.key === 'ArrowLeft';
+      if (!proxima && !anterior) return;
+      e.preventDefault();
+      const alvo = abas[(i + (proxima ? 1 : abas.length - 1)) % abas.length];
       mostrar(alvo.dataset.aba); alvo.focus();
     };
   });
 
   // Personalização
   const corAtual = () => ({
+    ...lerAparencia(),
+    tema: 'personalizado',
     sidebar: document.querySelector('[data-cor="sidebar"]').value,
     content: document.querySelector('[data-cor="content"]').value,
     acento: document.querySelector('[data-cor="acento"]').value,
   });
+  // O card Personalizado mostra as cores manuais atuais.
+  const gravarCores = () => { const a = corAtual(); gravarAparencia(a); document.querySelector('.tema-opcao.tema-personalizado').style.cssText = estiloPersonalizado(a); };
   // Aparência e Sistema agem na hora: não contam como alteração pendente ao fechar a janela.
   for (const tipo of ['input', 'change']) document.querySelectorAll('.cfg-aparencia, [data-painel="sistema"]').forEach(el => el.addEventListener(tipo, e => e.stopPropagation()));
   const avisar = () => { const a = lerAparencia(); $('#acento-aviso').hidden = contraste(a.acento, a.content) >= 3; };
-  document.querySelectorAll('input[name="acento"]').forEach(r => r.onchange = () => { document.querySelector('[data-cor="acento"]').value = r.value; gravarAparencia(corAtual()); avisar(); });
+  document.querySelectorAll('input[name="acento"]').forEach(r => r.onchange = () => { document.querySelector('[data-cor="acento"]').value = r.value; gravarCores(); avisar(); });
   avisar();
   document.querySelectorAll('[data-cor]').forEach(campo => {
-    campo.oninput = () => { if (campo.dataset.cor === 'acento') document.querySelectorAll('input[name="acento"]').forEach(r => r.checked = r.value.toLowerCase() === campo.value.toLowerCase()); gravarAparencia(corAtual()); avisar(); };
+    campo.oninput = () => { if (campo.dataset.cor === 'acento') document.querySelectorAll('input[name="acento"]').forEach(r => r.checked = r.value.toLowerCase() === campo.value.toLowerCase()); gravarCores(); avisar(); };
   });
+  // Tema e skin aplicam na hora; o Personalizado abre os controles de cor.
+  document.querySelectorAll('input[name="tema"]').forEach(r => r.onchange = () => { gravarAparencia({ ...lerAparencia(), tema: r.value }); $('#cfg-personalizado').hidden = r.value !== 'personalizado'; avisar(); });
+  document.querySelectorAll('input[name="skin"]').forEach(r => r.onchange = () => gravarAparencia({ ...lerAparencia(), skin: r.value }));
   $('#cor-padrao').onclick = () => {
     gravarAparencia({ ...APARENCIA_PADRAO });
     document.querySelector('[data-cor="sidebar"]').value = APARENCIA_PADRAO.sidebar;
     document.querySelector('[data-cor="content"]').value = APARENCIA_PADRAO.content;
     document.querySelector('[data-cor="acento"]').value = APARENCIA_PADRAO.acento;
     document.querySelectorAll('input[name="acento"]').forEach(r => r.checked = r.value === APARENCIA_PADRAO.acento);
+    document.querySelectorAll('input[name="tema"], input[name="skin"]').forEach(r => r.checked = r.value === APARENCIA_PADRAO.tema || r.value === APARENCIA_PADRAO.skin);
+    document.querySelector('.tema-opcao.tema-personalizado').style.cssText = estiloPersonalizado(APARENCIA_PADRAO);
+    $('#cfg-personalizado').hidden = true;
     avisar();
   };
 

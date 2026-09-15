@@ -1,0 +1,188 @@
+/* ---- Temas ----
+   Uma classe por tema no <html> (e no mini-card de Configurações). Só cores; o resto
+   do visual continua em styles.css. Pares de texto/fundo passam 4.5:1 (WCAG AA). */
+
+/* Clássicos */
+.tema-escuro-classico {
+  --bg:#141418; --panel:#1E1E24; --panel-raised:#26262E; --sidebar-bg:#1A1A20; --content-bg:#141418; --campo:#16161B;
+  --ink:#F2F2F2; --muted:#A8A8B2; --line:#33333C;
+  --acento:#C77DFF; --acento-2:#E0AAFF; --acento-forte:#9D4EDD; --acento-escuro:#8A2BE2; --acento-texto:#160821; --primario-texto:#FFFFFF;
+}
+/* Personalizado: base do clássico; fundos e destaque vêm inline do app.js. */
+.tema-personalizado {
+  --bg:#141418; --panel:#1E1E24; --panel-raised:#26262E; --sidebar-bg:#1A1A20; --content-bg:#141418; --campo:#16161B;
+  --ink:#F2F2F2; --muted:#A8A8B2; --line:#33333C;
+  --acento:#C77DFF; --acento-2:#E0AAFF; --acento-forte:#9D4EDD; --acento-escuro:#8A2BE2; --acento-texto:#160821; --primario-texto:#FFFFFF;
+}
+.tema-escuro-azul {
+  --bg:#10141B; --panel:#19202A; --panel-raised:#212A36; --sidebar-bg:#151A22; --content-bg:#10141B; --campo:#121720;
+  --ink:#EEF3F8; --muted:#A0ABBA; --line:#2E3846;
+  --acento:#5AB0FF; --acento-2:#8FD3FF; --acento-forte:#4A9FF0; --acento-escuro:#3A8AD8; --acento-texto:#06121F; --primario-texto:#06121F;
+}
+.tema-escuro-verde {
+  --bg:#0F1512; --panel:#18211C; --panel-raised:#202B25; --sidebar-bg:#141B17; --content-bg:#0F1512; --campo:#111814;
+  --ink:#EEF5F1; --muted:#9FB0A7; --line:#2D3A33;
+  --acento:#5FD39A; --acento-2:#B5E86F; --acento-forte:#45BE83; --acento-escuro:#34A36E; --acento-texto:#04140C; --primario-texto:#04140C;
+}
+.tema-escuro-ambar {
+  --bg:#15120D; --panel:#221D16; --panel-raised:#2B251C; --sidebar-bg:#1B1712; --content-bg:#15120D; --campo:#18140F;
+  --ink:#F6F1E8; --muted:#B3A899; --line:#3B3327;
+  --acento:#FFB547; --acento-2:#FF7A45; --acento-forte:#F0A030; --acento-escuro:#D98A1F; --acento-texto:#1A1004; --primario-texto:#1A1004;
+}
+.tema-alto-contraste {
+  --bg:#000000; --panel:#0D0D0D; --panel-raised:#161616; --sidebar-bg:#000000; --content-bg:#000000; --campo:#0A0A0A;
+  --ink:#FFFFFF; --muted:#D6D6D6; --line:#8A8A8A;
+  --acento:#FFE14D; --acento-2:#4DE1FF; --acento-forte:#FFE14D; --acento-escuro:#F5CF1F; --acento-texto:#000000; --primario-texto:#000000;
+}
+.tema-meia-noite {
+  --bg:#0B0E1E; --panel:#151934; --panel-raised:#1D2240; --sidebar-bg:#10132A; --content-bg:#0B0E1E; --campo:#0D1024;
+  --ink:#EEF0FF; --muted:#A3A8C8; --line:#2C3257;
+  --acento:#B8A9FF; --acento-2:#7FD8FF; --acento-forte:#6E5BD6; --acento-escuro:#5B48C4; --acento-texto:#0E0A24; --primario-texto:#FFFFFF;
+}
+.tema-floresta {
+  --bg:#0E1510; --panel:#172019; --panel-raised:#1F2A21; --sidebar-bg:#131B15; --content-bg:#0E1510; --campo:#101812;
+  --ink:#EFF4EE; --muted:#A7B3A6; --line:#2E3D31;
+  --acento:#E3B94F; --acento-2:#7FC98B; --acento-forte:#D1A53A; --acento-escuro:#BD9230; --acento-texto:#151004; --primario-texto:#151004;
+}
+
+/* Anime */
+.tema-neon-tokyo {
+  --bg:#07080F; --panel:#10121F; --panel-raised:#171A2B; --sidebar-bg:#0C0D18; --content-bg:#07080F; --campo:#0A0B14;
+  --ink:#F3F4FF; --muted:#A6A9C4; --line:#262A42;
+  --acento:#FF2D95; --acento-2:#00F0FF; --acento-forte:#D6166F; --acento-escuro:#B8105F; --acento-texto:#1A0010; --primario-texto:#FFFFFF;
+}
+.tema-sakura-night {
+  --bg:#141013; --panel:#211A1F; --panel-raised:#2A2128; --sidebar-bg:#1A1519; --content-bg:#141013; --campo:#171216;
+  --ink:#F7EEF2; --muted:#B9A7B0; --line:#3C2F38;
+  --acento:#FF8FAB; --acento-2:#FFD1DC; --acento-forte:#E86F8F; --acento-escuro:#D65A7C; --acento-texto:#1C0A10; --primario-texto:#1C0A10;
+}
+.tema-shonen-fire {
+  --bg:#15100D; --panel:#221A15; --panel-raised:#2C221B; --sidebar-bg:#1B1511; --content-bg:#15100D; --campo:#18120F;
+  --ink:#F8F0EA; --muted:#B8A89D; --line:#3E3027;
+  --acento:#FF6B2C; --acento-2:#FFC83D; --acento-forte:#F05A1A; --acento-escuro:#D94E12; --acento-texto:#1A0A02; --primario-texto:#1A0A02;
+}
+.tema-studio-ghibli {
+  --bg:#0F1A1A; --panel:#172424; --panel-raised:#1F2E2E; --sidebar-bg:#142020; --content-bg:#0F1A1A; --campo:#111D1D;
+  --ink:#EEF5F0; --muted:#A2B5AE; --line:#2D4040;
+  --acento:#7CB518; --acento-2:#E9C46A; --acento-forte:#6FA314; --acento-escuro:#5E8F0F; --acento-texto:#081004; --primario-texto:#081004;
+}
+.tema-evangelion {
+  --bg:#0C0A10; --panel:#17141E; --panel-raised:#1F1B28; --sidebar-bg:#121018; --content-bg:#0C0A10; --campo:#0F0D14;
+  --ink:#F2EFF7; --muted:#AAA3B8; --line:#2F2A3C;
+  --acento:#A855F7; --acento-2:#6DD35B; --acento-forte:#8B3FD9; --acento-escuro:#7431BF; --acento-texto:#0E0418; --primario-texto:#FFFFFF;
+}
+.tema-sailor-moon {
+  --bg:#0E1030; --panel:#171A42; --panel-raised:#1F2350; --sidebar-bg:#13163A; --content-bg:#0E1030; --campo:#111335;
+  --ink:#F4F2FF; --muted:#ABA9CE; --line:#2F3468;
+  --acento:#FF6BCB; --acento-2:#FFD166; --acento-forte:#E04FAE; --acento-escuro:#D0449F; --acento-texto:#1A0614; --primario-texto:#1A0614;
+}
+.tema-violet-evergarden {
+  --bg:#151A20; --panel:#1E252E; --panel-raised:#262F3A; --sidebar-bg:#1A2028; --content-bg:#151A20; --campo:#171C23;
+  --ink:#F1F4F7; --muted:#A9B3BF; --line:#36414E;
+  --acento:#7EB8DA; --acento-2:#D8C9A3; --acento-forte:#62A0C6; --acento-escuro:#528EB4; --acento-texto:#07121A; --primario-texto:#07121A;
+}
+.tema-demon-blood {
+  --bg:#0D0909; --panel:#1A1111; --panel-raised:#231717; --sidebar-bg:#140E0E; --content-bg:#0D0909; --campo:#110B0B;
+  --ink:#F7EDED; --muted:#B8A5A5; --line:#3A2626;
+  --acento:#E8395A; --acento-2:#F2A541; --acento-forte:#C41E3A; --acento-escuro:#9E1830; --acento-texto:#1A0006; --primario-texto:#FFFFFF;
+}
+.tema-cyber-lain {
+  --bg:#000000; --panel:#0A0F0C; --panel-raised:#111814; --sidebar-bg:#060906; --content-bg:#000000; --campo:#050805;
+  --ink:#E6FFF3; --muted:#8FB3A2; --line:#1F2E26;
+  --acento:#00FF9F; --acento-2:#B388FF; --acento-forte:#00D988; --acento-escuro:#00B872; --acento-texto:#001A0F; --primario-texto:#001A0F;
+}
+.tema-makoto-shinkai {
+  --bg:#111726; --panel:#1A2236; --panel-raised:#222B42; --sidebar-bg:#161D2F; --content-bg:#111726; --campo:#131A2A;
+  --ink:#F3F5FA; --muted:#A8B0C4; --line:#323D58;
+  --acento:#FF8C42; --acento-2:#7FB2FF; --acento-forte:#F07A2C; --acento-escuro:#DB6A1E; --acento-texto:#1A0B00; --primario-texto:#1A0B00;
+}
+.tema-jojo-stand {
+  --bg:#150B1F; --panel:#21142E; --panel-raised:#2A1B39; --sidebar-bg:#1B1027; --content-bg:#150B1F; --campo:#180D23;
+  --ink:#FBF3FF; --muted:#B9A8C8; --line:#3F2C52;
+  --acento:#FFC93C; --acento-2:#FF3EA5; --acento-forte:#F0B41F; --acento-escuro:#DB9E0F; --acento-texto:#1A1000; --primario-texto:#1A1000;
+}
+
+/* ---- Skins ----
+   Mexem em forma, espaço, sombra e fonte; nunca nas cores do tema. */
+.skin-padrao { /* o visual de sempre: nada muda */ }
+
+/* Minimal: bordas somem, sobra respiro. */
+.skin-minimal { --esp-5:24px; --esp-6:32px; --esp-7:40px; --shadow:none; }
+.skin-minimal :where(.card, .note-card, .cfg-grupo, .doc-details, .grafo-painel) { border-color:transparent; }
+.skin-minimal .hoje-acoes .capture:not(:focus-within) { border-color:transparent; }
+.skin-minimal :is(.search, .field input, .field textarea, .field select, .add-link input):not(:focus, :hover) { border-color:color-mix(in srgb, var(--line) 45%, transparent); }
+
+/* Compacto: tudo um degrau menor. */
+.skin-compacto {
+  --esp-1:3px; --esp-2:6px; --esp-3:9px; --esp-4:12px; --esp-5:14px; --esp-6:18px; --esp-7:24px;
+  --alt-p:24px; --alt-m:30px; --alt-g:36px;
+}
+.skin-compacto .content { padding:28px clamp(16px,3vw,44px) 60px; }
+.skin-compacto .routine-item, .skin-compacto .task-item { min-height:34px; }
+.skin-compacto .nav-item { padding:7px 10px; }
+.skin-compacto .hoje-acoes .capture, .skin-compacto .hoje-acoes > .secondary { height:40px; }
+
+/* Terminal: tudo em mono. */
+.skin-terminal { --fonte-interface:var(--fonte-codigo); --fonte-leitura:var(--fonte-codigo); }
+
+/* Terminal e Sharp: cantos retos; o que é redondo por natureza (pontos, chaves) continua. */
+.skin-terminal, .skin-sharp { --raio-controle:0px; --raio-card:0px; --raio-pilula:0px; }
+:is(.skin-terminal, .skin-sharp) *:not(.amostra, .cor-ponto, .cor-ponto input, .habito-dia, .dia-chip span, .doc-ponto, .md-alca, .grafo-cor, .interruptor) { border-radius:0 !important; }
+
+/* Sharp: bordas marcadas. */
+.skin-sharp :where(.card, .note-card, .cfg-grupo, .modal, .ctx-menu, .doc-details, .grafo-painel, .code-area) { border-width:2px; border-color:color-mix(in srgb, var(--muted) 35%, var(--line)); }
+.skin-sharp :where(.primary, .secondary, .new-note, .search, .field input, .field textarea, .field select, .add-link input, .tema-opcao, .skin-opcao) { border-width:1.5px; }
+.skin-sharp .hoje-acoes .capture { border-width:2px; }
+
+/* Suave: cantos redondos e sombras leves. */
+.skin-suave { --raio-controle:14px; --raio-card:22px; --shadow:0 10px 30px rgba(0,0,0,.2), 0 2px 6px rgba(0,0,0,.12); }
+.skin-suave :where(.modal, .ctx-menu, .doc-details, .grafo-painel, .code-area) { border-radius:var(--raio-card); }
+.skin-suave :where(.ctx-item, .tree-row, .nav-item) { border-radius:10px; }
+
+/* Neon: brilho do destaque em cards, botões principais e foco. */
+.skin-neon :where(.card, .note-card, .cfg-grupo, .modal, .ctx-menu, .grafo-painel, .doc-details) { border-color:color-mix(in srgb, var(--acento) 22%, var(--line)); }
+.skin-neon .card:hover, .skin-neon .note-card:hover { box-shadow:0 0 0 1px color-mix(in srgb, var(--acento) 35%, transparent), 0 0 24px color-mix(in srgb, var(--acento) 22%, transparent); }
+.skin-neon :where(.primary, .new-note) { box-shadow:0 0 12px color-mix(in srgb, var(--acento) 28%, transparent); }
+.skin-neon :is(.primary, .new-note):hover { box-shadow:0 0 18px color-mix(in srgb, var(--acento) 45%, transparent), 0 0 32px color-mix(in srgb, var(--acento-2) 18%, transparent); }
+.skin-neon :focus-visible { box-shadow:0 0 14px color-mix(in srgb, var(--acento) 45%, transparent); }
+.skin-neon .brand-logo { filter:drop-shadow(0 0 10px color-mix(in srgb, var(--acento) 60%, transparent)); }
+
+/* Paper: grão de papel (SVG em data: URI) e sombra de folha. */
+.skin-paper { --raio-card:6px; --shadow:0 1px 0 rgba(255,255,255,.03) inset, 0 2px 3px rgba(0,0,0,.35), 0 10px 24px rgba(0,0,0,.22); }
+.skin-paper :where(.content, .card, .note-card, .cfg-grupo, .modal) {
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 .07 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* ---- Configurações → Aparência: cards de tema e lista de skins ---- */
+.temas-grupo { display:grid; gap:var(--esp-2); }
+.temas-grupo .cfg-subtitulo { margin:var(--esp-2) 0 0; }
+.temas { display:grid; grid-template-columns:repeat(auto-fill, minmax(132px, 1fr)); gap:var(--esp-2); }
+/* O card usa as cores do próprio tema: é uma mini-janela do app (lateral + tela + ícone). */
+.tema-opcao { position:relative; display:grid; gap:var(--esp-2); padding:var(--esp-2); border:1px solid var(--line); border-radius:var(--raio-controle); background:var(--panel, var(--content-bg)); color:var(--ink); cursor:pointer; transition:border-color var(--rapido) var(--curva), box-shadow var(--rapido) var(--curva); }
+.tema-opcao:hover { border-color:color-mix(in srgb, var(--acento) 55%, var(--line)); box-shadow:0 0 0 1px color-mix(in srgb, var(--acento) 30%, transparent); }
+.tema-amostra { position:relative; display:grid; grid-template-columns:22% 1fr; height:60px; overflow:hidden; border-radius:max(0px, calc(var(--raio-controle) - 3px)); box-shadow:inset 0 0 0 1px var(--line); }
+.tema-lateral { background:var(--sidebar-bg, var(--panel)); border-right:1px solid var(--line); }
+.tema-tela { display:grid; align-content:center; gap:var(--esp-1); padding:0 var(--esp-2); background:var(--content-bg); }
+.tema-tela b { display:block; height:4px; border-radius:2px; background:var(--ink); width:58%; }
+.tema-tela b + b { background:var(--muted); width:40%; }
+.tema-tela em { display:block; width:26px; height:8px; margin-top:2px; border-radius:2px; background:var(--acento); box-shadow:inset 0 -2px 0 var(--acento-2); }
+.tema-amostra .tema-icone { position:absolute; right:var(--esp-2); top:50%; width:22px; height:22px; margin-top:-11px; color:var(--acento); }
+.tema-nome { font-size:var(--fs-secundario); font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.tema-opcao:has(input:checked) { border-color:var(--acento); box-shadow:0 0 0 1px var(--acento); }
+.tema-opcao:has(input:checked) .tema-nome { padding-right:20px; }
+/* Selecionado: selo com ✓ desenhado em CSS no canto inferior direito (não depende só da cor da borda). */
+.tema-opcao:has(input:checked)::after { content:""; position:absolute; right:var(--esp-2); bottom:var(--esp-2); width:16px; height:16px; border-radius:min(50%, var(--raio-pilula)); background:var(--acento); }
+.tema-opcao:has(input:checked)::before { content:""; position:absolute; z-index:1; right:calc(var(--esp-2) + 5px); bottom:calc(var(--esp-2) + 5px); width:4px; height:8px; border:solid var(--acento-texto, var(--content-bg)); border-width:0 2px 2px 0; transform:rotate(45deg); }
+.tema-opcao:has(input:focus-visible) { outline:2px solid var(--acento); outline-offset:2px; }
+
+.skins { display:grid; grid-template-columns:repeat(auto-fill, minmax(180px, 1fr)); gap:var(--esp-2); }
+.skin-opcao { position:relative; display:grid; gap:2px; padding:var(--esp-2) var(--esp-3); border:1px solid var(--line); border-radius:var(--raio-controle); cursor:pointer; transition:border-color var(--rapido) var(--curva), background-color var(--rapido) var(--curva); }
+.skin-opcao:hover { border-color:color-mix(in srgb, var(--acento) 45%, var(--line)); }
+.skin-opcao:has(input:checked) { border-color:var(--acento); background:var(--accent-soft); }
+.skin-opcao:has(input:focus-visible) { outline:2px solid var(--acento); outline-offset:2px; }
+.skin-nome { font-size:var(--fs-interface); font-weight:600; color:var(--ink); }
+.skin-desc { font-size:var(--fs-legenda); line-height:1.4; color:var(--muted); }
+
+/* Cores manuais: só no Personalizado, recuadas sob a grade de temas. */
+.cfg-personalizado { display:grid; padding-left:var(--esp-3); border-left:2px solid color-mix(in srgb, var(--acento) 35%, transparent); }
+@media (prefers-reduced-motion: reduce) { .tema-opcao, .skin-opcao { transition:none; } }
