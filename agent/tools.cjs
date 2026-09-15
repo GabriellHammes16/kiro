@@ -209,6 +209,15 @@ const FERRAMENTAS = [
     target: (args, resultado) => resultado?.date || 'today',
   },
   {
+    name: 'get_habits',
+    risk: 'read',
+    permission: 'read',
+    description: 'Devolve os hábitos acompanhados no Kuroi com o progresso calculado: frequência, se hoje é dia do hábito e se já foi feito, sequência atual, cumprimento nos últimos 30 dias (%), total de dias feitos e os últimos 7 dias. Use para acompanhar como os hábitos estão indo. Só leitura.',
+    inputSchema: { type: 'object', properties: { date: { type: 'string', pattern: '^\\d{4}-\\d{2}-\\d{2}$', description: 'Dia de referência AAAA-MM-DD. Sem isso, usa hoje.' } } },
+    run: (api, args, ctx) => api.getHabits(args, ctx),
+    target: () => 'habits',
+  },
+  {
     name: 'add_tag',
     risk: 'write',
     permission: 'update',

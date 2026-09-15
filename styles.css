@@ -73,7 +73,7 @@ nav { margin-top:25px; display:grid; gap:4px; }
 
 #save-status { position:fixed; bottom:0; left:252px; right:0; padding:8px 18px; background:var(--panel); border-top:1px solid var(--line); color:var(--muted); font-size:12px; z-index:6; }
 #save-status.error { color:#ffc5a9; border-top-color:#b95d39; }
-#vault-path { overflow-wrap:anywhere; }
+
 body.saving { cursor:progress; }
 .content { padding-bottom:65px; }
 [hidden] { display:none !important; }
@@ -580,7 +580,7 @@ body, button, input, textarea, select { font-family:var(--fonte-interface); }
 .tree.soltar-aqui { outline:2px dashed color-mix(in srgb, var(--acento) 50%, transparent); outline-offset:-4px; border-radius:8px; }
 
 /* Hoje: caixa de entrada e para revisar. */
-.caixa-entrada { margin-bottom:22px; }
+.caixa-entrada { margin-bottom:0; }
 .caixa-entrada .card-head .small-muted { min-width:22px; padding:1px 8px; border-radius:999px; text-align:center; background:var(--accent-soft); color:var(--acento); }
 .caixa-entrada a.routine-title, .para-revisar a.routine-title { cursor:pointer; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .caixa-entrada a.routine-title:hover, .para-revisar a.routine-title:hover { color:var(--acento); }
@@ -615,7 +615,7 @@ body, button, input, textarea, select { font-family:var(--fonte-interface); }
 .notes-grid { gap:var(--esp-4); }
 .page-head { margin-bottom:var(--esp-6); }
 .toolbar { margin-bottom:var(--esp-4); }
-.caixa-entrada { margin-bottom:var(--esp-5); }
+.caixa-entrada { margin-bottom:0; }
 /* Card não estica para acompanhar a coluna vizinha: sem vazio embaixo. */
 .stack { align-content:start; }
 .today-grid { align-items:start; }
@@ -688,3 +688,131 @@ body, button, input, textarea, select { font-family:var(--fonte-interface); }
 /* "Outra cor": anel de arco-íris para não parecer mais uma amostra fixa. */
 .cor-livre { padding:3px; background:conic-gradient(#FF6B6B, #FFD166, #57CC99, #4CC9F0, #C77DFF, #FF7EB6, #FF6B6B); box-shadow:none; }
 .cor-livre input { box-shadow:0 0 0 2px var(--panel); }
+
+/* ---- Hoje: continuar de onde parei ---- */
+.continuar-quando { margin-left:auto; font-size:var(--fs-legenda); color:var(--muted); }
+.continuar-nota { display:grid; gap:6px; width:100%; padding:var(--esp-3) var(--esp-4); border:1px solid var(--line); border-radius:var(--raio-controle); background:color-mix(in srgb, var(--panel-raised) 60%, transparent); color:var(--ink); text-align:left; font:inherit; cursor:pointer; transition:border-color var(--rapido) var(--curva), background var(--rapido) var(--curva); }
+.continuar-nota:hover { border-color:color-mix(in srgb, var(--acento) 45%, transparent); background:var(--accent-soft); }
+.continuar-titulo { display:flex; align-items:center; gap:8px; font-weight:650; font-size:var(--fs-destaque); }
+.continuar-titulo .icone { width:16px; height:16px; color:var(--muted); }
+.continuar-titulo .pasta-chip[data-cor-pasta] .icone { color:var(--cor-pasta); }
+.continuar-trecho { font-family:var(--fonte-leitura); font-size:var(--fs-interface); line-height:1.55; color:var(--muted); display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2; overflow:hidden; }
+.continuar-acao { display:inline-flex; align-items:center; gap:4px; font-size:var(--fs-secundario); font-weight:650; color:var(--acento); }
+.continuar-acao .icone { width:14px; height:14px; }
+
+/* ---- Hábitos ---- */
+.habitos .card-head > .small-muted + .icon-button { margin-left:var(--esp-1); }
+.habitos .card-head > h2 + .icon-button { margin-left:auto; }
+.habito { display:grid; grid-template-columns:auto minmax(0,1fr) auto; align-items:center; }
+.habito-texto { display:grid; gap:2px; min-width:0; }
+.habito-texto .routine-title { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.habito-meta { font-size:var(--fs-legenda); color:var(--muted); display:flex; align-items:center; gap:4px; flex-wrap:wrap; }
+.habito-sequencia { display:inline-flex; align-items:center; gap:3px; color:#FF9F43; font-weight:650; }
+.habito-sequencia .icone { width:13px; height:13px; }
+.habito-semana { display:flex; gap:4px; }
+.habito-dia { position:relative; width:22px; height:22px; padding:0; border-radius:50%; border:1.5px solid var(--line); background:transparent; color:var(--muted); font-size:10px; font-weight:650; line-height:1; cursor:pointer; transition:background var(--rapido) var(--curva), border-color var(--rapido) var(--curva); }
+.habito-dia:hover { border-color:var(--acento); color:var(--ink); }
+.habito-dia.feito { background:var(--accent); border-color:var(--accent); color:#fff; }
+.habito-dia.livre { opacity:.35; border-style:dashed; }
+.habito-dia.hoje { box-shadow:0 0 0 2px var(--panel), 0 0 0 3.5px color-mix(in srgb, var(--acento) 60%, transparent); }
+.done + .habito-texto .routine-title { color:var(--muted); text-decoration:line-through; }
+
+/* Janela do hábito: frequência em segmentos e dias em círculos. */
+.segmentos { display:flex; gap:4px; padding:3px; border:1px solid var(--line); border-radius:var(--raio-controle); background:var(--panel); }
+.segmento { flex:1; position:relative; cursor:pointer; }
+.segmento input { position:absolute; opacity:0; inset:0; margin:0; cursor:pointer; }
+.segmento span { display:block; text-align:center; padding:7px 8px; border-radius:6px; font-size:var(--fs-secundario); font-weight:600; color:var(--muted); transition:background var(--rapido) var(--curva), color var(--rapido) var(--curva); }
+.segmento input:checked + span { background:var(--accent-soft); color:var(--ink); box-shadow:inset 0 0 0 1px color-mix(in srgb, var(--acento) 40%, transparent); }
+.segmento input:focus-visible + span { outline:2px solid var(--acento); outline-offset:1px; }
+.dias-semana { display:flex; gap:6px; }
+.dia-chip { position:relative; cursor:pointer; }
+.dia-chip input { position:absolute; opacity:0; inset:0; margin:0; cursor:pointer; }
+.dia-chip span { display:grid; place-items:center; width:34px; height:34px; border-radius:50%; border:1.5px solid var(--line); font-size:var(--fs-secundario); font-weight:650; color:var(--muted); transition:background var(--rapido) var(--curva), border-color var(--rapido) var(--curva); }
+.dia-chip input:checked + span { background:var(--accent); border-color:var(--accent); color:#fff; }
+.dia-chip input:focus-visible + span { outline:2px solid var(--acento); outline-offset:2px; }
+#habito-vezes { max-width:120px; }
+.secondary.perigo { color:#FF8A8A; border-color:rgba(255,107,107,.35); margin-right:auto; }
+.secondary.perigo:hover { background:rgba(255,107,107,.12); border-color:#FF6B6B; color:#FFB3B3; }
+
+/* Estatísticas: números e as últimas 5 semanas. */
+.habitos-lista { display:grid; gap:var(--esp-3); margin-bottom:var(--esp-4); }
+.habito-stats { display:grid; gap:var(--esp-3); padding:var(--esp-4); border:1px solid var(--line); border-radius:var(--raio-card); background:var(--panel); }
+.habito-stats header { display:flex; align-items:flex-start; justify-content:space-between; gap:var(--esp-3); }
+.habito-numeros { display:grid; grid-template-columns:repeat(3, minmax(0,1fr)); gap:var(--esp-2); }
+.habito-numeros div { display:grid; gap:2px; }
+.habito-numeros b { font-size:var(--fs-titulo); font-variant-numeric:tabular-nums; }
+.habito-numeros span { font-size:var(--fs-legenda); color:var(--muted); }
+.habito-grade { display:grid; grid-template-columns:repeat(7, 16px); grid-auto-rows:16px; gap:4px; }
+.grade-dia { border-radius:4px; background:color-mix(in srgb, var(--line) 80%, transparent); }
+.grade-dia.feito { background:var(--accent); }
+.grade-dia.livre { background:transparent; box-shadow:inset 0 0 0 1px color-mix(in srgb, var(--line) 60%, transparent); }
+.grade-dia.hoje { outline:1.5px solid var(--acento); outline-offset:1px; }
+
+/* ---- Hoje em duas colunas por intenção: Agora (hábitos, tarefas) e Organizar (continuar, caixa, revisar) ---- */
+.today-grid { grid-template-columns:minmax(0,1fr) minmax(0,1fr); }
+.page-head { flex-wrap:wrap; gap:var(--esp-4); align-items:center; }
+
+/* Continuar: o card inteiro é o botão, sem caixa dentro de caixa. */
+.continuar-nota { padding:0; border:0; background:none; }
+.continuar-nota:hover { background:none; }
+.card.continuar:has(.continuar-nota:hover) { border-color:color-mix(in srgb, var(--acento) 45%, transparent); }
+.card.continuar:has(.continuar-nota:hover) .continuar-acao { text-decoration:underline; }
+
+/* Caixa de entrada: ações em ícones logo depois do título. */
+.caixa-acoes { display:flex; gap:2px; margin-left:auto; flex:0 0 auto; }
+
+/* Tarefas: prioridade encostada na direita; editar/excluir aparecem por cima só no hover. */
+.task-item { position:relative; }
+.task-item .priority { margin-left:auto; }
+.task-item .task-actions { position:absolute; right:0; top:50%; transform:translateY(-50%); padding-left:16px; background:linear-gradient(to right, transparent, var(--panel) 16px); opacity:0; pointer-events:none; transition:opacity var(--rapido) var(--curva); }
+.task-item:hover .task-actions, .task-item:focus-within .task-actions { opacity:1; pointer-events:auto; }
+
+/* Semana fixa dos hábitos: dia que ainda não chegou é só a letra. */
+.habito-dia.futuro { display:inline-grid; place-items:center; border-color:transparent; opacity:.35; cursor:default; }
+
+/* ---- Hoje adaptável: colunas quebram por largura real, não pela janela ---- */
+.today-grid { grid-template-columns:repeat(auto-fit, minmax(min(100%, 340px), 1fr)); }
+.page-head > div:first-child { flex:1 1 420px; min-width:0; }
+.frase-do-dia { display:block; font-size:clamp(22px, 2.3vw, 30px); line-height:1.25; letter-spacing:-.6px; text-wrap:balance; }
+/* Card estreito: a semana dos hábitos desce para baixo do nome, que não precisa mais ser cortado. */
+.card.habitos { container-type:inline-size; }
+@container (max-width: 420px) {
+  .habito { grid-template-columns:auto minmax(0,1fr); row-gap:var(--esp-2); }
+  .habito-semana { grid-column:2; }
+  .habito-texto .routine-title { white-space:normal; }
+}
+
+/* Confirmação de exclusão dentro do app. */
+.confirmar-texto { margin:0 0 var(--esp-5); font-size:var(--fs-interface); line-height:1.55; color:var(--ink); }
+.primary.perigo-cheio { background:#C0392B; border-color:#C0392B; color:#fff; box-shadow:none; }
+.primary.perigo-cheio:hover { background:#E74C3C; border-color:#E74C3C; color:#fff; }
+
+/* ---- Captura rápida: faixa própria abaixo da frase, na largura dos cards ---- */
+.page-head:has(+ .hoje-acoes) { margin-bottom:var(--esp-4); }
+.hoje-acoes { display:flex; align-items:stretch; gap:var(--esp-2); margin:0 0 var(--esp-5); }
+.hoje-acoes .capture { flex:1; min-width:0; display:flex; align-items:center; gap:var(--esp-2); height:48px; margin:0; padding:0 6px 0 14px; background:var(--panel); border:1px solid var(--line); border-radius:var(--raio-card); box-shadow:var(--shadow); transition:border-color var(--rapido) var(--curva), box-shadow var(--rapido) var(--curva); }
+.hoje-acoes .capture:focus-within { border-color:color-mix(in srgb, var(--acento) 60%, transparent); box-shadow:0 0 0 3px var(--accent-soft); }
+.hoje-acoes .capture > .icone { width:18px; height:18px; flex:0 0 auto; color:var(--acento); }
+.hoje-acoes .capture input { flex:1; min-width:0; height:100%; padding:0; border:0; background:transparent; color:var(--ink); font-size:var(--fs-destaque); outline:none; box-shadow:none; }
+.hoje-acoes .capture .primary { flex:0 0 auto; }
+.atalho { flex:0 0 auto; padding:2px 7px; border:1px solid var(--line); border-radius:6px; font:600 var(--fs-legenda)/1.4 var(--fonte-interface); color:var(--muted); white-space:nowrap; }
+.hoje-acoes .capture:focus-within .atalho { display:none; }
+.hoje-acoes > .secondary { flex:0 0 auto; height:48px; gap:6px; border-radius:var(--raio-card); }
+.hoje-acoes > .secondary .icone { width:15px; height:15px; }
+.captura-janela { max-width:none; height:44px; font-size:var(--fs-destaque); }
+@media (max-width: 1000px) { .atalho { display:none; } }
+
+/* ---- Configurações em abas ---- */
+.modal:has(.cfg) { max-width:640px; }
+.cfg-abas { position:sticky; top:calc(-1 * var(--esp-6)); z-index:1; display:flex; gap:4px; margin:0 0 var(--esp-2); padding:4px; border:1px solid var(--line); border-radius:var(--raio-controle); background:var(--panel); }
+.cfg-aba { flex:1; min-height:34px; padding:0 var(--esp-3); border:0; border-radius:6px; background:transparent; color:var(--muted); font:600 var(--fs-interface)/1 var(--fonte-interface); cursor:pointer; transition:background var(--rapido) var(--curva), color var(--rapido) var(--curva); }
+.cfg-aba:hover { color:var(--ink); background:rgba(255,255,255,.04); }
+.cfg-aba[aria-selected="true"] { background:var(--accent-soft); color:var(--ink); box-shadow:inset 0 0 0 1px color-mix(in srgb, var(--acento) 40%, transparent); }
+.cfg-aba:focus-visible { outline:2px solid var(--acento); outline-offset:2px; }
+.cfg-painel { display:grid; gap:var(--esp-4); min-height:360px; align-content:start; }
+.cfg-painel[hidden] { display:none; }
+.cfg-caminho { display:block; padding:var(--esp-2) var(--esp-3); border:1px solid var(--line); border-radius:var(--raio-controle); background:var(--bg); font-size:var(--fs-secundario); color:var(--ink); overflow-wrap:anywhere; }
+.cfg-botoes { display:flex; flex-wrap:wrap; gap:var(--esp-2); }
+.cfg-arquivo { cursor:pointer; }
+.cfg-arquivo input { display:none; }
+.cfg-painel .cfg-acoes { justify-content:flex-end; }

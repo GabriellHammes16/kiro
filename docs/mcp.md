@@ -115,7 +115,7 @@ quem fez o quê.
 `kuroi_restore_note`, `kuroi_list_notes`, `kuroi_search_notes`,
 `kuroi_list_trash`, `kuroi_create_folder`, `kuroi_list_folders`,
 `kuroi_move_note`, `kuroi_get_backlinks`, `kuroi_get_outgoing_links`,
-`kuroi_create_note_link`, `kuroi_get_recent_notes`, `kuroi_get_daily_note`,
+`kuroi_create_note_link`, `kuroi_get_recent_notes`, `kuroi_get_daily_note`, `kuroi_get_habits`,
 `kuroi_add_tag`, `kuroi_remove_tag`, `kuroi_search_by_tag`,
 `kuroi_get_vault_info`.
 

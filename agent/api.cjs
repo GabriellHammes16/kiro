@@ -15,7 +15,7 @@ const domain = require('../domain.js');
 const { AgentError, vaultRelativePath, folderSegments, noteTitle, tagList } = require('./security.cjs');
 const { KuroiEvents } = require('./events.cjs');
 
-const { pathKey, normalize, wikiLinks, findLinkedNote, localDate, tags: tagsDaNota } = domain;
+const { pathKey, normalize, wikiLinks, findLinkedNote, localDate, habitStats, tags: tagsDaNota } = domain;
 
 const CONFLITO = /mudou|ocupado/i;
 const MAX_LIMITE = 200;
@@ -351,6 +351,24 @@ class KuroiAgentApi {
 
   async getRecentNotes(args = {}) {
     return this.listNotes({ limit: this.#limite(args.limit, 10) });
+  }
+
+  /** Hábitos com o progresso já calculado, para o agente não interpretar o histórico cru. Só leitura. */
+  async getHabits(args = {}) {
+    const hoje = args.date ? String(args.date) : localDate();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(hoje)) throw new AgentError('INVALID_INPUT', 'date deve estar no formato AAAA-MM-DD.');
+    const state = await this.load();
+    return {
+      date: hoje,
+      habits: (state.habits || []).map(h => {
+        const s = habitStats(h, state.habitLog?.[h.id] || [], hoje);
+        return {
+          id: h.id, title: h.title, frequency: h.frequency, createdAt: h.createdAt ? new Date(h.createdAt).toISOString() : null,
+          dueToday: s.dueToday, doneToday: s.doneToday, streak: s.streak, rate30: s.rate30, totalDone: s.totalDone,
+          ...(s.weekCount !== undefined ? { weekCount: s.weekCount } : {}), last7: s.week,
+        };
+      }),
+    };
   }
 
   /** A nota diária do Kuroi é a nota cujo título é a data local. Só leitura. */

@@ -87,6 +87,7 @@ Nomes sem prefixo. A camada MCP publica os mesmos com `kuroi_` na frente.
 | `move_note` | write | update | Move a nota para outra pasta. |
 | `get_recent_notes` | read | read | Notas alteradas mais recentemente. |
 | `get_daily_note` | read | read | Nota do dia; não cria nada. |
+| `get_habits` | read | read | Hábitos com sequência, cumprimento em 30 dias e últimos 7 dias. |
 | `list_trash` | read | read | Itens restauráveis na lixeira. |
 
 ### Pastas, links e tags

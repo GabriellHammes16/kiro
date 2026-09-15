@@ -1,6 +1,6 @@
 const today = () => Kuroi.localDate();
 const uid = () => crypto.randomUUID();
-let state = { notes: [], tasks: [], routine: [], folders: [] };
+let state = { notes: [], tasks: [], habits: [], habitLog: {}, folders: [] };
 let currentView = "today";
 
 async function loadFromVault() { return window.cadernoDesktop ? window.cadernoDesktop.loadState() : api('state'); }
@@ -37,7 +37,162 @@ function render() {
 function head(eyebrow, title, description, action="") { return `<header class="page-head"><div><p class="eyebrow">${eyebrow}</p><h1>${title}</h1><p class="subhead">${description}</p></div>${action}</header>`; }
 function check(done, action, id) { return `<button class="check ${done ? "done" : ""}" aria-label="Marcar como ${done ? "não concluído" : "concluído"}" data-action="${action}" data-id="${id}"></button>`; }
 function taskRow(task) { return `<div class="task-item">${check(task.done,"toggle-task",task.id)}<div class="task-title">${escapeHtml(task.title)}<div class="task-info">${dateLabel(task.due)}${task.noteId && getNote(task.noteId) ? ` · ${linkDaNota(getNote(task.noteId))}` : ""}</div></div>${task.priority === "Alta" ? '<span class="priority">Alta</span>' : ""}<div class="task-actions"><button class="icon-button" data-action="edit-task" data-id="${task.id}" title="Editar">${icone('renomear')}</button><button class="icon-button" data-action="delete-task" data-id="${task.id}" title="Excluir">${icone('lixeira')}</button></div></div>`; }
-function renderToday() { const routineDone = state.routine.filter(r=>r.date===today() && r.done).length; const urgent = state.tasks.filter(t => !t.done && t.due <= today()); const recent = [...state.notes].sort((a,b)=>b.updatedAt-a.updatedAt).slice(0,3); return `${head("Seu espaço pessoal", "Bom dia", `${formatDate(today())}. Um passo de cada vez.`)}<div class="today-grid"><div class="stack"><section class="card"><div class="card-head"><h2>Rotina de hoje</h2><span class="small-muted">${routineDone}/${state.routine.length}</span></div>${state.routine.map(r=>`<div class="routine-item">${check(r.date===today() && r.done,"toggle-routine",r.id)}<span class="routine-title">${escapeHtml(r.title)}</span></div>`).join("")}<div class="progress"><div style="width:${state.routine.length ? routineDone/state.routine.length*100 : 0}%"></div></div></section><section class="card"><div class="card-head"><h2>Notas recentes</h2><a data-go="notes">Ver todas</a></div>${recent.map(n=>`<div class="routine-item"><span class="brand-mark">${icone('nota')}</span><span class="routine-title">${escapeHtml(n.title)}</span><button class="icon-button" data-action="edit-note" data-id="${n.id}" aria-label="Abrir nota">${icone('direita')}</button></div>`).join("") || '<div class="empty">Nenhuma nota ainda.</div>'}</section></div><div class="stack"><section class="card"><div class="card-head"><h2>Para fazer agora</h2><a data-go="tasks">Ver tarefas</a></div>${urgent.map(taskRow).join("") || '<div class="empty">Nada urgente. Ótimo momento para avançar nos estudos.</div>'}</section><section class="card"><div class="card-head"><h2>Estudos</h2><a data-go="studies">Abrir área</a></div>${state.folders.slice(0,3).map(f=>{const total=state.notes.filter(n=>n.folderId===f.id).length;return `<div class="routine-item"><span class="brand-mark pasta-chip"${f.color?` data-cor-pasta="${f.color}"`:""}>${icone('pastas')}</span><span class="routine-title">${escapeHtml(f.path||f.title)}</span><span class="small-muted">${total} nota${total===1?"":"s"}</span></div>`;}).join("") || '<div class="empty">Nenhuma pasta ainda.</div>'}</section></div></div>`; }
+function renderToday() {
+  const urgent = state.tasks.filter(t => !t.done && t.due <= today());
+  const ultima = [...state.notes].sort((a,b)=>b.updatedAt-a.updatedAt)[0];
+  // Duas colunas por intenção: "Agora" é o que se marca todo dia; "Organizar" é o trabalho com as notas.
+  return `${head(saudacao(), `<span class="frase-do-dia">${escapeHtml(fraseDoDia())}</span>`, `${formatDate(today())}.`)}<div class="today-grid"><div class="stack">${cardHabitos()}<section class="card"><div class="card-head"><h2>Para fazer agora</h2><a data-go="tasks">Ver tarefas</a></div>${urgent.map(taskRow).join("") || '<div class="empty">Nada urgente para hoje.</div>'}</section></div><div class="stack">${cardContinuar(ultima)}${cardCaixaDeEntrada()}${cardParaRevisar()}</div></div>`;
+}
+// Frase do dia no lugar do "Bom dia". Muda à meia-noite e não repete a de ontem:
+// o passo 7 percorre as 20 frases antes de voltar à primeira.
+const FRASES = [
+  'Ara ara… não seja vagabundo, vamos trabalhar porque você é pobre.',
+  'Ara ara~ o boleto não se paga sozinho, sabia?',
+  'Levanta, guerreiro. O sofá não vai te pagar salário.',
+  'Seus sonhos ligaram. Disseram que você está atrasado.',
+  'Menos scroll, mais progresso.',
+  'Ara ara… procrastinando de novo? Que decepção~',
+  'O café já fez a parte dele. Agora é com você.',
+  'Nem o Goku ficou forte deitado.',
+  'Bora, protagonista. O arco de treinamento começa agora.',
+  'Sua conta bancária pediu pra eu te lembrar: vai trabalhar.',
+  'Disciplina é fazer mesmo sem vontade. Tipo agora.',
+  'Ara ara~ quem não anota esquece. Quem esquece repete.',
+  'Hoje não é dia de desistir. Amanhã também não.',
+  'Senpai não vai te notar se as tarefas não estiverem feitas.',
+  'Pobre de ideias você não é. De dinheiro, ainda. Bora mudar isso.',
+  'Um hábito por vez, uma nota por vez, um boleto por vez.',
+  'Menos "amanhã eu faço", mais "feito".',
+  'O você do futuro está contando com você. Não passe vergonha.',
+  'Ara ara… esse cérebro não vai se organizar sozinho.',
+  'Trabalhe em silêncio. Deixe o saldo fazer barulho.',
+];
+function fraseDoDia(dia = today()) {
+  const [a, m, d] = dia.split('-').map(Number);
+  return FRASES[(Math.floor(Date.UTC(a, m - 1, d) / 864e5) * 7) % FRASES.length];
+}
+const saudacao = (hora = new Date().getHours()) => hora < 5 ? 'Boa madrugada' : hora < 12 ? 'Bom dia' : hora < 18 ? 'Boa tarde' : 'Boa noite';
+// Última nota editada, com o fim do texto: "Continuar" abre a nota já escrevendo no final.
+function cardContinuar(nota) {
+  if (!nota) return '';
+  const ultimo = textoPlano(nota.body.trim().split(/\n\s*\n/).filter(p => textoPlano(p)).pop() || '');
+  const trecho = ultimo === textoPlano(nota.title || '') ? '' : ultimo;
+  const pasta = state.folders.find(f => f.id === nota.folderId);
+  return `<section class="card continuar"><div class="card-head"><h2>Continuar de onde parei</h2><span class="continuar-quando">editada ${dateLabel(Kuroi.localDate(new Date(nota.updatedAt))).toLowerCase()}</span></div><button type="button" class="continuar-nota" data-extra="continuar" data-id="${nota.id}"><span class="continuar-titulo">${pasta ? `<span class="pasta-chip"${pasta.color ? ` data-cor-pasta="${pasta.color}"` : ''}>${icone('pastas')}</span>` : icone('nota')} ${escapeHtml(nota.title || 'Sem título')}</span>${trecho ? `<span class="continuar-trecho">${trecho.length > 180 ? '…' : ''}${escapeHtml(trecho.slice(-180))}</span>` : ''}<span class="continuar-acao">Continuar escrevendo ${icone('direita')}</span></button></section>`;
+}
+// ---- Hábitos no Hoje: só os do dia, com a semana clicável e a sequência. ----
+const DIAS_LETRA = ['D','S','T','Q','Q','S','S'], DIAS_CURTO = ['dom','seg','ter','qua','qui','sex','sáb'];
+const rotuloDoDia = dia => new Intl.DateTimeFormat('pt-BR', { weekday:'long', day:'numeric', month:'short' }).format(new Date(`${dia}T12:00`));
+function rotuloFrequencia(f) {
+  if (f.type === 'weekly') return `${f.times}x por semana`;
+  if (f.type !== 'days') return 'Todo dia';
+  const ordem = [...f.days].sort((a,b) => ((a+6)%7) - ((b+6)%7));
+  if (ordem.length === 7) return 'Todo dia';
+  return ordem.join() === '1,2,3,4,5' ? 'Dias úteis' : ordem.join() === '6,0' ? 'Fim de semana' : ordem.map(d => DIAS_CURTO[d]).join(', ');
+}
+function cardHabitos() {
+  const hoje = today();
+  const [a, m, d] = hoje.split('-').map(Number), domingo = Kuroi.localDate(new Date(a, m - 1, d + (7 - new Date(a, m - 1, d).getDay()) % 7));
+  const doDia = state.habits.map(h => ({ h, s: Kuroi.habitStats(h, state.habitLog[h.id] || [], hoje) })).filter(x => x.s.dueToday);
+  const feitos = doDia.filter(x => x.s.doneToday).length;
+  const linha = ({ h, s }) => {
+    const semanal = h.frequency.type === 'weekly';
+    const meta = [
+      semanal ? `${s.weekCount}/${h.frequency.times} na semana` : rotuloFrequencia(h.frequency),
+      s.streak ? `<span class="habito-sequencia">${icone('chama')} ${s.streak} ${semanal ? (s.streak === 1 ? 'semana' : 'semanas') : (s.streak === 1 ? 'dia' : 'dias')}</span>` : '',
+    ].filter(Boolean).join(' · ');
+    // Semana fixa de segunda a domingo: as letras não mudam de lugar; dias que ainda não chegaram ficam apagados.
+    const dias = Kuroi.habitDays(h, state.habitLog[h.id] || [], domingo, 7).map(d => d.date > hoje
+      ? `<span class="habito-dia futuro" title="${rotuloDoDia(d.date)}">${DIAS_LETRA[new Date(`${d.date}T12:00`).getDay()]}</span>`
+      : `<button type="button" class="habito-dia${d.done ? ' feito' : ''}${d.due ? '' : ' livre'}${d.date === hoje ? ' hoje' : ''}" data-action="toggle-habit-day" data-id="${h.id}|${d.date}" title="${rotuloDoDia(d.date)}${d.done ? ' · feito' : ''}" aria-label="${rotuloDoDia(d.date)}: ${d.done ? 'feito' : 'não feito'}" aria-pressed="${d.done}">${DIAS_LETRA[new Date(`${d.date}T12:00`).getDay()]}</button>`).join('');
+    return `<div class="routine-item habito" data-habito="${h.id}">${check(s.doneToday, 'toggle-habit', h.id)}<div class="habito-texto"><span class="routine-title">${escapeHtml(h.title)}</span><span class="habito-meta">${meta}</span></div><div class="habito-semana">${dias}</div></div>`;
+  };
+  const vazio = state.habits.length
+    ? '<div class="empty">Nenhum hábito para hoje.</div>'
+    : `<div class="empty">Crie um hábito para acompanhar sua sequência. ${extraButton('add-habit', 'Criar hábito')}</div>`;
+  return `<section class="card habitos"><div class="card-head"><h2>Hábitos</h2>${doDia.length ? `<span class="small-muted">${feitos}/${doDia.length}</span>` : ''}${extraButton('habit-stats', icone('grafico'), '', 'icon-button', 'Estatísticas dos hábitos')}${extraButton('add-habit', icone('mais'), '', 'icon-button', 'Novo hábito')}</div>${doDia.map(linha).join('') || vazio}</section>`;
+}
+function marcarHabito(id, dia = today()) {
+  if (busy || failed || !loaded || dia > today() || !state.habits.some(h => h.id === id)) return;
+  const dias = new Set(state.habitLog[id] || []);
+  dias.has(dia) ? dias.delete(dia) : dias.add(dia);
+  state.habitLog = { ...state.habitLog, [id]: [...dias].sort() };
+  // Marcar um dia de antes da criação quer dizer que o hábito já existia: a data de início recua.
+  const habito = state.habits.find(h => h.id === id), [a, m, d] = dia.split('-').map(Number), inicioDoDia = new Date(a, m - 1, d).getTime();
+  if (dias.has(dia) && habito.createdAt && inicioDoDia < habito.createdAt) state.habits = state.habits.map(h => h.id === id ? { ...h, createdAt: inicioDoDia } : h);
+  save();
+}
+function habitoModal(habito = { title: '', frequency: { type: 'daily' } }) {
+  const f = habito.frequency, dias = f.type === 'days' ? f.days : [1, 3, 5];
+  modal(habito.id ? 'Editar hábito' : 'Novo hábito', `<form class="form" id="habito-form">
+    <div class="field"><label for="habito-titulo">Hábito</label><input id="habito-titulo" name="title" required maxlength="80" value="${escapeHtml(habito.title)}" placeholder="Ex.: Beber 2 litros de água" /></div>
+    <div class="field"><span class="rotulo-campo" id="freq-rotulo">Frequência</span><div class="segmentos" role="radiogroup" aria-labelledby="freq-rotulo">${[['daily','Todo dia'],['days','Dias da semana'],['weekly','Vezes por semana']].map(([v, r]) => `<label class="segmento"><input type="radio" name="tipo" value="${v}" ${f.type === v ? 'checked' : ''} /><span>${r}</span></label>`).join('')}</div></div>
+    <div class="field" id="freq-dias" ${f.type === 'days' ? '' : 'hidden'}><span class="rotulo-campo">Em quais dias</span><div class="dias-semana">${[1,2,3,4,5,6,0].map(d => `<label class="dia-chip" title="${DIAS_CURTO[d]}"><input type="checkbox" name="dias" value="${d}" ${dias.includes(d) ? 'checked' : ''} /><span>${DIAS_LETRA[d]}</span></label>`).join('')}</div></div>
+    <div class="field" id="freq-vezes" ${f.type === 'weekly' ? '' : 'hidden'}><label for="habito-vezes">Quantas vezes por semana</label><input id="habito-vezes" name="vezes" type="number" min="1" max="7" value="${f.type === 'weekly' ? f.times : 3}" /></div>
+    <p class="cfg-aviso" id="habito-erro" hidden>Escolha pelo menos um dia.</p>
+    <div class="form-actions">${habito.id ? '<button type="button" class="secondary perigo" id="habito-excluir">Excluir</button>' : ''}<button type="button" class="secondary" id="cancel">Cancelar</button><button class="primary">${habito.id ? 'Salvar' : 'Criar hábito'}</button></div>
+  </form>`);
+  const form = $('#habito-form');
+  form.querySelectorAll('[name="tipo"]').forEach(r => r.onchange = () => { $('#freq-dias').hidden = r.value !== 'days'; $('#freq-vezes').hidden = r.value !== 'weekly'; });
+  $('#cancel').onclick = () => closeModal();
+  $('#habito-excluir')?.addEventListener('click', () => { closeModal(true); excluirHabito(habito.id); });
+  form.onsubmit = async e => {
+    e.preventDefault();
+    const dados = new FormData(form), tipo = dados.get('tipo');
+    const frequency = tipo === 'days' ? { type: 'days', days: dados.getAll('dias').map(Number) } : tipo === 'weekly' ? { type: 'weekly', times: Math.min(7, Math.max(1, Number(dados.get('vezes')) || 1)) } : { type: 'daily' };
+    if (!Kuroi.validFrequency(frequency)) { $('#habito-erro').hidden = false; return; }
+    const salvo = { ...habito, id: habito.id || uid(), title: String(dados.get('title')).trim(), frequency, createdAt: habito.createdAt || Date.now() };
+    state.habits = habito.id ? state.habits.map(h => h.id === habito.id ? salvo : h) : [...state.habits, salvo];
+    if (await save()) closeModal(true);
+  };
+}
+// Confirmação dentro do Kuroi, não o confirm() nativo: em alguns ambientes (Electron, navegador
+// embutido) a caixa nativa não aparece ou fecha sozinha, e a exclusão parecia não fazer nada.
+function excluirHabito(id) {
+  const habito = state.habits.find(h => h.id === id);
+  if (!habito || busy || failed || !loaded) return;
+  const dias = (state.habitLog[id] || []).length;
+  modal('Excluir hábito', `<p class="confirmar-texto">Excluir <strong>${escapeHtml(habito.title)}</strong>${dias ? ` e ${dias === 1 ? 'o dia marcado' : `os ${dias} dias marcados`}` : ''}? Isso não pode ser desfeito.</p><div class="form-actions"><button type="button" class="secondary" id="cancel">Cancelar</button><button type="button" class="primary perigo-cheio" id="confirmar-exclusao">Excluir hábito</button></div>`);
+  $('#cancel').onclick = () => closeModal(true);
+  $('#confirmar-exclusao').onclick = async () => {
+    state.habits = state.habits.filter(h => h.id !== id);
+    const { [id]: _removido, ...resto } = state.habitLog;
+    state.habitLog = resto;
+    if (await save()) closeModal(true);
+  };
+  $('#confirmar-exclusao').focus();
+}
+// Botão direito num hábito (no Hoje ou nas estatísticas); o hábito é buscado na hora do clique.
+function menuDoHabito(id) {
+  const atual = () => state.habits.find(h => h.id === id);
+  const feitoHoje = (state.habitLog[id] || []).includes(today());
+  return [
+    { rotulo: feitoHoje ? 'Desmarcar hoje' : 'Marcar como feito hoje', icone: icone('lista-tarefas'), acao: () => marcarHabito(id) },
+    { rotulo: 'Editar hábito', icone: icone('renomear'), acao: () => atual() && habitoModal(atual()) },
+    { rotulo: 'Novo hábito', icone: icone('mais'), acao: () => habitoModal() },
+    { rotulo: 'Estatísticas', icone: icone('grafico'), acao: () => habitosModal() },
+    { separador: true },
+    { rotulo: 'Excluir hábito', icone: icone('lixeira'), acao: () => excluirHabito(id) },
+  ];
+}
+const menuDosHabitos = () => [
+  { rotulo: 'Novo hábito', icone: icone('mais'), acao: () => habitoModal() },
+  { rotulo: 'Estatísticas', icone: icone('grafico'), acao: () => habitosModal() },
+];
+function habitosModal() {
+  const hoje = today();
+  const blocos = state.habits.map(h => {
+    const dias = state.habitLog[h.id] || [], s = Kuroi.habitStats(h, dias, hoje), semanal = h.frequency.type === 'weekly';
+    const grade = Kuroi.habitDays(h, dias, hoje, 35).map(d => `<span class="grade-dia${d.done ? ' feito' : ''}${d.due ? '' : ' livre'}${d.date === hoje ? ' hoje' : ''}" title="${rotuloDoDia(d.date)}${d.done ? ' · feito' : ''}"></span>`).join('');
+    return `<section class="habito-stats" data-habito="${h.id}"><header><div class="cfg-texto"><span class="cfg-titulo">${escapeHtml(h.title)}</span><span class="small-muted">${rotuloFrequencia(h.frequency)}</span></div><button type="button" class="icon-button" data-editar-habito="${h.id}" aria-label="Editar hábito" title="Editar">${icone('renomear')}</button></header>
+      <div class="habito-numeros"><div><b>${s.streak}</b><span>${semanal ? 'semanas seguidas' : 'dias seguidos'}</span></div><div><b>${s.rate30 === null ? '–' : s.rate30 + '%'}</b><span>nos últimos 30 dias</span></div><div><b>${s.totalDone}</b><span>vezes no total</span></div></div>
+      <div class="habito-grade" aria-label="Últimas 5 semanas">${grade}</div></section>`;
+  }).join('');
+  modal('Seus hábitos', `<div class="habitos-lista">${blocos || '<div class="empty">Nenhum hábito ainda.</div>'}</div><div class="form-actions"><button type="button" class="secondary" id="cancel">Fechar</button><button type="button" class="primary" id="habito-novo">${icone('mais')} Novo hábito</button></div>`);
+  $('#cancel').onclick = () => closeModal(true);
+  $('#habito-novo').onclick = () => { closeModal(true); habitoModal(); };
+  document.querySelectorAll('[data-editar-habito]').forEach(b => b.onclick = () => { const h = state.habits.find(x => x.id === b.dataset.editarHabito); closeModal(true); if (h) habitoModal(h); });
+}
 function renderNotes() { return `${head("Biblioteca", "Notas", "Escreva, revise e mantenha suas referências perto.", `<button class="primary" id="add-note">${icone('mais')} Nova nota</button>`)}<div class="toolbar"><input class="search" id="note-search" placeholder="Buscar texto ou #tag…" /></div><section class="notes-grid" id="notes-grid">${notesMarkup(state.notes)}</section>`; }
 const linkDaNota = nota => `<a class="task-nota" data-action="edit-note" data-id="${nota.id}">${escapeHtml(nota.title || "Sem título")}</a>`;
 // Prévia do card: o texto que a nota mostra, sem a sintaxe do Markdown.
@@ -115,6 +270,9 @@ const TRACOS = {
   recolher: '<path d="M7 17 12 12.5 17 17M7 11 12 6.5 17 11"/>',
   esquerda: '<path d="M14 5.5 7.5 12 14 18.5"/>',
   direita: '<path d="M10 5.5 16.5 12 10 18.5"/>',
+  grafico: '<path d="M4 20h16M7 16.5V11M12 16.5V6M17 16.5v-3.5"/>',
+  arquivar: '<path d="M4 5.5h16v4H4zM5.5 9.5V18a1.5 1.5 0 0 0 1.5 1.5h10a1.5 1.5 0 0 0 1.5-1.5V9.5M10 13.5h4"/>',
+  chama: '<path d="M12 21c-3.6 0-6-2.5-6-5.9 0-3.2 2.3-5 3.5-7.6.4 1.7 1.4 2.8 2.4 3.1.3-2.4 1.6-4.3 3.1-5.6.5 2.7 3 4.6 3 8.5 0 4.3-2.5 7.5-6 7.5z"/>',
   fechar: '<path d="M6.5 6.5 17.5 17.5M17.5 6.5 6.5 17.5"/>',
   lixeira: '<path d="M4 7h16M9.5 7V5.2A1.2 1.2 0 0 1 10.7 4h2.6a1.2 1.2 0 0 1 1.2 1.2V7"/><path d="M6.8 7 7.6 19a1.5 1.5 0 0 0 1.5 1.4h5.8A1.5 1.5 0 0 0 16.4 19L17.2 7"/>',
   renomear: '<path d="M4 20h4l10.3-10.3a2.4 2.4 0 1 0-3.4-3.4L4.6 16.6z"/><path d="M13.6 7.2 16.8 10.4"/>',
@@ -260,7 +418,7 @@ function action(type,id) {
     return;
   }
   if (busy || failed || !loaded) return;
-  if(type==="new-subfolder") folderModal({title:"",description:"",parentId:id}); if(type==="toggle-routine"){const r=state.routine.find(x=>x.id===id);r.done=r.date===today()?!r.done:true;r.date=today();save();render();} if(type==="toggle-task"){const t=state.tasks.find(x=>x.id===id);t.done=!t.done;save();render();} if(type==="toggle-note-task") marcarTarefaDaNota(id); if(type==="edit-note") abrirNota(getNote(id)); if(type==="new-note-folder") abrirNota(notaVazia({folderId:id})); if(type==="edit-task") taskModal(state.tasks.find(x=>x.id===id)); if(type==="edit-folder") folderModal(state.folders.find(x=>x.id===id)); if(type==="delete-task"){state.tasks=state.tasks.filter(x=>x.id!==id);save();render();} if(type==="delete-folder") deleteFolder(id); }
+  if(type==="new-subfolder") folderModal({title:"",description:"",parentId:id}); if(type==="toggle-habit") marcarHabito(id); if(type==="toggle-habit-day"){const [habito,dia]=id.split("|");marcarHabito(habito,dia);} if(type==="toggle-task"){const t=state.tasks.find(x=>x.id===id);t.done=!t.done;save();render();} if(type==="toggle-note-task") marcarTarefaDaNota(id); if(type==="edit-note") abrirNota(getNote(id)); if(type==="new-note-folder") abrirNota(notaVazia({folderId:id})); if(type==="edit-task") taskModal(state.tasks.find(x=>x.id===id)); if(type==="edit-folder") folderModal(state.folders.find(x=>x.id===id)); if(type==="delete-task"){state.tasks=state.tasks.filter(x=>x.id!==id);save();render();} if(type==="delete-folder") deleteFolder(id); }
 // Excluir uma pasta leva junto suas subpastas; as notas continuam no cofre, na raiz.
 function deleteFolder(id) {
   const ids=Kuroi.descendants(state.folders,id);
@@ -340,7 +498,7 @@ async function reload(manual=false){
   try{
     const saved=await loadFromVault();Kuroi.validateState(saved);
     const changed=state.revision!==saved.revision||!loaded;
-    state=saved;loaded=true;failed=false;$('#vault-path').textContent=state.vaultPath;
+    state=saved;loaded=true;failed=false;
     // Recarregar de propósito descarta a edição: a nota aberta volta ao que está no cofre.
     if(manual&&editing){const n=editing.id&&getNote(editing.id);editing=n?{...n,tags:[...(n.tags||[])],links:[...(n.links||[])]}:null;editorDirty=false;if(!editing)currentView='today';}
     if(manual)closeModal(true);if(changed||manual)render();status('Cofre atualizado');
@@ -350,7 +508,7 @@ async function reload(manual=false){
 const itemQueAbre=n=>`<div class="routine-item"><span class="brand-mark">${icone('nota')}</span><a class="routine-title" data-action="edit-note" data-id="${n.id}">${escapeHtml(n.title||'Sem título')}</a></div>`;
 function cardCaixaDeEntrada(){
   const notas=state.notes.filter(Kuroi.inInbox).sort((a,b)=>(b.createdAt??b.updatedAt)-(a.createdAt??a.updatedAt));
-  return `<section class="card caixa-entrada"><div class="card-head"><h2>Caixa de entrada</h2><span class="small-muted">${notas.length}</span></div>${notas.map(n=>`<div class="routine-item"><span class="brand-mark">${icone('nota')}</span><a class="routine-title" data-action="edit-note" data-id="${n.id}">${escapeHtml(n.title||'Sem título')}</a>${extraButton('inbox-mover',`${icone('pastas')} Mover para`,n.id)}${extraButton('inbox-arquivar','Arquivar',n.id)}</div>`).join('')||'<div class="empty">Nada pendente. Tudo organizado.</div>'}</section>`;
+  return `<section class="card caixa-entrada"><div class="card-head"><h2>Caixa de entrada</h2><span class="small-muted">${notas.length}</span></div>${notas.map(n=>`<div class="routine-item"><span class="brand-mark">${icone('nota')}</span><a class="routine-title" data-action="edit-note" data-id="${n.id}">${escapeHtml(n.title||'Sem título')}</a><span class="caixa-acoes">${extraButton('inbox-mover',icone('pastas'),n.id,'icon-button','Mover para pasta')}${extraButton('inbox-arquivar',icone('arquivar'),n.id,'icon-button','Arquivar (tirar da caixa)')}</span></div>`).join('')||'<div class="empty">Nada pendente. Tudo organizado.</div>'}</section>`;
 }
 function cardParaRevisar(){
   const {loose,forgotten}=Kuroi.toReview(state.notes);
@@ -368,15 +526,26 @@ async function tirarDaCaixa(id,folderId){
 const extraButton=(action,label,id='',cls='secondary',nome='')=>`<button type="button" class="${cls}" data-extra="${action}" data-id="${escapeHtml(id)}"${nome?` aria-label="${nome}" title="${nome}"`:''}>${label}</button>`;
 function enhanceView(){
   if(currentView!=='today')return;
-  $('.page-head').insertAdjacentHTML('beforeend',extraButton('daily','Abrir nota diária','','primary'));
-  $('.page-head').insertAdjacentHTML('afterend','<section class="card capture"><form id="capture-form"><label for="capture-text">Captura rápida</label><div class="add-link"><input id="capture-text" required placeholder="Uma ideia, uma pergunta, algo para lembrar…" /><button class="primary">Guardar</button></div></form></section>');
-  $('.card-head').insertAdjacentHTML('beforeend',extraButton('add-routine',icone('mais'),'','icon-button','Novo hábito'));
-  $('.capture').insertAdjacentHTML('afterend',cardCaixaDeEntrada());
-  $('.today-grid > .stack:last-child')?.insertAdjacentHTML('beforeend',cardParaRevisar());
-  $('#capture-form').onsubmit=async e=>{
-    e.preventDefault();if(busy||failed)return;const body=$('#capture-text').value.trim();if(!body)return;
-    state.notes.unshift({id:uid(),title:(textoPlano(body.split('\n')[0]).replace(/(^|\s)#(?=[\p{L}\p{N}_/-])/gu,'$1')||body).slice(0,80),body,links:[],tags:['inbox'],createdAt:Date.now(),updatedAt:Date.now(),folderId:''});await save();
-  };
+  // Captura numa faixa própria logo abaixo da frase, na largura dos cards: não depende de quantas linhas a frase ocupa.
+  $('.page-head').insertAdjacentHTML('afterend',`<div class="hoje-acoes"><form id="capture-form" class="capture add-link"><label for="capture-text" class="sr-only">Captura rápida</label>${icone('mais')}<input id="capture-text" required autocomplete="off" placeholder="Capturar uma ideia, pergunta ou lembrete…" /><kbd class="atalho" title="De qualquer tela">Ctrl + Espaço</kbd><button class="primary">Guardar</button></form>${extraButton('daily',`${icone('calendario')} Nota diária`,'','secondary')}</div>`);
+  $('#capture-form').onsubmit=async e=>{e.preventDefault();if(await capturar($('#capture-text').value))$('#capture-text')?.focus();};
+}
+// Uma captura vira nota na caixa de entrada; o título é a primeira linha sem sintaxe.
+async function capturar(texto){
+  const body=String(texto||'').trim();if(!body||busy||failed||!loaded)return false;
+  state.notes.unshift({id:uid(),title:(textoPlano(body.split('\n')[0]).replace(/(^|\s)#(?=[\p{L}\p{N}_/-])/gu,'$1')||body).slice(0,80),body,links:[],tags:['inbox'],createdAt:Date.now(),updatedAt:Date.now(),folderId:''});
+  return save();
+}
+// Ctrl+Espaço de qualquer tela: no Hoje vai para a faixa de captura; fora dele abre uma janela pequena.
+function capturaRapida(){
+  if(!loaded||failed||busy)return;
+  if(currentView==='today'&&$('#capture-text')&&!$('#modal-root').firstChild){$('#capture-text').focus();return;}
+  if($('#modal-root').firstChild)return;
+  modal('Captura rápida',`<form class="form" id="captura-janela"><input class="search captura-janela" id="captura-janela-texto" required autocomplete="off" placeholder="Capturar uma ideia, pergunta ou lembrete…" aria-label="Captura rápida" /><p class="small-muted">Vai para a caixa de entrada do Hoje. Enter guarda, Esc fecha.</p></form>`);
+  const campo=$('#captura-janela-texto');
+  campo.addEventListener('input',e=>e.stopPropagation()); // digitar não pede "descartar" ao fechar com Esc
+  $('#captura-janela').onsubmit=async e=>{e.preventDefault();if(await capturar(campo.value))closeModal(true);};
+  campo.focus();
 }
 // ---- Editor de documento: a nota ocupa a página inteira, como um processador de texto. ----
 async function abrirNota(nota){
@@ -1769,10 +1938,9 @@ async function extraAction(type,id){
     abrirMenuContexto({preventDefault(){},clientX:r.left,clientY:r.bottom},document.body,pastas.length?pastas.map(f=>({rotulo:f.path||f.title,icone:icone('pastas'),acao:()=>tirarDaCaixa(id,f.id)})):[{rotulo:'Nenhuma pasta ainda',icone:icone('pastas'),ativo:()=>false,acao:()=>{}}]);
   }
   if(type==='daily')abrirNota(state.notes.find(n=>n.title===today())||notaVazia({title:today(),body:templates.daily.body,tags:['diario']}));
-  if(type==='add-routine'){
-    modal('Novo hábito','<form id="routine-form" class="form"><div class="field"><label for="routine-title">Qual hábito você quer acompanhar?</label><input id="routine-title" required /></div><button class="primary">Adicionar hábito</button></form>');
-    $('#routine-form').onsubmit=async e=>{e.preventDefault();state.routine.push({id:uid(),title:$('#routine-title').value,date:today(),done:false});if(await save())closeModal(true);};
-  }
+  if(type==='add-habit') habitoModal();
+  if(type==='habit-stats') habitosModal();
+  if(type==='continuar'){const nota=getNote(id);if(nota){await abrirNota(nota);if(editing?.id===id)abrirNoFim();}}
 }
 // A restauração é do próprio Vault: ele devolve a nota ou a pasta inteira, com
 // subpastas, anexos e os identificadores originais. Reconstruir isso aqui, como
@@ -1847,18 +2015,32 @@ const agentApi = {
   save: parcial => window.cadernoDesktop ? window.cadernoDesktop.saveAgentConfig(parcial) : api('agent-config', parcial),
 };
 // Aparência aplica na hora; as permissões de agente só no botão Salvar.
-async function showSettings() {
+const ABAS_CFG = [['personalizacao', 'Personalização'], ['sistema', 'Sistema'], ['integracoes', 'Integrações'], ['atalhos', 'Atalhos']];
+let abaDasConfiguracoes = 'personalizacao';
+const ATALHOS = [
+  ['Ctrl + Espaço', 'Captura rápida', 'De qualquer tela, direto para a caixa de entrada.'],
+  ['Ctrl + O', 'Ir para nota', 'Busca uma nota pelo título.'],
+  ['Ctrl + N', 'Nova nota', ''],
+  ['Ctrl + S', 'Salvar a nota aberta', ''],
+  ['[[', 'Ligar a outra nota', 'Mostra sugestões de títulos enquanto você digita.'],
+  ['Botão direito', 'Menus rápidos', 'Na árvore de pastas, nas notas, nos hábitos e dentro do texto.'],
+  ['Esc', 'Fechar janela ou menu', ''],
+];
+async function showSettings(aba = abaDasConfiguracoes) {
   if (busy || !loaded) return;
-  let conf;
-  try { conf = await agentApi.load(); }
-  catch (error) { status('Não foi possível ler a configuração de agentes: ' + error.message, true); return; }
+  let conf = null, erroConf = '';
+  try { conf = await agentApi.load(); } catch (error) { erroConf = error.message; }
   const cores = lerAparencia();
   const texto = (titulo, detalhe = '', id = '') => `<span class="cfg-texto"><span class="cfg-titulo"${id ? ` id="${id}"` : ''}>${titulo}</span>${detalhe ? `<span class="small-muted">${detalhe}</span>` : ''}</span>`;
   const chave = (id, titulo, marcado, detalhe = '', extra = '') => `<label class="cfg-linha cfg-chave ${extra}">${texto(titulo, detalhe)}<input type="checkbox" data-perm="${id}" ${marcado ? 'checked' : ''} /><span class="interruptor" aria-hidden="true"></span></label>`;
   const cor = (id, titulo, valor) => `<div class="cfg-linha">${texto(titulo)}<label class="cor-ponto" title="Escolher cor"><input type="color" data-cor="${id}" value="${valor}" aria-label="${titulo}" /></label></div>`;
+  const botao = (id, rotulo, nomeIcone) => `<button type="button" class="secondary cfg-pequeno" id="${id}">${icone(nomeIcone)} ${rotulo}</button>`;
   const DETALHES = { read: 'Buscar e ler o conteúdo das notas.', create: 'Criar notas e pastas novas.', update: 'Alterar texto, título, etiquetas e pasta.', delete: 'A nota vai para a lixeira e pode ser restaurada.' };
+  if (!ABAS_CFG.some(([id]) => id === aba)) aba = 'personalizacao';
+  const painel = (id, conteudo) => `<div class="cfg-painel" data-painel="${id}" role="tabpanel" id="painel-${id}" aria-labelledby="aba-${id}" ${id === aba ? '' : 'hidden'}>${conteudo}</div>`;
   modal('Configurações', `<div class="cfg">
-    <section class="cfg-grupo cfg-aparencia">
+    <div class="cfg-abas" role="tablist" aria-label="Seções das configurações">${ABAS_CFG.map(([id, rotulo]) => `<button type="button" role="tab" class="cfg-aba" id="aba-${id}" data-aba="${id}" aria-controls="painel-${id}" aria-selected="${id === aba}" tabindex="${id === aba ? 0 : -1}">${rotulo}</button>`).join('')}</div>
+    ${painel('personalizacao', `<section class="cfg-grupo cfg-aparencia">
       <header class="cfg-grupo-topo">${texto('Aparência', 'Muda na hora e vale só para esta instalação.')}<button type="button" class="secondary cfg-pequeno" id="cor-padrao">${icone('recarregar')} Restaurar padrão</button></header>
       ${cor('sidebar', 'Fundo da barra lateral', cores.sidebar)}
       ${cor('content', 'Fundo da área de texto', cores.content)}
@@ -1866,8 +2048,21 @@ async function showSettings() {
         <div class="amostras" role="radiogroup" aria-labelledby="acento-rotulo">${ACENTOS.map(([hex, nome]) => `<label class="amostra" style="--cor-pasta:${hex}" title="${nome}"><input type="radio" name="acento" value="${hex}" ${hex.toLowerCase() === cores.acento.toLowerCase() ? 'checked' : ''} /><span class="sr-only">${nome}</span></label>`).join('')}<label class="cor-ponto cor-livre" title="Outra cor"><input type="color" data-cor="acento" value="${cores.acento}" aria-label="Outra cor de destaque" /></label></div>
         <p class="cfg-aviso" id="acento-aviso" hidden>Essa cor tem pouco contraste com o fundo: textos e ícones podem ficar difíceis de ler.</p>
       </div>
+    </section>`)}
+    ${painel('sistema', `<section class="cfg-grupo">
+      <header class="cfg-grupo-topo">${texto('Cofre', 'A pasta onde suas notas ficam, como arquivos Markdown.')}</header>
+      <div class="cfg-linha cfg-linha-coluna">${texto('Local')}<code class="cfg-caminho">${escapeHtml(state.vaultPath || 'vault/')}</code>
+        <div class="cfg-botoes">${window.cadernoDesktop ? botao('cfg-abrir-pasta', 'Abrir pasta', 'pasta-aberta') + botao('cfg-trocar-cofre', 'Escolher outro cofre', 'pastas') : ''}${botao('cfg-copiar-caminho', 'Copiar caminho', 'copiar')}</div>
+      </div>
+      <div class="cfg-linha">${texto('Recarregar cofre', 'Lê os arquivos de novo, se você editou algo fora do Kuroi.')}${botao('cfg-recarregar', 'Recarregar', 'recarregar')}</div>
     </section>
     <section class="cfg-grupo">
+      <header class="cfg-grupo-topo">${texto('Dados', 'Backup em um arquivo JSON com notas, pastas, tarefas e hábitos.')}</header>
+      <div class="cfg-linha">${texto('Exportar backup', 'As imagens coladas nas notas não entram no arquivo.')}${botao('cfg-exportar', 'Exportar', 'exportar')}</div>
+      <div class="cfg-linha">${texto('Importar backup', 'Substitui os dados atuais; antes, pede confirmação.')}<label class="secondary cfg-pequeno cfg-arquivo">${icone('importar')} Importar<input type="file" id="cfg-importar" accept="application/json" /></label></div>
+      <div class="cfg-linha">${texto('Lixeira', 'Notas e pastas excluídas, prontas para restaurar.')}${botao('cfg-lixeira', 'Abrir lixeira', 'lixeira')}</div>
+    </section>`)}
+    ${painel('integracoes', conf ? `<section class="cfg-grupo">
       <header class="cfg-grupo-topo">${texto('IA e integrações', 'Agentes externos usam a Agent API, sempre dentro deste cofre. O Kuroi não envia nada para a nuvem por conta própria.')}</header>
       ${chave('enabled', 'Permitir agentes neste cofre', conf.enabled, 'Liga o acesso para programas como o Claude Desktop.')}
       ${chave('mcp', 'Servidor MCP', conf.mcp.enabled, 'Conexão local pelo stdio, sem abrir porta de rede.', 'cfg-depende')}
@@ -1876,19 +2071,37 @@ async function showSettings() {
       ${chave('confirm', 'Confirmar ações destrutivas', conf.requireConfirmationForDestructive, 'Pede confirmação antes de excluir.', 'cfg-depende')}
       <p class="small-muted cfg-rodape">Guardado em <code>.kuroi/agent.json</code>, dentro do cofre.</p>
     </section>
-    <div class="form-actions cfg-acoes"><button type="button" class="secondary" id="cancel">Fechar</button><button type="button" class="primary" id="ai-save" disabled>Salvar permissões</button></div>
+    <div class="form-actions cfg-acoes"><button type="button" class="primary" id="ai-save" disabled>Salvar permissões</button></div>` : `<p class="cfg-aviso">Não foi possível ler a configuração de agentes: ${escapeHtml(erroConf)}</p>`)}
+    ${painel('atalhos', `<section class="cfg-grupo">
+      <header class="cfg-grupo-topo">${texto('Atalhos', 'Para fazer as coisas sem tirar a mão do teclado.')}</header>
+      ${ATALHOS.map(([tecla, titulo, detalhe]) => `<div class="cfg-linha">${texto(titulo, detalhe)}<kbd class="atalho">${tecla}</kbd></div>`).join('')}
+    </section>`)}
   </div>`);
-  // Salvar só faz sentido depois de mexer nas permissões.
-  document.querySelectorAll('[data-perm]').forEach(c => c.addEventListener('change', () => { $('#ai-save').disabled = false; }));
 
+  // Abas: clique ou setas esquerda/direita; a última aberta volta na próxima vez.
+  const abas = [...document.querySelectorAll('.cfg-aba')];
+  const mostrar = id => {
+    abaDasConfiguracoes = id;
+    abas.forEach(b => { const ativa = b.dataset.aba === id; b.setAttribute('aria-selected', ativa); b.tabIndex = ativa ? 0 : -1; });
+    document.querySelectorAll('.cfg-painel').forEach(p => { p.hidden = p.dataset.painel !== id; });
+  };
+  abas.forEach((b, i) => {
+    b.onclick = () => mostrar(b.dataset.aba);
+    b.onkeydown = e => {
+      if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
+      const alvo = abas[(i + (e.key === 'ArrowRight' ? 1 : abas.length - 1)) % abas.length];
+      mostrar(alvo.dataset.aba); alvo.focus();
+    };
+  });
+
+  // Personalização
   const corAtual = () => ({
     sidebar: document.querySelector('[data-cor="sidebar"]').value,
     content: document.querySelector('[data-cor="content"]').value,
     acento: document.querySelector('[data-cor="acento"]').value,
   });
-  // A aparência já é gravada ao mudar: não conta como alteração pendente do formulário,
-  // senão fechar a janela pergunta se quer descartar algo que não se perde.
-  for (const tipo of ['input', 'change']) $('.cfg-aparencia').addEventListener(tipo, e => e.stopPropagation());
+  // Aparência e Sistema agem na hora: não contam como alteração pendente ao fechar a janela.
+  for (const tipo of ['input', 'change']) document.querySelectorAll('.cfg-aparencia, [data-painel="sistema"]').forEach(el => el.addEventListener(tipo, e => e.stopPropagation()));
   const avisar = () => { const a = lerAparencia(); $('#acento-aviso').hidden = contraste(a.acento, a.content) >= 3; };
   document.querySelectorAll('input[name="acento"]').forEach(r => r.onchange = () => { document.querySelector('[data-cor="acento"]').value = r.value; gravarAparencia(corAtual()); avisar(); });
   avisar();
@@ -1903,7 +2116,19 @@ async function showSettings() {
     document.querySelectorAll('input[name="acento"]').forEach(r => r.checked = r.value === APARENCIA_PADRAO.acento);
     avisar();
   };
-  $('#cancel').onclick = () => closeModal(true);
+
+  // Sistema
+  $('#cfg-abrir-pasta')?.addEventListener('click', () => window.cadernoDesktop.openVault());
+  $('#cfg-trocar-cofre')?.addEventListener('click', escolherOutroCofre);
+  $('#cfg-copiar-caminho').onclick = async () => { const b = $('#cfg-copiar-caminho'); if (await copiarTexto(state.vaultPath || '')) { b.lastChild.textContent = ' Copiado'; setTimeout(() => { if (b.isConnected) b.lastChild.textContent = ' Copiar caminho'; }, 1500); } };
+  $('#cfg-recarregar').onclick = () => reload(true);
+  $('#cfg-exportar').onclick = exportarDados;
+  $('#cfg-importar').onchange = e => { const arquivo = e.target.files[0]; e.target.value = ''; importarDados(arquivo); };
+  $('#cfg-lixeira').onclick = () => { closeModal(true); showTrash(); };
+
+  // Integrações: Salvar só depois de mexer nas permissões.
+  if (!conf) return;
+  document.querySelectorAll('[data-perm]').forEach(c => c.addEventListener('change', () => { $('#ai-save').disabled = false; }));
   $('#ai-save').onclick = async () => {
     const marcado = id => document.querySelector(`[data-perm="${id}"]`).checked;
     try {
@@ -1913,15 +2138,18 @@ async function showSettings() {
         permissions: Object.fromEntries(CAIXAS.map(([id]) => [id, marcado(id)])),
         requireConfirmationForDestructive: marcado('confirm'),
       });
-      closeModal(true); status('Configurações salvas');
+      modalDirty = false; $('#ai-save').disabled = true; $('#ai-save').textContent = 'Permissões salvas';
     } catch (error) { status('Não foi possível salvar: ' + error.message, true); }
   };
 }
 // Árvore: botão direito abre o menu da nota ou da pasta; arrastar uma nota para uma pasta a move.
 document.addEventListener('contextmenu',e=>{
+  if(!loaded||busy||failed)return;
   const linha=e.target.closest('.tree-row');
-  if(!linha||!loaded||busy||failed)return;
-  abrirMenuContexto(e,document.body,menuDaArvore(linha));
+  if(linha)return abrirMenuContexto(e,document.body,menuDaArvore(linha));
+  const habito=e.target.closest('[data-habito]');
+  if(habito)return abrirMenuContexto(e,document.body,menuDoHabito(habito.dataset.habito));
+  if(e.target.closest('.card.habitos, .habitos-lista'))abrirMenuContexto(e,document.body,menuDosHabitos());
 });
 // Soltar sobre uma nota vale como soltar na pasta dela; fora das pastas, é a raiz.
 const alvoDaSoltura=e=>{const no=e.target.closest?.('.tree-node');return no?no.querySelector(':scope > .tree-folder'):e.target.closest?.('.tree');};
@@ -1948,29 +2176,33 @@ document.querySelectorAll('.nav-item').forEach(b=>b.onclick=()=>{if(loaded)irPar
 $('#new-note').onclick=()=>{if(loaded&&!busy&&!failed)abrirNota(notaVazia());};
 $('#daily-note').onclick=()=>extraAction('daily');
 $('#go-note').onclick=irParaNota;
-$('#reload-vault').onclick=()=>reload(true);
-$('#trash').onclick=showTrash;
-$('#settings').onclick=showSettings;
-$('#open-vault').onclick=()=>window.cadernoDesktop?window.cadernoDesktop.openVault():alert(`Seu cofre está em:\n${state.vaultPath||'vault/'}\n\nAbra essa pasta pelo Explorador de Arquivos.`);
-$('#choose-vault').hidden=!window.cadernoDesktop;
-$('#choose-vault').onclick=async()=>{
-  if(busy||!closeModal())return;if(failed){status('Exporte suas alterações e recarregue antes de trocar de cofre.',true);return;}
+$('#settings').onclick=()=>showSettings();
+// ---- Ações de sistema: ficam na aba Sistema das Configurações ----
+async function escolherOutroCofre(){
+  if(busy||!window.cadernoDesktop)return;closeModal(true);
+  if(failed){status('Exporte suas alterações e recarregue antes de trocar de cofre.',true);return;}
   setBusy(true);
-  try{const saved=await window.cadernoDesktop.chooseVault();if(saved){Kuroi.validateState(saved);state=saved;loaded=true;failed=false;$('#vault-path').textContent=state.vaultPath;render();status('Cofre aberto');}}
+  try{const saved=await window.cadernoDesktop.chooseVault();if(saved){Kuroi.validateState(saved);state=saved;loaded=true;failed=false;expanded=null;editing=null;render();}}
   catch(error){status(error.message,true);}finally{setBusy(false);}
-};
-$('#export-data').onclick=()=>{
+}
+function exportarDados(){
   const a=document.createElement('a');const url=URL.createObjectURL(new Blob([JSON.stringify(state,null,2)],{type:'application/json'}));a.href=url;a.download=`kuroi-${today()}.json`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
-};
-$('#import-data').onchange=async e=>{
-  const file=e.target.files[0];e.target.value='';if(!file||busy||failed||!loaded)return;
-  try{
-    const data=Kuroi.validateState(JSON.parse(await file.text()));
-    if(!confirm(`Importar ${data.notes.length} notas e substituir os dados atuais? As notas removidas irão para a lixeira. Uma cópia do cofre atual será preservada.`))return;
-    data.notes=data.notes.map(n=>{const copy={...n};delete copy.file;return copy;});state={...data,revision:state.revision,vaultPath:state.vaultPath};
-    if(await save())status('Backup importado e salvo');
-  }catch(error){status('Importação cancelada: '+error.message,true);}
-};
+}
+// Confirmação dentro do app, como na exclusão de hábito: o confirm() nativo pode não aparecer no Electron.
+async function importarDados(arquivo){
+  if(!arquivo||busy||failed||!loaded)return;
+  let data;
+  try{data=Kuroi.validateState(JSON.parse(await arquivo.text()));}
+  catch(error){status('Importação cancelada: '+error.message,true);return;}
+  const partes=[`${data.notes.length} nota${data.notes.length===1?'':'s'}`,`${(data.folders||[]).length} pasta${(data.folders||[]).length===1?'':'s'}`,`${(data.habits||data.routine||[]).length} hábito${(data.habits||data.routine||[]).length===1?'':'s'}`];
+  modal('Importar backup',`<p class="confirmar-texto">Importar <strong>${partes.join(', ')}</strong> de <strong>${escapeHtml(arquivo.name)}</strong> e substituir os dados atuais? As notas que saírem vão para a lixeira e uma cópia do cofre atual é preservada.</p><div class="form-actions"><button type="button" class="secondary" id="cancel">Cancelar</button><button type="button" class="primary" id="confirmar-importacao">Importar e substituir</button></div>`);
+  $('#cancel').onclick=()=>closeModal(true);
+  $('#confirmar-importacao').onclick=async()=>{
+    data.notes=data.notes.map(n=>{const copy={...n};delete copy.file;return copy;});
+    state={...data,revision:state.revision,vaultPath:state.vaultPath};
+    if(await save())closeModal(true);
+  };
+}
 // Ctrl+O: achar uma nota pelo título sem tirar a mão do teclado.
 function irParaNota(){
   if(!loaded||failed||busy||$('#modal-root').firstChild)return;
@@ -1996,6 +2228,7 @@ function irParaNota(){
 document.addEventListener('keydown',e=>{
   if(e.key==='Escape') closeModal();
   if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='o'){e.preventDefault();irParaNota();}
+  if(e.ctrlKey&&e.code==='Space'){e.preventDefault();capturaRapida();}
   if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='n'){e.preventDefault();if(loaded&&!failed&&!busy&&!$('#modal-root').firstChild)abrirNota(notaVazia());}
   if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='s'&&editing){e.preventDefault();salvarNota();}
 });

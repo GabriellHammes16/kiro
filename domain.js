@@ -9,7 +9,7 @@
   function validateState(value) {
     const fail = () => { throw new Error('Dados inválidos. O cofre não foi alterado.'); };
     if (!value || typeof value !== 'object') fail();
-    for (const key of ['notes', 'tasks', 'routine', value.folders ? 'folders' : 'studies']) {
+    for (const key of ['notes', 'tasks', value.folders ? 'folders' : 'studies', ...(value.routine !== undefined ? ['routine'] : []), ...(value.habits !== undefined ? ['habits'] : [])]) {
       if (!Array.isArray(value[key])) fail();
       const ids = new Set();
       for (const item of value[key]) {
@@ -25,7 +25,14 @@
       if (n.folderId && !id(n.folderId)) fail();
     }
     for (const t of value.tasks) if (!date(t.due) || !['Baixa', 'Média', 'Alta'].includes(t.priority) || typeof t.done !== 'boolean' || (t.noteId && !id(t.noteId))) fail();
-    for (const r of value.routine) if (!date(r.date) || typeof r.done !== 'boolean') fail();
+    for (const r of value.routine || []) if (!date(r.date) || typeof r.done !== 'boolean') fail();
+    for (const h of value.habits || []) {
+      if (!validFrequency(h.frequency) || (h.createdAt !== undefined && (!Number.isFinite(h.createdAt) || Math.abs(h.createdAt) > 8.64e15))) fail();
+    }
+    if (value.habitLog !== undefined) {
+      if (!value.habitLog || typeof value.habitLog !== 'object' || Array.isArray(value.habitLog)) fail();
+      for (const [chave, dias] of Object.entries(value.habitLog)) if (!id(chave) || !Array.isArray(dias) || !dias.every(date)) fail();
+    }
     for (const s of value.studies || []) if (s.description !== undefined && !text(s.description)) fail();
     if (value.folders) {
       folderPaths(value.folders);
@@ -58,6 +65,91 @@
     for (const f of folders) visit(f);
     return paths;
   }
+  // ---- Hábitos: frequência, histórico por dia (AAAA-MM-DD local) e estatísticas ----
+  // Frequência: todo dia, em dias da semana (0 = domingo) ou X vezes por semana (semana de segunda a domingo).
+  function validFrequency(f) {
+    if (!f || typeof f !== 'object') return false;
+    if (f.type === 'daily') return true;
+    if (f.type === 'days') return Array.isArray(f.days) && f.days.length > 0 && f.days.length <= 7 && new Set(f.days).size === f.days.length && f.days.every(d => Number.isInteger(d) && d >= 0 && d <= 6);
+    if (f.type === 'weekly') return Number.isInteger(f.times) && f.times >= 1 && f.times <= 7;
+    return false;
+  }
+  const partes = dia => dia.split('-').map(Number);
+  const addDays = (dia, n) => { const [y, m, d] = partes(dia); return localDate(new Date(y, m - 1, d + n)); };
+  const weekday = dia => { const [y, m, d] = partes(dia); return new Date(y, m - 1, d).getDay(); };
+  // Os n dias que terminam em "hoje", cada um dizendo se era dia do hábito e se foi feito.
+  function habitDays(habit, dias = [], hoje = localDate(), n = 7) {
+    const feitos = new Set(dias), inicio = habit.createdAt ? localDate(new Date(habit.createdAt)) : '';
+    const f = habit.frequency;
+    return Array.from({ length: n }, (_, i) => {
+      const dia = addDays(hoje, i - n + 1);
+      return { date: dia, done: feitos.has(dia), due: (!inicio || dia >= inicio) && (f.type !== 'days' || f.days.includes(weekday(dia))) };
+    });
+  }
+  function habitStats(habit, dias = [], hoje = localDate()) {
+    const feitos = new Set(dias), f = habit.frequency, inicio = habit.createdAt ? localDate(new Date(habit.createdAt)) : '';
+    const existe = dia => !inicio || dia >= inicio;
+    const devido = dia => existe(dia) && (f.type !== 'days' || f.days.includes(weekday(dia)));
+    const segunda = dia => addDays(dia, -((weekday(dia) + 6) % 7));
+    const naSemana = seg => Array.from({ length: 7 }, (_, i) => addDays(seg, i)).filter(d => feitos.has(d)).length;
+    let streak = 0;
+    if (f.type === 'weekly') {
+      // A semana atual só entra quando a meta já foi batida; ainda em aberto, não quebra a sequência.
+      let seg = segunda(hoje);
+      if (naSemana(seg) < f.times) seg = addDays(seg, -7);
+      for (let i = 0; i < 520 && (!inicio || addDays(seg, 6) >= inicio) && naSemana(seg) >= f.times; i++, seg = addDays(seg, -7)) streak++;
+    } else {
+      // Hoje ainda por fazer não quebra: a contagem começa em ontem.
+      let dia = devido(hoje) && !feitos.has(hoje) ? addDays(hoje, -1) : hoje;
+      for (let i = 0; i < 3650 && existe(dia); i++, dia = addDays(dia, -1)) {
+        if (!devido(dia)) continue;
+        if (!feitos.has(dia)) break;
+        streak++;
+      }
+    }
+    // Cumprimento nos últimos 30 dias; hoje só entra depois de feito.
+    let esperados = 0, cumpridos = 0;
+    if (f.type === 'weekly') {
+      const existentes = Array.from({ length: 28 }, (_, i) => addDays(hoje, -i)).filter(existe);
+      cumpridos = existentes.filter(d => feitos.has(d)).length;
+      esperados = Math.max(1, Math.round(existentes.length / 7 * f.times));
+    } else {
+      for (let i = 0; i < 30; i++) {
+        const dia = addDays(hoje, -i);
+        if (!devido(dia) || (dia === hoje && !feitos.has(dia))) continue;
+        esperados++; if (feitos.has(dia)) cumpridos++;
+      }
+    }
+    return {
+      dueToday: f.type === 'weekly' ? existe(hoje) : devido(hoje),
+      doneToday: feitos.has(hoje),
+      streak,
+      rate30: esperados ? Math.min(100, Math.round(cumpridos / esperados * 100)) : null,
+      totalDone: [...feitos].filter(d => d <= hoje).length,
+      week: habitDays(habit, dias, hoje, 7),
+      ...(f.type === 'weekly' ? { weekCount: naSemana(segunda(hoje)) } : {}),
+    };
+  }
+  // Cofres e backups antigos têm "routine" (só "feito hoje"): vira hábito diário com o dia marcado.
+  // Também limpa o histórico: dias repetidos, datas inválidas e hábitos que não existem mais.
+  function withHabits(value) {
+    if (!value || typeof value !== 'object') return value;
+    const { routine, ...resto } = value;
+    const habits = Array.isArray(resto.habits) ? resto.habits : (Array.isArray(routine) ? routine : [])
+      .filter(r => r && id(r.id) && text(r.title))
+      .map(r => ({ id: r.id, title: r.title, frequency: { type: 'daily' }, ...(date(r.date) ? { createdAt: new Date(...partes(r.date).map((v, i) => i === 1 ? v - 1 : v)).getTime() } : {}) }));
+    const origem = Array.isArray(resto.habits)
+      ? (resto.habitLog && typeof resto.habitLog === 'object' && !Array.isArray(resto.habitLog) ? resto.habitLog : {})
+      : Object.fromEntries((Array.isArray(routine) ? routine : []).filter(r => r && r.done && date(r.date)).map(r => [r.id, [r.date]]));
+    const ids = new Set(habits.map(h => h && h.id));
+    const habitLog = {};
+    for (const [chave, dias] of Object.entries(origem)) {
+      if (!ids.has(chave) || !Array.isArray(dias)) continue;
+      const limpos = [...new Set(dias.filter(date))].sort();
+      if (limpos.length) habitLog[chave] = limpos;
+    }
+    return { ...resto, habits, habitLog };
+  }
   function descendants(folders, id) {
     const found = new Set([id]);
     let changed = true;
@@ -80,7 +172,7 @@
       data.notes = data.notes.map(n => ({ ...n, folderId: data.folders.some(f => f.id === n.folderId) ? n.folderId : '' }));
     }
     delete data.studies; data.formatVersion = 3;
-    return validateState(data);
+    return validateState(withHabits(data));
   }
   const normalize = value => String(value).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
   const isImagePath = value => /\.(png|jpe?g|gif|webp|avif|bmp)$/i.test(value.trim());
@@ -115,7 +207,7 @@
   // Cores de pasta são nomes de uma paleta fixa: nada de CSS livre vindo do arquivo do cofre.
   const FOLDER_COLORS = ['azul', 'verde', 'amarelo', 'laranja', 'vermelho', 'rosa', 'roxo', 'cinza'];
   const folderColor = value => FOLDER_COLORS.includes(value) ? value : '';
-  const api = { FOLDER_COLORS, folderColor, localDate, safeUrl, validateState, normalize, isImagePath, wikiLinks, tags, findLinkedNote, mentions, inInbox, withoutInbox, toReview, linkQuery, linkSuggestions, validFolderName, folderPaths, descendants, upgradeBackup, pathKey };
+  const api = { FOLDER_COLORS, folderColor, habitStats, habitDays, withHabits, validFrequency, localDate, safeUrl, validateState, normalize, isImagePath, wikiLinks, tags, findLinkedNote, mentions, inInbox, withoutInbox, toReview, linkQuery, linkSuggestions, validFolderName, folderPaths, descendants, upgradeBackup, pathKey };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Kuroi = api;
 })(globalThis);
