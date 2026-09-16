@@ -235,3 +235,13 @@ test('createdAt sobrevive à reabertura; nota antiga sem o campo recebe uma data
   assert.ok(Number.isFinite(antiga.createdAt)&&antiga.createdAt>0);
   assert.doesNotMatch(await fs.readFile(path.join(vault.directory,'antiga.md'),'utf8'),/createdAt/);
 });
+test('datas lidas do sistema de arquivos viram inteiros', async t => {
+  const vault=await setup(t);await seed(vault,[]);
+  const file=path.join(vault.directory,'Solta.md');
+  await fs.writeFile(file,'Nota sem frontmatter');
+  // Força milissegundos fracionários, como o Windows costuma devolver
+  await fs.utimes(file,1789526443.1234567,1789526443.1234567);
+  const solta=(await vault.load()).notes.find(n=>n.title==='Solta');
+  assert.ok(Number.isInteger(solta.createdAt),`createdAt: ${solta.createdAt}`);
+  assert.ok(Number.isInteger(solta.updatedAt),`updatedAt: ${solta.updatedAt}`);
+});

@@ -133,7 +133,7 @@ class Vault {
         const file=relative?`${relative}/${entry.name}`:entry.name;
         const target=await this.safePath(file);
         if(entry.isDirectory()){directories.push(file);await walk(file);}
-        else if(entry.isFile()){const info=await fs.stat(target);files.set(file,{data:await fs.readFile(target),mtime:info.mtimeMs,birthtime:info.birthtimeMs});}
+        else if(entry.isFile()){const info=await fs.stat(target);files.set(file,{data:await fs.readFile(target),mtime:Math.round(info.mtimeMs),birthtime:Math.round(info.birthtimeMs)});}
       }
     };
     await walk();return {files,directories};
