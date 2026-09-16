@@ -68,6 +68,8 @@ const temMarcaDeAnexos = async directory => {
   return false;
 };
 const ATTACHMENT_LIMIT = 20 * 1024 * 1024;
+const PLUGIN_FILE_LIMIT = 2 * 1024 * 1024;
+const PLUGIN_DATA_LIMIT = 1024 * 1024;
 const IMAGE_TYPES = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp', avif: 'image/avif', bmp: 'image/bmp' };
 // Pelo conteúdo, não pelo nome nem pelo tipo declarado. SVG fica de fora: pode carregar script.
 function imageSignature(data) {
@@ -307,6 +309,59 @@ class Vault {
     const info=await fs.stat(file);
     if(!info.isFile()||info.size>ATTACHMENT_LIMIT)throw new Error('Imagem inválida.');
     return {data:await fs.readFile(file),type};
+  }
+  /** Plug-ins ficam em <cofre>/.kiro/plugins/<id>/. Só o que está nessa pasta é servido. */
+  async pluginPath(id,arquivo=''){
+    if(!/^[a-z0-9][a-z0-9-]{1,39}$/.test(id||''))throw new Error('Identificador de plug-in inválido.');
+    if(arquivo&&!/^[a-z0-9][a-z0-9._-]{0,60}$/i.test(arquivo))throw new Error('Caminho de plug-in inválido.');
+    // safePath ainda vale aqui: é ele que barra link simbólico apontando para fora do cofre.
+    return this.safePath(`.kiro/plugins/${id}${arquivo?`/${arquivo}`:''}`);
+  }
+  /** Lista as pastas de plug-in com o manifesto lido; quem estiver quebrado volta como erro. */
+  async listPlugins(){
+    const raiz=path.join(this.directory,'.kiro','plugins');
+    let entradas=[];
+    try{entradas=await fs.readdir(raiz,{withFileTypes:true});}catch(erro){if(erro.code==='ENOENT')return [];throw erro;}
+    const achados=[];
+    for(const entrada of entradas.sort((a,b)=>a.name.localeCompare(b.name))){
+      if(!entrada.isDirectory())continue;
+      try{
+        const bruto=await fs.readFile(await this.pluginPath(entrada.name,'manifest.json'),'utf8');
+        achados.push({id:entrada.name,manifesto:JSON.parse(bruto)});
+      }catch(erro){
+        achados.push({id:entrada.name,erro:erro instanceof SyntaxError?'manifest.json não é um JSON válido.':erro.message});
+      }
+    }
+    return achados;
+  }
+  /** Só código: o worker do Kiro importa .js e mais nada. */
+  async readPluginFile(id,arquivo){
+    const alvo=await this.pluginPath(id,arquivo);
+    if(!/\.js$/i.test(arquivo))throw new Error('Só arquivos .js de plug-in são servidos.');
+    const info=await fs.stat(alvo);
+    if(!info.isFile()||info.size>PLUGIN_FILE_LIMIT)throw new Error('Arquivo de plug-in inválido.');
+    return fs.readFile(alvo);
+  }
+  /** Escolhas do usuário (ativado, permissões concedidas) em .kiro/plugins.json. */
+  async readPluginChoices(){
+    const bruto=await optionalRead(path.join(this.directory,'.kiro','plugins.json'));
+    try{const dado=JSON.parse(bruto||'{}');return dado&&typeof dado==='object'&&!Array.isArray(dado)?dado:{};}
+    catch{return {};}
+  }
+  async writePluginChoices(escolhas){
+    await atomicWrite(path.join(this.directory,'.kiro','plugins.json'),`${JSON.stringify(escolhas,null,2)}\n`);
+    return escolhas;
+  }
+  /** Espaço do próprio plug-in (kiro.storage), com teto de 1 MB. */
+  async readPluginData(id){
+    const bruto=await optionalRead(await this.pluginPath(id,'data.json'));
+    try{return JSON.parse(bruto||'{}');}catch{return {};}
+  }
+  async writePluginData(id,dados){
+    const texto=`${JSON.stringify(dados,null,2)}\n`;
+    if(Buffer.byteLength(texto)>PLUGIN_DATA_LIMIT)throw new Error('O plug-in passou de 1 MB de dados guardados.');
+    await atomicWrite(await this.pluginPath(id,'data.json'),texto);
+    return dados;
   }
   /**
    * Chamado só depois que a gravação foi aplicada e o journal removido.
