@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Grafo de revisão do KIRO: arquivos, funções, chamadas, referências e as fronteiras
+// Grafo de revisão do Kiro: arquivos, funções, chamadas, referências e as fronteiras
 // entre camadas (IPC do Electron, rotas HTTP, ferramentas MCP). Serve para revisar uma
 // mudança: quem depende desta função, o que ela alcança, se algum teste passa por ela.
 //

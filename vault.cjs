@@ -62,7 +62,7 @@ const HISTORY_LIMIT = 30;
 // cada salvamento, o que multiplicaria o espaço em disco pelo limite do histórico.
 const ATTACHMENT_MARKER = '.kiro-anexos';
 const ATTACHMENT_MARKERS = [ATTACHMENT_MARKER, '.kuroi-anexos'];
-const ATTACHMENT_FOLDERS = ['Anexos', 'Anexos do KIRO', 'Anexos do KUROI'];
+const ATTACHMENT_FOLDERS = ['Anexos', 'Anexos do Kiro', 'Anexos do KUROI'];
 const temMarcaDeAnexos = async directory => {
   for (const marca of ATTACHMENT_MARKERS) if (await pathExists(path.join(directory, marca))) return true;
   return false;
@@ -271,7 +271,7 @@ class Vault {
     try{await this.tidy(transaction);}catch{/* a faxina não pode falhar um salvamento já aplicado */}
     return (await this.read()).state;
   }
-  /** Pasta onde vão as imagens coladas: a primeira que está livre ou já é do KIRO. */
+  /** Pasta onde vão as imagens coladas: a primeira que está livre ou já é do Kiro. */
   async attachmentFolder(){
     for(const name of ATTACHMENT_FOLDERS){
       const directory=await this.safePath(name);
@@ -289,7 +289,7 @@ class Vault {
       const folder=await this.attachmentFolder();
       // A marca vem antes da imagem: a pasta nunca aparece na varredura sem ela.
       const marker=await this.safePath(`${folder}/${ATTACHMENT_MARKER}`);
-      if(!await pathExists(marker))await atomicWrite(marker,'Imagens coladas nas notas do KIRO. Esta marca tira a pasta da árvore de notas.\n');
+      if(!await pathExists(marker))await atomicWrite(marker,'Imagens coladas nas notas do Kiro. Esta marca tira a pasta da árvore de notas.\n');
       const stem=typeof name==='string'?path.basename(name.replace(/\\/g,'/')).replace(/\.[^.]*$/,''):'';
       const now=new Date(), two=n=>String(n).padStart(2,'0');
       // "image.png" é o nome genérico que o navegador dá a um print colado.

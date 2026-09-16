@@ -90,4 +90,4 @@ createServer(async (request, response) => {
     response.writeHead(200, { 'Content-Type': `${file[1]}; charset=utf-8`, 'Cache-Control': 'no-cache' });
     response.end(body);
   } catch (error) { send(response, 400, { error: error.message }); }
-}).listen(port, '127.0.0.1', () => console.log(dev ? `KIRO em desenvolvimento: http://localhost:${port} · cofre ${vaultDirectory}` : `KIRO em http://localhost:${port}`));
+}).listen(port, '127.0.0.1', () => console.log(dev ? `Kiro em desenvolvimento: http://localhost:${port} · cofre ${vaultDirectory}` : `Kiro em http://localhost:${port}`));

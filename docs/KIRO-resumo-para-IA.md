@@ -1,4 +1,4 @@
-# KIRO: resumo do projeto para outra IA
+# Kiro: resumo do projeto para outra IA
 
 > Cole este arquivo inteiro numa conversa com outra IA para ela entender o projeto antes de ajudar.
 > Estado em **15/09/2026**, versão **0.11.2** instalada, com mudanças da 0.12.0 ainda não commitadas (veja "Situação atual").
@@ -7,7 +7,7 @@
 
 ## 1. O que é
 
-**KIRO** é um aplicativo de **"segundo cérebro"**, parecido com o Obsidian: um lugar para **capturar ideias, organizar notas, ligar uma nota a outra, acompanhar tarefas e hábitos**.
+**Kiro** é um aplicativo de **"segundo cérebro"**, parecido com o Obsidian: um lugar para **capturar ideias, organizar notas, ligar uma nota a outra, acompanhar tarefas e hábitos**.
 
 - **Local e offline.** Os dados ficam numa pasta do computador, o "cofre". Não há conta, servidor na nuvem nem assinatura.
 - **Notas em Markdown.** Cada nota é um arquivo `.md` de verdade, legível em qualquer editor.
@@ -24,7 +24,7 @@
 |---|---|
 | Interface | **HTML + CSS + JavaScript puro**: sem framework, sem TypeScript, sem etapa de build |
 | Desktop | **Electron 44** (`contextIsolation`, `sandbox`, protocolo próprio `kiro-anexo://` para imagens) |
-| Instalador | **electron-builder** (NSIS para Windows): `dist/KIRO-Setup-<versão>.exe` |
+| Instalador | **electron-builder** (NSIS para Windows): `dist/Kiro-Setup-<versão>.exe` |
 | Servidor da versão web | **Node.js** (`http` nativo), só em `127.0.0.1` |
 | Dados | Arquivos **Markdown com frontmatter YAML** (`js-yaml`) + um `caderno.json` com os dados auxiliares |
 | Integração com IA | **Agent API** própria + **servidor MCP** (`@modelcontextprotocol/sdk`, transporte stdio) |
@@ -88,7 +88,7 @@ updatedAt: 1789189555996
 
 ---
 
-## 4. O que o KIRO faz hoje
+## 4. O que o Kiro faz hoje
 
 ### Tela Hoje (a inicial)
 - **Frase do dia** no lugar de "Bom dia": 20 frases bem-humoradas que mudam à meia-noite e nunca repetem a do dia anterior ("Ara ara… não seja vagabundo, vamos trabalhar porque você é pobre."). A saudação muda com a hora.
@@ -153,7 +153,7 @@ updatedAt: 1789189555996
   - nunca há operações genéricas como "ler qualquer arquivo" ou "rodar comando";
   - tudo fica restrito ao cofre, com permissões e auditoria;
   - o servidor MCP é só stdio e não abre porta de rede.
-- **Uso atual:** o **Claude Desktop** está configurado para usar o MCP do KIRO instalado.
+- **Uso atual:** o **Claude Desktop** está configurado para usar o MCP do Kiro instalado.
 
 ---
 
@@ -164,7 +164,7 @@ npm run dev          # versão web de desenvolvimento em http://localhost:4180 (
 npm run dev:reset    # recria o cofre de exemplo
 npm test             # 63 testes (node --test), sempre em pastas temporárias
 npm run desktop:dev  # app Electron com o cofre de exemplo
-npm run build:win    # gera dist/KIRO-Setup-<versão>.exe
+npm run build:win    # gera dist/Kiro-Setup-<versão>.exe
 npm run mcp          # servidor MCP (stdio)
 ```
 
@@ -180,7 +180,7 @@ Fluxo usado no projeto:
 
 ## 6. Regras e preferências do dono (respeite ao sugerir mudanças)
 
-1. **Nunca tocar nos cofres reais** em testes: `C:\Projetos\Meu segundo cerebro\vault` e `C:\Users\bielg\Documents\KIRO\vault`. Testes usam pastas temporárias, e o desenvolvimento usa `dev-vault/`.
+1. **Nunca tocar nos cofres reais** em testes: `C:\Projetos\Meu segundo cerebro\vault` e `C:\Users\bielg\Documents\Kiro\vault`. Testes usam pastas temporárias, e o desenvolvimento usa `dev-vault/`.
 2. **Não transformar em SaaS** e não tornar serviços externos obrigatórios.
 3. **Nada do cofre é enviado automaticamente** para fora. Nenhuma chave de API embutida no código.
 4. **Sem operações genéricas** na API de agentes (`read_any_file`, `run_shell` etc.).

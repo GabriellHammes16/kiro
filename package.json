@@ -16,7 +16,7 @@
   },
   "build": {
     "appId": "com.kiro.local",
-    "productName": "KIRO",
+    "productName": "Kiro",
     "directories": {
       "output": "dist"
     },
@@ -40,7 +40,7 @@
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
-      "artifactName": "KIRO-Setup-${version}.${ext}"
+      "artifactName": "Kiro-Setup-${version}.${ext}"
     },
     "asarUnpack": [
       "mcp/**",

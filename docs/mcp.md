@@ -23,7 +23,7 @@ KIRO_VAULT="C:/MeuCofre" node mcp/server.mjs
 ```
 
 Sem argumento, o cofre é resolvido nesta ordem: `--vault`, `KIRO_VAULT`, cofre
-escolhido no aplicativo desktop, `Documentos/KIRO/vault`, cofre do projeto.
+escolhido no aplicativo desktop, `Documentos/Kiro/vault`, cofre do projeto.
 
 O servidor escreve `Kiro MCP ativo. Cofre: <caminho>` em **stderr** e fica
 aguardando. Rodar direto no terminal é normal: um cliente MCP é quem conversa
@@ -36,7 +36,7 @@ consegue executar nada de dentro de um asar. Por isso a camada de agentes é
 desempacotada na instalação, e o caminho a usar é o de `app.asar.unpacked`:
 
 ```
-%LOCALAPPDATA%\Programs\KIRO\resources\app.asar.unpacked\mcp\server.mjs
+%LOCALAPPDATA%\Programs\Kiro\resources\app.asar.unpacked\mcp\server.mjs
 ```
 
 ```json
@@ -44,7 +44,7 @@ desempacotada na instalação, e o caminho a usar é o de `app.asar.unpacked`:
   "mcpServers": {
     "kiro": {
       "command": "node",
-      "args": ["C:/Users/voce/AppData/Local/Programs/KIRO/resources/app.asar.unpacked/mcp/server.mjs"]
+      "args": ["C:/Users/voce/AppData/Local/Programs/Kiro/resources/app.asar.unpacked/mcp/server.mjs"]
     }
   }
 }
@@ -76,7 +76,7 @@ Formato usado pela maioria dos clientes MCP:
     "kiro": {
       "command": "node",
       "args": ["C:/Projetos/Meu segundo cerebro/mcp/server.mjs"],
-      "env": { "KIRO_VAULT": "C:/Users/voce/Documents/KIRO/vault" }
+      "env": { "KIRO_VAULT": "C:/Users/voce/Documents/Kiro/vault" }
     }
   }
 }

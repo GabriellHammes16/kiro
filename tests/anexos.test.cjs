@@ -53,7 +53,7 @@ test('pasta "Anexos" que já é do usuário continua sendo pasta de notas; image
   const vault = await cofre(t);
   await vault.save({ ...(await vault.load()), folders: [{ id: 'pasta-anexos', title: 'Anexos', parentId: '' }], notes: [nota({ folderId: 'pasta-anexos' })] });
   const { path: caminho } = await vault.saveAttachment({ data: PNG });
-  assert.match(caminho, /^Anexos do KIRO\//);
+  assert.match(caminho, /^Anexos do Kiro\//);
   const depois = await vault.load();
   assert.deepEqual(depois.folders.map(f => f.title), ['Anexos']);
   assert.equal(depois.notes[0].folderId, depois.folders[0].id);

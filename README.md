@@ -1,4 +1,4 @@
-# KIRO — segundo cérebro local
+# Kiro — segundo cérebro local
 
 Notas em Markdown, conexões entre ideias, estudos, tarefas e rotina. Funciona offline e mantém os dados em uma pasta escolhida por você.
 
@@ -25,7 +25,7 @@ A recarga ao vivo só existe com `--dev`: o `npm start` não a oferece, e `dev/`
 
 O que só existe no desktop: **Escolher outro cofre** e abrir a pasta do cofre no Explorador de Arquivos.
 
-No desktop, o cofre padrão fica em `Documentos/KIRO/vault`. **Escolher outro cofre** abre uma pasta existente ou vazia e lembra a escolha. Essa ação troca o cofre aberto; não transfere os arquivos do anterior. Para transferir, copie a pasta inteira com o aplicativo fechado.
+No desktop, o cofre padrão fica em `Documentos/Kiro/vault`. **Escolher outro cofre** abre uma pasta existente ou vazia e lembra a escolha. Essa ação troca o cofre aberto; não transfere os arquivos do anterior. Para transferir, copie a pasta inteira com o aplicativo fechado.
 
 No navegador, o padrão é `vault/` neste projeto. Para abrir outra pasta no PowerShell:
 
@@ -58,11 +58,11 @@ Todos os arquivos `.md` da pasta e de suas subpastas são carregados. Pastas ocu
 
 `caderno.json` guarda somente tarefas, rotina e pastas de estudo. Não guarda cópias do corpo das notas. Metadados YAML personalizados são preservados ao editar uma nota; sua formatação pode ser normalizada.
 
-Arquivos criados, editados ou removidos em outro editor aparecem ao voltar para o aplicativo ou na verificação a cada cinco segundos. Essa atualização fica suspensa enquanto um formulário está aberto, há um salvamento em andamento ou uma falha pendente. Arquivos externos sem identificador recebem um ID baseado no caminho até serem editados pelo KIRO.
+Arquivos criados, editados ou removidos em outro editor aparecem ao voltar para o aplicativo ou na verificação a cada cinco segundos. Essa atualização fica suspensa enquanto um formulário está aberto, há um salvamento em andamento ou uma falha pendente. Arquivos externos sem identificador recebem um ID baseado no caminho até serem editados pelo Kiro.
 
 Se o cofre mudar enquanto você edita, o salvamento é recusado, preservando a versão externa. Sua versão permanece na janela: **Exporte os dados** antes de **Recarregar cofre**. Texto ainda não submetido no formulário deve ser copiado separadamente.
 
-Pastas de estudo são a organização do KIRO. Arquivos externos são encontrados em qualquer subpasta, mas sua hierarquia não cria automaticamente pastas de estudo na interface.
+Pastas de estudo são a organização do Kiro. Arquivos externos são encontrados em qualquer subpasta, mas sua hierarquia não cria automaticamente pastas de estudo na interface.
 
 ## Migração, lixeira e recuperação
 
@@ -84,7 +84,7 @@ Cole um print com **Ctrl+V** ou arraste uma imagem para dentro da nota. A imagem
 
 Aceita PNG, JPEG, GIF e WebP de até 20 MB. SVG não é aceito, porque pode carregar código.
 
-`Anexos/` tem um arquivo `.kiro-anexos` que a identifica. Com ele, a pasta não aparece na árvore, colar uma imagem não entra em conflito com a nota aberta e as imagens não são copiadas para `.history` a cada salvamento. Em troca, o histórico e a lixeira não guardam imagens: apagar o `![[...]]` da nota não apaga o arquivo, e uma imagem apagada da pasta não volta. Se o cofre já tiver uma pasta `Anexos` sua, as imagens vão para `Anexos do KIRO`.
+`Anexos/` tem um arquivo `.kiro-anexos` que a identifica. Com ele, a pasta não aparece na árvore, colar uma imagem não entra em conflito com a nota aberta e as imagens não são copiadas para `.history` a cada salvamento. Em troca, o histórico e a lixeira não guardam imagens: apagar o `![[...]]` da nota não apaga o arquivo, e uma imagem apagada da pasta não volta. Se o cofre já tiver uma pasta `Anexos` sua, as imagens vão para `Anexos do Kiro`.
 
 ## Equações
 

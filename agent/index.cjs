@@ -27,7 +27,7 @@ function arquivoDeConfiguracaoDesktop() {
     return path.join(process.env.XDG_CONFIG_HOME || path.join(casa, '.config'), nome, 'vault-settings.json');
   };
   // Quem instalou o aplicativo como KUROI tem a escolha de cofre guardada com o nome antigo.
-  const atual = pasta('KIRO');
+  const atual = pasta('Kiro');
   return fsSync.existsSync(atual) ? atual : (fsSync.existsSync(pasta('KUROI')) ? pasta('KUROI') : atual);
 }
 
@@ -44,8 +44,8 @@ function resolveVaultDirectory(explicito) {
     const salvo = JSON.parse(fsSync.readFileSync(arquivoDeConfiguracaoDesktop(), 'utf8'));
     if (salvo && typeof salvo.directory === 'string' && salvo.directory.trim()) return path.resolve(salvo.directory);
   } catch { /* sem configuração do desktop: segue para os padrões */ }
-  // Instalação nova usa Documents/KIRO; quem veio do KUROI continua no cofre de sempre.
-  for (const nome of ['KIRO', 'KUROI']) {
+  // Instalação nova usa Documents/Kiro; quem veio do KUROI continua no cofre de sempre.
+  for (const nome of ['Kiro', 'KUROI']) {
     const padraoDesktop = path.join(os.homedir(), 'Documents', nome, 'vault');
     if (fsSync.existsSync(padraoDesktop)) return padraoDesktop;
   }

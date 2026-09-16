@@ -73,7 +73,7 @@ test('temas.css define todas as variáveis para cada tema e o seletor de cada sk
   for (const [id] of SKINS) assert.match(css, new RegExp(`\\.skin-${id}(?![\\w-])`), `skin ${id}: seletor .skin-${id} ausente em temas.css`);
 });
 
-test('tema KIRO em temas.css bate com o :root de styles.css', () => {
+test('tema Kiro em temas.css bate com o :root de styles.css', () => {
   const classico = blocoDoTema(ler('temas.css'), 'kiro');
   assert.equal(classico.acento, '#9273FF');
   const root = Object.assign({}, ...[...ler('styles.css').matchAll(/:root\s*\{([^}]*)\}/g)].map(m => variaveis(m[1])));

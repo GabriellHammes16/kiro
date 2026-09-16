@@ -2,7 +2,7 @@
    Uma classe por tema no <html> (e no mini-card de Configurações). Só cores; o resto
    do visual continua em styles.css. Pares de texto/fundo passam 4.5:1 (WCAG AA). */
 
-/* Clássicos (o primeiro é a identidade do KIRO) */
+/* Clássicos (o primeiro é a identidade do Kiro) */
 .tema-kiro {
   --bg:#0B0F14; --panel:#1A1F26; --panel-raised:#232A33; --sidebar-bg:#11161D; --content-bg:#0B0F14; --campo:#12171E;
   --ink:#E5E7EB; --muted:#94A3B8; --line:#2A3340;

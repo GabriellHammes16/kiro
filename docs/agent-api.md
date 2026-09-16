@@ -67,7 +67,7 @@ await toolkit.call('create_note', { title: 'Ideias' }, { clientId: 'mico', clien
 ```
 
 O cofre é resolvido nesta ordem: argumento explícito, `KIRO_VAULT`, cofre
-escolhido no aplicativo desktop, `Documentos/KIRO/vault`, cofre do projeto.
+escolhido no aplicativo desktop, `Documentos/Kiro/vault`, cofre do projeto.
 
 ## Ferramentas
 

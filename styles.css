@@ -65,7 +65,7 @@ nav { margin-top:25px; display:grid; gap:4px; }
 .modal-backdrop { position:fixed; inset:0; display:grid; place-items:center; padding:20px; z-index:5; }.modal { max-width:660px; width:100%; max-height:88vh; overflow:auto; border-radius:14px; padding:22px; }.modal-head { display:flex; justify-content:space-between; align-items:center; margin-bottom:18px; }.modal-head h2 { margin:0; font-size:20px; }.modal .form { margin-top:0; }.links-list { margin-top:14px; }.link-row { display:flex; gap:8px; align-items:center; padding:8px 0; border-top:1px solid var(--line); }.link-row a { flex:1; color:var(--accent); font-size:13px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }.add-link { display:flex; gap:8px; margin-top:9px; }.add-link input { flex:1; border:1px solid var(--line); border-radius:8px; padding:8px; }
 @media (max-width:780px) { .app-shell { display:block; }.sidebar { position:sticky; top:0; width:100%; height:auto; z-index:3; padding:12px; flex-direction:row; align-items:center; gap:10px; }.brand { padding:0; }.sidebar nav { margin:0; display:flex; overflow:auto; }.nav-item { white-space:nowrap; }.new-note { width:auto; white-space:nowrap; }.content { margin:0; width:100%; padding:28px 18px; }.today-grid,.task-layout { grid-template-columns:1fr; }.page-head h1 { font-size:27px; } }
 
-/* KIRO — interface escura, com profundidade sutil e bastante espaço visual. */
+/* Kiro — interface escura, com profundidade sutil e bastante espaço visual. */
 .capture { margin-bottom:22px; }
 .capture label { font-weight:650; font-size:14px; }
 
