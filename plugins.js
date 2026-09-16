@@ -69,7 +69,28 @@
   const metodosPermitidos = permissoes => Object.keys(METODOS).filter(m => !METODOS[m] || lista(permissoes).includes(METODOS[m]));
   const podeChamar = (permissoes, metodo) => tem(METODOS, metodo) && (!METODOS[metodo] || lista(permissoes).includes(METODOS[metodo]));
 
-  const api = { PERMISSOES, METODOS, validarManifesto, compararVersoes, comparar, precisaConsentir, rotuloDaPermissao, metodosPermitidos, podeChamar };
+  /**
+   * Decide o que carregar: só plug-in ativado, com manifesto válido e permissões
+   * já concedidas. O resto volta como pendente (espera consentimento) ou problema.
+   */
+  function planoDeCarga(achados, escolhas, { versaoDoKiro } = {}) {
+    const plano = { carregar: [], pendentes: [], problemas: [] };
+    for (const achado of achados || []) {
+      if (achado.erro) { plano.problemas.push({ id: achado.id, erro: achado.erro }); continue; }
+      const { ok, manifesto, erro } = validarManifesto(achado.manifesto, { versaoDoKiro });
+      if (!ok) { plano.problemas.push({ id: achado.id, erro }); continue; }
+      // A rota serve pelo nome da pasta: id diferente enganaria quem lê as permissões.
+      if (manifesto.id !== achado.id) { plano.problemas.push({ id: achado.id, erro: 'O id do manifesto é diferente do nome da pasta.' }); continue; }
+      const registro = (escolhas || {})[achado.id];
+      if (!registro || !registro.enabled) { plano.pendentes.push({ id: achado.id, manifesto, motivo: 'desligado' }); continue; }
+      if (precisaConsentir(registro, manifesto)) { plano.pendentes.push({ id: achado.id, manifesto, motivo: 'permissoes-novas' }); continue; }
+      // Vale o que o usuário concedeu, não o que o manifesto pede.
+      plano.carregar.push({ id: achado.id, manifesto, permissoes: lista(registro.permissions) });
+    }
+    return plano;
+  }
+
+  const api = { PERMISSOES, METODOS, planoDeCarga, validarManifesto, compararVersoes, comparar, precisaConsentir, rotuloDaPermissao, metodosPermitidos, podeChamar };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.KiroPlugins = api;
 })(globalThis);

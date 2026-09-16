@@ -17,6 +17,14 @@ if (dev && !process.env.KIRO_VAULT && !process.env.KUROI_VAULT) await (await imp
 const agentConfig = new agentModule.AgentConfig(vaultDirectory);
 const publicFiles = { '/': ['index.html', 'text/html'], '/index.html': ['index.html', 'text/html'], '/app.js': ['app.js', 'text/javascript'], '/domain.js': ['domain.js', 'text/javascript'], '/plugins.js': ['plugins.js', 'text/javascript'], '/plugin-worker.js': ['plugin-worker.js', 'text/javascript'],'/styles.css': ['styles.css', 'text/css'], '/temas.css': ['temas.css', 'text/css'],'/kiro-logo.png': ['kiro-logo.png', 'image/png'], '/kiro-abertura.png': ['kiro-abertura.png', 'image/png'] };
 const allowedHosts = new Set([`localhost:${port}`, `127.0.0.1:${port}`]);
+const { version } = JSON.parse(await readFile(join(root, 'package.json'), 'utf8'));
+// Corpo JSON com teto de tamanho: o erro sobe para o catch e vira 400.
+const lerJson = async (request, limite) => {
+  if (request.headers['content-type']?.split(';')[0] !== 'application/json') throw new Error('Use JSON.');
+  let bruto = '';
+  for await (const parte of request) { bruto += parte; if (bruto.length > limite) throw new Error('Pedido grande demais.'); }
+  return JSON.parse(bruto || '{}');
+};
 const send = (res, status, data) => { res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' }); res.end(JSON.stringify(data)); };
 createServer(async (request, response) => {
   response.setHeader('X-Content-Type-Options', 'nosniff');
@@ -82,6 +90,19 @@ createServer(async (request, response) => {
         response.writeHead(200, { 'Content-Type': 'font/woff2', 'Cache-Control': 'max-age=86400' });
         return response.end(corpo);
       } catch { return send(response, 404, { error: 'Fonte não encontrada.' }); }
+    }
+    // Dados dos plug-ins: a lista da pasta, as escolhas do usuário e o espaço de
+    // cada plug-in. Quem decide o que carregar é a página; aqui só se lê e grava.
+    if (rota === '/api/version' && request.method === 'GET') return send(response, 200, { version });
+    if (rota === '/api/plugins' && request.method === 'GET') return send(response, 200, await vault.listPlugins());
+    if (rota === '/api/plugin-choices') {
+      if (request.method === 'GET') return send(response, 200, await vault.readPluginChoices());
+      if (request.method === 'POST') return send(response, 200, await vault.writePluginChoices(await lerJson(request, 64 * 1024)));
+    }
+    if (rota.startsWith('/api/plugin-data/')) {
+      const id = decodeURIComponent(rota.slice('/api/plugin-data/'.length));
+      if (request.method === 'GET') return send(response, 200, await vault.readPluginData(id));
+      if (request.method === 'POST') return send(response, 200, await vault.writePluginData(id, await lerJson(request, 1024 * 1024)));
     }
     // Código de plug-in: só .js de dentro de .kiro/plugins, com a rede do worker cortada.
     if (rota.startsWith('/plugins/')) {

@@ -185,3 +185,36 @@ test('o plug-in de exemplo é válido e pede o mínimo', () => {
     assert.equal(P.podeChamar(r.manifesto.permissions, metodo.slice('kiro.'.length)), true, metodo);
   }
 });
+
+test('decide quais plug-ins carregar a partir da pasta e das escolhas', () => {
+  const achados = [
+    { id: 'word-count', manifesto: base },
+    { id: 'quebrado', erro: 'manifest.json não é um JSON válido.' },
+    { id: 'pede-mais', manifesto: { ...base, id: 'pede-mais', permissions: ['notes:read', 'notes:write'] } },
+    { id: 'desligado', manifesto: { ...base, id: 'desligado' } },
+    { id: 'outro-nome', manifesto: { ...base, id: 'nome-diferente' } },
+  ];
+  const escolhas = {
+    'word-count': { enabled: true, permissions: ['notes:read'], network: [] },
+    'pede-mais': { enabled: true, permissions: ['notes:read'], network: [] },
+  };
+  const plano = P.planoDeCarga(achados, escolhas, { versaoDoKiro: '0.15.0' });
+  assert.deepEqual(plano.carregar.map(p => p.id), ['word-count']);
+  assert.deepEqual(plano.carregar[0].permissoes, ['notes:read']);
+  assert.equal(plano.pendentes.find(p => p.id === 'pede-mais').motivo, 'permissoes-novas');
+  assert.equal(plano.pendentes.find(p => p.id === 'desligado').motivo, 'desligado');
+  assert.equal(plano.problemas.find(p => p.id === 'quebrado').erro.length > 0, true);
+  // Pasta com nome diferente do id do manifesto não carrega: a rota usa a pasta.
+  assert.match(plano.problemas.find(p => p.id === 'outro-nome').erro, /id/i);
+});
+
+test('o hospedeiro do app.js confere a permissão concedida a cada chamada', () => {
+  const app = require('node:fs').readFileSync(path.join(__dirname, '..', 'app.js'), 'utf8');
+  // assert.ok e não assert.match: o app.js inteiro no relatório de falha não ajuda ninguém.
+  const tem = (expressao, motivo) => assert.ok(expressao.test(app), motivo);
+  // Worker de módulo: sem isso o import() do plug-in não funciona.
+  tem(/new Worker\('plugin-worker\.js', \{ type: 'module' \}\)/, 'o worker precisa ser criado como módulo');
+  // A checagem usa as permissões concedidas pelo usuário, não as do manifesto.
+  tem(/podeChamar\(estado\.permissoes, /, 'cada chamada reconfere a permissão concedida');
+  tem(/LIMITE_ATIVACAO = 3000, LIMITE_CHAMADA = 5000/, 'os limites de tempo do plano');
+});

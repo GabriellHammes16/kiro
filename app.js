@@ -1999,6 +1999,246 @@ async function showTrash(){
     });
   }catch(error){status(error.message,true);}
 }
+// ---- Plug-ins ----
+// O código de terceiro roda num worker; aqui só atendemos pedidos, sempre
+// conferindo de novo a permissão concedida: o worker é território do plug-in.
+const LIMITE_ATIVACAO = 3000, LIMITE_CHAMADA = 5000, LIMITE_MENSAGEM = 2 * 1024 * 1024;
+const pluginsAtivos = new Map();          // id → { manifesto, permissoes, worker, comandos, paineis }
+const problemasDosPlugins = new Map();    // id → motivo pelo qual parou de funcionar nesta sessão
+let planoDosPlugins = { carregar: [], pendentes: [], problemas: [] };
+let VERSAO = '0.0.0';                     // versão do Kiro, comparada com o minKiro do manifesto
+const pluginApi = {
+  versao: () => window.cadernoDesktop ? window.cadernoDesktop.version() : api('version').then(r => r.version),
+  lista: () => window.cadernoDesktop ? window.cadernoDesktop.plugins() : api('plugins'),
+  escolhas: () => window.cadernoDesktop ? window.cadernoDesktop.pluginChoices() : api('plugin-choices'),
+  gravarEscolhas: e => window.cadernoDesktop ? window.cadernoDesktop.savePluginChoices(e) : api('plugin-choices', e),
+  dados: id => window.cadernoDesktop ? window.cadernoDesktop.pluginData(id) : api(`plugin-data/${encodeURIComponent(id)}`),
+  gravarDados: (id, d) => window.cadernoDesktop ? window.cadernoDesktop.savePluginData(id, d) : api(`plugin-data/${encodeURIComponent(id)}`, d),
+};
+// No aplicativo instalado a página é file://: o código do plug-in vem pelo esquema próprio.
+const urlDoPlugin = id => window.cadernoDesktop ? `kiro-plugin://${id}/index.js` : `/plugins/${id}/index.js`;
+
+async function carregarPlugins() {
+  for (const id of [...pluginsAtivos.keys()]) desativarPlugin(id);
+  problemasDosPlugins.clear();
+  try {
+    const [achados, escolhas] = await Promise.all([pluginApi.lista(), pluginApi.escolhas()]);
+    planoDosPlugins = KiroPlugins.planoDeCarga(achados, escolhas, { versaoDoKiro: VERSAO });
+  } catch (erro) {
+    planoDosPlugins = { carregar: [], pendentes: [], problemas: [] };
+    return status('Não foi possível ler os plug-ins: ' + erro.message, true);
+  }
+  for (const { id, erro } of planoDosPlugins.problemas) problemasDosPlugins.set(id, erro);
+  for (const alvo of planoDosPlugins.carregar) ativarPlugin(alvo);
+}
+
+function ativarPlugin({ id, manifesto, permissoes }) {
+  desativarPlugin(id);
+  problemasDosPlugins.delete(id);
+  // `permissoes` é o que o usuário concedeu, não o que o manifesto pede: é isso que vale na checagem.
+  const estado = { manifesto, permissoes: [...(permissoes || [])], comandos: [], paineis: [], pendentes: new Map(), proxima: 1 };
+  try { estado.worker = new Worker('plugin-worker.js', { type: 'module' }); }
+  catch (erro) { problemasDosPlugins.set(id, erro.message); return; }
+  pluginsAtivos.set(id, estado);
+  estado.worker.onmessage = ({ data }) => atenderPlugin(id, data || {});
+  estado.worker.onerror = evento => { evento.preventDefault?.(); falharPlugin(id, evento.message || 'Erro no código do plug-in.'); };
+  estado.worker.postMessage({ tipo: 'ativar', id, url: urlDoPlugin(id), permissoes: estado.permissoes });
+  estado.prazo = setTimeout(() => falharPlugin(id, 'O plug-in não respondeu na ativação.'), LIMITE_ATIVACAO);
+}
+
+function desativarPlugin(id) {
+  const estado = pluginsAtivos.get(id);
+  if (!estado) return;
+  clearTimeout(estado.prazo);
+  for (const { rejeitar } of estado.pendentes.values()) rejeitar(new Error('O plug-in foi desativado.'));
+  estado.pendentes.clear();
+  estado.worker.terminate();
+  pluginsAtivos.delete(id);
+}
+
+// Um plug-in problemático cai sozinho: os outros e o Kiro seguem de pé.
+function falharPlugin(id, mensagem) {
+  const estado = pluginsAtivos.get(id);
+  const nome = estado?.manifesto?.name || id;
+  desativarPlugin(id);
+  problemasDosPlugins.set(id, mensagem);
+  status(`Plug-in ${nome}: ${mensagem}`, true);
+}
+
+async function atenderPlugin(id, data) {
+  const estado = pluginsAtivos.get(id);
+  if (!estado) return;
+  if (data.tipo === 'pronto') {
+    clearTimeout(estado.prazo);
+    estado.comandos = (data.registros?.command || []).map(r => ({ id: String(r.id), label: String(r.label || r.id) }));
+    estado.paineis = (data.registros?.panel || []).map(r => ({ id: String(r.id), label: String(r.label || r.id) }));
+    // A Tarefa 6 redesenha comandos e painéis a partir daqui.
+    return;
+  }
+  if (data.tipo === 'erro') return falharPlugin(id, data.mensagem || 'Erro no plug-in.');
+  // Resposta a uma ação que nós pedimos (clique num painel, comando).
+  if (data.tipo === 'resposta') {
+    const pendente = estado.pendentes.get(data.chamada);
+    if (!pendente) return;
+    estado.pendentes.delete(data.chamada);
+    clearTimeout(pendente.prazo);
+    return data.erro ? pendente.rejeitar(new Error(data.erro)) : pendente.resolver(data.valor);
+  }
+  if (data.tipo !== 'chamada') return;
+  try {
+    if (!KiroPlugins.podeChamar(estado.permissoes, data.metodo)) throw new Error(`Sem permissão para ${data.metodo}.`);
+    const valor = await executarMetodo(id, data.metodo, Array.isArray(data.args) ? data.args : []);
+    if (JSON.stringify(valor ?? null).length > LIMITE_MENSAGEM) throw new Error('A resposta passou de 2 MB.');
+    estado.worker.postMessage({ tipo: 'resposta', chamada: data.chamada, valor: valor ?? null });
+  } catch (erro) {
+    if (pluginsAtivos.get(id) === estado) estado.worker.postMessage({ tipo: 'resposta', chamada: data.chamada, erro: erro.message });
+  }
+}
+
+// Pede ao plug-in que rode um comando ou desenhe um painel; a Tarefa 6 usa isto.
+function chamarPlugin(id, registro, dados) {
+  const estado = pluginsAtivos.get(id);
+  if (!estado) return Promise.reject(new Error('Esse plug-in não está ativo.'));
+  const chamada = estado.proxima++;
+  return new Promise((resolver, rejeitar) => {
+    const prazo = setTimeout(() => falharPlugin(id, 'O plug-in demorou demais para responder.'), LIMITE_CHAMADA);
+    estado.pendentes.set(chamada, { resolver, rejeitar, prazo });
+    estado.worker.postMessage({ tipo: 'acao', chamada, registro, dados });
+  });
+}
+
+// ---- A API do plug-in traduzida para o que o app já faz com o estado ----
+const caminhoDaPasta = folderId => { const p = state.folders.find(f => f.id === folderId); return p ? (p.path || p.title) : ''; };
+// O plug-in conhece a pasta pelo caminho; aceitamos também o identificador.
+const pastaPorNome = valor => {
+  const alvo = String(valor || '').trim();
+  if (!alvo) return '';
+  const p = state.folders.find(f => f.id === alvo || Kiro.pathKey(f.path || f.title) === Kiro.pathKey(alvo) || Kiro.pathKey(f.title) === Kiro.pathKey(alvo));
+  if (!p) throw new Error(`Pasta não encontrada: ${alvo}.`);
+  return p.id;
+};
+const notaParaPlugin = n => ({ id: n.id, title: n.title || '', body: n.body || '', tags: [...(n.tags || [])], folder: caminhoDaPasta(n.folderId), createdAt: n.createdAt || null, updatedAt: n.updatedAt || null });
+const tarefaParaPlugin = t => ({ id: t.id, title: t.title, due: t.due, priority: t.priority, done: !!t.done, noteId: t.noteId || '' });
+const etiquetas = v => Array.isArray(v) ? v.map(t => String(t).trim()).filter(Boolean).slice(0, 30) : [];
+const notaDoPlugin = id => { const n = getNote(String(id || '')); if (!n) throw new Error('Nota não encontrada.'); return n; };
+// Gravar pelo mesmo caminho da interface: se o cofre recusar, o plug-in recebe o motivo.
+async function gravar() {
+  if (busy || failed || !loaded) throw new Error('O cofre está ocupado ou não pôde ser lido.');
+  if (!await save()) throw new Error('Não foi possível gravar no cofre.');
+}
+
+async function executarMetodo(id, metodo, args) {
+  const [a, b] = args;
+  switch (metodo) {
+    case 'notes.list': {
+      const { limit, folder, since } = a || {};
+      const pasta = folder === undefined || folder === '' ? null : pastaPorNome(folder);
+      return state.notes
+        .filter(n => (pasta === null || (n.folderId || '') === pasta) && (!since || (n.updatedAt || 0) >= Number(since)))
+        .sort((x, y) => (y.updatedAt || 0) - (x.updatedAt || 0))
+        .slice(0, Math.min(Number(limit) > 0 ? Number(limit) : 100, 500))
+        .map(notaParaPlugin);
+    }
+    case 'notes.get': return notaParaPlugin(notaDoPlugin(a));
+    case 'notes.current': return editing ? notaParaPlugin(editing) : null;
+    case 'notes.search': {
+      const q = Kiro.normalize(String(a || '').trim());
+      if (!q) return [];
+      return state.notes.filter(n => Kiro.normalize(n.title || '').includes(q) || Kiro.normalize(n.body || '').includes(q)).slice(0, 50).map(notaParaPlugin);
+    }
+    case 'notes.create': {
+      const { title, folder, body, tags } = a || {};
+      if (!String(title || '').trim()) throw new Error('A nota precisa de um título.');
+      const nota = { id: uid(), title: String(title).trim().slice(0, 200), body: String(body || ''), links: [], tags: etiquetas(tags), folderId: pastaPorNome(folder), createdAt: Date.now(), updatedAt: Date.now() };
+      state.notes = [nota, ...state.notes];
+      await gravar();
+      return notaParaPlugin(getNote(nota.id) || nota);
+    }
+    case 'notes.update': {
+      const nota = notaDoPlugin(a), campos = b || {};
+      const nova = { ...nota, updatedAt: Date.now() };
+      if (campos.title !== undefined) nova.title = String(campos.title).trim().slice(0, 200);
+      if (campos.body !== undefined) nova.body = String(campos.body);
+      if (campos.tags !== undefined) nova.tags = etiquetas(campos.tags);
+      if (campos.folder !== undefined) nova.folderId = pastaPorNome(campos.folder);
+      if (!nova.title) throw new Error('A nota precisa de um título.');
+      state.notes = state.notes.map(n => n.id === nota.id ? nova : n);
+      // A nota aberta no editor acompanha a mudança, como no arrastar da árvore.
+      if (editing?.id === nota.id) { editing = { ...nova, tags: [...nova.tags], links: [...(nova.links || [])] }; editorDirty = false; }
+      await gravar();
+      return notaParaPlugin(getNote(nota.id) || nova);
+    }
+    case 'notes.trash': {
+      const nota = notaDoPlugin(a);
+      state.notes = state.notes.filter(n => n.id !== nota.id);
+      if (editing?.id === nota.id) { editing = null; editorDirty = false; currentView = 'today'; }
+      await gravar();
+      return true;
+    }
+    case 'notes.move': {
+      const nota = notaDoPlugin(a), folderId = pastaPorNome(b);
+      state.notes = state.notes.map(n => n.id === nota.id ? { ...n, folderId, updatedAt: Date.now() } : n);
+      if (editing?.id === nota.id) editing = { ...editing, folderId };
+      await gravar();
+      return notaParaPlugin(getNote(nota.id));
+    }
+    case 'tasks.list': return state.tasks.map(tarefaParaPlugin);
+    case 'tasks.create': {
+      const { title, due, priority, noteId } = a || {};
+      if (!String(title || '').trim()) throw new Error('A tarefa precisa de um título.');
+      const tarefa = { id: uid(), title: String(title).trim().slice(0, 200), due: /^\d{4}-\d{2}-\d{2}$/.test(due || '') ? due : today(), priority: ['Baixa', 'Média', 'Alta'].includes(priority) ? priority : 'Média', noteId: noteId && getNote(noteId) ? noteId : '', done: false };
+      state.tasks = [tarefa, ...state.tasks];
+      await gravar();
+      return tarefaParaPlugin(tarefa);
+    }
+    case 'tasks.update': {
+      const tarefa = state.tasks.find(t => t.id === String(a || ''));
+      if (!tarefa) throw new Error('Tarefa não encontrada.');
+      const campos = b || {}, nova = { ...tarefa };
+      if (campos.title !== undefined) nova.title = String(campos.title).trim().slice(0, 200);
+      if (campos.due !== undefined && /^\d{4}-\d{2}-\d{2}$/.test(campos.due)) nova.due = campos.due;
+      if (campos.priority !== undefined && ['Baixa', 'Média', 'Alta'].includes(campos.priority)) nova.priority = campos.priority;
+      if (campos.done !== undefined) nova.done = !!campos.done;
+      if (!nova.title) throw new Error('A tarefa precisa de um título.');
+      state.tasks = state.tasks.map(t => t.id === tarefa.id ? nova : t);
+      await gravar();
+      return tarefaParaPlugin(nova);
+    }
+    case 'habits.list': return state.habits.map(h => ({ id: h.id, title: h.title, frequency: h.frequency, days: [...(state.habitLog[h.id] || [])] }));
+    case 'habits.mark': {
+      const habito = state.habits.find(h => h.id === String(a || ''));
+      if (!habito) throw new Error('Hábito não encontrado.');
+      const dia = /^\d{4}-\d{2}-\d{2}$/.test(b || '') ? b : today();
+      if (dia > today()) throw new Error('Não dá para marcar um dia que ainda não chegou.');
+      // marcarHabito alterna; marcar de novo o que já está feito não deve desmarcar.
+      if (!(state.habitLog[habito.id] || []).includes(dia)) { if (busy || failed || !loaded) throw new Error('O cofre está ocupado.'); marcarHabito(habito.id, dia); }
+      return true;
+    }
+    case 'folders.create': {
+      const { title, parent } = a || {};
+      const nome = String(title || '').trim();
+      if (!Kiro.validFolderName(nome)) throw new Error('Nome de pasta inválido.');
+      const parentId = pastaPorNome(parent);
+      if (state.folders.some(f => (f.parentId || '') === parentId && Kiro.pathKey(f.title) === Kiro.pathKey(nome))) throw new Error('Já existe uma pasta com esse nome neste local.');
+      const pasta = { id: uid(), title: nome, parentId, description: '', color: Kiro.folderColor('') };
+      state.folders = [pasta, ...state.folders];
+      await gravar();
+      const gravada = state.folders.find(f => f.id === pasta.id) || pasta;
+      return { id: gravada.id, title: gravada.title, folder: gravada.path || gravada.title };
+    }
+    // O espaço do próprio plug-in: 1 MB, conferido no cofre.
+    case 'storage.get': { const dados = await pluginApi.dados(id); return a === undefined ? dados : (dados[String(a)] ?? null); }
+    case 'storage.set': {
+      const dados = await pluginApi.dados(id);
+      if (b === undefined || b === null) delete dados[String(a)]; else dados[String(a)] = b;
+      await pluginApi.gravarDados(id, dados);
+      return true;
+    }
+    case 'notify': { status(`${pluginsAtivos.get(id)?.manifesto?.name || id}: ${String(a ?? '')}`, !!(b && b.error)); return true; }
+    default: throw new Error(`Método desconhecido: ${metodo}.`);
+  }
+}
+
 // ---- Aparência ----
 // Preferência de tela, guardada por instalação (localStorage), não no cofre:
 // é ajuste de máquina, não conteúdo que deva viajar junto com as notas.
@@ -2287,3 +2527,9 @@ setInterval(()=>{if(document.hidden)return;if(lastDay!==today()){lastDay=today()
 desenharIconesFixos();
 aplicarAparencia();
 reload();
+// Plug-ins entram em paralelo com o cofre: só precisam da versão do Kiro, que é
+// o que o manifesto compara em minKiro.
+(async () => {
+  try { VERSAO = await pluginApi.versao() || VERSAO; } catch { /* sem versão, o minKiro não é conferido */ }
+  await carregarPlugins();
+})();

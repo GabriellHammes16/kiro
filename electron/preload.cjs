@@ -9,5 +9,11 @@ contextBridge.exposeInMainWorld('cadernoDesktop', {
   restore: pedido => ipcRenderer.invoke('vault:restore', pedido),
   saveAttachment: pedido => ipcRenderer.invoke('vault:attachment', pedido),
   agentConfig: () => ipcRenderer.invoke('agent:config:get'),
-  saveAgentConfig: parcial => ipcRenderer.invoke('agent:config:set', parcial)
+  saveAgentConfig: parcial => ipcRenderer.invoke('agent:config:set', parcial),
+  version: () => ipcRenderer.invoke('app:version'),
+  plugins: () => ipcRenderer.invoke('plugins:list'),
+  pluginChoices: () => ipcRenderer.invoke('plugins:choices:get'),
+  savePluginChoices: escolhas => ipcRenderer.invoke('plugins:choices:set', escolhas),
+  pluginData: id => ipcRenderer.invoke('plugins:data:get', id),
+  savePluginData: (id, dados) => ipcRenderer.invoke('plugins:data:set', id, dados)
 });

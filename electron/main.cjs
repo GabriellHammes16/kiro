@@ -69,6 +69,14 @@ else app.whenReady().then(async () => {
       } });
     } catch { return new Response('Plug-in não encontrado.', { status: 404 }); }
   });
+  // Plug-ins: a lista da pasta, as escolhas do usuário e o espaço de cada plug-in.
+  // A versão do app é o que a página compara com o minKiro do manifesto.
+  ipcMain.handle('app:version', () => app.getVersion());
+  ipcMain.handle('plugins:list', () => vault.listPlugins());
+  ipcMain.handle('plugins:choices:get', () => vault.readPluginChoices());
+  ipcMain.handle('plugins:choices:set', (_event, escolhas) => vault.writePluginChoices(escolhas));
+  ipcMain.handle('plugins:data:get', (_event, id) => vault.readPluginData(String(id || '')));
+  ipcMain.handle('plugins:data:set', (_event, id, dados) => vault.writePluginData(String(id || ''), dados));
   ipcMain.handle('vault:open', async () => { await mkdir(vault.directory, { recursive: true }); return shell.openPath(vault.directory); });
   ipcMain.handle('vault:path', () => vault.directory);
   ipcMain.handle('agent:config:get', () => agentConfig.load());
