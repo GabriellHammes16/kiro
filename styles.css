@@ -840,3 +840,35 @@ body, button, input, textarea, select { font-family:var(--fonte-interface); }
   #abertura img { animation:abertura-simples 300ms linear both; }
   @keyframes abertura-simples { from { opacity:0; } to { opacity:1; } }
 }
+
+/* ---- Painéis de plug-in ----
+   O plug-in manda dados; a marcação é do Kiro e usa as variáveis de sempre, então
+   herda tema e skin sem nada de especial. Tudo aqui é texto já escapado. */
+.plugin-fonte { margin-left:auto; color:var(--muted); font-size:var(--fs-legenda); }
+.card-head > .plugin-fonte + .icon-button { margin-left:var(--esp-1); }
+.plugin-conteudo > :first-child { margin-top:0; }
+.plugin-conteudo > :last-child { margin-bottom:0; }
+.plugin-texto { margin:0; font-size:var(--fs-interface); line-height:1.55; overflow-wrap:anywhere; }
+.plugin-lista { list-style:none; margin:0; padding:0; }
+.plugin-item { display:flex; align-items:center; gap:var(--esp-3); min-height:44px; padding:var(--esp-2) var(--esp-2); margin:0 calc(var(--esp-2) * -1); border-bottom:1px solid var(--line); border-radius:var(--raio-controle); font-size:var(--fs-interface); }
+.plugin-item:last-child { border-bottom:0; }
+.plugin-titulo { flex:1; overflow-wrap:anywhere; }
+.plugin-item[data-acao] { cursor:pointer; transition:background var(--rapido) var(--curva); }
+.plugin-item[data-acao]:hover { background:var(--accent-soft); }
+.plugin-cards { display:grid; grid-template-columns:repeat(auto-fill,minmax(180px,1fr)); gap:var(--esp-3); }
+.plugin-card { margin:0; padding:var(--esp-3); border:1px solid var(--line); border-radius:var(--raio-controle); background:color-mix(in srgb, var(--panel) 70%, transparent); }
+.plugin-card h4 { margin:0 0 var(--esp-1); font-size:var(--fs-interface); }
+.plugin-card p { margin:0; color:var(--muted); font-size:var(--fs-secundario); overflow-wrap:anywhere; }
+.plugin-card[data-acao] { cursor:pointer; transition:border-color var(--rapido) var(--curva); }
+.plugin-card[data-acao]:hover { border-color:color-mix(in srgb, var(--acento) 45%, transparent); }
+.plugin-tabela-rolagem { overflow-x:auto; }
+.plugin-tabela { width:100%; border-collapse:collapse; font-size:var(--fs-secundario); }
+.plugin-tabela th, .plugin-tabela td { padding:var(--esp-2); text-align:left; border-bottom:1px solid var(--line); overflow-wrap:anywhere; }
+.plugin-tabela th { color:var(--muted); font-weight:650; }
+.plugin-tabela tr:last-child td { border-bottom:0; }
+.plugin-form { display:grid; gap:var(--esp-3); }
+.plugin-form .field > span { font-size:var(--fs-legenda); font-weight:650; }
+.plugin-form button { justify-self:end; }
+.plugin-pilha { display:grid; gap:var(--esp-3); }
+/* Foco visível: o item do painel é alcançável pelo teclado como qualquer botão. */
+.plugin-item[data-acao]:focus-visible, .plugin-card[data-acao]:focus-visible { outline:2px solid var(--acento); outline-offset:2px; }

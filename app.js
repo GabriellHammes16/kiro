@@ -41,7 +41,7 @@ function renderToday() {
   const urgent = state.tasks.filter(t => !t.done && t.due <= today());
   const ultima = [...state.notes].sort((a,b)=>b.updatedAt-a.updatedAt)[0];
   // Duas colunas por intenção: "Agora" é o que se marca todo dia; "Organizar" é o trabalho com as notas.
-  return `${head(saudacao(), `<span class="frase-do-dia">${escapeHtml(fraseDoDia())}</span>`, `${formatDate(today())}.`)}<div class="today-grid"><div class="stack">${cardHabitos()}<section class="card"><div class="card-head"><h2>Para fazer agora</h2><a data-go="tasks">Ver tarefas</a></div>${urgent.map(taskRow).join("") || '<div class="empty">Nada urgente para hoje.</div>'}</section></div><div class="stack">${cardContinuar(ultima)}${cardCaixaDeEntrada()}${cardParaRevisar()}</div></div>`;
+  return `${head(saudacao(), `<span class="frase-do-dia">${escapeHtml(fraseDoDia())}</span>`, `${formatDate(today())}.`)}<div class="today-grid"><div class="stack">${cardHabitos()}<section class="card"><div class="card-head"><h2>Para fazer agora</h2><a data-go="tasks">Ver tarefas</a></div>${urgent.map(taskRow).join("") || '<div class="empty">Nada urgente para hoje.</div>'}</section></div><div class="stack">${cardContinuar(ultima)}${cardCaixaDeEntrada()}${cardParaRevisar()}${cardsDosPlugins()}</div></div>`;
 }
 // Frase do dia no lugar do "Bom dia". Muda à meia-noite e não repete a de ontem:
 // o passo 7 percorre as 20 frases antes de voltar à primeira.
@@ -560,6 +560,7 @@ function enhanceView(){
   // Captura numa faixa própria logo abaixo da frase, na largura dos cards: não depende de quantas linhas a frase ocupa.
   $('.page-head').insertAdjacentHTML('afterend',`<div class="hoje-acoes"><form id="capture-form" class="capture add-link"><label for="capture-text" class="sr-only">Captura rápida</label>${icone('mais')}<input id="capture-text" required autocomplete="off" placeholder="Capturar uma ideia, pergunta ou lembrete…" /><kbd class="atalho" title="De qualquer tela">Ctrl + Espaço</kbd><button class="primary">Guardar</button></form>${extraButton('daily',`${icone('calendario')} Nota diária`,'','secondary')}</div>`);
   $('#capture-form').onsubmit=async e=>{e.preventDefault();if(await capturar($('#capture-text').value))$('#capture-text')?.focus();};
+  desenharPaineisDosPlugins();
 }
 // Uma captura vira nota na caixa de entrada; o título é a primeira linha sem sintaxe.
 async function capturar(texto){
@@ -1873,6 +1874,8 @@ function menuDaNota() {
     { rotulo: 'Colar', icone: icone('colar'), acao: colar },
     { separador: true },
     { rotulo: 'Selecionar tudo', icone: icone('selecionar'), acao: a => a.select() },
+    // Comandos de plug-in também com a nota aberta: é aqui que notes.current() faz sentido.
+    ...(comandosDosPlugins().length ? [{ separador: true }, { rotulo: 'Plug-ins', icone: icone('codigo'), filhos: comandosDosPlugins() }] : []),
     { separador: true },
     { rotulo: 'Salvar', icone: icone('salvar'), acao: () => salvarNota() },
     { rotulo: 'Detalhes', icone: icone('detalhes'), acao: () => acaoEditor('detalhes') },
@@ -1972,6 +1975,10 @@ async function extraAction(type,id){
   if(type==='add-habit') habitoModal();
   if(type==='habit-stats') habitosModal();
   if(type==='continuar'){const nota=getNote(id);if(nota){await abrirNota(nota);if(editing?.id===id)abrirNoFim();}}
+  if(type==='plugin-comandos'){
+    const r=document.querySelector(`[data-extra="plugin-comandos"][data-id="${CSS.escape(id)}"]`).getBoundingClientRect();
+    abrirMenuContexto({preventDefault(){},clientX:r.left,clientY:r.bottom},document.body,menuDoPlugin(id));
+  }
 }
 // A restauração é do próprio Vault: ele devolve a nota ou a pasta inteira, com
 // subpastas, anexos e os identificadores originais. Reconstruir isso aqui, como
@@ -2054,6 +2061,7 @@ function desativarPlugin(id) {
   estado.pendentes.clear();
   estado.worker.terminate();
   pluginsAtivos.delete(id);
+  for (const chave of [...conteudoDosPaineis.keys()]) if (chave.startsWith(`${id}\n`)) conteudoDosPaineis.delete(chave);
 }
 
 // Um plug-in problemático cai sozinho: os outros e o Kiro seguem de pé.
@@ -2063,6 +2071,7 @@ function falharPlugin(id, mensagem) {
   desativarPlugin(id);
   problemasDosPlugins.set(id, mensagem);
   status(`Plug-in ${nome}: ${mensagem}`, true);
+  if (currentView === 'today' && loaded) render();
 }
 
 async function atenderPlugin(id, data) {
@@ -2072,7 +2081,8 @@ async function atenderPlugin(id, data) {
     clearTimeout(estado.prazo);
     estado.comandos = (data.registros?.command || []).map(r => ({ id: String(r.id), label: String(r.label || r.id) }));
     estado.paineis = (data.registros?.panel || []).map(r => ({ id: String(r.id), label: String(r.label || r.id) }));
-    // A Tarefa 6 redesenha comandos e painéis a partir daqui.
+    // O plug-in fica pronto depois da tela: redesenhar traz os cards dele para o Hoje.
+    if (currentView === 'today' && loaded) render();
     return;
   }
   if (data.tipo === 'erro') return falharPlugin(id, data.mensagem || 'Erro no plug-in.');
@@ -2106,6 +2116,109 @@ function chamarPlugin(id, registro, dados) {
     estado.worker.postMessage({ tipo: 'acao', chamada, registro, dados });
   });
 }
+
+// ---- Painéis e comandos na tela ----
+// O plug-in devolve dados; quem desenha é o Kiro, com o tema e a skin atuais.
+// O conteúdo já desenhado fica guardado para o redesenho não piscar.
+const conteudoDosPaineis = new Map();     // "<id>\n<painel>" → HTML já montado
+const chaveDoPainel = (id, painel) => `${id}\n${painel}`;
+const seletorDoPainel = (id, painel) => `.plugin-painel[data-plugin="${CSS.escape(id)}"][data-painel="${CSS.escape(painel)}"]`;
+
+// Um card por painel registrado; o cabeçalho traz o rótulo do painel e o nome do plug-in.
+function cardsDosPlugins() {
+  const cartoes = [];
+  for (const [id, estado] of pluginsAtivos) {
+    const nome = escapeHtml(estado.manifesto?.name || id);
+    const botao = estado.comandos.length
+      ? extraButton('plugin-comandos', icone('codigo'), id, 'icon-button', `Comandos de ${estado.manifesto?.name || id}`)
+      : '';
+    const card = (painel, corpo) => `<section class="card plugin-painel" data-plugin="${escapeHtml(id)}" data-painel="${escapeHtml(painel ? painel.id : '')}"><div class="card-head"><h2>${escapeHtml(painel ? painel.label : estado.manifesto?.name || id)}</h2><span class="plugin-fonte">${nome}</span>${botao}</div><div class="plugin-conteudo">${corpo}</div></section>`;
+    for (const painel of estado.paineis) cartoes.push(card(painel, conteudoDosPaineis.get(chaveDoPainel(id, painel.id)) || '<div class="empty">Carregando…</div>'));
+    // Plug-in só de comandos também aparece: senão não haveria por onde chamá-lo.
+    if (!estado.paineis.length && estado.comandos.length) cartoes.push(card(null, `<div class="empty">${estado.comandos.length === 1 ? 'Um comando disponível' : `${estado.comandos.length} comandos disponíveis`} no menu ao lado.</div>`));
+  }
+  return cartoes.join('');
+}
+
+// Pede a cada painel visível o desenho atual. Erro do plug-in fica no card dele.
+function desenharPaineisDosPlugins() {
+  for (const card of document.querySelectorAll('.plugin-painel[data-painel]:not([data-painel=""])')) {
+    const { plugin, painel } = card.dataset;
+    chamarPlugin(plugin, { tipo: 'panel', id: painel }, { action: '', values: {} })
+      .then(dados => guardarPainel(plugin, painel, dados))
+      .catch(erro => guardarPainel(plugin, painel, { type: 'text', text: erro.message }));
+  }
+}
+
+function guardarPainel(id, painel, dados) {
+  const html = KiroPlugins.painelParaHtml(dados, { pluginId: id });
+  conteudoDosPaineis.set(chaveDoPainel(id, painel), html);
+  const alvo = document.querySelector(`${seletorDoPainel(id, painel)} .plugin-conteudo`);
+  if (alvo) alvo.innerHTML = html;
+}
+
+/**
+ * Clique ou Enter num item do painel. `open:<noteId>` é reservado do Kiro e abre a
+ * nota; o resto vai para o plug-in, que devolve o painel já atualizado.
+ */
+function acaoDoPainel(id, painel, acao, values) {
+  if (!pluginsAtivos.has(id)) return;
+  if (acao.startsWith('open:')) {
+    const nota = getNote(acao.slice(5));
+    return nota ? abrirNota(nota) : status('A nota indicada pelo plug-in não existe mais.', true);
+  }
+  chamarPlugin(id, { tipo: 'panel', id: painel }, { action: acao, values: values || {} })
+    .then(dados => { if (dados) guardarPainel(id, painel, dados); })
+    .catch(erro => status(`Plug-in ${pluginsAtivos.get(id)?.manifesto?.name || id}: ${erro.message}`, true));
+}
+
+function rodarComandoDoPlugin(id, comando) {
+  chamarPlugin(id, { tipo: 'command', id: comando }, {})
+    .then(() => desenharPaineisDosPlugins())   // o comando pode ter mudado o que o painel mostra
+    .catch(erro => status(`Plug-in ${pluginsAtivos.get(id)?.manifesto?.name || id}: ${erro.message}`, true));
+}
+
+// Comandos ficam no botão do cabeçalho do card e no botão direito, como os hábitos.
+function menuDoPlugin(id) {
+  const estado = pluginsAtivos.get(id);
+  const comandos = estado?.comandos || [];
+  if (!comandos.length) return [{ rotulo: 'Este plug-in não oferece comandos', icone: icone('codigo'), ativo: () => false, acao: () => {} }];
+  return comandos.map(c => ({ rotulo: c.label, icone: icone('codigo'), acao: () => rodarComandoDoPlugin(id, c.id) }));
+}
+
+// Todos os comandos ativos, já prontos para virar itens de menu.
+const comandosDosPlugins = () => [...pluginsAtivos].flatMap(([id, estado]) =>
+  estado.comandos.map(c => ({ rotulo: `${estado.manifesto?.name || id}: ${c.label}`, icone: icone('codigo'), acao: () => rodarComandoDoPlugin(id, c.id) })));
+
+const itemDePainel = alvo => alvo?.closest('[data-acao][data-plugin]');
+function dispararItemDePainel(alvo) {
+  const card = alvo.closest('.plugin-painel');
+  acaoDoPainel(alvo.dataset.plugin, card?.dataset.painel || '', alvo.dataset.acao || '', {});
+}
+document.addEventListener('click', evento => {
+  const alvo = itemDePainel(evento.target);
+  if (!alvo || alvo.tagName === 'FORM') return;   // o formulário responde ao envio, não ao clique
+  evento.preventDefault();
+  dispararItemDePainel(alvo);
+});
+// Teclado: os itens com ação têm role="button" e tabindex, então Enter e Espaço valem clique.
+document.addEventListener('keydown', evento => {
+  if (evento.key !== 'Enter' && evento.key !== ' ') return;
+  const alvo = itemDePainel(evento.target);
+  if (!alvo || alvo.tagName === 'FORM') return;
+  evento.preventDefault();
+  dispararItemDePainel(alvo);
+});
+document.addEventListener('submit', evento => {
+  const form = evento.target.closest?.('form.plugin-form[data-plugin]');
+  if (!form) return;
+  evento.preventDefault();
+  acaoDoPainel(form.dataset.plugin, form.closest('.plugin-painel')?.dataset.painel || '', form.dataset.acao || '', Object.fromEntries(new FormData(form)));
+});
+document.addEventListener('contextmenu', evento => {
+  const card = evento.target.closest?.('.plugin-painel');
+  if (card && loaded && !busy && !failed) abrirMenuContexto(evento, document.body, menuDoPlugin(card.dataset.plugin));
+});
 
 // ---- A API do plug-in traduzida para o que o app já faz com o estado ----
 const caminhoDaPasta = folderId => { const p = state.folders.find(f => f.id === folderId); return p ? (p.path || p.title) : ''; };

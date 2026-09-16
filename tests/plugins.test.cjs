@@ -218,3 +218,52 @@ test('o hospedeiro do app.js confere a permissão concedida a cada chamada', () 
   tem(/podeChamar\(estado\.permissoes, /, 'cada chamada reconfere a permissão concedida');
   tem(/LIMITE_ATIVACAO = 3000, LIMITE_CHAMADA = 5000/, 'os limites de tempo do plano');
 });
+
+test('painel declarativo vira marcação com o texto escapado', () => {
+  const html = P.painelParaHtml({ type: 'list', items: [{ title: '<b>oi</b>', detail: 'x & y', action: 'open:1' }] }, { pluginId: 'word-count' });
+  assert.match(html, /&lt;b&gt;oi&lt;\/b&gt;/);
+  assert.match(html, /x &amp; y/);
+  assert.match(html, /data-plugin="word-count"/);
+  assert.match(html, /data-acao="open:1"/);
+  assert.ok(!/<b>/.test(html));
+
+  assert.match(P.painelParaHtml({ type: 'text', text: 'olá' }, { pluginId: 'p' }), /olá/);
+  assert.match(P.painelParaHtml({ type: 'table', columns: ['A'], rows: [['1']] }, { pluginId: 'p' }), /<th[^>]*>A<\/th>/);
+  assert.match(P.painelParaHtml({ type: 'nao-existe' }, { pluginId: 'p' }), /não reconhecido|inválido/i);
+});
+
+test('o painel escapa em todo canto: nada do plug-in vira marcação', () => {
+  const veneno = '"><img src=x onerror=alert(1)>';
+  const painel = tipo => P.painelParaHtml(tipo, { pluginId: veneno });
+  // Fronteira de segurança: nem texto, nem ação, nem atributo escapam do escape.
+  for (const dados of [
+    { type: 'text', text: veneno },
+    { type: 'list', items: [{ title: veneno, detail: veneno, action: veneno }] },
+    { type: 'cards', items: [{ title: veneno, body: veneno, action: veneno }] },
+    { type: 'table', columns: [veneno], rows: [[veneno]] },
+    { type: 'form', submit: veneno, fields: [{ name: veneno, label: veneno, type: 'select', options: [veneno] }] },
+    { type: 'stack', children: [{ type: 'text', text: veneno }] },
+    { type: veneno },
+  ]) {
+    const html = painel(dados);
+    // O texto escapado pode conter a palavra "onerror"; o que não pode é a marcação crua.
+    assert.ok(!html.includes('<img'), `tag crua passou em ${dados.type}`);
+    assert.ok(!html.includes(veneno), `o texto do plug-in saiu sem escape em ${dados.type}`);
+  }
+  // Tipo de campo do plug-in não vira atributo livre: só text, number ou select.
+  const form = P.painelParaHtml({ type: 'form', submit: 'ok', fields: [{ name: 'n', label: 'n', type: 'file" onfocus="x' }] }, { pluginId: 'p' });
+  assert.match(form, /type="text"/);
+  assert.ok(!form.includes('onfocus'));
+  // A pilha aceita filho quebrado sem derrubar o painel inteiro.
+  assert.match(P.painelParaHtml({ type: 'stack', children: ['nada'] }, { pluginId: 'p' }), /não reconhecido/i);
+});
+
+test('os painéis e comandos do plug-in chegam à tela Hoje', () => {
+  const app = require('node:fs').readFileSync(path.join(__dirname, '..', 'app.js'), 'utf8');
+  const tem = (expressao, motivo) => assert.ok(expressao.test(app), motivo);
+  tem(/painelParaHtml/, 'o app desenha o painel pela parte pura');
+  tem(/cardsDosPlugins\(\)/, 'a tela Hoje monta os cards dos plug-ins');
+  // Ação reservada: abrir a nota é do Kiro, não do plug-in.
+  tem(/open:/, 'a ação reservada open:<noteId> abre a nota');
+});
+

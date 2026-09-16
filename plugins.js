@@ -90,7 +90,44 @@
     return plano;
   }
 
-  const api = { PERMISSOES, METODOS, planoDeCarga, validarManifesto, compararVersoes, comparar, precisaConsentir, rotuloDaPermissao, metodosPermitidos, podeChamar };
+  const escapar = v => String(v === undefined || v === null ? '' : v).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+  const itens = v => Array.isArray(v) ? v : [];
+  /**
+   * O plug-in manda dados, nunca HTML: aqui eles viram marcação com todo texto
+   * escapado, usando as classes do próprio Kiro para herdar tema e skin. Esta é a
+   * fronteira: nada que venha do plug-in chega ao DOM sem passar por escapar().
+   */
+  function painelParaHtml(dados, { pluginId } = {}) {
+    const alvo = ` data-plugin="${escapar(pluginId)}"`;
+    const clicavel = acao => acao ? `${alvo} data-acao="${escapar(acao)}" role="button" tabindex="0"` : '';
+    const d = dados && typeof dados === 'object' && !Array.isArray(dados) ? dados : {};
+    switch (d.type) {
+      case 'text':
+        return `<p class="plugin-texto">${escapar(d.text)}</p>`;
+      case 'list':
+        return `<ul class="plugin-lista">${itens(d.items).map(i => `<li class="plugin-item"${clicavel(i && i.action)}><span class="plugin-titulo">${escapar(i && i.title)}</span>${i && i.detail ? `<span class="small-muted">${escapar(i.detail)}</span>` : ''}</li>`).join('')}</ul>`;
+      case 'cards':
+        return `<div class="plugin-cards">${itens(d.items).map(i => `<article class="plugin-card"${clicavel(i && i.action)}><h4>${escapar(i && i.title)}</h4><p>${escapar(i && i.body)}</p></article>`).join('')}</div>`;
+      case 'table':
+        return `<div class="plugin-tabela-rolagem"><table class="plugin-tabela"><thead><tr>${itens(d.columns).map(c => `<th scope="col">${escapar(c)}</th>`).join('')}</tr></thead><tbody>${itens(d.rows).map(l => `<tr>${itens(l).map(c => `<td>${escapar(c)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+      case 'form':
+        // O tipo do campo sai de uma lista fixa: virar atributo livre abriria a porta de novo.
+        return `<form class="plugin-form"${alvo} data-acao="${escapar(d.submit)}">${itens(d.fields).map(f => {
+          const campo = f && typeof f === 'object' ? f : {};
+          const nome = ` name="${escapar(campo.name)}"`;
+          const entrada = campo.type === 'select'
+            ? `<select${nome}>${itens(campo.options).map(o => `<option value="${escapar(o)}">${escapar(o)}</option>`).join('')}</select>`
+            : `<input${nome} type="${campo.type === 'number' ? 'number' : 'text'}" />`;
+          return `<label class="field"><span>${escapar(campo.label)}</span>${entrada}</label>`;
+        }).join('')}<button class="primary" type="submit">Enviar</button></form>`;
+      case 'stack':
+        return `<div class="plugin-pilha">${itens(d.children).map(c => painelParaHtml(c, { pluginId })).join('')}</div>`;
+      default:
+        return `<p class="cfg-aviso">Formato de painel não reconhecido: ${escapar(d.type)}.</p>`;
+    }
+  }
+
+  const api = { PERMISSOES, METODOS, painelParaHtml, planoDeCarga, validarManifesto, compararVersoes, comparar, precisaConsentir, rotuloDaPermissao, metodosPermitidos, podeChamar };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.KiroPlugins = api;
 })(globalThis);
