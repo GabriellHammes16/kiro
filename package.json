@@ -35,7 +35,7 @@
     ],
     "win": {
       "target": "nsis",
-      "icon": "kiro-icone.png"
+      "icon": "kiro-logo.png"
     },
     "nsis": {
       "oneClick": false,

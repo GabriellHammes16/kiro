@@ -9,7 +9,7 @@ let vault, settings;
 // (file://) não lê o disco, e só arquivos de imagem de dentro do cofre passam.
 protocol.registerSchemesAsPrivileged([{ scheme: 'kiro-anexo', privileges: { standard: true, secure: true, supportFetchAPI: true } }]);
 function createWindow() {
-  const window = new BrowserWindow({ width: 1280, height: 820, minWidth: 900, minHeight: 620, backgroundColor: '#0a0a0a', title: 'KIRO', icon: join(__dirname, '..', 'kiro-icone.png'), webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true, preload: join(__dirname, 'preload.cjs') } });
+  const window = new BrowserWindow({ width: 1280, height: 820, minWidth: 900, minHeight: 620, backgroundColor: '#0a0a0a', title: 'KIRO', icon: join(__dirname, '..', 'kiro-logo.png'), webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true, preload: join(__dirname, 'preload.cjs') } });
   window.loadFile(join(__dirname, '..', 'index.html'));
   window.webContents.on('will-navigate', event => event.preventDefault());
   window.webContents.setWindowOpenHandler(({ url }) => { if (/^https?:/i.test(url)) shell.openExternal(url); return { action: 'deny' }; });
