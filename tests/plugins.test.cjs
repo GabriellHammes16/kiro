@@ -166,3 +166,22 @@ test('o worker é de módulo e importa a parte pura por import', () => {
   // A página cria o worker como módulo; a Tarefa 5 depende desta linha.
   assert.match(ler('index.html'), /<script src="plugins\.js"><\/script>/);
 });
+
+test('o plug-in de exemplo é válido e pede o mínimo', () => {
+  const pasta = path.join(__dirname, '..', 'dev-vault', '.kiro', 'plugins', 'word-count');
+  const manifesto = JSON.parse(require('node:fs').readFileSync(path.join(pasta, 'manifest.json'), 'utf8'));
+  const r = P.validarManifesto(manifesto, { versaoDoKiro: require('../package.json').version });
+  assert.equal(r.ok, true, r.erro);
+  assert.equal(r.manifesto.id, 'word-count');
+  assert.deepEqual(r.manifesto.permissions, ['notes:read']);
+  assert.deepEqual(r.manifesto.network, []);
+
+  // O exemplo é material de referência: precisa exportar activate e só chamar
+  // métodos que a permissão declarada libera.
+  const codigo = require('node:fs').readFileSync(path.join(pasta, 'index.js'), 'utf8');
+  assert.match(codigo, /export default/);
+  assert.match(codigo, /activate\s*\(/);
+  for (const metodo of codigo.match(/kiro\.[a-z]+\.[a-z]+/gi) || []) {
+    assert.equal(P.podeChamar(r.manifesto.permissions, metodo.slice('kiro.'.length)), true, metodo);
+  }
+});
