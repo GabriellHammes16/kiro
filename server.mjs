@@ -10,12 +10,12 @@ const root = dirname(fileURLToPath(import.meta.url));
 // --dev: cofre de exemplo, recarga ao vivo e porta própria, para rodar junto do npm start.
 const dev = process.argv.includes('--dev');
 const port = Number(process.env.PORT || (dev ? 4180 : 4173));
-const vaultDirectory = process.env.KUROI_VAULT || join(root, dev ? 'dev-vault' : 'vault');
+const vaultDirectory = process.env.KIRO_VAULT || process.env.KUROI_VAULT || join(root, dev ? 'dev-vault' : 'vault');
 const vault = new Vault(vaultDirectory);
 const devTools = dev ? (await import('./dev/devtools.mjs')).createDevTools(root) : null;
-if (dev && !process.env.KUROI_VAULT) await (await import('./dev/seed.cjs')).default.semearSeVazio(vaultDirectory);
+if (dev && !process.env.KIRO_VAULT && !process.env.KUROI_VAULT) await (await import('./dev/seed.cjs')).default.semearSeVazio(vaultDirectory);
 const agentConfig = new agentModule.AgentConfig(vaultDirectory);
-const publicFiles = { '/': ['index.html', 'text/html'], '/index.html': ['index.html', 'text/html'], '/app.js': ['app.js', 'text/javascript'], '/domain.js': ['domain.js', 'text/javascript'], '/styles.css': ['styles.css', 'text/css'], '/temas.css': ['temas.css', 'text/css'],'/kuroi-logo-transparent.png': ['kuroi-logo-transparent.png', 'image/png'] };
+const publicFiles = { '/': ['index.html', 'text/html'], '/index.html': ['index.html', 'text/html'], '/app.js': ['app.js', 'text/javascript'], '/domain.js': ['domain.js', 'text/javascript'], '/styles.css': ['styles.css', 'text/css'], '/temas.css': ['temas.css', 'text/css'],'/kiro-logo.png': ['kiro-logo.png', 'image/png'], '/kiro-abertura.png': ['kiro-abertura.png', 'image/png'] };
 const allowedHosts = new Set([`localhost:${port}`, `127.0.0.1:${port}`]);
 const send = (res, status, data) => { res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' }); res.end(JSON.stringify(data)); };
 createServer(async (request, response) => {
@@ -53,7 +53,7 @@ createServer(async (request, response) => {
       if (!['image/png', 'image/jpeg', 'image/gif', 'image/webp'].includes(request.headers['content-type']?.split(';')[0])) return send(response, 415, { error: 'Envie uma imagem PNG, JPEG, GIF ou WebP.' });
       let tamanho = 0; const partes = [];
       for await (const parte of request) { tamanho += parte.length; if (tamanho > 20 * 1024 * 1024) return send(response, 413, { error: 'Imagem maior que 20 MB.' }); partes.push(parte); }
-      let nome = ''; try { nome = decodeURIComponent(request.headers['x-kuroi-nome'] || ''); } catch { /* nome ilegível: a imagem recebe um nome gerado */ }
+      let nome = ''; try { nome = decodeURIComponent(request.headers['x-kiro-nome'] || ''); } catch { /* nome ilegível: a imagem recebe um nome gerado */ }
       return send(response, 200, await vault.saveAttachment({ name: nome, data: Buffer.concat(partes) }));
     }
     // Sem a query: a recarga de estilo pede styles.css?v=<hora> para furar o cache.
@@ -90,4 +90,4 @@ createServer(async (request, response) => {
     response.writeHead(200, { 'Content-Type': `${file[1]}; charset=utf-8`, 'Cache-Control': 'no-cache' });
     response.end(body);
   } catch (error) { send(response, 400, { error: error.message }); }
-}).listen(port, '127.0.0.1', () => console.log(dev ? `KUROI em desenvolvimento: http://localhost:${port} · cofre ${vaultDirectory}` : `KUROI em http://localhost:${port}`));
+}).listen(port, '127.0.0.1', () => console.log(dev ? `KIRO em desenvolvimento: http://localhost:${port} · cofre ${vaultDirectory}` : `KIRO em http://localhost:${port}`));

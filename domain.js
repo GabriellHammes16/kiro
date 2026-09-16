@@ -209,7 +209,7 @@
   const folderColor = value => FOLDER_COLORS.includes(value) ? value : '';
   // ---- Aparência: temas, skins e cores manuais (preferência da instalação, em localStorage) ----
   const TEMAS = [
-    ['escuro-classico', 'Escuro Clássico', 'classicos'], ['escuro-azul', 'Escuro Azul', 'classicos'], ['escuro-verde', 'Escuro Verde', 'classicos'],
+    ['kiro', 'KIRO', 'classicos'], ['escuro-azul', 'Escuro Azul', 'classicos'], ['escuro-verde', 'Escuro Verde', 'classicos'],
     ['escuro-ambar', 'Escuro Âmbar', 'classicos'], ['alto-contraste', 'Alto Contraste', 'classicos'], ['meia-noite', 'Meia-noite', 'classicos'], ['floresta', 'Floresta', 'classicos'],
     ['neon-tokyo', 'Neon Tokyo', 'anime'], ['sakura-night', 'Sakura Night', 'anime'], ['shonen-fire', 'Shonen Fire', 'anime'], ['studio-ghibli', 'Studio Ghibli', 'anime'],
     ['evangelion', 'Evangelion', 'anime'], ['sailor-moon', 'Sailor Moon', 'anime'], ['violet-evergarden', 'Violet Evergarden', 'anime'], ['demon-blood', 'Demon Blood', 'anime'],
@@ -220,7 +220,7 @@
     ['terminal', 'Terminal', 'Fonte mono e cantos retos.'], ['suave', 'Suave', 'Cantos redondos e sombras leves.'], ['sharp', 'Sharp', 'Cantos retos, bordas marcadas.'],
     ['neon', 'Neon', 'Brilho sutil no destaque.'], ['paper', 'Paper', 'Textura de papel ilustrado.'],
   ];
-  const APARENCIA_PADRAO = Object.freeze({ tema: 'escuro-classico', skin: 'padrao', sidebar: '#1A1A20', content: '#141418', acento: '#C77DFF' });
+  const APARENCIA_PADRAO = Object.freeze({ tema: 'kiro', skin: 'padrao', sidebar: '#11161D', content: '#0B0F14', acento: '#9273FF' });
   const corValida = v => text(v) && /^#[0-9a-f]{6}$/i.test(v);
   // Luminância relativa e razão de contraste (WCAG).
   function luminancia(hex) {
@@ -231,13 +231,17 @@
   // Sempre devolve um objeto completo; o que vier estranho do localStorage vira padrão.
   function aparenciaValida(salvo) {
     const s = salvo && typeof salvo === 'object' && !Array.isArray(salvo) ? salvo : {};
-    const ANTIGA = { sidebar: '#0e0e0e', content: '#0a0a0a' };
+    // Fundos de versões anteriores (inclusive de quando o aplicativo se chamava KUROI)
+    // contam como padrão: quem nunca escolheu cor recebe a identidade atual.
+    const ANTIGAS = { sidebar: ['#0e0e0e', '#1a1a20'], content: ['#0a0a0a', '#141418'], acento: ['#c77dff'] };
     const cores = {};
     for (const chave of ['sidebar', 'content', 'acento']) {
-      const v = corValida(s[chave]) && s[chave].toLowerCase() !== ANTIGA[chave] ? s[chave] : APARENCIA_PADRAO[chave];
+      const v = corValida(s[chave]) && !ANTIGAS[chave].includes(s[chave].toLowerCase()) ? s[chave] : APARENCIA_PADRAO[chave];
       cores[chave] = v;
     }
     // Salvo de antes dos temas: cor própria vira "personalizado"; quem nunca mexeu fica no clássico.
+    // 'escuro-classico' era o id do tema padrão antes da identidade KIRO.
+    if (s.tema === 'escuro-classico') s = { ...s, tema: 'kiro' };
     const tema = s.tema === 'personalizado' || TEMAS.some(([id]) => id === s.tema) ? s.tema
       : s.tema === undefined && ['sidebar', 'content', 'acento'].some(k => cores[k].toLowerCase() !== APARENCIA_PADRAO[k].toLowerCase()) ? 'personalizado'
       : APARENCIA_PADRAO.tema;
@@ -247,5 +251,5 @@
   const classesDaAparencia = a => { const v = aparenciaValida(a); return [`tema-${v.tema}`, `skin-${v.skin}`]; };
   const api = { TEMAS, SKINS, APARENCIA_PADRAO, luminancia, contraste, corValida, aparenciaValida, classesDaAparencia, FOLDER_COLORS, folderColor,habitStats, habitDays, withHabits, validFrequency, localDate, safeUrl, validateState, normalize, isImagePath, wikiLinks, tags, findLinkedNote, mentions, inInbox, withoutInbox, toReview, linkQuery, linkSuggestions, validFolderName, folderPaths, descendants, upgradeBackup, pathKey };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
-  else root.Kuroi = api;
+  else root.Kiro = api;
 })(globalThis);

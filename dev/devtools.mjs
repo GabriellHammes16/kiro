@@ -12,7 +12,7 @@ const OBSERVADOS = new Map([
   ['app.js', 'reload'],
   ['index.html', 'reload'],
   ['domain.js', 'reload'],
-  ['kuroi-logo-transparent.png', 'reload'],
+  ['kiro-logo.png', 'reload'],
 ]);
 
 export function createDevTools(root) {

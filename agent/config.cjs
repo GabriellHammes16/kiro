@@ -1,8 +1,9 @@
 'use strict';
-// Configuração "AI & Integrations" do Kuroi, por cofre.
-// Mora em <cofre>/.kuroi/agent.json — fora do alcance do scan de notas — para que
+// Configuração "AI & Integrations" do Kiro, por cofre.
+// Mora em <cofre>/.kiro/agent.json — fora do alcance do scan de notas — para que
 // a permissão acompanhe o cofre quando ele é copiado para outra máquina.
 const fs = require('node:fs/promises');
+const fsSync = require('node:fs');
 const path = require('node:path');
 
 const PADRAO = Object.freeze({
@@ -14,6 +15,17 @@ const PADRAO = Object.freeze({
 });
 
 const booleano = (valor, queda) => typeof valor === 'boolean' ? valor : queda;
+
+/**
+ * Pasta interna do cofre. Cofres criados como KUROI têm ".kuroi": renomeia na
+ * primeira vez, para a configuração e a auditoria continuarem de onde pararam.
+ */
+function pastaInterna(directory) {
+  const atual = path.join(path.resolve(directory), '.kiro'), antiga = path.join(path.resolve(directory), '.kuroi');
+  try { if (!fsSync.existsSync(atual) && fsSync.existsSync(antiga)) fsSync.renameSync(antiga, atual); }
+  catch { /* sem permissão ou em uso: segue com a pasta nova, sem perder o que havia */ }
+  return atual;
+}
 
 function normalizar(bruto) {
   const dado = bruto && typeof bruto === 'object' ? bruto : {};
@@ -33,7 +45,7 @@ function normalizar(bruto) {
 
 class AgentConfig {
   constructor(directory) {
-    this.file = path.join(path.resolve(directory), '.kuroi', 'agent.json');
+    this.file = path.join(pastaInterna(directory), 'agent.json');
   }
 
   /** Um arquivo ausente ou corrompido cai no padrão: nunca abre mais permissão do que o previsto. */
@@ -56,4 +68,4 @@ class AgentConfig {
   }
 }
 
-module.exports = { AgentConfig, DEFAULT_CONFIG: PADRAO };
+module.exports = { pastaInterna, AgentConfig, DEFAULT_CONFIG: PADRAO };

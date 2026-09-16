@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 /**
- * Kuroi MCP Server — adaptador fino sobre a Kuroi Agent API.
+ * Kiro MCP Server — adaptador fino sobre a Kiro Agent API.
  *
- *   pedido MCP -> validação -> Kuroi Agent API -> Vault
+ *   pedido MCP -> validação -> Kiro Agent API -> Vault
  *
  * Nenhuma manipulação de arquivo acontece aqui. Este processo só traduz entre o
  * protocolo MCP e o toolkit, para que o mesmo núcleo sirva CLI, plugins e outros
@@ -11,7 +11,7 @@
  * Transporte: stdio. Não abre porta de rede.
  *
  * Uso:  node mcp/server.mjs [--vault <caminho>]
- *       KUROI_VAULT=<caminho> node mcp/server.mjs
+ *       KIRO_VAULT=<caminho> node mcp/server.mjs
  */
 import { createRequire } from 'node:module';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
@@ -24,9 +24,9 @@ import {
 } from '@modelcontextprotocol/sdk/types.js';
 
 const require = createRequire(import.meta.url);
-const { createKuroiAgent } = require('../agent/index.cjs');
+const { createKiroAgent } = require('../agent/index.cjs');
 
-const PREFIXO = 'kuroi_';
+const PREFIXO = 'kiro_';
 
 function argumentoCofre(argv) {
   const i = argv.indexOf('--vault');
@@ -44,10 +44,10 @@ function identificar(servidor) {
 const texto = valor => ({ content: [{ type: 'text', text: JSON.stringify(valor, null, 2) }] });
 
 async function main() {
-  const { toolkit, api, directory } = createKuroiAgent({ vaultDirectory: argumentoCofre(process.argv) });
+  const { toolkit, api, directory } = createKiroAgent({ vaultDirectory: argumentoCofre(process.argv) });
 
   const servidor = new Server(
-    { name: 'kuroi', version: '0.5.0' },
+    { name: 'kiro', version: '0.5.0' },
     { capabilities: { tools: {}, resources: {} } },
   );
 
@@ -62,7 +62,7 @@ async function main() {
         idempotentHint: f.risk === 'read',
         openWorldHint: false,
       },
-      _meta: { 'kuroi/risk': f.risk, 'kuroi/permission': f.permission },
+      _meta: { 'kiro/risk': f.risk, 'kiro/permission': f.permission },
     })),
   }));
 
@@ -83,27 +83,27 @@ async function main() {
 
   servidor.setRequestHandler(ListResourcesRequestSchema, async () => ({
     resources: [
-      { uri: 'kuroi://vault', name: 'Cofre Kuroi', description: 'Caminho, revisão e contagens do cofre aberto.', mimeType: 'application/json' },
-      { uri: 'kuroi://daily', name: 'Nota diária', description: 'Nota do dia de hoje, se existir.', mimeType: 'application/json' },
+      { uri: 'kiro://vault', name: 'Cofre Kiro', description: 'Caminho, revisão e contagens do cofre aberto.', mimeType: 'application/json' },
+      { uri: 'kiro://daily', name: 'Nota diária', description: 'Nota do dia de hoje, se existir.', mimeType: 'application/json' },
     ],
   }));
 
   servidor.setRequestHandler(ReadResourceRequestSchema, async pedido => {
     const uri = String(pedido.params.uri || '');
     const responder = valor => ({ contents: [{ uri, mimeType: 'application/json', text: JSON.stringify(valor, null, 2) }] });
-    if (uri === 'kuroi://vault') return responder(await api.describeVault());
-    if (uri === 'kuroi://daily') return responder(await api.getDailyNote({}));
-    const nota = uri.match(/^kuroi:\/\/notes\/(.+)$/);
+    if (uri === 'kiro://vault') return responder(await api.describeVault());
+    if (uri === 'kiro://daily') return responder(await api.getDailyNote({}));
+    const nota = uri.match(/^kiro:\/\/notes\/(.+)$/);
     if (nota) return responder(await api.readNote({ id: decodeURIComponent(nota[1]) }));
     throw new Error(`Recurso desconhecido: ${uri}`);
   });
 
   // stdout pertence ao protocolo; qualquer aviso vai para stderr.
-  process.stderr.write(`Kuroi MCP ativo. Cofre: ${directory}\n`);
+  process.stderr.write(`Kiro MCP ativo. Cofre: ${directory}\n`);
   await servidor.connect(new StdioServerTransport());
 }
 
 main().catch(erro => {
-  process.stderr.write(`Falha ao iniciar o Kuroi MCP: ${erro.message}\n`);
+  process.stderr.write(`Falha ao iniciar o Kiro MCP: ${erro.message}\n`);
   process.exit(1);
 });

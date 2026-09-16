@@ -11,7 +11,7 @@ const domain = require('../domain.js');
 const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAMAASsJTYQAAAAASUVORK5CYII=', 'base64');
 const nota = (extra = {}) => ({ id: 'nota-1', title: 'Com imagem', body: 'Texto', links: [], tags: [], folderId: '', updatedAt: Date.now(), ...extra });
 async function cofre(t) {
-  const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'kuroi-anexos-'));
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'kiro-anexos-'));
   t.after(() => fs.rm(directory, { recursive: true, force: true }));
   return new Vault(directory);
 }
@@ -45,7 +45,7 @@ test('nome de arquivo arrastado vira slug; conteúdo e caminhos perigosos são r
   await assert.rejects(vault.saveAttachment({ name: 'x.png', data: Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"/>') }), /não é uma imagem/);
   await assert.rejects(vault.saveAttachment({ name: 'x.png', data: Buffer.alloc(0) }), /vazia/);
   await assert.rejects(vault.saveAttachment({ data: Buffer.concat([PNG, Buffer.alloc(20 * 1024 * 1024)]) }), /20 MB/);
-  for (const ruim of ['../fora.png', 'Anexos/../../fora.png', '.history/x.png', 'caderno.json', 'Anexos/.kuroi-anexos', 'C:/Windows/x.png'])
+  for (const ruim of ['../fora.png', 'Anexos/../../fora.png', '.history/x.png', 'caderno.json', 'Anexos/.kiro-anexos', 'C:/Windows/x.png'])
     await assert.rejects(vault.readAttachment(ruim), `aceitou ${ruim}`);
 });
 
@@ -53,7 +53,7 @@ test('pasta "Anexos" que já é do usuário continua sendo pasta de notas; image
   const vault = await cofre(t);
   await vault.save({ ...(await vault.load()), folders: [{ id: 'pasta-anexos', title: 'Anexos', parentId: '' }], notes: [nota({ folderId: 'pasta-anexos' })] });
   const { path: caminho } = await vault.saveAttachment({ data: PNG });
-  assert.match(caminho, /^Anexos do KUROI\//);
+  assert.match(caminho, /^Anexos do KIRO\//);
   const depois = await vault.load();
   assert.deepEqual(depois.folders.map(f => f.title), ['Anexos']);
   assert.equal(depois.notes[0].folderId, depois.folders[0].id);
@@ -72,9 +72,9 @@ test('imagem embutida não conta como ligação entre notas', () => {
 });
 
 test('servidor recebe imagem colada e só devolve imagens de dentro do cofre', async t => {
-  const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'kuroi-anexos-http-'));
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'kiro-anexos-http-'));
   const port = 14000 + Math.floor(Math.random() * 20000);
-  const child = spawn(process.execPath, ['server.mjs'], { cwd: path.join(__dirname, '..'), env: { ...process.env, PORT: String(port), KUROI_VAULT: directory }, windowsHide: true });
+  const child = spawn(process.execPath, ['server.mjs'], { cwd: path.join(__dirname, '..'), env: { ...process.env, PORT: String(port), KIRO_VAULT: directory }, windowsHide: true });
   t.after(async () => {
     if (child.exitCode === null) { const parou = new Promise(resolve => child.once('exit', resolve)); child.kill(); await parou; }
     await fs.rm(directory, { recursive: true, force: true });
@@ -88,7 +88,7 @@ test('servidor recebe imagem colada e só devolve imagens de dentro do cofre', a
   assert.equal((await fetch(base + '/api/anexo', { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: 'oi' })).status, 415);
   assert.equal((await fetch(base + '/api/anexo', { method: 'POST', headers: { 'Content-Type': 'image/png', Origin: 'https://evil.example' }, body: PNG })).status, 403);
 
-  const enviada = await fetch(base + '/api/anexo', { method: 'POST', headers: { 'Content-Type': 'image/png', 'X-Kuroi-Nome': encodeURIComponent('Captura de tela.png') }, body: PNG });
+  const enviada = await fetch(base + '/api/anexo', { method: 'POST', headers: { 'Content-Type': 'image/png', 'X-Kiro-Nome': encodeURIComponent('Captura de tela.png') }, body: PNG });
   assert.equal(enviada.status, 200);
   const { path: caminho } = await enviada.json();
   assert.match(caminho, /^Anexos\/captura-de-tela-[0-9a-f]{6}\.png$/);

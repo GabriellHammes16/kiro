@@ -6,9 +6,9 @@ const os = require('node:os');
 const { spawn } = require('node:child_process');
 
 test('servidor restringe acesso e persiste o cofre pela API', async t => {
-  const directory=await fs.mkdtemp(path.join(os.tmpdir(),'kuroi-http-'));
+  const directory=await fs.mkdtemp(path.join(os.tmpdir(),'kiro-http-'));
   const port=14000+Math.floor(Math.random()*20000);
-  const child=spawn(process.execPath,['server.mjs'],{cwd:path.join(__dirname,'..'),env:{...process.env,PORT:String(port),KUROI_VAULT:directory},windowsHide:true});
+  const child=spawn(process.execPath,['server.mjs'],{cwd:path.join(__dirname,'..'),env:{...process.env,PORT:String(port),KIRO_VAULT:directory},windowsHide:true});
   t.after(async()=>{
     if(child.exitCode===null){const stopped=new Promise(resolve=>child.once('exit',resolve));child.kill();await stopped;}
     await fs.rm(directory,{recursive:true,force:true});
@@ -53,9 +53,9 @@ test('servidor restringe acesso e persiste o cofre pela API', async t => {
 test('modo de desenvolvimento injeta a recarga ao vivo; o normal não a expõe', async t => {
   const raiz=path.join(__dirname,'..');
   const iniciar=async(args)=>{
-    const directory=await fs.mkdtemp(path.join(os.tmpdir(),'kuroi-dev-'));
+    const directory=await fs.mkdtemp(path.join(os.tmpdir(),'kiro-dev-'));
     const port=14000+Math.floor(Math.random()*20000);
-    const child=spawn(process.execPath,['server.mjs',...args],{cwd:raiz,env:{...process.env,PORT:String(port),KUROI_VAULT:directory},windowsHide:true});
+    const child=spawn(process.execPath,['server.mjs',...args],{cwd:raiz,env:{...process.env,PORT:String(port),KIRO_VAULT:directory},windowsHide:true});
     t.after(async()=>{
       if(child.exitCode===null){const stopped=new Promise(resolve=>child.once('exit',resolve));child.kill();await stopped;}
       await fs.rm(directory,{recursive:true,force:true});
@@ -84,7 +84,7 @@ test('modo de desenvolvimento injeta a recarga ao vivo; o normal não a expõe',
   const leitor=resposta.body.getReader();
   assert.match(new TextDecoder().decode((await leitor.read()).value),/^event: boot\ndata: \w+/);
   eventos.abort();
-  // com KUROI_VAULT apontado, o modo dev não semeia exemplo em pasta alheia
+  // com KIRO_VAULT apontado, o modo dev não semeia exemplo em pasta alheia
   assert.deepEqual(await fs.readdir(dev.directory).then(n=>n.filter(x=>!x.startsWith('.'))),[]);
   // o que o instalador empacota nunca inclui as ferramentas de desenvolvimento
   const {build}=require('../package.json');

@@ -1,10 +1,10 @@
-# Kuroi MCP Server
+# Kiro MCP Server
 
-Expõe o cofre do Kuroi como ferramentas MCP, para qualquer cliente compatível
+Expõe o cofre do Kiro como ferramentas MCP, para qualquer cliente compatível
 com o Model Context Protocol.
 
 O servidor é um adaptador fino: valida o pedido e chama a
-[Kuroi Agent API](./agent-api.md). Nenhuma manipulação de arquivo acontece nele.
+[Kiro Agent API](./agent-api.md). Nenhuma manipulação de arquivo acontece nele.
 
 ## Iniciar
 
@@ -19,39 +19,39 @@ node mcp/server.mjs --vault "C:/MeuCofre"
 ```
 
 ```bash
-KUROI_VAULT="C:/MeuCofre" node mcp/server.mjs
+KIRO_VAULT="C:/MeuCofre" node mcp/server.mjs
 ```
 
-Sem argumento, o cofre é resolvido nesta ordem: `--vault`, `KUROI_VAULT`, cofre
-escolhido no aplicativo desktop, `Documentos/KUROI/vault`, cofre do projeto.
+Sem argumento, o cofre é resolvido nesta ordem: `--vault`, `KIRO_VAULT`, cofre
+escolhido no aplicativo desktop, `Documentos/KIRO/vault`, cofre do projeto.
 
-O servidor escreve `Kuroi MCP ativo. Cofre: <caminho>` em **stderr** e fica
+O servidor escreve `Kiro MCP ativo. Cofre: <caminho>` em **stderr** e fica
 aguardando. Rodar direto no terminal é normal: um cliente MCP é quem conversa
 com ele pela entrada padrão.
 
 ### A partir do aplicativo instalado
 
-Os arquivos do Kuroi ficam empacotados em `app.asar`, e um `node` externo não
+Os arquivos do Kiro ficam empacotados em `app.asar`, e um `node` externo não
 consegue executar nada de dentro de um asar. Por isso a camada de agentes é
 desempacotada na instalação, e o caminho a usar é o de `app.asar.unpacked`:
 
 ```
-%LOCALAPPDATA%\Programs\KUROI\resources\app.asar.unpacked\mcp\server.mjs
+%LOCALAPPDATA%\Programs\KIRO\resources\app.asar.unpacked\mcp\server.mjs
 ```
 
 ```json
 {
   "mcpServers": {
-    "kuroi": {
+    "kiro": {
       "command": "node",
-      "args": ["C:/Users/voce/AppData/Local/Programs/KUROI/resources/app.asar.unpacked/mcp/server.mjs"]
+      "args": ["C:/Users/voce/AppData/Local/Programs/KIRO/resources/app.asar.unpacked/mcp/server.mjs"]
     }
   }
 }
 ```
 
 O caminho muda se você escolheu outra pasta durante a instalação. É preciso ter
-o Node instalado na máquina: o Kuroi não expõe o Node embutido do Electron para
+o Node instalado na máquina: o Kiro não expõe o Node embutido do Electron para
 processos externos.
 
 ## Transporte
@@ -73,10 +73,10 @@ Formato usado pela maioria dos clientes MCP:
 ```json
 {
   "mcpServers": {
-    "kuroi": {
+    "kiro": {
       "command": "node",
       "args": ["C:/Projetos/Meu segundo cerebro/mcp/server.mjs"],
-      "env": { "KUROI_VAULT": "C:/Users/voce/Documents/KUROI/vault" }
+      "env": { "KIRO_VAULT": "C:/Users/voce/Documents/KIRO/vault" }
     }
   }
 }
@@ -100,39 +100,39 @@ await cliente.connect(new StdioClientTransport({
 
 const { tools } = await cliente.listTools();
 const resposta = await cliente.callTool({
-  name: 'kuroi_create_note',
+  name: 'kiro_create_note',
   arguments: { title: 'Ideias para o canal', folder: 'Projetos', content: 'Primeira ideia.' },
 });
 ```
 
 O nome que o cliente informa no handshake vira o `clientId` da auditoria. Não é
-obrigatório e não muda o comportamento do Kuroi: serve para você saber depois
+obrigatório e não muda o comportamento do Kiro: serve para você saber depois
 quem fez o quê.
 
 ## Ferramentas publicadas
 
-`kuroi_create_note`, `kuroi_read_note`, `kuroi_update_note`, `kuroi_delete_note`,
-`kuroi_restore_note`, `kuroi_list_notes`, `kuroi_search_notes`,
-`kuroi_list_trash`, `kuroi_create_folder`, `kuroi_list_folders`,
-`kuroi_move_note`, `kuroi_get_backlinks`, `kuroi_get_outgoing_links`,
-`kuroi_create_note_link`, `kuroi_get_recent_notes`, `kuroi_get_daily_note`, `kuroi_get_habits`,
-`kuroi_add_tag`, `kuroi_remove_tag`, `kuroi_search_by_tag`,
-`kuroi_get_vault_info`.
+`kiro_create_note`, `kiro_read_note`, `kiro_update_note`, `kiro_delete_note`,
+`kiro_restore_note`, `kiro_list_notes`, `kiro_search_notes`,
+`kiro_list_trash`, `kiro_create_folder`, `kiro_list_folders`,
+`kiro_move_note`, `kiro_get_backlinks`, `kiro_get_outgoing_links`,
+`kiro_create_note_link`, `kiro_get_recent_notes`, `kiro_get_daily_note`, `kiro_get_habits`,
+`kiro_add_tag`, `kiro_remove_tag`, `kiro_search_by_tag`,
+`kiro_get_vault_info`.
 
 Schemas e níveis de risco estão em [agent-api.md](./agent-api.md).
 
 Cada ferramenta vai com *annotations* padrão do MCP — `readOnlyHint`,
-`destructiveHint`, `idempotentHint`, `openWorldHint` — e com `kuroi/risk` e
-`kuroi/permission` no `_meta`. Um cliente pode usar isso para pedir confirmação
+`destructiveHint`, `idempotentHint`, `openWorldHint` — e com `kiro/risk` e
+`kiro/permission` no `_meta`. Um cliente pode usar isso para pedir confirmação
 antes de uma ação destrutiva.
 
 ## Recursos
 
 | URI | Conteúdo |
 |---|---|
-| `kuroi://vault` | Caminho, revisão e contagem de notas e pastas. |
-| `kuroi://daily` | Nota de hoje, se existir. |
-| `kuroi://notes/<id>` | Uma nota pelo id. |
+| `kiro://vault` | Caminho, revisão e contagem de notas e pastas. |
+| `kiro://daily` | Nota de hoje, se existir. |
+| `kiro://notes/<id>` | Uma nota pelo id. |
 
 Só isso, de propósito: nada de despejar o cofre inteiro em contexto.
 
@@ -156,7 +156,7 @@ permissões e a mesma auditoria da Agent API valem aqui.
 
 Vale saber:
 
-- **Excluir vem desligado por padrão.** `kuroi_delete_note` responde
+- **Excluir vem desligado por padrão.** `kiro_delete_note` responde
   `PERMISSION_DENIED` até você ligar em **Configurações › IA e integrações**, na barra lateral.
 - **Desligar tudo** é uma caixa na mesma tela: com `enabled: false`, toda
   ferramenta responde `AGENT_DISABLED`.
@@ -164,6 +164,6 @@ Vale saber:
   de execução de comando.
 - **Conteúdo de nota é dado, não instrução.** Uma nota do cofre pode conter
   texto tentando comandar o agente; quem decide o que fazer com isso é o cliente
-  de IA, não o Kuroi.
+  de IA, não o Kiro.
 - Rodar o servidor dá ao cliente conectado o mesmo alcance que a configuração
   permite. Conecte apenas clientes em que você confia.

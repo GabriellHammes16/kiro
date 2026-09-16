@@ -1,5 +1,5 @@
 {
-  "name": "kuroi",
+  "name": "kiro",
   "version": "0.13.0",
   "private": true,
   "main": "electron/main.cjs",
@@ -15,8 +15,8 @@
     "review-graph": "node scripts/build-review-graph.mjs"
   },
   "build": {
-    "appId": "com.kuroi.local",
-    "productName": "KUROI",
+    "appId": "com.kiro.local",
+    "productName": "KIRO",
     "directories": {
       "output": "dist"
     },
@@ -35,12 +35,12 @@
     ],
     "win": {
       "target": "nsis",
-      "icon": "kuroi-logo-transparent.png"
+      "icon": "kiro-icone.png"
     },
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
-      "artifactName": "KUROI-Setup-${version}.${ext}"
+      "artifactName": "KIRO-Setup-${version}.${ext}"
     },
     "asarUnpack": [
       "mcp/**",

@@ -50,15 +50,23 @@ function markdown(note, previous = '') {
   return `---\n${yaml.dump(metadata, { schema: yaml.CORE_SCHEMA, lineWidth: -1, noRefs: true })}---\n\n${note.body}\n`;
 }
 
-const FOLDER_MARKER = '.kuroi-folder.json';
+const FOLDER_MARKER = '.kiro-folder.json';
+// Cofres criados quando o aplicativo se chamava KUROI: as marcas antigas continuam
+// valendo na leitura, e a gravação seguinte já escreve as novas.
+const FOLDER_MARKERS = [FOLDER_MARKER, '.kuroi-folder.json'];
 // Cada gravação copia o cofre inteiro para .history. Sem teto, isso cresce sem fim.
 const HISTORY_LIMIT = 30;
 // Imagens coladas nas notas moram numa pasta marcada na raiz do cofre. A marca tira
 // a pasta da varredura: as imagens não viram pasta na árvore, não entram na revisão
 // (colar não gera conflito com a nota aberta) e não são copiadas para .history a
 // cada salvamento, o que multiplicaria o espaço em disco pelo limite do histórico.
-const ATTACHMENT_MARKER = '.kuroi-anexos';
-const ATTACHMENT_FOLDERS = ['Anexos', 'Anexos do KUROI'];
+const ATTACHMENT_MARKER = '.kiro-anexos';
+const ATTACHMENT_MARKERS = [ATTACHMENT_MARKER, '.kuroi-anexos'];
+const ATTACHMENT_FOLDERS = ['Anexos', 'Anexos do KIRO', 'Anexos do KUROI'];
+const temMarcaDeAnexos = async directory => {
+  for (const marca of ATTACHMENT_MARKERS) if (await pathExists(path.join(directory, marca))) return true;
+  return false;
+};
 const ATTACHMENT_LIMIT = 20 * 1024 * 1024;
 const IMAGE_TYPES = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp', avif: 'image/avif', bmp: 'image/bmp' };
 // Pelo conteúdo, não pelo nome nem pelo tipo declarado. SVG fica de fora: pode carregar script.
@@ -119,7 +127,7 @@ class Vault {
     const walk=async(relative='')=>{
       for(const entry of await fs.readdir(path.join(this.directory,relative),{withFileTypes:true})){
         if(!relative&&(entry.name.startsWith('.')||entry.name==='caderno.json'))continue;
-        if(!relative&&entry.isDirectory()&&await pathExists(path.join(this.directory,entry.name,ATTACHMENT_MARKER)))continue;
+        if(!relative&&entry.isDirectory()&&await temMarcaDeAnexos(path.join(this.directory,entry.name)))continue;
         const file=relative?`${relative}/${entry.name}`:entry.name;
         const target=await this.safePath(file);
         if(entry.isDirectory()){directories.push(file);await walk(file);}
@@ -140,7 +148,7 @@ class Vault {
     for(const n of legacy)if(!notes.some(x=>x.id===n.id))notes.push({...n,file:undefined});
     const folders=[], byDisk=new Map();
     for(const diskPath of directories.filter(visible).sort((a,b)=>a.split('/').length-b.split('/').length)){
-      const marker=files.get(`${diskPath}/${FOLDER_MARKER}`);
+      const marker=FOLDER_MARKERS.map(m=>files.get(`${diskPath}/${m}`)).find(Boolean);
       const cached=(data.folders||[]).find(f=>f.path===diskPath);
       const id=marker?JSON.parse(marker.data.toString('utf8')).id:cached?.id||`folder-${hash(diskPath).slice(0,32)}`;
       const folder={id,title:path.posix.basename(diskPath),parentId:byDisk.get(parentPath(diskPath))?.id||'',diskPath,description:cached?.description||'',color:folderColor(cached?.color)};
@@ -172,8 +180,8 @@ class Vault {
   load(){return this.exclusive(async()=>(await this.read()).state);}
   locked(operation){
     return this.exclusive(async()=>{
-      await fs.mkdir(this.directory,{recursive:true});const lockPath=await this.safePath('.kuroi.lock');let lock;
-      try{lock=await fs.open(lockPath,'wx');}catch(error){if(error.code==='EEXIST')throw new Error('O cofre está ocupado. Verifique .kuroi.lock se houve uma interrupção.');throw error;}
+      await fs.mkdir(this.directory,{recursive:true});const lockPath=await this.safePath('.kiro.lock');let lock;
+      try{lock=await fs.open(lockPath,'wx');}catch(error){if(error.code==='EEXIST')throw new Error('O cofre está ocupado. Verifique .kiro.lock se houve uma interrupção.');throw error;}
       try{return await operation();}finally{await lock.close();await fs.unlink(lockPath);}
     });
   }
@@ -182,7 +190,7 @@ class Vault {
     validateState(input);const before=await this.read();
     if(input.revision!==before.state.revision)throw new Error('O cofre mudou em outro editor. Exporte suas alterações e recarregue antes de salvar.');
     const paths=folderPaths(input.folders), beforeFolders=before.state.folders;
-    for(const folderPath of paths.values())if(!folderPath.includes('/')&&await pathExists(path.join(this.directory,folderPath,ATTACHMENT_MARKER)))throw new Error(`A pasta "${folderPath}" guarda as imagens coladas nas notas. Escolha outro nome.`);
+    for(const folderPath of paths.values())if(!folderPath.includes('/')&&await temMarcaDeAnexos(path.join(this.directory,folderPath)))throw new Error(`A pasta "${folderPath}" guarda as imagens coladas nas notas. Escolha outro nome.`);
     const owner=file=>beforeFolders.filter(f=>f.diskPath&&inside(file,f.diskPath)).sort((a,b)=>b.diskPath.length-a.diskPath.length)[0];
     const remap=file=>{const f=owner(file);return f?(paths.has(f.id)?paths.get(f.id)+file.slice(f.diskPath.length):null):file;};
     const desired=new Map(), desiredDirs=new Set(), changes=new Map(), used=new Set();
@@ -194,7 +202,7 @@ class Vault {
     for(const destination of paths.values())desiredDirs.add(destination);
     const noteFiles=new Set(before.state.notes.map(n=>n.file).filter(Boolean));
     for(const [file,value]of before.files){
-      if(noteFiles.has(file)||path.posix.basename(file)===FOLDER_MARKER)continue;
+      if(noteFiles.has(file)||FOLDER_MARKERS.includes(path.posix.basename(file)))continue;
       const target=remap(file);if(target){put(target,value.data);changes.set(pathKey(file),target);}
     }
     const nextNotes=input.notes.map(note=>{
@@ -209,7 +217,7 @@ class Vault {
       for(const dir of restoring.directories){const target=restoring.map(dir,paths);if(target)desiredDirs.add(target);}
       const archivedNotes=new Set(restoring.entry.notes.map(n=>n.file));
       for(const [file,data]of restoring.files){
-        if(archivedNotes.has(file)||path.posix.basename(file)===FOLDER_MARKER)continue;
+        if(archivedNotes.has(file)||FOLDER_MARKERS.includes(path.posix.basename(file)))continue;
         const target=restoring.map(file,paths);if(target){put(target,data);changes.set(pathKey(file),target);}
       }
     }
@@ -263,11 +271,11 @@ class Vault {
     try{await this.tidy(transaction);}catch{/* a faxina não pode falhar um salvamento já aplicado */}
     return (await this.read()).state;
   }
-  /** Pasta onde vão as imagens coladas: a primeira que está livre ou já é do KUROI. */
+  /** Pasta onde vão as imagens coladas: a primeira que está livre ou já é do KIRO. */
   async attachmentFolder(){
     for(const name of ATTACHMENT_FOLDERS){
       const directory=await this.safePath(name);
-      if(!await pathExists(directory)||await pathExists(path.join(directory,ATTACHMENT_MARKER)))return name;
+      if(!await pathExists(directory)||await temMarcaDeAnexos(directory))return name;
     }
     throw new Error('Não há pasta livre para guardar imagens. Renomeie a pasta "Anexos" do cofre.');
   }
@@ -281,7 +289,7 @@ class Vault {
       const folder=await this.attachmentFolder();
       // A marca vem antes da imagem: a pasta nunca aparece na varredura sem ela.
       const marker=await this.safePath(`${folder}/${ATTACHMENT_MARKER}`);
-      if(!await pathExists(marker))await atomicWrite(marker,'Imagens coladas nas notas do KUROI. Esta marca tira a pasta da árvore de notas.\n');
+      if(!await pathExists(marker))await atomicWrite(marker,'Imagens coladas nas notas do KIRO. Esta marca tira a pasta da árvore de notas.\n');
       const stem=typeof name==='string'?path.basename(name.replace(/\\/g,'/')).replace(/\.[^.]*$/,''):'';
       const now=new Date(), two=n=>String(n).padStart(2,'0');
       // "image.png" é o nome genérico que o navegador dá a um print colado.

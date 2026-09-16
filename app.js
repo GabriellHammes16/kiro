@@ -1,4 +1,4 @@
-const today = () => Kuroi.localDate();
+const today = () => Kiro.localDate();
 const uid = () => crypto.randomUUID();
 let state = { notes: [], tasks: [], habits: [], habitLog: {}, folders: [] };
 let currentView = "today";
@@ -9,7 +9,7 @@ async function save() {
   const snapshot = structuredClone(state);
   setBusy(true); status('Salvando…');
   try {
-    Kuroi.validateState(snapshot);
+    Kiro.validateState(snapshot);
     state = window.cadernoDesktop ? await window.cadernoDesktop.saveState(snapshot) : await api('state', snapshot);
     status('Salvo no cofre'); render(); return true;
   } catch (error) {
@@ -78,7 +78,7 @@ function cardContinuar(nota) {
   const ultimo = textoPlano(nota.body.trim().split(/\n\s*\n/).filter(p => textoPlano(p)).pop() || '');
   const trecho = ultimo === textoPlano(nota.title || '') ? '' : ultimo;
   const pasta = state.folders.find(f => f.id === nota.folderId);
-  return `<section class="card continuar"><div class="card-head"><h2>Continuar de onde parei</h2><span class="continuar-quando">editada ${dateLabel(Kuroi.localDate(new Date(nota.updatedAt))).toLowerCase()}</span></div><button type="button" class="continuar-nota" data-extra="continuar" data-id="${nota.id}"><span class="continuar-titulo">${pasta ? `<span class="pasta-chip"${pasta.color ? ` data-cor-pasta="${pasta.color}"` : ''}>${icone('pastas')}</span>` : icone('nota')} ${escapeHtml(nota.title || 'Sem título')}</span>${trecho ? `<span class="continuar-trecho">${trecho.length > 180 ? '…' : ''}${escapeHtml(trecho.slice(-180))}</span>` : ''}<span class="continuar-acao">Continuar escrevendo ${icone('direita')}</span></button></section>`;
+  return `<section class="card continuar"><div class="card-head"><h2>Continuar de onde parei</h2><span class="continuar-quando">editada ${dateLabel(Kiro.localDate(new Date(nota.updatedAt))).toLowerCase()}</span></div><button type="button" class="continuar-nota" data-extra="continuar" data-id="${nota.id}"><span class="continuar-titulo">${pasta ? `<span class="pasta-chip"${pasta.color ? ` data-cor-pasta="${pasta.color}"` : ''}>${icone('pastas')}</span>` : icone('nota')} ${escapeHtml(nota.title || 'Sem título')}</span>${trecho ? `<span class="continuar-trecho">${trecho.length > 180 ? '…' : ''}${escapeHtml(trecho.slice(-180))}</span>` : ''}<span class="continuar-acao">Continuar escrevendo ${icone('direita')}</span></button></section>`;
 }
 // ---- Hábitos no Hoje: só os do dia, com a semana clicável e a sequência. ----
 const DIAS_LETRA = ['D','S','T','Q','Q','S','S'], DIAS_CURTO = ['dom','seg','ter','qua','qui','sex','sáb'];
@@ -92,8 +92,8 @@ function rotuloFrequencia(f) {
 }
 function cardHabitos() {
   const hoje = today();
-  const [a, m, d] = hoje.split('-').map(Number), domingo = Kuroi.localDate(new Date(a, m - 1, d + (7 - new Date(a, m - 1, d).getDay()) % 7));
-  const doDia = state.habits.map(h => ({ h, s: Kuroi.habitStats(h, state.habitLog[h.id] || [], hoje) })).filter(x => x.s.dueToday);
+  const [a, m, d] = hoje.split('-').map(Number), domingo = Kiro.localDate(new Date(a, m - 1, d + (7 - new Date(a, m - 1, d).getDay()) % 7));
+  const doDia = state.habits.map(h => ({ h, s: Kiro.habitStats(h, state.habitLog[h.id] || [], hoje) })).filter(x => x.s.dueToday);
   const feitos = doDia.filter(x => x.s.doneToday).length;
   const linha = ({ h, s }) => {
     const semanal = h.frequency.type === 'weekly';
@@ -102,7 +102,7 @@ function cardHabitos() {
       s.streak ? `<span class="habito-sequencia">${icone('chama')} ${s.streak} ${semanal ? (s.streak === 1 ? 'semana' : 'semanas') : (s.streak === 1 ? 'dia' : 'dias')}</span>` : '',
     ].filter(Boolean).join(' · ');
     // Semana fixa de segunda a domingo: as letras não mudam de lugar; dias que ainda não chegaram ficam apagados.
-    const dias = Kuroi.habitDays(h, state.habitLog[h.id] || [], domingo, 7).map(d => d.date > hoje
+    const dias = Kiro.habitDays(h, state.habitLog[h.id] || [], domingo, 7).map(d => d.date > hoje
       ? `<span class="habito-dia futuro" title="${rotuloDoDia(d.date)}">${DIAS_LETRA[new Date(`${d.date}T12:00`).getDay()]}</span>`
       : `<button type="button" class="habito-dia${d.done ? ' feito' : ''}${d.due ? '' : ' livre'}${d.date === hoje ? ' hoje' : ''}" data-action="toggle-habit-day" data-id="${h.id}|${d.date}" title="${rotuloDoDia(d.date)}${d.done ? ' · feito' : ''}" aria-label="${rotuloDoDia(d.date)}: ${d.done ? 'feito' : 'não feito'}" aria-pressed="${d.done}">${DIAS_LETRA[new Date(`${d.date}T12:00`).getDay()]}</button>`).join('');
     return `<div class="routine-item habito" data-habito="${h.id}">${check(s.doneToday, 'toggle-habit', h.id)}<div class="habito-texto"><span class="routine-title">${escapeHtml(h.title)}</span><span class="habito-meta">${meta}</span></div><div class="habito-semana">${dias}</div></div>`;
@@ -140,13 +140,13 @@ function habitoModal(habito = { title: '', frequency: { type: 'daily' } }) {
     e.preventDefault();
     const dados = new FormData(form), tipo = dados.get('tipo');
     const frequency = tipo === 'days' ? { type: 'days', days: dados.getAll('dias').map(Number) } : tipo === 'weekly' ? { type: 'weekly', times: Math.min(7, Math.max(1, Number(dados.get('vezes')) || 1)) } : { type: 'daily' };
-    if (!Kuroi.validFrequency(frequency)) { $('#habito-erro').hidden = false; return; }
+    if (!Kiro.validFrequency(frequency)) { $('#habito-erro').hidden = false; return; }
     const salvo = { ...habito, id: habito.id || uid(), title: String(dados.get('title')).trim(), frequency, createdAt: habito.createdAt || Date.now() };
     state.habits = habito.id ? state.habits.map(h => h.id === habito.id ? salvo : h) : [...state.habits, salvo];
     if (await save()) closeModal(true);
   };
 }
-// Confirmação dentro do Kuroi, não o confirm() nativo: em alguns ambientes (Electron, navegador
+// Confirmação dentro do Kiro, não o confirm() nativo: em alguns ambientes (Electron, navegador
 // embutido) a caixa nativa não aparece ou fecha sozinha, e a exclusão parecia não fazer nada.
 function excluirHabito(id) {
   const habito = state.habits.find(h => h.id === id);
@@ -182,8 +182,8 @@ const menuDosHabitos = () => [
 function habitosModal() {
   const hoje = today();
   const blocos = state.habits.map(h => {
-    const dias = state.habitLog[h.id] || [], s = Kuroi.habitStats(h, dias, hoje), semanal = h.frequency.type === 'weekly';
-    const grade = Kuroi.habitDays(h, dias, hoje, 35).map(d => `<span class="grade-dia${d.done ? ' feito' : ''}${d.due ? '' : ' livre'}${d.date === hoje ? ' hoje' : ''}" title="${rotuloDoDia(d.date)}${d.done ? ' · feito' : ''}"></span>`).join('');
+    const dias = state.habitLog[h.id] || [], s = Kiro.habitStats(h, dias, hoje), semanal = h.frequency.type === 'weekly';
+    const grade = Kiro.habitDays(h, dias, hoje, 35).map(d => `<span class="grade-dia${d.done ? ' feito' : ''}${d.due ? '' : ' livre'}${d.date === hoje ? ' hoje' : ''}" title="${rotuloDoDia(d.date)}${d.done ? ' · feito' : ''}"></span>`).join('');
     return `<section class="habito-stats" data-habito="${h.id}"><header><div class="cfg-texto"><span class="cfg-titulo">${escapeHtml(h.title)}</span><span class="small-muted">${rotuloFrequencia(h.frequency)}</span></div><button type="button" class="icon-button" data-editar-habito="${h.id}" aria-label="Editar hábito" title="Editar">${icone('renomear')}</button></header>
       <div class="habito-numeros"><div><b>${s.streak}</b><span>${semanal ? 'semanas seguidas' : 'dias seguidos'}</span></div><div><b>${s.rate30 === null ? '–' : s.rate30 + '%'}</b><span>nos últimos 30 dias</span></div><div><b>${s.totalDone}</b><span>vezes no total</span></div></div>
       <div class="habito-grade" aria-label="Últimas 5 semanas">${grade}</div></section>`;
@@ -207,10 +207,10 @@ function textoPlano(md) {
 }
 function notesMarkup(notes) { return notes.length ? [...notes].sort((a,b)=>b.updatedAt-a.updatedAt).map(n=>{
   const folder=state.folders.find(f=>f.id===n.folderId);
-  const ligacoes=new Set(Kuroi.wikiLinks(n.body).map(l=>Kuroi.normalize(l.target))).size;
+  const ligacoes=new Set(Kiro.wikiLinks(n.body).map(l=>Kiro.normalize(l.target))).size;
   const meta=[
     folder && `<span class="pasta-chip"${folder.color?` data-cor-pasta="${folder.color}"`:""}>${icone('pastas')} ${escapeHtml(folder.path||folder.title)}</span>`,
-    Kuroi.tags(n).map(t=>`#${escapeHtml(t)}`).join(" "),
+    Kiro.tags(n).map(t=>`#${escapeHtml(t)}`).join(" "),
     ligacoes && `${ligacoes} ${ligacoes===1?"ligação":"ligações"}`,
     n.links.length && `${n.links.length} link${n.links.length===1?"":"s"} externo${n.links.length===1?"":"s"}`,
     ...(()=>{const dia=d=>new Intl.DateTimeFormat("pt-BR",{day:"numeric",month:"short"}).format(d);
@@ -301,7 +301,7 @@ const TRACOS = {
   salvar: '<path d="M5 6.5A1.5 1.5 0 0 1 6.5 5h9L19 8.5V18a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 5 18z"/><path d="M8.5 5v4.5h6M8.5 19.5v-5h7v5"/>',
   detalhes: '<path d="M4.5 8h8M17 8h2.5M4.5 16h3M12 16h7.5"/><circle cx="14.5" cy="8" r="2.2"/><circle cx="9.5" cy="16" r="2.2"/>',
   // Temas (cards de Aparência): um desenho por tema; os de anime são homenagens em traço, sem logos.
-  'tema-escuro-classico': '<path d="M19 14.8A7.8 7.8 0 1 1 9.2 5a6.2 6.2 0 0 0 9.8 9.8z"/>',
+  'tema-kiro': '<path d="M19 14.8A7.8 7.8 0 1 1 9.2 5a6.2 6.2 0 0 0 9.8 9.8z"/>',
   'tema-escuro-azul': '<path d="M12 3.5c3.3 4.1 5.8 7.2 5.8 10.6a5.8 5.8 0 0 1-11.6 0C6.2 10.7 8.7 7.6 12 3.5z"/>',
   'tema-escuro-verde': '<path d="M5.5 18.5C4.5 10.5 9.5 5 19.5 4.5 19 14.5 13.5 19.5 5.5 18.5z"/><path d="M4 20l9-9"/>',
   'tema-escuro-ambar': '<path d="M6.5 3.5h11M6.5 20.5h11"/><path d="M8 3.5c0 5 4 5.5 4 8.5s-4 3.5-4 8.5M16 3.5c0 5-4 5.5-4 8.5s4 3.5 4 8.5"/><path d="M9.8 18.6h4.4" stroke-width="2.5"/>',
@@ -339,7 +339,7 @@ function treeMarkup(parentId, depth) {
     return `<div class="tree-node${open?" open":""}" data-id="${folder.id}"${folder.color?` data-cor-pasta="${folder.color}"`:""}><div class="tree-row tree-folder" data-action="toggle-folder" data-id="${folder.id}" style="--depth:${depth}"${folder.description?` title="${escapeHtml(folder.description)}"`:""}><span class="twisty">${temFilhos?icone('direita'):""}</span><span class="tree-icone">${icone('pastas')}</span><span class="tree-name" title="${escapeHtml(folder.title)}">${escapeHtml(folder.title)}</span>${tools}</div><div class="tree-children"><div class="tree-children-inner">${treeMarkup(folder.id,depth+1)}</div></div></div>`;
   }).join("");
   const notes = folderNotes(parentId).map(note => {
-    const tags = Kuroi.tags(note).slice(0,2).map(t=>`#${escapeHtml(t)}`).join(" ");
+    const tags = Kiro.tags(note).slice(0,2).map(t=>`#${escapeHtml(t)}`).join(" ");
     return `<div class="tree-row tree-note${editing?.id === note.id ? " ativa" : ""}" draggable="true" data-action="edit-note" data-id="${note.id}" style="--depth:${depth}"><span class="twisty"></span><span class="tree-icone">${icone('nota')}</span><span class="tree-name" title="${escapeHtml(note.title||"Sem título")}">${escapeHtml(note.title||"Sem título")}</span><span class="tree-meta">${tags}</span></div>`;
   }).join("");
   return folders + notes;
@@ -361,14 +361,17 @@ function toggleFolder(id) {
 }
 // Barra lateral do cofre recolhível: recolhida, sobra só a casinha. A escolha fica
 // no navegador (localStorage), como a aparência: é preferência de tela, não dado do cofre.
-let lateralRecolhida = (() => { try { return localStorage.getItem('kuroi.lateralRecolhida') === '1'; } catch { return false; } })();
+// Preferências de tela salvas por instalação. A chave antiga (kuroi.*) ainda é lida:
+// quem usava o aplicativo com o nome anterior não perde o que tinha escolhido.
+const lerPreferencia = chave => { try { return localStorage.getItem(`kiro.${chave}`) ?? localStorage.getItem(`kuroi.${chave}`); } catch { return null; } };
+let lateralRecolhida = lerPreferencia('lateralRecolhida') === '1';
 function botaoLateral() {
   const acao = lateralRecolhida ? 'Mostrar barra lateral' : 'Esconder barra lateral';
   return `<button class="icon-button cofre-alternar" data-cofre="alternar" title="${acao}" aria-label="${acao}" aria-expanded="${!lateralRecolhida}">${icone(lateralRecolhida ? 'direita' : 'esquerda')}</button>`;
 }
 function alternarLateral() {
   lateralRecolhida = !lateralRecolhida;
-  try { localStorage.setItem('kuroi.lateralRecolhida', lateralRecolhida ? '1' : '0'); } catch { /* janela privada: vale só nesta sessão */ }
+  try { localStorage.setItem('kiro.lateralRecolhida', lateralRecolhida ? '1' : '0'); } catch { /* janela privada: vale só nesta sessão */ }
   document.querySelector('.app-shell').classList.toggle('lateral-recolhida', lateralRecolhida);
   // Atualiza o botão em vez de trocá-lo, para não tirar o foco de quem usa o teclado.
   const botao = document.querySelector('[data-cofre="alternar"]');
@@ -415,8 +418,8 @@ function bindView() {
   document.querySelector('#expand-all')?.addEventListener('click',()=>abrirTodas(true));
   document.querySelector('#collapse-all')?.addEventListener('click',()=>abrirTodas(false));
   document.querySelector('#note-search')?.addEventListener('input',e=>{
-    const q=Kuroi.normalize(e.target.value);
-    document.querySelector('#notes-grid').innerHTML=notesMarkup(state.notes.filter(n=>q.startsWith('#') ? Kuroi.tags(n).some(t=>Kuroi.normalize(t).includes(q.slice(1))) : Kuroi.normalize(n.title+' '+n.body+' '+Kuroi.tags(n).join(' ')).includes(q)));
+    const q=Kiro.normalize(e.target.value);
+    document.querySelector('#notes-grid').innerHTML=notesMarkup(state.notes.filter(n=>q.startsWith('#') ? Kiro.tags(n).some(t=>Kiro.normalize(t).includes(q.slice(1))) : Kiro.normalize(n.title+' '+n.body+' '+Kiro.tags(n).join(' ')).includes(q)));
   });
   if(currentView==="graph"){bindGraph();return;}
   if(currentView==="studies"){
@@ -441,7 +444,7 @@ function action(type,id) {
   if(type==="new-subfolder") folderModal({title:"",description:"",parentId:id}); if(type==="toggle-habit") marcarHabito(id); if(type==="toggle-habit-day"){const [habito,dia]=id.split("|");marcarHabito(habito,dia);} if(type==="toggle-task"){const t=state.tasks.find(x=>x.id===id);t.done=!t.done;save();render();} if(type==="toggle-note-task") marcarTarefaDaNota(id); if(type==="edit-note") abrirNota(getNote(id)); if(type==="new-note-folder") abrirNota(notaVazia({folderId:id})); if(type==="edit-task") taskModal(state.tasks.find(x=>x.id===id)); if(type==="edit-folder") folderModal(state.folders.find(x=>x.id===id)); if(type==="delete-task"){state.tasks=state.tasks.filter(x=>x.id!==id);save();render();} if(type==="delete-folder") deleteFolder(id); }
 // Excluir uma pasta leva junto suas subpastas; as notas continuam no cofre, na raiz.
 function deleteFolder(id) {
-  const ids=Kuroi.descendants(state.folders,id);
+  const ids=Kiro.descendants(state.folders,id);
   const notes=state.notes.filter(n=>ids.has(n.folderId));
   if((ids.size>1||notes.length)&&!confirm(`Esta pasta contém ${ids.size-1} subpasta${ids.size===2?"":"s"} e ${notes.length} nota${notes.length===1?"":"s"}. As subpastas serão excluídas e as notas irão para a raiz do cofre. Continuar?`))return;
   state.notes=state.notes.map(n=>ids.has(n.folderId)?{...n,folderId:""}:n);
@@ -476,7 +479,7 @@ function menuDaArvore(linha) {
     { rotulo: 'Nova subpasta', icone: icone('pasta-nova'), acao: () => folderModal({ title: '', description: '', parentId: id }) },
     { separador: true },
     { rotulo: 'Renomear ou mover', icone: icone('renomear'), acao: () => pastaAtual() && folderModal(pastaAtual()) },
-    { rotulo: 'Cor', icone: icone('realce'), filhos: ['', ...Kuroi.FOLDER_COLORS].map(cor => ({ rotulo: NOMES_DE_COR[cor], icone: bolinha(cor), ativo: () => (pastaAtual()?.color || '') !== cor, acao: () => { const pasta = pastaAtual(); if (pasta) { pasta.color = cor; save(); } } })) },
+    { rotulo: 'Cor', icone: icone('realce'), filhos: ['', ...Kiro.FOLDER_COLORS].map(cor => ({ rotulo: NOMES_DE_COR[cor], icone: bolinha(cor), ativo: () => (pastaAtual()?.color || '') !== cor, acao: () => { const pasta = pastaAtual(); if (pasta) { pasta.color = cor; save(); } } })) },
     { separador: true },
     { rotulo: 'Excluir pasta', icone: icone('lixeira'), acao: () => deleteFolder(id) },
   ];
@@ -485,12 +488,12 @@ function modal(title, body) { modalDirty=false; document.querySelector("#modal-r
 function closeModal(force=false){ if(!force && (busy || (modalDirty && !confirm('Descartar as alterações deste formulário?'))))return false; document.querySelector('#modal-root').innerHTML='';modalDirty=false;return true; }
 function taskModal(task={title:"",due:today(),priority:"Média",noteId:""}) { modal(task.id?"Editar tarefa":"Nova tarefa", `<form class="form" id="task-form"><div class="field"><label>Tarefa</label><input name="title" required value="${escapeHtml(task.title)}" placeholder="O que precisa ser feito?" /></div><div class="two-cols"><div class="field"><label>Data</label><input name="due" type="date" value="${task.due}" required /></div><div class="field"><label>Prioridade</label><select name="priority">${["Baixa","Média","Alta"].map(p=>`<option ${p===task.priority?"selected":""}>${p}</option>`).join("")}</select></div></div><div class="field"><label>Nota associada (opcional)</label><select name="noteId"><option value="">Nenhuma</option>${state.notes.map(n=>`<option value="${n.id}" ${n.id===task.noteId?"selected":""}>${escapeHtml(n.title)}</option>`).join("")}</select></div><div class="form-actions"><button type="button" class="secondary" id="cancel">Cancelar</button><button class="primary">Salvar tarefa</button></div></form>`);document.querySelector("#cancel").onclick=()=>closeModal();document.querySelector("#task-form").onsubmit=e=>{e.preventDefault();const f=new FormData(e.currentTarget);const saved={...task,id:task.id||uid(),title:f.get("title"),due:f.get("due"),priority:f.get("priority"),noteId:f.get("noteId"),done:task.done||false};state.tasks=task.id?state.tasks.map(t=>t.id===task.id?saved:t):[saved,...state.tasks];save();closeModal(true);render();}; }
 const NOMES_DE_COR = { "":"Sem cor", azul:"Azul", verde:"Verde", amarelo:"Amarelo", laranja:"Laranja", vermelho:"Vermelho", rosa:"Rosa", roxo:"Roxo", cinza:"Cinza" };
-function folderModal(folder={title:"",description:"",parentId:""}) { modal(folder.id?"Editar pasta":"Nova pasta de estudo", `<form class="form" id="folder-form"><div class="field"><label>Nome da pasta</label><input name="title" required value="${escapeHtml(folder.title)}" placeholder="Ex.: JAVA, Inglês, programação" /><small class="small-muted">Vira uma pasta de verdade no cofre: sem &lt; &gt; : " / \\ | ? * e sem ponto ou espaço no início ou no final.</small></div><div class="field"><label>Dentro de</label><select name="parentId"><option value="">Raiz do cofre</option>${state.folders.filter(f=>!(folder.id?Kuroi.descendants(state.folders,folder.id):new Set()).has(f.id)).sort(byTitle).map(f=>`<option value="${f.id}" ${f.id===(folder.parentId||"")?"selected":""}>${escapeHtml(f.path||f.title)}</option>`).join("")}</select></div><div class="field"><span class="rotulo-campo" id="cor-pasta-rotulo">Cor</span><div class="amostras" role="radiogroup" aria-labelledby="cor-pasta-rotulo">${["",...Kuroi.FOLDER_COLORS].map(cor=>`<label class="amostra" data-cor-pasta="${cor}" title="${NOMES_DE_COR[cor]}"><input type="radio" name="color" value="${cor}" ${cor===(folder.color||"")?"checked":""} /><span class="sr-only">${NOMES_DE_COR[cor]}</span></label>`).join("")}</div></div><div class="field"><label>Descrição</label><textarea name="description" placeholder="Qual é seu objetivo com esta pasta?">${escapeHtml(folder.description||"")}</textarea></div><div class="form-actions"><button type="button" class="secondary" id="cancel">Cancelar</button><button class="primary">Salvar pasta</button></div></form>`);document.querySelector("#cancel").onclick=()=>closeModal();document.querySelector("#folder-form").onsubmit=e=>{e.preventDefault();const f=new FormData(e.currentTarget);const title=f.get("title").trim();
+function folderModal(folder={title:"",description:"",parentId:""}) { modal(folder.id?"Editar pasta":"Nova pasta de estudo", `<form class="form" id="folder-form"><div class="field"><label>Nome da pasta</label><input name="title" required value="${escapeHtml(folder.title)}" placeholder="Ex.: JAVA, Inglês, programação" /><small class="small-muted">Vira uma pasta de verdade no cofre: sem &lt; &gt; : " / \\ | ? * e sem ponto ou espaço no início ou no final.</small></div><div class="field"><label>Dentro de</label><select name="parentId"><option value="">Raiz do cofre</option>${state.folders.filter(f=>!(folder.id?Kiro.descendants(state.folders,folder.id):new Set()).has(f.id)).sort(byTitle).map(f=>`<option value="${f.id}" ${f.id===(folder.parentId||"")?"selected":""}>${escapeHtml(f.path||f.title)}</option>`).join("")}</select></div><div class="field"><span class="rotulo-campo" id="cor-pasta-rotulo">Cor</span><div class="amostras" role="radiogroup" aria-labelledby="cor-pasta-rotulo">${["",...Kiro.FOLDER_COLORS].map(cor=>`<label class="amostra" data-cor-pasta="${cor}" title="${NOMES_DE_COR[cor]}"><input type="radio" name="color" value="${cor}" ${cor===(folder.color||"")?"checked":""} /><span class="sr-only">${NOMES_DE_COR[cor]}</span></label>`).join("")}</div></div><div class="field"><label>Descrição</label><textarea name="description" placeholder="Qual é seu objetivo com esta pasta?">${escapeHtml(folder.description||"")}</textarea></div><div class="form-actions"><button type="button" class="secondary" id="cancel">Cancelar</button><button class="primary">Salvar pasta</button></div></form>`);document.querySelector("#cancel").onclick=()=>closeModal();document.querySelector("#folder-form").onsubmit=e=>{e.preventDefault();const f=new FormData(e.currentTarget);const title=f.get("title").trim();
   // Validar aqui evita que um nome inválido bloqueie a janela no salvamento.
-  if(!Kuroi.validFolderName(title)){alert('Nome de pasta inválido. Evite < > : " / \\ | ? * , nomes reservados do Windows e ponto ou espaço no início ou no final.');return;}
+  if(!Kiro.validFolderName(title)){alert('Nome de pasta inválido. Evite < > : " / \\ | ? * , nomes reservados do Windows e ponto ou espaço no início ou no final.');return;}
   const parentId=f.get("parentId")||"";
-  const saved={...folder,id:folder.id||uid(),title,parentId,description:f.get("description"),color:Kuroi.folderColor(f.get("color"))};
-  if(state.folders.some(x=>x.id!==saved.id&&(x.parentId||"")===parentId&&Kuroi.pathKey(x.title)===Kuroi.pathKey(title))){alert("Já existe uma pasta com esse nome neste local.");return;}
+  const saved={...folder,id:folder.id||uid(),title,parentId,description:f.get("description"),color:Kiro.folderColor(f.get("color"))};
+  if(state.folders.some(x=>x.id!==saved.id&&(x.parentId||"")===parentId&&Kiro.pathKey(x.title)===Kiro.pathKey(title))){alert("Já existe uma pasta com esse nome neste local.");return;}
   state.folders=folder.id?state.folders.map(x=>x.id===folder.id?saved:x):[saved,...state.folders];
   // Deixar visível o que acabou de ser criado ou movido.
   if(expanded){expanded.add(saved.id);if(parentId)expanded.add(parentId);}
@@ -509,6 +512,14 @@ async function api(endpoint,data){
   const response=await fetch(`/api/${endpoint}`,data===undefined?{}:{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
   const result=await response.json();if(!response.ok)throw new Error(result.error||'Não foi possível acessar o cofre.');return result;
 }
+// Abertura: some assim que o cofre carrega, mas fica tempo suficiente para a marca ser vista.
+const abertura=document.getElementById('abertura');
+function fecharAbertura(){
+  if(!abertura||!abertura.isConnected||abertura.classList.contains('saindo'))return;
+  setTimeout(()=>{abertura.classList.add('saindo');setTimeout(()=>abertura.remove(),450);},Math.max(0,1200-performance.now()));
+}
+// Cofre lento ou com erro: a abertura sai de qualquer jeito, nunca prende a tela.
+setTimeout(fecharAbertura,4000);
 function status(message,error=false){$('#save-status').textContent=message;$('#save-status').classList.toggle('error',error);}
 function setBusy(value){busy=value;document.body.classList.toggle('saving',value);$('.app-shell').inert=value;$('#modal-root').inert=value;}
 async function reload(manual=false){
@@ -516,22 +527,22 @@ async function reload(manual=false){
   if(manual&&(failed||modalDirty||editorDirty)&&!confirm('Recarregar descarta alterações ainda não salvas nesta janela. Exporte seus dados ou copie o texto antes de continuar. Recarregar?'))return;
   setBusy(true);
   try{
-    const saved=await loadFromVault();Kuroi.validateState(saved);
+    const saved=await loadFromVault();Kiro.validateState(saved);
     const changed=state.revision!==saved.revision||!loaded;
     state=saved;loaded=true;failed=false;
     // Recarregar de propósito descarta a edição: a nota aberta volta ao que está no cofre.
     if(manual&&editing){const n=editing.id&&getNote(editing.id);editing=n?{...n,tags:[...(n.tags||[])],links:[...(n.links||[])]}:null;editorDirty=false;if(!editing)currentView='today';}
     if(manual)closeModal(true);if(changed||manual)render();status('Cofre atualizado');
   }catch(error){status('Não foi possível ler o cofre: '+error.message,true);}
-  finally{setBusy(false);}
+  finally{setBusy(false);fecharAbertura();}
 }
 const itemQueAbre=n=>`<div class="routine-item"><span class="brand-mark">${icone('nota')}</span><a class="routine-title" data-action="edit-note" data-id="${n.id}">${escapeHtml(n.title||'Sem título')}</a></div>`;
 function cardCaixaDeEntrada(){
-  const notas=state.notes.filter(Kuroi.inInbox).sort((a,b)=>(b.createdAt??b.updatedAt)-(a.createdAt??a.updatedAt));
+  const notas=state.notes.filter(Kiro.inInbox).sort((a,b)=>(b.createdAt??b.updatedAt)-(a.createdAt??a.updatedAt));
   return `<section class="card caixa-entrada"><div class="card-head"><h2>Caixa de entrada</h2><span class="small-muted">${notas.length}</span></div>${notas.map(n=>`<div class="routine-item"><span class="brand-mark">${icone('nota')}</span><a class="routine-title" data-action="edit-note" data-id="${n.id}">${escapeHtml(n.title||'Sem título')}</a><span class="caixa-acoes">${extraButton('inbox-mover',icone('pastas'),n.id,'icon-button','Mover para pasta')}${extraButton('inbox-arquivar',icone('arquivar'),n.id,'icon-button','Arquivar (tirar da caixa)')}</span></div>`).join('')||'<div class="empty">Nada pendente. Tudo organizado.</div>'}</section>`;
 }
 function cardParaRevisar(){
-  const {loose,forgotten}=Kuroi.toReview(state.notes);
+  const {loose,forgotten}=Kiro.toReview(state.notes);
   if(!loose.length&&!forgotten.length)return '';
   const lista=(titulo,notas)=>notas.length?`<h3 class="revisar-titulo">${titulo}</h3>${notas.map(itemQueAbre).join('')}`:'';
   return `<section class="card para-revisar"><div class="card-head"><h2>Para revisar</h2></div>${lista('Soltas',loose)}${lista('Esquecidas',forgotten)}</section>`;
@@ -539,7 +550,7 @@ function cardParaRevisar(){
 // Tirar da caixa de entrada (e, se vier uma pasta, mover para ela) numa gravação só.
 async function tirarDaCaixa(id,folderId){
   if(busy||failed||!loaded)return;
-  state.notes=state.notes.map(n=>n.id===id?{...Kuroi.withoutInbox(n),...(folderId===undefined?{}:{folderId}),updatedAt:Date.now()}:n);
+  state.notes=state.notes.map(n=>n.id===id?{...Kiro.withoutInbox(n),...(folderId===undefined?{}:{folderId}),updatedAt:Date.now()}:n);
   if(folderId&&expanded)expanded.add(folderId);
   await save();
 }
@@ -591,10 +602,10 @@ function renderEditor(){
 // Quem cita esta nota, com a linha do [[link]] como trecho. Nota ainda não salva não tem quem a cite.
 function renderMencoes(nota){
   if(!nota.id)return '';
-  const citam=Kuroi.mentions(state.notes,nota); if(!citam.length)return '';
-  const resolve=l=>Kuroi.findLinkedNote(state.notes,l.target)?.id===nota.id;
+  const citam=Kiro.mentions(state.notes,nota); if(!citam.length)return '';
+  const resolve=l=>Kiro.findLinkedNote(state.notes,l.target)?.id===nota.id;
   const itens=citam.map(n=>{
-    const linha=n.body.split('\n').find(l=>Kuroi.wikiLinks(l).some(resolve))||'';
+    const linha=n.body.split('\n').find(l=>Kiro.wikiLinks(l).some(resolve))||'';
     return `<div class="mencao">${linkDaNota(n)}<span class="small-muted">${escapeHtml(textoPlano(linha).slice(0,160))}</span></div>`;
   }).join('');
   return `<section class="doc-mencoes"><h2 class="small-muted">Mencionada em (${citam.length})</h2>${itens}</section>`;
@@ -602,7 +613,7 @@ function renderMencoes(nota){
 function estadoDoc(){ $('#doc-state')?.classList.toggle('sujo', editorDirty); }
 function desenharLinksDoc(){
   const caixa=$('#doc-links'); if(!caixa) return;
-  caixa.innerHTML=editing.links.map((l,i)=>`<div class="link-row"><a href="${escapeHtml(Kuroi.safeUrl(l)||'#')}" target="_blank" rel="noopener noreferrer">${escapeHtml(l)}</a><button class="icon-button" type="button" data-remove-link="${i}" title="Remover link" aria-label="Remover link">${icone('fechar')}</button></div>`).join('');
+  caixa.innerHTML=editing.links.map((l,i)=>`<div class="link-row"><a href="${escapeHtml(Kiro.safeUrl(l)||'#')}" target="_blank" rel="noopener noreferrer">${escapeHtml(l)}</a><button class="icon-button" type="button" data-remove-link="${i}" title="Remover link" aria-label="Remover link">${icone('fechar')}</button></div>`).join('');
   caixa.querySelectorAll('[data-remove-link]').forEach(b=>b.onclick=()=>{editing.links.splice(+b.dataset.removeLink,1);editorDirty=true;estadoDoc();desenharLinksDoc();});
 }
 function bindEditor(){
@@ -627,7 +638,7 @@ function bindEditor(){
   };
   $('#doc-link-add').onclick=()=>{
     const campo=$('#doc-link'), valor=campo.value.trim();
-    if(!Kuroi.safeUrl(valor)){alert('Informe um endereço http:// ou https:// válido.');return;}
+    if(!Kiro.safeUrl(valor)){alert('Informe um endereço http:// ou https:// válido.');return;}
     editing.links.push(valor);campo.value='';sujar();desenharLinksDoc();
   };
   bindCorpo(corpo);
@@ -639,7 +650,7 @@ function bindEditor(){
   else if(!editing.body.trim())abrirNoFim();
 }
 // ---- Grafo de conexões ----
-// As ligações são derivadas do texto, como no resto do Kuroi: não há índice a
+// As ligações são derivadas do texto, como no resto do Kiro: não há índice a
 // manter. Simulação de forças escrita à mão porque a CSP é script-src 'self':
 // nada de biblioteca por CDN, e o app não tem etapa de build.
 // As opções da tela ficam no navegador, como a aparência: são preferência de
@@ -655,10 +666,10 @@ const CORES_DE_GRUPO = ['#4EA8DE', '#57CC99', '#FFB703', '#FF6B6B', '#F72585', '
 const FILTROS = ['etiquetas', 'anexos', 'somenteExistentes', 'orfaos', 'local', 'profundidade'];
 // A nota aberta mais recentemente é o centro do grafo local.
 let ultimaNota = null;
-let grafoOpcoes = { ...GRAFO_PADRAO, ...(() => { try { return JSON.parse(localStorage.getItem('kuroi.grafo') || '{}'); } catch { return {}; } })() };
+let grafoOpcoes = { ...GRAFO_PADRAO, ...(() => { try { return JSON.parse(lerPreferencia('grafo') || '{}'); } catch { return {}; } })() };
 let grafoObservador = null, grafoResize = null;
 function gravarGrafoOpcoes() {
-  try { localStorage.setItem('kuroi.grafo', JSON.stringify(grafoOpcoes)); } catch { /* janela privada: vale só nesta sessão */ }
+  try { localStorage.setItem('kiro.grafo', JSON.stringify(grafoOpcoes)); } catch { /* janela privada: vale só nesta sessão */ }
 }
 const valorDoGrafo = (nome, valor) => ['distancia', 'profundidade'].includes(nome) ? String(Math.round(valor)) : Number(valor).toFixed(2);
 
@@ -670,27 +681,27 @@ function corDaPasta(id) {
 function grafoDados(op = grafoOpcoes) {
   const nos = new Map(), arestas = [];
   const ligar = (de, para) => { arestas.push({ de, para }); nos.get(de).grau++; nos.get(para).grau++; nos.get(para).entradas++; };
-  for (const nota of state.notes) nos.set(nota.id, { id: nota.id, rotulo: nota.title || 'Sem título', tipo: 'nota', pasta: corDaPasta(nota.folderId), grau: 0, entradas: 0, procura: `${nota.title || ''} ${Kuroi.tags(nota).join(' ')}` });
+  for (const nota of state.notes) nos.set(nota.id, { id: nota.id, rotulo: nota.title || 'Sem título', tipo: 'nota', pasta: corDaPasta(nota.folderId), grau: 0, entradas: 0, procura: `${nota.title || ''} ${Kiro.tags(nota).join(' ')}` });
   for (const nota of state.notes) {
     const vistos = new Set();
-    for (const link of Kuroi.wikiLinks(nota.body)) {
-      const alvo = Kuroi.findLinkedNote(state.notes, link.target);
-      const chave = alvo ? alvo.id : `fantasma:${Kuroi.pathKey(link.target)}`;
+    for (const link of Kiro.wikiLinks(nota.body)) {
+      const alvo = Kiro.findLinkedNote(state.notes, link.target);
+      const chave = alvo ? alvo.id : `fantasma:${Kiro.pathKey(link.target)}`;
       if (chave === nota.id || vistos.has(chave) || (!alvo && op.somenteExistentes)) continue;
       vistos.add(chave);
       // Link para nota inexistente vira nó fantasma: mostra o que você pretendia criar.
       if (!nos.has(chave)) nos.set(chave, { id: chave, rotulo: link.target, tipo: 'fantasma', grau: 0, entradas: 0 });
       ligar(nota.id, chave);
     }
-    if (op.etiquetas) for (const etiqueta of Kuroi.tags(nota)) {
-      const chave = `etiqueta:${Kuroi.pathKey(etiqueta)}`;
+    if (op.etiquetas) for (const etiqueta of Kiro.tags(nota)) {
+      const chave = `etiqueta:${Kiro.pathKey(etiqueta)}`;
       if (vistos.has(chave)) continue;
       vistos.add(chave);
       if (!nos.has(chave)) nos.set(chave, { id: chave, rotulo: `#${etiqueta}`, tipo: 'etiqueta', grau: 0, entradas: 0 });
       ligar(nota.id, chave);
     }
     if (op.anexos) for (const achado of imagensNaFonte(nota.body)) {
-      const chave = `anexo:${Kuroi.pathKey(achado.imagem.caminho)}`;
+      const chave = `anexo:${Kiro.pathKey(achado.imagem.caminho)}`;
       if (vistos.has(chave)) continue;
       vistos.add(chave);
       if (!nos.has(chave)) nos.set(chave, { id: chave, rotulo: achado.imagem.caminho.split('/').pop(), tipo: 'anexo', grau: 0, entradas: 0 });
@@ -799,8 +810,8 @@ function bindGraph() {
   // Raiz quadrada para que uma nota muito citada não vire um disco gigante.
   const raio = no => (4.5 + Math.sqrt(no.entradas || 0) * 3.4) * grafoOpcoes.tamanho;
   // "procura", não "texto": no.texto é o elemento <text> do rótulo, criado no desenho.
-  const procuravel = no => Kuroi.normalize(no.procura || no.rotulo);
-  const corDoNo = no => grafoOpcoes.grupos.find(g => g.consulta.trim() && procuravel(no).includes(Kuroi.normalize(g.consulta)))?.cor || '';
+  const procuravel = no => Kiro.normalize(no.procura || no.rotulo);
+  const corDoNo = no => grafoOpcoes.grupos.find(g => g.consulta.trim() && procuravel(no).includes(Kiro.normalize(g.consulta)))?.cor || '';
 
   function medir() {
     largura = Math.max(320, tela.clientWidth);
@@ -826,7 +837,7 @@ function bindGraph() {
   }
   // Aparência sem refazer o desenho: tamanho, cor, grossura, setas, busca e rótulos.
   function pintar() {
-    const busca = Kuroi.normalize(grafoOpcoes.busca.trim());
+    const busca = Kiro.normalize(grafoOpcoes.busca.trim());
     tela.style.setProperty('--grafo-solta', corValida(grafoOpcoes.corSolta) ? grafoOpcoes.corSolta : GRAFO_PADRAO.corSolta);
     for (const no of nos) {
       const r = raio(no);
@@ -1086,13 +1097,13 @@ function lerImagem(dentro) {
   const partes = dentro.split('|');
   const medida = partes.length > 1 && /^\s*(\d{1,4})(?:x\d{1,4})?\s*$/.exec(partes[partes.length - 1]);
   const caminho = (medida ? partes.slice(0, -1) : partes).join('|').trim();
-  if (!Kuroi.isImagePath(caminho)) return null;
+  if (!Kiro.isImagePath(caminho)) return null;
   return { caminho, largura: medida ? Number(medida[1]) : null };
 }
-// No desktop a imagem vem pelo esquema kuroi-anexo://, no navegador pela rota /anexo/.
+// No desktop a imagem vem pelo esquema kiro-anexo://, no navegador pela rota /anexo/.
 function urlDoAnexo(caminho) {
   const partes = caminho.replace(/^\/+/, '').split('/').map(encodeURIComponent).join('/');
-  return window.cadernoDesktop ? `kuroi-anexo://cofre/${partes}` : `/anexo/${partes}`;
+  return window.cadernoDesktop ? `kiro-anexo://cofre/${partes}` : `/anexo/${partes}`;
 }
 function htmlDaImagem({ caminho, largura }) {
   const nome = escapeHtml(caminho.split('/').pop());
@@ -1138,11 +1149,11 @@ function mdInline(texto) {
       const [alvoBruto, rotuloBruto] = dentro.split('|');
       const alvo = alvoBruto.split('#')[0].trim();
       const rotulo = (rotuloBruto || alvoBruto).trim();
-      const nota = Kuroi.findLinkedNote(state.notes, desescapar(alvo));
+      const nota = Kiro.findLinkedNote(state.notes, desescapar(alvo));
       return reservar(`<a class="wikilink${nota ? '' : ' ausente'}" data-alvo="${alvo}"${nota ? ` data-id="${nota.id}"` : ''} title="${nota ? 'Abrir nota' : 'Nota ainda não criada'}">${rotulo}</a>`);
     })
     .replace(/\[([^\][\n]*)\]\(([^)\s]+)\)/g, (inteiro, rotulo, url) => {
-      const limpa = Kuroi.safeUrl(desescapar(url));
+      const limpa = Kiro.safeUrl(desescapar(url));
       return limpa ? reservar(`<a href="${limpa}" target="_blank" rel="noopener noreferrer">${rotulo || url}</a>`) : inteiro;
     })
     .replace(/\*\*([^\n*]+)\*\*/g, '<strong>$1</strong>')
@@ -1480,8 +1491,8 @@ function fecharSugestoes() { sugestao?.lista.remove(); sugestao = null; }
 document.addEventListener('scroll', () => { if (sugestao) fecharSugestoes(); }, true);
 function atualizarSugestoes(campo) {
   const cursor = campo.selectionStart, antes = campo.value.slice(0, cursor);
-  const consulta = cursor === campo.selectionEnd ? Kuroi.linkQuery(antes.slice(antes.lastIndexOf('\n') + 1)) : null;
-  const titulos = consulta === null ? [] : Kuroi.linkSuggestions(state.notes.filter(n => n.id !== editing?.id), consulta);
+  const consulta = cursor === campo.selectionEnd ? Kiro.linkQuery(antes.slice(antes.lastIndexOf('\n') + 1)) : null;
+  const titulos = consulta === null ? [] : Kiro.linkSuggestions(state.notes.filter(n => n.id !== editing?.id), consulta);
   if (!titulos.length) return fecharSugestoes();
   let lista = sugestao?.lista;
   if (!lista) {
@@ -1547,7 +1558,7 @@ function imagensDoEvento(dados) {
 }
 async function guardarImagem(arquivo) {
   if (window.cadernoDesktop) return window.cadernoDesktop.saveAttachment({ nome: arquivo.name || '', dados: new Uint8Array(await arquivo.arrayBuffer()) });
-  const resposta = await fetch('/api/anexo', { method: 'POST', headers: { 'Content-Type': arquivo.type, 'X-Kuroi-Nome': encodeURIComponent(arquivo.name || '') }, body: arquivo });
+  const resposta = await fetch('/api/anexo', { method: 'POST', headers: { 'Content-Type': arquivo.type, 'X-Kiro-Nome': encodeURIComponent(arquivo.name || '') }, body: arquivo });
   const resultado = await resposta.json();
   if (!resposta.ok) throw new Error(resultado.error || 'Não foi possível guardar a imagem.');
   return resultado;
@@ -1762,7 +1773,7 @@ function linkExterno(area) {
   const sel = area.value.slice(area.selectionStart, area.selectionEnd);
   const url = prompt('Endereço do link:', 'https://');
   if (url === null) return;
-  const limpo = Kuroi.safeUrl(url.trim());
+  const limpo = Kiro.safeUrl(url.trim());
   if (!limpo) { alert('Informe um endereço http:// ou https:// válido.'); return; }
   const i = area.selectionStart;
   inserirTexto(area, '[' + sel + '](' + limpo + ')');
@@ -1794,7 +1805,7 @@ function wikilinkNoCursor(area) {
     const inicio = achado.index, fim = inicio + achado[0].length;
     if (cursor < inicio || cursor > fim) continue;
     const alvo = achado[1].split('|')[0].split('#')[0].trim();
-    return alvo ? { alvo, nota: Kuroi.findLinkedNote(state.notes, alvo) } : null;
+    return alvo ? { alvo, nota: Kiro.findLinkedNote(state.notes, alvo) } : null;
   }
   return null;
 }
@@ -1991,16 +2002,16 @@ async function showTrash(){
 // ---- Aparência ----
 // Preferência de tela, guardada por instalação (localStorage), não no cofre:
 // é ajuste de máquina, não conteúdo que deva viajar junto com as notas.
-const { APARENCIA_PADRAO, TEMAS, SKINS, contraste, corValida } = Kuroi;
+const { APARENCIA_PADRAO, TEMAS, SKINS, contraste, corValida } = Kiro;
 const ACENTOS = [['#C77DFF','Roxo'],['#4EA8DE','Azul'],['#4CC9F0','Ciano'],['#57CC99','Verde'],['#FFD166','Amarelo'],['#FF9F43','Laranja'],['#FF7EB6','Rosa'],['#FF6B6B','Vermelho']];
 function lerAparencia() {
-  try { return Kuroi.aparenciaValida(JSON.parse(localStorage.getItem('kuroi.aparencia') || '{}')); } catch { return Kuroi.aparenciaValida({}); }
+  try { return Kiro.aparenciaValida(JSON.parse(lerPreferencia('aparencia') || '{}')); } catch { return Kiro.aparenciaValida({}); }
 }
 function aplicarAparencia(valores) {
-  const a = Kuroi.aparenciaValida(valores || lerAparencia());
+  const a = Kiro.aparenciaValida(valores || lerAparencia());
   const html = document.documentElement, raiz = html.style;
   html.classList.remove(...[...html.classList].filter(c => /^(tema|skin)-/.test(c)));
-  html.classList.add(...Kuroi.classesDaAparencia(a));
+  html.classList.add(...Kiro.classesDaAparencia(a));
   // Tema pronto traz as próprias variáveis (temas.css); só o Personalizado usa as cores manuais inline.
   if (a.tema !== 'personalizado') {
     ['--sidebar-bg', '--content-bg', '--acento', '--acento-forte', '--acento-escuro', '--acento-texto'].forEach(p => raiz.removeProperty(p));
@@ -2019,7 +2030,7 @@ function aplicarAparencia(valores) {
   return a;
 }
 function gravarAparencia(a) {
-  try { localStorage.setItem('kuroi.aparencia', JSON.stringify(a)); } catch { /* janela privada: só aplica na sessão */ }
+  try { localStorage.setItem('kiro.aparencia', JSON.stringify(a)); } catch { /* janela privada: só aplica na sessão */ }
   aplicarAparencia(a);
 }
 const CAIXAS = [['read','Ler notas'],['create','Criar notas'],['update','Editar notas'],['delete','Excluir notas (vai para a lixeira)']];
@@ -2079,7 +2090,7 @@ async function showSettings(aba = abaDasConfiguracoes) {
       <div class="cfg-linha cfg-linha-coluna">${texto('Local')}<code class="cfg-caminho">${escapeHtml(state.vaultPath || 'vault/')}</code>
         <div class="cfg-botoes">${window.cadernoDesktop ? botao('cfg-abrir-pasta', 'Abrir pasta', 'pasta-aberta') + botao('cfg-trocar-cofre', 'Escolher outro cofre', 'pastas') : ''}${botao('cfg-copiar-caminho', 'Copiar caminho', 'copiar')}</div>
       </div>
-      <div class="cfg-linha">${texto('Recarregar cofre', 'Lê os arquivos de novo, se você editou algo fora do Kuroi.')}${botao('cfg-recarregar', 'Recarregar', 'recarregar')}</div>
+      <div class="cfg-linha">${texto('Recarregar cofre', 'Lê os arquivos de novo, se você editou algo fora do Kiro.')}${botao('cfg-recarregar', 'Recarregar', 'recarregar')}</div>
     </section>
     <section class="cfg-grupo">
       <header class="cfg-grupo-topo">${texto('Dados', 'Backup em um arquivo JSON com notas, pastas, tarefas e hábitos.')}</header>
@@ -2088,13 +2099,13 @@ async function showSettings(aba = abaDasConfiguracoes) {
       <div class="cfg-linha">${texto('Lixeira', 'Notas e pastas excluídas, prontas para restaurar.')}${botao('cfg-lixeira', 'Abrir lixeira', 'lixeira')}</div>
     </section>`)}
     ${painel('integracoes', conf ? `<section class="cfg-grupo">
-      <header class="cfg-grupo-topo">${texto('IA e integrações', 'Agentes externos usam a Agent API, sempre dentro deste cofre. O Kuroi não envia nada para a nuvem por conta própria.')}</header>
+      <header class="cfg-grupo-topo">${texto('IA e integrações', 'Agentes externos usam a Agent API, sempre dentro deste cofre. O Kiro não envia nada para a nuvem por conta própria.')}</header>
       ${chave('enabled', 'Permitir agentes neste cofre', conf.enabled, 'Liga o acesso para programas como o Claude Desktop.')}
       ${chave('mcp', 'Servidor MCP', conf.mcp.enabled, 'Conexão local pelo stdio, sem abrir porta de rede.', 'cfg-depende')}
       <h4 class="cfg-subtitulo cfg-depende">O que o agente pode fazer</h4>
       ${CAIXAS.map(([id, rotulo]) => chave(id, rotulo.replace(/ \(.*\)$/, ''), conf.permissions[id], DETALHES[id], 'cfg-depende')).join('')}
       ${chave('confirm', 'Confirmar ações destrutivas', conf.requireConfirmationForDestructive, 'Pede confirmação antes de excluir.', 'cfg-depende')}
-      <p class="small-muted cfg-rodape">Guardado em <code>.kuroi/agent.json</code>, dentro do cofre.</p>
+      <p class="small-muted cfg-rodape">Guardado em <code>.kiro/agent.json</code>, dentro do cofre.</p>
     </section>
     <div class="form-actions cfg-acoes"><button type="button" class="primary" id="ai-save" disabled>Salvar permissões</button></div>` : `<p class="cfg-aviso">Não foi possível ler a configuração de agentes: ${escapeHtml(erroConf)}</p>`)}
     ${painel('atalhos', `<section class="cfg-grupo">
@@ -2192,15 +2203,15 @@ document.addEventListener('contextmenu',e=>{
 // Soltar sobre uma nota vale como soltar na pasta dela; fora das pastas, é a raiz.
 const alvoDaSoltura=e=>{const no=e.target.closest?.('.tree-node');return no?no.querySelector(':scope > .tree-folder'):e.target.closest?.('.tree');};
 const limparSoltura=(exceto)=>document.querySelectorAll('.soltar-aqui').forEach(x=>x!==exceto&&x.classList.remove('soltar-aqui'));
-document.addEventListener('dragstart',e=>{const nota=e.target.closest?.('.tree-note');if(!nota)return;e.dataTransfer.setData('text/kuroi-nota',nota.dataset.id);e.dataTransfer.effectAllowed='move';});
+document.addEventListener('dragstart',e=>{const nota=e.target.closest?.('.tree-note');if(!nota)return;e.dataTransfer.setData('text/kiro-nota',nota.dataset.id);e.dataTransfer.effectAllowed='move';});
 document.addEventListener('dragover',e=>{
-  if(!e.dataTransfer.types.includes('text/kuroi-nota'))return;
+  if(!e.dataTransfer.types.includes('text/kiro-nota'))return;
   const alvo=alvoDaSoltura(e);limparSoltura(alvo);if(!alvo)return;
   e.preventDefault();e.dataTransfer.dropEffect='move';alvo.classList.add('soltar-aqui');
 });
 document.addEventListener('dragend',()=>limparSoltura());
 document.addEventListener('drop',e=>{
-  const id=e.dataTransfer.getData('text/kuroi-nota');const alvo=id&&alvoDaSoltura(e);
+  const id=e.dataTransfer.getData('text/kiro-nota');const alvo=id&&alvoDaSoltura(e);
   limparSoltura();
   if(!alvo)return;
   e.preventDefault();moverNota(id,alvo.classList.contains('tree-folder')?alvo.dataset.id:'');
@@ -2220,17 +2231,17 @@ async function escolherOutroCofre(){
   if(busy||!window.cadernoDesktop)return;closeModal(true);
   if(failed){status('Exporte suas alterações e recarregue antes de trocar de cofre.',true);return;}
   setBusy(true);
-  try{const saved=await window.cadernoDesktop.chooseVault();if(saved){Kuroi.validateState(saved);state=saved;loaded=true;failed=false;expanded=null;editing=null;render();}}
+  try{const saved=await window.cadernoDesktop.chooseVault();if(saved){Kiro.validateState(saved);state=saved;loaded=true;failed=false;expanded=null;editing=null;render();}}
   catch(error){status(error.message,true);}finally{setBusy(false);}
 }
 function exportarDados(){
-  const a=document.createElement('a');const url=URL.createObjectURL(new Blob([JSON.stringify(state,null,2)],{type:'application/json'}));a.href=url;a.download=`kuroi-${today()}.json`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+  const a=document.createElement('a');const url=URL.createObjectURL(new Blob([JSON.stringify(state,null,2)],{type:'application/json'}));a.href=url;a.download=`kiro-${today()}.json`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
 }
 // Confirmação dentro do app, como na exclusão de hábito: o confirm() nativo pode não aparecer no Electron.
 async function importarDados(arquivo){
   if(!arquivo||busy||failed||!loaded)return;
   let data;
-  try{data=Kuroi.validateState(JSON.parse(await arquivo.text()));}
+  try{data=Kiro.validateState(JSON.parse(await arquivo.text()));}
   catch(error){status('Importação cancelada: '+error.message,true);return;}
   const partes=[`${data.notes.length} nota${data.notes.length===1?'':'s'}`,`${(data.folders||[]).length} pasta${(data.folders||[]).length===1?'':'s'}`,`${(data.habits||data.routine||[]).length} hábito${(data.habits||data.routine||[]).length===1?'':'s'}`];
   modal('Importar backup',`<p class="confirmar-texto">Importar <strong>${partes.join(', ')}</strong> de <strong>${escapeHtml(arquivo.name)}</strong> e substituir os dados atuais? As notas que saírem vão para a lixeira e uma cópia do cofre atual é preservada.</p><div class="form-actions"><button type="button" class="secondary" id="cancel">Cancelar</button><button type="button" class="primary" id="confirmar-importacao">Importar e substituir</button></div>`);
@@ -2247,8 +2258,8 @@ function irParaNota(){
   modal('Ir para nota','<div class="form"><input class="search ir-busca" id="ir-busca" placeholder="Digite o título da nota…" autocomplete="off" aria-label="Buscar nota" /><div class="ir-lista" id="ir-lista" role="listbox"></div></div>');
   const campo=$('#ir-busca'), lista=$('#ir-lista'); let achadas=[], marcada=0;
   const desenhar=()=>{
-    const q=Kuroi.normalize(campo.value.trim());
-    const pontos=n=>{const t=Kuroi.normalize(n.title||'');return !q?1:t.startsWith(q)?3:t.includes(q)?2:Kuroi.normalize(n.body).includes(q)?1:0;};
+    const q=Kiro.normalize(campo.value.trim());
+    const pontos=n=>{const t=Kiro.normalize(n.title||'');return !q?1:t.startsWith(q)?3:t.includes(q)?2:Kiro.normalize(n.body).includes(q)?1:0;};
     achadas=state.notes.map(n=>[pontos(n),n]).filter(([p])=>p).sort((a,b)=>b[0]-a[0]||b[1].updatedAt-a[1].updatedAt).slice(0,12).map(([,n])=>n);
     marcada=Math.min(marcada,Math.max(achadas.length-1,0));
     lista.innerHTML=achadas.map((n,i)=>{const p=state.folders.find(f=>f.id===n.folderId);return `<button type="button" class="ir-item${i===marcada?' marcada':''}" data-i="${i}" role="option" aria-selected="${i===marcada}"><span>${escapeHtml(n.title||'Sem título')}</span><small>${p?escapeHtml(p.path||p.title):''}</small></button>`;}).join('')||'<div class="empty">Nenhuma nota encontrada.</div>';

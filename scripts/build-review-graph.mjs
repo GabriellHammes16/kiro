@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Grafo de revisão do KUROI: arquivos, funções, chamadas, referências e as fronteiras
+// Grafo de revisão do KIRO: arquivos, funções, chamadas, referências e as fronteiras
 // entre camadas (IPC do Electron, rotas HTTP, ferramentas MCP). Serve para revisar uma
 // mudança: quem depende desta função, o que ela alcança, se algum teste passa por ela.
 //
@@ -117,7 +117,7 @@ for (const arquivo of arquivos) {
     if (texto[alvo]) { importa.get(arquivo).add(alvo); arestas.push({ de: `arquivo:${arquivo}`, para: `arquivo:${alvo}`, tipo: 'importa' }); }
   }
 }
-importa.get('app.js')?.add('domain.js');     // global Kuroi, carregado antes pelo index.html
+importa.get('app.js')?.add('domain.js');     // global Kiro, carregado antes pelo index.html
 importa.get('dev/reload.js')?.add('app.js'); // lê editorDirty e salvarNota do escopo global
 const alcancaveis = new Map(arquivos.map(arquivo => {
   const vistos = new Set(), fila = [...importa.get(arquivo)];
@@ -204,11 +204,11 @@ rotas.forEach((m, k) => {
   pontas.push(...destinos(servidor.slice(m.index, fim < 0 ? m.index + 600 : fim)));
   fronteira(`HTTP ${metodo} /api/${rota}`, 'http', pontas);
 });
-fronteira('GET /anexo/* · kuroi-anexo://', 'http', [
+fronteira('GET /anexo/* · kiro-anexo://', 'http', [
   ...[...app.matchAll(/urlDoAnexo\(/g)].map(u => dono('app.js', u.index)).filter(q => q && q.nome !== 'urlDoAnexo').map(q => ({ de: q.id })),
   ...(em('vault.cjs', 'readAttachment') ? [{ para: em('vault.cjs', 'readAttachment').id }] : []),
 ]);
-fronteira('MCP stdio (ferramentas kuroi_*)', 'mcp', [
+fronteira('MCP stdio (ferramentas kiro_*)', 'mcp', [
   { de: em('mcp/server.mjs', 'main')?.id || 'arquivo:mcp/server.mjs' },
   ...(em('agent/tools.cjs', 'call') ? [{ para: em('agent/tools.cjs', 'call').id }] : []),
 ]);

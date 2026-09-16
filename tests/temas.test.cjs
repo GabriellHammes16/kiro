@@ -8,7 +8,7 @@ const raiz = path.join(__dirname, '..');
 const ler = nome => fs.readFileSync(path.join(raiz, nome), 'utf8');
 const VARIAVEIS = ['bg', 'panel', 'panel-raised', 'sidebar-bg', 'content-bg', 'campo', 'ink', 'muted', 'line',
   'acento', 'acento-2', 'acento-forte', 'acento-escuro', 'acento-texto', 'primario-texto'];
-const PADRAO = { tema: 'escuro-classico', skin: 'padrao' };
+const PADRAO = { tema: 'kiro', skin: 'padrao' };
 
 // Lê `--nome:#hex` de um trecho de CSS.
 const variaveis = trecho => Object.fromEntries([...trecho.matchAll(/--([\w-]+)\s*:\s*(#[0-9a-fA-F]{6})\b/g)].map(m => [m[1], m[2].toUpperCase()]));
@@ -24,12 +24,12 @@ test('aparência padrão: vazio, lixo ou nada viram Escuro Clássico + Padrão',
     assert.equal(a.tema, PADRAO.tema, `tema para ${JSON.stringify(salvo)}`);
     assert.equal(a.skin, PADRAO.skin, `skin para ${JSON.stringify(salvo)}`);
   }
-  assert.deepEqual(APARENCIA_PADRAO, { tema: 'escuro-classico', skin: 'padrao', sidebar: '#1A1A20', content: '#141418', acento: '#C77DFF' });
-  assert.deepEqual(classesDaAparencia(aparenciaValida(undefined)), ['tema-escuro-classico', 'skin-padrao']);
+  assert.deepEqual(APARENCIA_PADRAO, { tema: 'kiro', skin: 'padrao', sidebar: '#11161D', content: '#0B0F14', acento: '#9273FF' });
+  assert.deepEqual(classesDaAparencia(aparenciaValida(undefined)), ['tema-kiro', 'skin-padrao']);
 });
 
 test('tema e skin sobrevivem à ida e volta por JSON e são independentes', () => {
-  for (const [tema, skin] of [['neon-tokyo', 'neon'], ['sakura-night', 'suave'], ['alto-contraste', 'terminal'], ['escuro-classico', 'paper']]) {
+  for (const [tema, skin] of [['neon-tokyo', 'neon'], ['sakura-night', 'suave'], ['alto-contraste', 'terminal'], ['kiro', 'paper']]) {
     const salvo = JSON.parse(JSON.stringify(aparenciaValida({ ...APARENCIA_PADRAO, tema, skin })));
     const a = aparenciaValida(salvo);
     assert.equal(a.tema, tema);
@@ -56,10 +56,10 @@ test('ids desconhecidos e cores inválidas caem no padrão', () => {
 });
 
 test('migração: salvo antigo sem tema vira personalizado só se tinha cores próprias', () => {
-  assert.equal(aparenciaValida({ sidebar: '#223344', content: '#141418', acento: '#C77DFF' }).tema, 'personalizado');
-  assert.equal(aparenciaValida({ sidebar: '#1A1A20', content: '#141418', acento: '#5AB0FF' }).tema, 'personalizado');
-  assert.equal(aparenciaValida({ sidebar: '#0E0E0E', content: '#0A0A0A', acento: '#C77DFF' }).tema, 'escuro-classico');
-  assert.equal(aparenciaValida({ sidebar: '#1A1A20', content: '#141418', acento: '#C77DFF' }).tema, 'escuro-classico');
+  assert.equal(aparenciaValida({ sidebar: '#223344', content: '#0B0F14', acento: '#9273FF' }).tema, 'personalizado');
+  assert.equal(aparenciaValida({ sidebar: '#11161D', content: '#0B0F14', acento: '#5AB0FF' }).tema, 'personalizado');
+  assert.equal(aparenciaValida({ sidebar: '#0E0E0E', content: '#0A0A0A', acento: '#C77DFF' }).tema, 'kiro');
+  assert.equal(aparenciaValida({ sidebar: '#1A1A20', content: '#141418', acento: '#C77DFF' }).tema, 'kiro');
   assert.equal(aparenciaValida({ sidebar: '#223344' }).skin, 'padrao');
 });
 
@@ -73,9 +73,9 @@ test('temas.css define todas as variáveis para cada tema e o seletor de cada sk
   for (const [id] of SKINS) assert.match(css, new RegExp(`\\.skin-${id}(?![\\w-])`), `skin ${id}: seletor .skin-${id} ausente em temas.css`);
 });
 
-test('Escuro Clássico em temas.css bate com o :root de styles.css', () => {
-  const classico = blocoDoTema(ler('temas.css'), 'escuro-classico');
-  assert.equal(classico.acento, '#C77DFF');
+test('tema KIRO em temas.css bate com o :root de styles.css', () => {
+  const classico = blocoDoTema(ler('temas.css'), 'kiro');
+  assert.equal(classico.acento, '#9273FF');
   const root = Object.assign({}, ...[...ler('styles.css').matchAll(/:root\s*\{([^}]*)\}/g)].map(m => variaveis(m[1])));
   for (const v of ['bg', 'panel', 'ink', 'muted', 'line', 'acento']) assert.equal(classico[v], root[v], `--${v}`);
 });

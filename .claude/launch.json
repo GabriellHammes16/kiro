@@ -2,13 +2,13 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "kuroi-dev",
+      "name": "kiro-dev",
       "runtimeExecutable": "node",
       "runtimeArgs": ["--watch", "server.mjs", "--dev"],
       "port": 4180
     },
     {
-      "name": "kuroi",
+      "name": "kiro",
       "runtimeExecutable": "node",
       "runtimeArgs": ["server.mjs"],
       "port": 4173

@@ -7,7 +7,7 @@ const { Vault } = require('../vault.cjs');
 const domain = require('../domain.js');
 const note = (overrides = {}) => ({ id: 'note-1', title: 'Minha nota', body: 'Conteúdo original', links: [], tags: [], folderId: '', updatedAt: Date.now(), ...overrides });
 async function setup(t) {
-  const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'kuroi-test-'));
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'kiro-test-'));
   t.after(() => fs.rm(directory, { recursive: true, force: true }));
   return new Vault(directory);
 }
@@ -116,7 +116,7 @@ test('salvamento concluído não deixa lixo em .staging', async t => {
 });
 
 test('.history é podado ao passar do limite, sem tocar na lixeira', async t => {
-  const directory=await fs.mkdtemp(path.join(os.tmpdir(),'kuroi-hist-'));
+  const directory=await fs.mkdtemp(path.join(os.tmpdir(),'kiro-hist-'));
   t.after(()=>fs.rm(directory,{recursive:true,force:true}));
   const vault=new Vault(directory,{historyLimit:3});
   let state=await vault.load();
@@ -142,7 +142,7 @@ test('.history é podado ao passar do limite, sem tocar na lixeira', async t => 
 });
 
 test('historyLimit 0 desliga a poda', async t => {
-  const directory=await fs.mkdtemp(path.join(os.tmpdir(),'kuroi-hist0-'));
+  const directory=await fs.mkdtemp(path.join(os.tmpdir(),'kiro-hist0-'));
   t.after(()=>fs.rm(directory,{recursive:true,force:true}));
   const vault=new Vault(directory,{historyLimit:0});
   let state=await vault.load();

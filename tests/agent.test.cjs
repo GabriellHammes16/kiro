@@ -5,12 +5,12 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
 const os = require('node:os');
 const path = require('node:path');
-const { createKuroiAgent } = require('../agent/index.cjs');
+const { createKiroAgent } = require('../agent/index.cjs');
 
 async function montar(t) {
-  const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'kuroi-agent-'));
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'kiro-agent-'));
   t.after(() => fs.rm(directory, { recursive: true, force: true }));
-  return createKuroiAgent({ vaultDirectory: directory });
+  return createKiroAgent({ vaultDirectory: directory });
 }
 const cliente = { clientId: 'teste', clientName: 'Suite' };
 // assert.rejects com regex compara a mensagem; aqui o contrato é o código do erro.
@@ -154,7 +154,7 @@ test('path traversal e escrita fora do cofre são recusados', async t => {
     '/etc/passwd',
     'C:/Windows/system.ini',
     '.history/coisa.md',
-    '.kuroi/agent.json',
+    '.kiro/agent.json',
     '.trash/x.md',
     'caderno.json',
   ];

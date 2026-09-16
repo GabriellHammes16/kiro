@@ -7,10 +7,10 @@ const os = require('node:os');
 const path = require('node:path');
 const { Vault } = require('../vault.cjs');
 const { validateState, habitStats } = require('../domain.js');
-const { createKuroiAgent } = require('../agent/index.cjs');
+const { createKiroAgent } = require('../agent/index.cjs');
 
 const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAMAASsJTYQAAAAASUVORK5CYII=', 'base64');
-const pasta = async t => { const d = await fs.mkdtemp(path.join(os.tmpdir(), 'kuroi-backup-')); t.after(() => fs.rm(d, { recursive: true, force: true })); return d; };
+const pasta = async t => { const d = await fs.mkdtemp(path.join(os.tmpdir(), 'kiro-backup-')); t.after(() => fs.rm(d, { recursive: true, force: true })); return d; };
 const dia = n => { const d = new Date(); d.setDate(d.getDate() - n); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
 
 // O mesmo que o app faz em "Importar dados": valida o JSON, descarta caminhos de arquivo e salva por cima do cofre aberto.
@@ -56,7 +56,7 @@ test('cofre apagado: importar o backup exportado remonta notas, pastas, tarefas 
   });
   const antes = essencial(estado);
   const progressoAntes = estado.habits.map(h => habitStats(h, estado.habitLog[h.id] || []));
-  const agenteAntes = await createKuroiAgent({ vaultDirectory: diretorioA }).toolkit.call('get_habits', {}, { clientId: 'teste' });
+  const agenteAntes = await createKiroAgent({ vaultDirectory: diretorioA }).toolkit.call('get_habits', {}, { clientId: 'teste' });
 
   // 2. "Exportar dados" e 3. o cofre some.
   const backup = JSON.stringify(estado, null, 2);
@@ -66,11 +66,11 @@ test('cofre apagado: importar o backup exportado remonta notas, pastas, tarefas 
   const diretorioB = await pasta(t);
   await importarComoOApp(new Vault(diretorioB), backup);
 
-  // 5. Abrir o Kuroi de novo: lê do disco, não da memória.
+  // 5. Abrir o Kiro de novo: lê do disco, não da memória.
   const lido = await new Vault(diretorioB).load();
   assert.deepEqual(essencial(lido), antes);
   assert.deepEqual(lido.habits.map(h => habitStats(h, lido.habitLog[h.id] || [])), progressoAntes);
-  const agenteDepois = await createKuroiAgent({ vaultDirectory: diretorioB }).toolkit.call('get_habits', {}, { clientId: 'teste' });
+  const agenteDepois = await createKiroAgent({ vaultDirectory: diretorioB }).toolkit.call('get_habits', {}, { clientId: 'teste' });
   assert.deepEqual(agenteDepois, agenteAntes);
 
   // Os arquivos Markdown voltam para as pastas certas.

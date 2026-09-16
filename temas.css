@@ -2,17 +2,17 @@
    Uma classe por tema no <html> (e no mini-card de Configurações). Só cores; o resto
    do visual continua em styles.css. Pares de texto/fundo passam 4.5:1 (WCAG AA). */
 
-/* Clássicos */
-.tema-escuro-classico {
-  --bg:#141418; --panel:#1E1E24; --panel-raised:#26262E; --sidebar-bg:#1A1A20; --content-bg:#141418; --campo:#16161B;
-  --ink:#F2F2F2; --muted:#A8A8B2; --line:#33333C;
-  --acento:#C77DFF; --acento-2:#E0AAFF; --acento-forte:#9D4EDD; --acento-escuro:#8A2BE2; --acento-texto:#160821; --primario-texto:#FFFFFF;
+/* Clássicos (o primeiro é a identidade do KIRO) */
+.tema-kiro {
+  --bg:#0B0F14; --panel:#1A1F26; --panel-raised:#232A33; --sidebar-bg:#11161D; --content-bg:#0B0F14; --campo:#12171E;
+  --ink:#E5E7EB; --muted:#94A3B8; --line:#2A3340;
+  --acento:#9273FF; --acento-2:#3B82F6; --acento-forte:#6B4AE8; --acento-escuro:#5836C7; --acento-texto:#000000; --primario-texto:#FFFFFF;
 }
 /* Personalizado: base do clássico; fundos e destaque vêm inline do app.js. */
 .tema-personalizado {
-  --bg:#141418; --panel:#1E1E24; --panel-raised:#26262E; --sidebar-bg:#1A1A20; --content-bg:#141418; --campo:#16161B;
-  --ink:#F2F2F2; --muted:#A8A8B2; --line:#33333C;
-  --acento:#C77DFF; --acento-2:#E0AAFF; --acento-forte:#9D4EDD; --acento-escuro:#8A2BE2; --acento-texto:#160821; --primario-texto:#FFFFFF;
+  --bg:#0B0F14; --panel:#1A1F26; --panel-raised:#232A33; --sidebar-bg:#11161D; --content-bg:#0B0F14; --campo:#12171E;
+  --ink:#E5E7EB; --muted:#94A3B8; --line:#2A3340;
+  --acento:#9273FF; --acento-2:#3B82F6; --acento-forte:#6B4AE8; --acento-escuro:#5836C7; --acento-texto:#000000; --primario-texto:#FFFFFF;
 }
 .tema-escuro-azul {
   --bg:#10141B; --panel:#19202A; --panel-raised:#212A36; --sidebar-bg:#151A22; --content-bg:#10141B; --campo:#121720;

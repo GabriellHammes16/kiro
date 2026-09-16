@@ -1,9 +1,9 @@
-# Kuroi Agent API
+# Kiro Agent API
 
 Camada única por onde agentes de IA — e qualquer outro cliente que não seja a
-interface gráfica — falam com o cofre do Kuroi.
+interface gráfica — falam com o cofre do Kiro.
 
-O Kuroi continua funcionando normalmente sem nenhuma IA conectada. Esta camada é
+O Kiro continua funcionando normalmente sem nenhuma IA conectada. Esta camada é
 uma capacidade a mais, desligável, e não fala com nenhum serviço externo.
 
 ## Arquitetura
@@ -16,7 +16,7 @@ uma capacidade a mais, desligável, e não fala com nenhum serviço externo.
                   AgentToolkit                agent/tools.cjs
                   schema · permissão · auditoria
                        │
-                  KuroiAgentApi               agent/api.cjs
+                  KiroAgentApi               agent/api.cjs
                   notes · search · folders · links · tags
                        │
                      Vault                    vault.cjs
@@ -41,12 +41,12 @@ Duas regras sustentam o desenho:
 | `agent/schema.cjs` | Validador do subconjunto de JSON Schema das ferramentas. |
 | `agent/api.cjs` | Operações do cofre. Agnóstico de interface e de fornecedor de IA. |
 | `agent/tools.cjs` | Catálogo, permissões e auditoria. Porta de entrada dos agentes. |
-| `agent/audit.cjs` | Log JSONL em `<cofre>/.kuroi/audit.log`. |
-| `agent/config.cjs` | Configuração em `<cofre>/.kuroi/agent.json`. |
+| `agent/audit.cjs` | Log JSONL em `<cofre>/.kiro/audit.log`. |
+| `agent/config.cjs` | Configuração em `<cofre>/.kiro/agent.json`. |
 | `agent/events.cjs` | Barramento de eventos internos. |
 | `agent/index.cjs` | Monta a pilha e descobre qual cofre usar. |
 
-`.kuroi/` fica dentro do cofre mas fora do alcance do varredor de notas: o
+`.kiro/` fica dentro do cofre mas fora do alcance do varredor de notas: o
 `scan()` do Vault ignora entradas ocultas na raiz, então esses arquivos nunca
 viram nota nem entram na lista de remoções. A configuração acompanha o cofre
 quando ele é copiado para outra máquina.
@@ -54,11 +54,11 @@ quando ele é copiado para outra máquina.
 ## Uso como biblioteca
 
 ```js
-const { createKuroiAgent } = require('./agent/index.cjs');
+const { createKiroAgent } = require('./agent/index.cjs');
 
-const { api, toolkit } = createKuroiAgent({ vaultDirectory: 'C:/MeuCofre' });
+const { api, toolkit } = createKiroAgent({ vaultDirectory: 'C:/MeuCofre' });
 
-// Fachada direta, para a interface e para código de dentro do Kuroi:
+// Fachada direta, para a interface e para código de dentro do Kiro:
 await api.notes.create({ title: 'Ideias', folder: 'Projetos', content: '...' });
 await api.notes.search({ query: 'python' });
 
@@ -66,12 +66,12 @@ await api.notes.search({ query: 'python' });
 await toolkit.call('create_note', { title: 'Ideias' }, { clientId: 'mico', clientName: 'Mico' });
 ```
 
-O cofre é resolvido nesta ordem: argumento explícito, `KUROI_VAULT`, cofre
-escolhido no aplicativo desktop, `Documentos/KUROI/vault`, cofre do projeto.
+O cofre é resolvido nesta ordem: argumento explícito, `KIRO_VAULT`, cofre
+escolhido no aplicativo desktop, `Documentos/KIRO/vault`, cofre do projeto.
 
 ## Ferramentas
 
-Nomes sem prefixo. A camada MCP publica os mesmos com `kuroi_` na frente.
+Nomes sem prefixo. A camada MCP publica os mesmos com `kiro_` na frente.
 
 ### Notas
 
@@ -124,7 +124,7 @@ Exemplos. `toolkit.list()` devolve o schema completo de cada ferramenta.
   "snippet": "…assistente pessoal capaz de…" } ] }
 ```
 
-O nome do arquivo segue a convenção do próprio Kuroi: `<título-em-slug>-<id>.md`.
+O nome do arquivo segue a convenção do próprio Kiro: `<título-em-slug>-<id>.md`.
 É a mesma regra usada quando você cria uma nota na interface, e o sufixo com id
 garante que nenhuma criação sobrescreve arquivo existente.
 
@@ -134,13 +134,13 @@ Cada ferramenta declara **risco** e **permissão**.
 
 - **risk** — `read`, `write` ou `destructive`. Serve para o cliente decidir
   quando pedir confirmação ao usuário. Vai também nas *annotations* do MCP.
-- **permission** — `read`, `create`, `update` ou `delete`. É o que o Kuroi
+- **permission** — `read`, `create`, `update` ou `delete`. É o que o Kiro
   checa contra a configuração antes de executar.
 
-A porta de permissão fica no `AgentToolkit`, não na `KuroiAgentApi`. A interface
+A porta de permissão fica no `AgentToolkit`, não na `KiroAgentApi`. A interface
 gráfica usa a API direto e não é barrada: ali quem age é o próprio usuário.
 
-Configuração em `<cofre>/.kuroi/agent.json`, editável pela tela **Configurações**,
+Configuração em `<cofre>/.kiro/agent.json`, editável pela tela **Configurações**,
 seção IA e integrações, na barra lateral:
 
 ```json
@@ -163,7 +163,7 @@ Toda entrada de agente é tratada como não confiável.
   barra invertida, unidade de disco (`C:`), caminho iniciado em `/` ou `~`,
   caractere nulo e mais de 15 níveis.
 - Nomes ocultos (iniciados em `.`) são recusados, assim como `.history`,
-  `.trash`, `.staging`, `.kuroi`, `caderno.json` e o journal de transação.
+  `.trash`, `.staging`, `.kiro`, `caderno.json` e o journal de transação.
 - Nomes de pasta passam pela mesma validação da interface: sem `< > : " / \ | ?
   *`, sem nomes reservados do Windows, sem ponto ou espaço nas pontas.
 - Abaixo disso, o `safePath()` do Vault ainda confere o caminho resolvido e
@@ -172,13 +172,13 @@ Toda entrada de agente é tratada como não confiável.
 - O validador de schema recusa **campo desconhecido**, tipo errado e obrigatório
   ausente. Um argumento a mais na chamada é erro, não é ignorado.
 - Não existe e não deve existir ferramenta genérica: nada de `read_any_file`,
-  `write_any_file`, `run_shell` ou `execute`. A API só manipula recursos do Kuroi.
+  `write_any_file`, `run_shell` ou `execute`. A API só manipula recursos do Kiro.
 - Exclusão nunca é permanente: `delete_note` move para a lixeira e devolve o
   identificador de recuperação. Não há exclusão permanente exposta a agentes.
 
 ## Auditoria
 
-Toda operação de escrita gera uma linha em `<cofre>/.kuroi/audit.log` (JSONL),
+Toda operação de escrita gera uma linha em `<cofre>/.kiro/audit.log` (JSONL),
 inclusive as recusadas — uma tentativa negada é informação de auditoria.
 
 ```json
@@ -201,7 +201,7 @@ alterações legível.
 `note.moved`, `note.restored` e `folder.created`, com `source` e `clientId`.
 
 ```js
-const { events } = createKuroiAgent({ vaultDirectory });
+const { events } = createKiroAgent({ vaultDirectory });
 events.on('note.created', ({ path, source, clientId }) => { /* índice, embeddings… */ });
 ```
 
@@ -221,7 +221,7 @@ cliente específico — a Mico é tratada como qualquer outro agente autorizado.
 
 ## Privacidade
 
-O Kuroi não envia conteúdo do cofre para lugar nenhum. Ele responde quando uma
+O Kiro não envia conteúdo do cofre para lugar nenhum. Ele responde quando uma
 ferramenta pede, e só isso. Não há chave de OpenAI, Anthropic, OpenRouter ou
 qualquer outro provedor nesta camada: o modelo é responsabilidade do cliente.
 
@@ -230,7 +230,7 @@ qualquer outro provedor nesta camada: o modelo é responsabilidade do cliente.
 - Busca é textual. A pontuação está isolada em `searchNotes` para que uma busca
   semântica possa ser somada depois sem mudar a assinatura da ferramenta.
 - Campos YAML personalizados são preservados no disco pelo Vault, mas não são
-  editáveis por esta API — ela expõe os campos que o Kuroi modela.
-- `createdAt` vem do sistema de arquivos; o Kuroi não guarda data de criação
+  editáveis por esta API — ela expõe os campos que o Kiro modela.
+- `createdAt` vem do sistema de arquivos; o Kiro não guarda data de criação
   própria. Notas sem arquivo em disco devolvem `null`.
 - Não há exclusão permanente nem operações em lote.

@@ -1,14 +1,15 @@
 const { app, BrowserWindow, ipcMain, Menu, shell, dialog, protocol } = require('electron');
 const { readFile, mkdir } = require('node:fs/promises');
-const { join } = require('node:path');
+const { join, dirname } = require('node:path');
+const { existsSync } = require('node:fs');
 const { Vault, atomicWrite } = require('../vault.cjs');
 const { AgentConfig } = require('../agent/index.cjs');
 let vault, settings;
 // As imagens das notas chegam à janela por este esquema, servido pelo Vault: a página
 // (file://) não lê o disco, e só arquivos de imagem de dentro do cofre passam.
-protocol.registerSchemesAsPrivileged([{ scheme: 'kuroi-anexo', privileges: { standard: true, secure: true, supportFetchAPI: true } }]);
+protocol.registerSchemesAsPrivileged([{ scheme: 'kiro-anexo', privileges: { standard: true, secure: true, supportFetchAPI: true } }]);
 function createWindow() {
-  const window = new BrowserWindow({ width: 1280, height: 820, minWidth: 900, minHeight: 620, backgroundColor: '#0a0a0a', title: 'KUROI', icon: join(__dirname, '..', 'kuroi-logo-transparent.png'), webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true, preload: join(__dirname, 'preload.cjs') } });
+  const window = new BrowserWindow({ width: 1280, height: 820, minWidth: 900, minHeight: 620, backgroundColor: '#0a0a0a', title: 'KIRO', icon: join(__dirname, '..', 'kiro-icone.png'), webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true, preload: join(__dirname, 'preload.cjs') } });
   window.loadFile(join(__dirname, '..', 'index.html'));
   window.webContents.on('will-navigate', event => event.preventDefault());
   window.webContents.setWindowOpenHandler(({ url }) => { if (/^https?:/i.test(url)) shell.openExternal(url); return { action: 'deny' }; });
@@ -17,7 +18,11 @@ if (!app.requestSingleInstanceLock()) app.quit();
 else app.whenReady().then(async () => {
   Menu.setApplicationMenu(null);
   settings = join(app.getPath('userData'), 'vault-settings.json');
-  let directory = join(app.getPath('documents'), 'KUROI', 'vault');
+  // Instalação que veio do KUROI: a escolha de cofre está na pasta com o nome antigo.
+  const settingsAntigo = join(dirname(app.getPath('userData')), 'KUROI', 'vault-settings.json');
+  if (!existsSync(settings) && existsSync(settingsAntigo)) settings = settingsAntigo;
+  let directory = join(app.getPath('documents'), 'KIRO', 'vault');
+  if (!existsSync(directory) && existsSync(join(app.getPath('documents'), 'KUROI', 'vault'))) directory = join(app.getPath('documents'), 'KUROI', 'vault');
   // npm run desktop:dev abre o cofre de exemplo sem mexer no cofre salvo.
   // Só no código-fonte: o aplicativo empacotado ignora a opção e nem traz dev/.
   if (!app.isPackaged && process.argv.includes('--dev-vault')) {
@@ -39,7 +44,7 @@ else app.whenReady().then(async () => {
     return vault.saveAttachment({ name: String(pedido.nome || ''), data: Buffer.from(pedido.dados) });
   });
   // `vault` é lido a cada pedido: depois de escolher outro cofre, as imagens vêm do novo.
-  protocol.handle('kuroi-anexo', async request => {
+  protocol.handle('kiro-anexo', async request => {
     try {
       const relativo = new URL(request.url).pathname.slice(1).split('/').map(decodeURIComponent).join('/');
       const { data, type } = await vault.readAttachment(relativo);
@@ -51,7 +56,7 @@ else app.whenReady().then(async () => {
   ipcMain.handle('agent:config:get', () => agentConfig.load());
   ipcMain.handle('agent:config:set', (_event, parcial) => agentConfig.save(parcial));
   ipcMain.handle('vault:choose', async event => {
-    const result = await dialog.showOpenDialog(BrowserWindow.fromWebContents(event.sender), { title: 'Abrir pasta como cofre KUROI', properties: ['openDirectory', 'createDirectory'] });
+    const result = await dialog.showOpenDialog(BrowserWindow.fromWebContents(event.sender), { title: 'Abrir pasta como cofre KIRO', properties: ['openDirectory', 'createDirectory'] });
     if (result.canceled) return null;
     const selected = new Vault(result.filePaths[0]);
     const state = await selected.load();
@@ -63,5 +68,5 @@ else app.whenReady().then(async () => {
   createWindow();
   app.on('activate', () => { if (!BrowserWindow.getAllWindows().length) createWindow(); });
   app.on('second-instance', () => { const window = BrowserWindow.getAllWindows()[0]; if (window) { window.restore(); window.focus(); } });
-}).catch(error => { dialog.showErrorBox('Não foi possível abrir o KUROI', error.message); app.quit(); });
+}).catch(error => { dialog.showErrorBox('Não foi possível abrir o KIRO', error.message); app.quit(); });
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });

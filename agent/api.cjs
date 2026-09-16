@@ -1,6 +1,6 @@
 'use strict';
 /**
- * Kuroi Agent API — a única camada autorizada a mexer no cofre em nome de terceiros.
+ * Kiro Agent API — a única camada autorizada a mexer no cofre em nome de terceiros.
  *
  * Não reimplementa persistência: toda escrita passa por Vault.save(), que já faz
  * gravação atômica, checagem de revisão, snapshot em .history e arquivamento em
@@ -13,7 +13,7 @@ const fs = require('node:fs/promises');
 const { randomUUID } = require('node:crypto');
 const domain = require('../domain.js');
 const { AgentError, vaultRelativePath, folderSegments, noteTitle, tagList } = require('./security.cjs');
-const { KuroiEvents } = require('./events.cjs');
+const { KiroEvents } = require('./events.cjs');
 
 const { pathKey, normalize, wikiLinks, findLinkedNote, localDate, habitStats, tags: tagsDaNota } = domain;
 
@@ -42,13 +42,13 @@ function recortar(corpo, consulta) {
   return `${inicio > 0 ? '…' : ''}${corpo.slice(inicio, fim).replace(/\s+/g, ' ').trim()}${fim < corpo.length ? '…' : ''}`;
 }
 
-class KuroiAgentApi {
+class KiroAgentApi {
   constructor(vault, { events } = {}) {
-    if (!vault || typeof vault.load !== 'function') throw new Error('KuroiAgentApi precisa de um Vault.');
+    if (!vault || typeof vault.load !== 'function') throw new Error('KiroAgentApi precisa de um Vault.');
     this.vault = vault;
-    this.events = events || new KuroiEvents();
+    this.events = events || new KiroEvents();
 
-    // Fachada no formato pedido: kuroi.notes.create(), kuroi.folders.list()...
+    // Fachada no formato pedido: kiro.notes.create(), kiro.folders.list()...
     this.notes = {
       create: (a, c) => this.createNote(a, c),
       read: (a, c) => this.readNote(a, c),
@@ -81,7 +81,7 @@ class KuroiAgentApi {
 
   /**
    * Ciclo ler-alterar-gravar. O Vault recusa gravação sobre revisão vencida;
-   * outra janela do Kuroi salvando ao mesmo tempo é motivo de nova tentativa,
+   * outra janela do Kiro salvando ao mesmo tempo é motivo de nova tentativa,
    * não de erro para o agente.
    */
   async #mutate(alterar) {
@@ -371,7 +371,7 @@ class KuroiAgentApi {
     };
   }
 
-  /** A nota diária do Kuroi é a nota cujo título é a data local. Só leitura. */
+  /** A nota diária do Kiro é a nota cujo título é a data local. Só leitura. */
   async getDailyNote(args = {}) {
     const state = await this.load();
     const data = args.date ? String(args.date) : localDate();
@@ -566,4 +566,4 @@ class KuroiAgentApi {
   }
 }
 
-module.exports = { KuroiAgentApi, AgentError };
+module.exports = { KiroAgentApi, AgentError };

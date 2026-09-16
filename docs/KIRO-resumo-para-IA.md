@@ -1,4 +1,4 @@
-# KUROI: resumo do projeto para outra IA
+# KIRO: resumo do projeto para outra IA
 
 > Cole este arquivo inteiro numa conversa com outra IA para ela entender o projeto antes de ajudar.
 > Estado em **15/09/2026**, versão **0.11.2** instalada, com mudanças da 0.12.0 ainda não commitadas (veja "Situação atual").
@@ -7,7 +7,7 @@
 
 ## 1. O que é
 
-**KUROI** é um aplicativo de **"segundo cérebro"**, parecido com o Obsidian: um lugar para **capturar ideias, organizar notas, ligar uma nota a outra, acompanhar tarefas e hábitos**.
+**KIRO** é um aplicativo de **"segundo cérebro"**, parecido com o Obsidian: um lugar para **capturar ideias, organizar notas, ligar uma nota a outra, acompanhar tarefas e hábitos**.
 
 - **Local e offline.** Os dados ficam numa pasta do computador, o "cofre". Não há conta, servidor na nuvem nem assinatura.
 - **Notas em Markdown.** Cada nota é um arquivo `.md` de verdade, legível em qualquer editor.
@@ -23,8 +23,8 @@
 | Parte | Tecnologia |
 |---|---|
 | Interface | **HTML + CSS + JavaScript puro**: sem framework, sem TypeScript, sem etapa de build |
-| Desktop | **Electron 44** (`contextIsolation`, `sandbox`, protocolo próprio `kuroi-anexo://` para imagens) |
-| Instalador | **electron-builder** (NSIS para Windows): `dist/KUROI-Setup-<versão>.exe` |
+| Desktop | **Electron 44** (`contextIsolation`, `sandbox`, protocolo próprio `kiro-anexo://` para imagens) |
+| Instalador | **electron-builder** (NSIS para Windows): `dist/KIRO-Setup-<versão>.exe` |
 | Servidor da versão web | **Node.js** (`http` nativo), só em `127.0.0.1` |
 | Dados | Arquivos **Markdown com frontmatter YAML** (`js-yaml`) + um `caderno.json` com os dados auxiliares |
 | Integração com IA | **Agent API** própria + **servidor MCP** (`@modelcontextprotocol/sdk`, transporte stdio) |
@@ -47,7 +47,7 @@ index.html      casca da página (barra lateral + <main id="app">)
 domain.js       regras puras compartilhadas entre navegador e Node: validação, links, menções,
                 hábitos (frequência, sequência, estatísticas), caixa de entrada, revisão
 vault.cjs       leitura e gravação do cofre: Markdown, caderno.json, histórico, lixeira,
-                trava (.kuroi.lock), gravação atômica, anexos (imagens)
+                trava (.kiro.lock), gravação atômica, anexos (imagens)
 server.mjs      servidor da versão web (npm start = porta 4173; npm run dev = porta 4180 com recarga)
 electron/       main.cjs (janela, IPC, protocolo de imagens) e preload.cjs (ponte segura)
 agent/          Agent API: api.cjs (operações), tools.cjs (21 ferramentas), config.cjs
@@ -66,7 +66,7 @@ cofre/
   Estudos/Python/listas-em-python-<id>.md    ← cada nota é um .md; pastas são pastas reais
   caderno.json                                ← tarefas, hábitos, histórico dos hábitos, pastas (cor, descrição)
   Anexos/                                     ← imagens coladas nas notas (PNG/JPG/GIF/WebP)
-  .history/  .trash/  .kuroi/agent.json       ← versões anteriores, lixeira, permissões dos agentes
+  .history/  .trash/  .kiro/agent.json       ← versões anteriores, lixeira, permissões dos agentes
 ```
 
 Frontmatter de uma nota:
@@ -88,7 +88,7 @@ updatedAt: 1789189555996
 
 ---
 
-## 4. O que o KUROI faz hoje
+## 4. O que o KIRO faz hoje
 
 ### Tela Hoje (a inicial)
 - **Frase do dia** no lugar de "Bom dia": 20 frases bem-humoradas que mudam à meia-noite e nunca repetem a do dia anterior ("Ara ara… não seja vagabundo, vamos trabalhar porque você é pobre."). A saudação muda com a hora.
@@ -139,7 +139,7 @@ updatedAt: 1789189555996
 
 ### Configurações (4 abas)
 - **Personalização:** **temas** (7 Clássicos + 11 Anime, todos com contraste de 4,5:1) e **Personalizado** (cores de fundo e destaque manuais, com aviso de contraste); **skins** mudam cantos, espaços, bordas e fonte (Padrão, Minimal, Compacto, Terminal, Suave, Sharp, Neon, Paper).
-  - Guardado em `localStorage['kuroi.aparencia']` como `{ tema, skin, sidebar, content, acento }`; `domain.js` valida (`aparenciaValida`, migra o formato antigo) e `app.js` põe as classes `tema-<id>`/`skin-<id>` no `<html>`.
+  - Guardado em `localStorage['kiro.aparencia']` como `{ tema, skin, sidebar, content, acento }`; `domain.js` valida (`aparenciaValida`, migra o formato antigo) e `app.js` põe as classes `tema-<id>`/`skin-<id>` no `<html>`.
   - As variáveis de cada tema e as regras das skins ficam em `temas.css` (carregado depois de `styles.css`); aplicar é na hora, sem recarregar.
 - **Sistema:** caminho do cofre, abrir pasta, trocar de cofre, recarregar, exportar/importar backup JSON, lixeira.
 - **Integrações:** permissões dos agentes de IA (ler, criar, editar, excluir, confirmar ações destrutivas, ligar/desligar MCP).
@@ -153,7 +153,7 @@ updatedAt: 1789189555996
   - nunca há operações genéricas como "ler qualquer arquivo" ou "rodar comando";
   - tudo fica restrito ao cofre, com permissões e auditoria;
   - o servidor MCP é só stdio e não abre porta de rede.
-- **Uso atual:** o **Claude Desktop** está configurado para usar o MCP do KUROI instalado.
+- **Uso atual:** o **Claude Desktop** está configurado para usar o MCP do KIRO instalado.
 
 ---
 
@@ -164,7 +164,7 @@ npm run dev          # versão web de desenvolvimento em http://localhost:4180 (
 npm run dev:reset    # recria o cofre de exemplo
 npm test             # 63 testes (node --test), sempre em pastas temporárias
 npm run desktop:dev  # app Electron com o cofre de exemplo
-npm run build:win    # gera dist/KUROI-Setup-<versão>.exe
+npm run build:win    # gera dist/KIRO-Setup-<versão>.exe
 npm run mcp          # servidor MCP (stdio)
 ```
 
@@ -180,7 +180,7 @@ Fluxo usado no projeto:
 
 ## 6. Regras e preferências do dono (respeite ao sugerir mudanças)
 
-1. **Nunca tocar nos cofres reais** em testes: `C:\Projetos\Meu segundo cerebro\vault` e `C:\Users\bielg\Documents\KUROI\vault`. Testes usam pastas temporárias, e o desenvolvimento usa `dev-vault/`.
+1. **Nunca tocar nos cofres reais** em testes: `C:\Projetos\Meu segundo cerebro\vault` e `C:\Users\bielg\Documents\KIRO\vault`. Testes usam pastas temporárias, e o desenvolvimento usa `dev-vault/`.
 2. **Não transformar em SaaS** e não tornar serviços externos obrigatórios.
 3. **Nada do cofre é enviado automaticamente** para fora. Nenhuma chave de API embutida no código.
 4. **Sem operações genéricas** na API de agentes (`read_any_file`, `run_shell` etc.).
@@ -215,7 +215,7 @@ Também foram feitos: bateria de testes com vários agentes (servidor, persistê
 - **Limite conhecido:** o **backup JSON não inclui as imagens** coladas nas notas. Para um backup completo, copie a pasta do cofre.
 - **Falhas apontadas pela bateria de testes e ainda não corrigidas:**
   - edições simultâneas de agentes na mesma nota podem perder gravações (só 3 tentativas);
-  - uma trava `.kuroi.lock` órfã, depois de uma queda, precisa ser apagada à mão;
+  - uma trava `.kiro.lock` órfã, depois de uma queda, precisa ser apagada à mão;
   - a exclusão de **pasta** ainda usa o `confirm()` nativo.
 - **Ideias sugeridas e não feitas:**
   - backup com imagens;

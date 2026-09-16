@@ -74,7 +74,7 @@ function conteudo(agora) {
         '',
         '1. Fundamentos',
         '2. Estruturas de dados',
-        '3. Projeto final: [[Kuroi]]',
+        '3. Projeto final: [[Kiro]]',
         '',
         '---',
         '',
@@ -93,7 +93,7 @@ function conteudo(agora) {
         '',
         'Veja também [[Plano de estudos]]. #python',
       ], ['python']),
-      nota('n-kuroi', 'Kuroi', 'f-projetos', [
+      nota('n-kiro', 'Kiro', 'f-projetos', [
         'Segundo cérebro local. Relacionadas: [[Bem-vindo ao modo de desenvolvimento]] e [[Ideia futura]].',
         '',
         '> Uma citação simples, sem tipo de destaque.',
@@ -133,7 +133,7 @@ module.exports = { DEV_VAULT, semear, semearSeVazio };
 
 if (require.main === module) {
   (async () => {
-    // --reset apaga apenas a pasta fixa dev-vault do projeto; KUROI_VAULT é ignorado de propósito.
+    // --reset apaga apenas a pasta fixa dev-vault do projeto; KIRO_VAULT é ignorado de propósito.
     if (process.argv.includes('--reset')) await fs.rm(DEV_VAULT, { recursive: true, force: true });
     const criou = await semearSeVazio();
     console.log(criou ? `Cofre de desenvolvimento pronto em ${DEV_VAULT}` : `${DEV_VAULT} já tem conteúdo. Use npm run dev:reset para recriar.`);

@@ -1,15 +1,16 @@
 'use strict';
 // Registro de auditoria em JSONL, um evento por linha.
-// Fica em <cofre>/.kuroi/audit.log: o scan() do Vault ignora entradas ocultas na
+// Fica em <cofre>/.kiro/audit.log: o scan() do Vault ignora entradas ocultas na
 // raiz, então este arquivo nunca vira nota nem entra na lista de remoções.
 const fs = require('node:fs/promises');
 const path = require('node:path');
+const { pastaInterna } = require('./config.cjs');
 
 const LIMITE_BYTES = 5 * 1024 * 1024;
 
 class AuditLog {
   constructor(directory) {
-    this.directory = path.join(path.resolve(directory), '.kuroi');
+    this.directory = pastaInterna(directory);
     this.file = path.join(this.directory, 'audit.log');
     this.fila = Promise.resolve();
   }

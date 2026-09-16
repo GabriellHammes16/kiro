@@ -12,7 +12,9 @@ class AgentError extends Error {
 }
 
 // Diretórios de trabalho do cofre. O agente nunca os enxerga nem os altera.
-const RESERVED = new Set(['.history', '.trash', '.staging', '.kuroi', 'caderno.json', '.transaction.json', '.kuroi.lock']);
+const RESERVED = new Set(['.history', '.trash', '.staging', '.kiro', 'caderno.json', '.transaction.json', '.kiro.lock',
+  // Nomes de quando o aplicativo se chamava KUROI: seguem fora do alcance dos agentes.
+  '.kuroi', '.kuroi.lock']);
 const MAX_SEGMENTS = 15;
 const MAX_TITLE = 200;
 
@@ -40,7 +42,7 @@ function vaultRelativePath(entrada, { campo = 'path', extensao = null } = {}) {
     if (parte === '.' || parte === '..') throw new AgentError('PATH_TRAVERSAL', 'Navegar para fora do cofre não é permitido.');
     if (parte.startsWith('.')) throw new AgentError('RESERVED_PATH', 'Arquivos e pastas ocultos não fazem parte do cofre.');
   }
-  if (RESERVED.has(partes[0])) throw new AgentError('RESERVED_PATH', `"${partes[0]}" é uma área interna do Kuroi.`);
+  if (RESERVED.has(partes[0])) throw new AgentError('RESERVED_PATH', `"${partes[0]}" é uma área interna do Kiro.`);
   if (extensao && !new RegExp(`\\.${extensao}$`, 'i').test(bruto)) {
     throw new AgentError('INVALID_PATH', `O caminho deve terminar em .${extensao}`);
   }

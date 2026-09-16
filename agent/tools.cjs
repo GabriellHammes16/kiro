@@ -4,10 +4,10 @@
  *
  * Divisão de responsabilidades: api.cjs faz as operações; aqui ficam as três
  * coisas que só existem por causa de terceiros — validação do schema, permissão
- * e auditoria. A interface do Kuroi usa a API direto e não passa por este gate,
+ * e auditoria. A interface do Kiro usa a API direto e não passa por este gate,
  * porque ali quem age é o próprio usuário.
  *
- * Nomes sem prefixo. A camada MCP publica os mesmos com "kuroi_" na frente.
+ * Nomes sem prefixo. A camada MCP publica os mesmos com "kiro_" na frente.
  */
 const { AgentError } = require('./security.cjs');
 const { validate } = require('./schema.cjs');
@@ -23,7 +23,7 @@ const FERRAMENTAS = [
     name: 'create_note',
     risk: 'write',
     permission: 'create',
-    description: 'Cria uma nota Markdown dentro do cofre Kuroi atual. O caminho é sempre relativo ao cofre; esta ferramenta não escreve fora dele. Pastas ausentes no caminho informado são criadas. Recusa criar uma segunda nota com o mesmo título na mesma pasta.',
+    description: 'Cria uma nota Markdown dentro do cofre Kiro atual. O caminho é sempre relativo ao cofre; esta ferramenta não escreve fora dele. Pastas ausentes no caminho informado são criadas. Recusa criar uma segunda nota com o mesmo título na mesma pasta.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -69,7 +69,7 @@ const FERRAMENTAS = [
     name: 'delete_note',
     risk: 'destructive',
     permission: 'delete',
-    description: 'Move uma nota para a lixeira do Kuroi. Não apaga em definitivo: devolve um trashEntryId que permite restaurar a nota depois.',
+    description: 'Move uma nota para a lixeira do Kiro. Não apaga em definitivo: devolve um trashEntryId que permite restaurar a nota depois.',
     inputSchema: { type: 'object', properties: { ...alvoNota } },
     run: (api, args, ctx) => api.deleteNote(args, ctx),
     target: (args, resultado) => resultado?.deleted?.path || args.path || args.id,
@@ -87,7 +87,7 @@ const FERRAMENTAS = [
     name: 'list_trash',
     risk: 'read',
     permission: 'read',
-    description: 'Lista os itens na lixeira do Kuroi que ainda podem ser restaurados.',
+    description: 'Lista os itens na lixeira do Kiro que ainda podem ser restaurados.',
     inputSchema: { type: 'object', properties: {} },
     run: (api, args, ctx) => api.listTrash(args, ctx),
     target: () => 'trash',
@@ -130,7 +130,7 @@ const FERRAMENTAS = [
     name: 'create_folder',
     risk: 'write',
     permission: 'create',
-    description: 'Cria uma pasta no cofre, incluindo pastas intermediárias do caminho. Pastas do Kuroi são diretórios reais dentro do cofre.',
+    description: 'Cria uma pasta no cofre, incluindo pastas intermediárias do caminho. Pastas do Kiro são diretórios reais dentro do cofre.',
     inputSchema: { type: 'object', properties: { path: { type: 'string', description: 'Caminho relativo ao cofre, por exemplo "Projetos/Ideias".' } }, required: ['path'] },
     run: (api, args, ctx) => api.createFolder(args, ctx),
     target: args => args.path,
@@ -148,7 +148,7 @@ const FERRAMENTAS = [
     name: 'move_note',
     risk: 'write',
     permission: 'update',
-    description: 'Move uma nota para outra pasta do cofre. O arquivo Markdown é movido de verdade e os links relativos são reescritos pelo Kuroi.',
+    description: 'Move uma nota para outra pasta do cofre. O arquivo Markdown é movido de verdade e os links relativos são reescritos pelo Kiro.',
     inputSchema: { type: 'object', properties: { ...alvoNota, folder: { type: 'string', description: 'Pasta de destino relativa ao cofre. Vazio move para a raiz.' } }, required: ['folder'] },
     run: (api, args, ctx) => api.moveNote(args, ctx),
     target: (args, resultado) => resultado?.note?.path || args.path || args.id,
@@ -175,7 +175,7 @@ const FERRAMENTAS = [
     name: 'create_note_link',
     risk: 'write',
     permission: 'update',
-    description: 'Acrescenta um link [[assim]] de uma nota para outra. Os backlinks do Kuroi são derivados do texto, então basta escrever o link: não existe índice a atualizar à mão.',
+    description: 'Acrescenta um link [[assim]] de uma nota para outra. Os backlinks do Kiro são derivados do texto, então basta escrever o link: não existe índice a atualizar à mão.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -203,7 +203,7 @@ const FERRAMENTAS = [
     name: 'get_daily_note',
     risk: 'read',
     permission: 'read',
-    description: 'Devolve a nota diária do Kuroi, cujo título é a data local no formato AAAA-MM-DD. Não cria a nota: se não existir, devolve exists:false e o agente pode chamar create_note.',
+    description: 'Devolve a nota diária do Kiro, cujo título é a data local no formato AAAA-MM-DD. Não cria a nota: se não existir, devolve exists:false e o agente pode chamar create_note.',
     inputSchema: { type: 'object', properties: { date: { type: 'string', description: 'Data AAAA-MM-DD. Sem isso, usa o dia de hoje.' } } },
     run: (api, args, ctx) => api.getDailyNote(args, ctx),
     target: (args, resultado) => resultado?.date || 'today',
@@ -212,7 +212,7 @@ const FERRAMENTAS = [
     name: 'get_habits',
     risk: 'read',
     permission: 'read',
-    description: 'Devolve os hábitos acompanhados no Kuroi com o progresso calculado: frequência, se hoje é dia do hábito e se já foi feito, sequência atual, cumprimento nos últimos 30 dias (%), total de dias feitos e os últimos 7 dias. Use para acompanhar como os hábitos estão indo. Só leitura.',
+    description: 'Devolve os hábitos acompanhados no Kiro com o progresso calculado: frequência, se hoje é dia do hábito e se já foi feito, sequência atual, cumprimento nos últimos 30 dias (%), total de dias feitos e os últimos 7 dias. Use para acompanhar como os hábitos estão indo. Só leitura.',
     inputSchema: { type: 'object', properties: { date: { type: 'string', pattern: '^\\d{4}-\\d{2}-\\d{2}$', description: 'Dia de referência AAAA-MM-DD. Sem isso, usa hoje.' } } },
     run: (api, args, ctx) => api.getHabits(args, ctx),
     target: () => 'habits',
@@ -267,7 +267,7 @@ const PERMISSAO_DE_RISCO = { read: 'read', write: 'write', destructive: 'destruc
 
 class AgentToolkit {
   constructor({ api, audit, config }) {
-    if (!api) throw new Error('AgentToolkit precisa de uma KuroiAgentApi.');
+    if (!api) throw new Error('AgentToolkit precisa de uma KiroAgentApi.');
     this.api = api;
     this.audit = audit || null;
     this.config = config || null;
@@ -287,9 +287,9 @@ class AgentToolkit {
   async #permitir(ferramenta) {
     if (!this.config) return;
     const conf = await this.config.load();
-    if (!conf.enabled) throw new AgentError('AGENT_DISABLED', 'A integração com agentes está desligada nas configurações do Kuroi.');
+    if (!conf.enabled) throw new AgentError('AGENT_DISABLED', 'A integração com agentes está desligada nas configurações do Kiro.');
     if (!conf.permissions[ferramenta.permission]) {
-      throw new AgentError('PERMISSION_DENIED', `O Kuroi está configurado para não permitir "${ferramenta.permission}" por agentes. Ajuste em AI & Integrations.`);
+      throw new AgentError('PERMISSION_DENIED', `O Kiro está configurado para não permitir "${ferramenta.permission}" por agentes. Ajuste em AI & Integrations.`);
     }
   }
 
