@@ -883,3 +883,10 @@ body, button, input, textarea, select { font-family:var(--fonte-interface); }
 .plugin-pilha { display:grid; gap:var(--esp-3); }
 /* Foco visível: o item do painel é alcançável pelo teclado como qualquer botão. */
 .plugin-item[data-acao]:focus-visible, .plugin-card[data-acao]:focus-visible { outline:2px solid var(--acento); outline-offset:2px; }
+
+/* Avisos temporários dos plug-ins (kiro.notify e erros de evento): empilham no canto e somem sozinhos. */
+#avisos-plugins { position:fixed; right:var(--esp-4, 18px); bottom:48px; z-index:30; display:grid; gap:var(--esp-2, 8px); max-width:min(360px, calc(100vw - 32px)); pointer-events:none; }
+.aviso-plugin { padding:10px 14px; border-radius:var(--raio-controle, 8px); background:var(--panel-raised); color:var(--ink); border:1px solid var(--line); border-left:3px solid var(--acento); box-shadow:var(--shadow); font-size:var(--fs-secundario, 13px); overflow-wrap:anywhere; animation:avisoEntra .18s ease-out; }
+.aviso-plugin.erro { border-left-color:var(--ink); font-weight:600; }
+@keyframes avisoEntra { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:none; } }
+@media (prefers-reduced-motion: reduce) { .aviso-plugin { animation:none; } }

@@ -11,7 +11,9 @@
 //   { tipo: 'resposta', chamada, valor | erro }   resposta a uma 'chamada' do worker
 //   { tipo: 'acao', chamada, registro: { tipo, id }, dados }
 // (worker → página):
-//   { tipo: 'pronto', registros: { command: [{ id, label }], panel: [{ id, label }] } }
+//   { tipo: 'pronto', registros: { command: [{ id, label }], panel: [{ id, label }], event: ['save'|'create'|'day'] } }
+// Eventos chegam como 'acao' com registro { tipo: 'event', id: 'save'|'create'|'day' }
+// e dados { note } (save/create) ou { date } (day).
 //   { tipo: 'chamada', chamada, metodo, args }    pedido de método da API
 //   { tipo: 'resposta', chamada, valor | erro }   retorno de uma 'acao'
 //   { tipo: 'erro', mensagem }
@@ -19,7 +21,7 @@ import './plugins.js';
 
 const { metodosPermitidos } = globalThis.KiroPlugins;
 const pendentes = new Map();
-const registros = { command: new Map(), panel: new Map() };
+const registros = { command: new Map(), panel: new Map(), event: new Map() };
 let proxima = 1;
 let ativado = false;
 
@@ -49,6 +51,10 @@ function montarApi(permissoes) {
   const kiro = {
     command: (id, label, handler) => guardar('command', id, label, handler),
     panel: (id, label, render) => guardar('panel', id, label, render),
+    // Um handler por evento; registrar de novo troca o anterior.
+    onSave: handler => guardar('event', 'save', 'save', handler),
+    onCreate: handler => guardar('event', 'create', 'create', handler),
+    onDay: handler => guardar('event', 'day', 'day', handler),
   };
   for (const metodo of metodosPermitidos(permissoes)) {
     const [grupo, nome] = metodo.includes('.') ? metodo.split('.') : ['', metodo];
@@ -68,7 +74,7 @@ async function ativar({ url, permissoes }) {
   const plugin = modulo.default || modulo;
   if (!plugin || typeof plugin.activate !== 'function') throw new Error('O plug-in precisa exportar activate(kiro).');
   await plugin.activate(montarApi(permissoes));
-  postMessage({ tipo: 'pronto', registros: { command: listar('command'), panel: listar('panel') } });
+  postMessage({ tipo: 'pronto', registros: { command: listar('command'), panel: listar('panel'), event: [...registros.event.keys()] } });
 }
 
 // Um clique num painel ou um comando: a página pede, o plug-in responde.

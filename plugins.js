@@ -201,7 +201,22 @@
     return saida.join('');
   }
 
-  const api = { PERMISSOES, METODOS, painelParaHtml, higienizarHtml, planoDeCarga, validarManifesto, compararVersoes, comparar, precisaConsentir, rotuloDaPermissao, metodosPermitidos, podeChamar };
+  // Eventos: compara as notas de antes e de depois de uma gravação (ou recarga)
+  // pelo updatedAt. Nota apagada não gera evento.
+  function eventosDaGravacao(antes, depois) {
+    const anterior = new Map((antes || []).map(n => [n.id, n.updatedAt]));
+    const criadas = [], alteradas = [];
+    for (const n of depois || []) {
+      if (!anterior.has(n.id)) criadas.push(n.id);
+      else if (anterior.get(n.id) !== n.updatedAt) alteradas.push(n.id);
+    }
+    return { criadas, alteradas };
+  }
+  // save e create levam a nota inteira: só quem pode ler notas recebe. day não leva nada.
+  const deveEntregar = (evento, permissoes) =>
+    evento === 'day' ? true : (evento === 'save' || evento === 'create') && (permissoes || []).includes('notes:read');
+
+  const api = { PERMISSOES, METODOS, eventosDaGravacao, deveEntregar, painelParaHtml, higienizarHtml, planoDeCarga, validarManifesto, compararVersoes, comparar, precisaConsentir, rotuloDaPermissao, metodosPermitidos, podeChamar };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.KiroPlugins = api;
 })(globalThis);

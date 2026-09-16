@@ -421,3 +421,27 @@ test('higienizador não trava com entrada patológica de 200 KB', () => {
   assert.ok(P.higienizarHtml('x'.repeat(300 * 1024)).length <= 200 * 1024);
 });
 
+test('eventos: o que mudou numa gravação e quem pode receber', () => {
+  const antes = [{ id: 'a', updatedAt: 1 }, { id: 'b', updatedAt: 1 }];
+  const depois = [{ id: 'a', updatedAt: 2 }, { id: 'b', updatedAt: 1 }, { id: 'c', updatedAt: 3 }];
+  assert.deepEqual(P.eventosDaGravacao(antes, depois), { criadas: ['c'], alteradas: ['a'] });
+  assert.deepEqual(P.eventosDaGravacao(depois, depois), { criadas: [], alteradas: [] });
+  assert.deepEqual(P.eventosDaGravacao(null, undefined), { criadas: [], alteradas: [] });
+  assert.equal(P.deveEntregar('save', ['notes:read']), true);
+  assert.equal(P.deveEntregar('save', []), false);
+  assert.equal(P.deveEntregar('create', ['tasks:read']), false);
+  assert.equal(P.deveEntregar('day', []), true);
+  assert.equal(P.deveEntregar('outro', ['notes:read']), false);
+});
+
+test('app: eventos têm anti-laço, não disparam na primeira carga e avisos de plug-in usam o aviso temporário', () => {
+  const fs = require('node:fs'), path = require('node:path');
+  const app = fs.readFileSync(path.join(__dirname, '..', 'app.js'), 'utf8');
+  const worker = fs.readFileSync(path.join(__dirname, '..', 'plugin-worker.js'), 'utf8');
+  for (const nome of ['onSave', 'onCreate', 'onDay']) assert.match(worker, new RegExp(`${nome}\\b`));
+  assert.match(app, /eventosDaGravacao/);
+  assert.match(app, /PROFUNDIDADE_EVENTOS/);
+  assert.match(app, /case 'notify': \{ avisoDePlugin\(/);
+  assert.match(app, /aria-live/);
+});
+
