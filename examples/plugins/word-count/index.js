@@ -1,8 +1,8 @@
 // Example plugin for Kiro — copy this folder to <vault>/.kiro/plugins/ to start
 // your own. See docs/plugins.md for the full API.
 //
-// It asks for a single permission (notes:read), registers one command and one
-// panel, and never touches anything it did not declare.
+// It asks for a single permission (notes:read), registers one command, one
+// panel and one block, and never touches anything it did not declare.
 
 // Words are runs of non-space characters. Good enough for a word counter, and
 // it costs one line instead of a tokenizer.
@@ -10,7 +10,7 @@ const words = text => (String(text || '').trim().match(/\S+/g) || []).length;
 
 export default {
   async activate(kiro) {
-    // A command shows up in Kiro's command menu. The handler runs in the worker.
+    // A command is run from Settings → Plug-ins. The handler runs in the worker.
     kiro.command('count', 'Count words in the open note', async () => {
       const note = await kiro.notes.current();
       kiro.notify(note ? `${words(note.body)} words in "${note.title}"` : 'Open a note first.');
