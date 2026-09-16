@@ -327,3 +327,97 @@ test('plug-ins não aparecem em menu de botão direito; comandos rodam nas Confi
   assert.ok(!/'plugin-comandos'/.test(app), 'o cabeçalho do card não deve ter botão de comandos');
   assert.ok(/data-comando-plugin=/.test(app), 'a aba Plug-ins deve ter botões de comando');
 });
+
+test('higienizador mantém o permitido e remove o perigoso', () => {
+  const limpo = P.higienizarHtml;
+  assert.equal(limpo('<p>oi <strong>forte</strong></p>'), '<p>oi <strong>forte</strong></p>');
+  assert.equal(limpo('<script>alert(1)</script><p>x</p>'), '<p>x</p>');
+  assert.equal(limpo('<img src="x" onerror="alert(1)">'), '<img>');
+  assert.equal(limpo('<a href="javascript:alert(1)">x</a>'), '<a>x</a>');
+  assert.equal(limpo('<a href="https://kiro.app" target="_blank">x</a>'), '<a href="https://kiro.app" rel="noopener noreferrer">x</a>');
+  assert.equal(limpo('<iframe src="https://x"></iframe><b>ok</b>'), '<b>ok</b>');
+  assert.equal(limpo('<div style="position:fixed">x</div>'), '<div>x</div>');
+  assert.equal(limpo('<svg viewBox="0 0 10 10"><path d="M0 0L10 10"/></svg>'), '<svg viewBox="0 0 10 10"><path d="M0 0L10 10"></path></svg>');
+  assert.equal(limpo('<img src="data:image/png;base64,AAAA">'), '<img src="data:image/png;base64,AAAA">');
+  assert.equal(limpo('<img src="data:text/html;base64,AAAA">'), '<img>');
+  assert.equal(limpo('<p>a &lt; b</p>'), '<p>a &lt; b</p>');
+  assert.equal(limpo('<P ONCLICK="x">y</P>'), '<p>y</p>');
+  assert.equal(limpo('<style>body{}</style><p>z</p>'), '<p>z</p>');
+  assert.equal(limpo('<!-- <script>x</script> --><p>c</p>'), '<p>c</p>');
+  assert.equal(limpo('<svg><foreignObject><p>x</p></foreignObject></svg>'), '<svg></svg>');
+});
+
+test('higienizador resiste a vetores de ataque conhecidos', () => {
+  const limpo = P.higienizarHtml;
+  // Nenhuma saída pode ter tag fora da lista, on*, style, xlink ou URL executável em atributo.
+  const semVetor = saida => {
+    for (const [, nome, attrs] of saida.matchAll(/<\/?([a-zA-Z]+)([^>]*)>/g)) {
+      assert.ok(['p', 'br', 'hr', 'span', 'div', 'strong', 'em', 'b', 'i', 'u', 's', 'code', 'pre', 'blockquote', 'ul', 'ol', 'li', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'table', 'thead', 'tbody', 'tr', 'th', 'td', 'a', 'img', 'svg', 'g', 'path', 'rect', 'circle', 'line', 'polyline', 'polygon', 'text'].includes(nome), `tag ${nome} em ${saida}`);
+      // Atributos só no formato canônico nome="valor", sem aspas nem < cruas no valor.
+      assert.match(attrs, /^(\s[a-zA-Z-]+="[^"<>]*")*$/, `atributo fora do formato em ${saida}`);
+      for (const [, chave, valor] of attrs.matchAll(/\s([a-zA-Z-]+)="([^"]*)"/g)) {
+        assert.ok(['class', 'title', 'alt', 'colspan', 'rowspan', 'href', 'src', 'width', 'height', 'viewBox', 'd', 'fill', 'stroke', 'stroke-width', 'x', 'y', 'x1', 'y1', 'x2', 'y2', 'cx', 'cy', 'r', 'points', 'text-anchor', 'font-size', 'transform', 'rel'].includes(chave), `atributo ${chave} em ${saida}`);
+        if (chave === 'href') assert.match(valor, /^(https?:|#)/, `href em ${saida}`);
+        if (chave === 'src') assert.match(valor, /^data:image\//, `src em ${saida}`);
+      }
+    }
+    assert.ok(!/<(?![a-zA-Z/])/.test(saida), `< solto em ${saida}`);
+  };
+  const casos = [
+    ['<img src=x onerror=alert(1)>', '<img>'],
+    ['<img/src=x/onerror=alert(1)>', '<img>'],
+    ['<img src="x"onerror="alert(1)">', '<img>'],
+    ['<a href="JaVaScRiPt:alert(1)">x</a>', '<a>x</a>'],
+    ['<a href="&#106;avascript:alert(1)">x</a>', '<a>x</a>'],
+    ['<a href="&#x6A;avascript:alert(1)">x</a>', '<a>x</a>'],
+    ['<a href="&#106avascript:alert(1)">x</a>', '<a>x</a>'],
+    ['<a href="java\tscript:alert(1)">x</a>', '<a>x</a>'],
+    ['<a href="java&#9;script:alert(1)">x</a>', '<a>x</a>'],
+    ['<a href="  javascript:alert(1)">x</a>', '<a>x</a>'],
+    ['<a href=javascript:alert(1)>x</a>', '<a>x</a>'],
+    ['<a href="data:text/html,<script>alert(1)</script>">x</a>', '<a>x</a>'],
+    ['<a href="https://ok" onclick="alert(1)">x</a>', '<a href="https://ok" rel="noopener noreferrer">x</a>'],
+    ['<a href="https://x&quot; onclick=&quot;alert(1)">x</a>', '<a href="https://x&quot; onclick=&quot;alert(1)" rel="noopener noreferrer">x</a>'],
+    ['<p>x</p onclick="alert(1)"><b>y</b>', '<p>x</p><b>y</b>'],
+    ['</script><script>alert(1)</script>ok', 'ok'],
+    ['<svg><script>alert(1)</script><rect width="1"/></svg>', '<svg><rect width="1"></rect></svg>'],
+    ['<svg onload=alert(1)><a xlink:href="javascript:alert(1)"><text>t</text></a></svg>', '<svg><a><text>t</text></a></svg>'],
+    ['<svg><animate attributeName="href" to="javascript:alert(1)"/><set attributeName="onload" to="alert(1)"/></svg>', '<svg></svg>'],
+    ['<math><mtext><table><mglyph><style><img src=x onerror=alert(1)></style></mglyph></table></mtext></math>', '<table></table>'],
+    ['a < b > c', 'a &lt; b &gt; c'],
+    ['<<script>alert(1)</script>', '&lt;'],
+    ['<scr<script>ipt>alert(1)</script>', '&lt;scr'],
+    ['<b><i>x', '<b><i>x</i></b>'],
+    ['<div><span>x</div>y</span>', '<div><span>x</span></div>y'],
+    ['&#60;script&#62;alert(1)&#60;/script&#62;', '&lt;script&gt;alert(1)&lt;/script&gt;'],
+    ['<p title="a&quot;><script>alert(1)</script>">t</p>', '<p title="a&quot;&gt;&lt;script&gt;alert(1)&lt;/script&gt;">t</p>'],
+    ['<p class=\'x" onmouseover="alert(1)\'>t</p>', '<p class="x&quot; onmouseover=&quot;alert(1)">t</p>'],
+    ['<rect fill="url(javascript:alert(1))"/>', '<rect></rect>'],
+    ['<form action="https://x"><input name="p"><button formaction="javascript:alert(1)">b</button></form>', 'b'],
+    ['<object data="x"><embed src="x"></object><template><img src=x onerror=alert(1)></template>ok', 'ok'],
+    ['<noscript><p title="</noscript><img src=x onerror=alert(1)>"></noscript>', ''],
+    ['<script>never closed <p>x</p>', ''],
+    ['<!--><img src=x onerror=alert(1)>-->', ''],
+    ['<p>&#99999999999; &#xZZ; &#abc;</p>', '<p>&amp;#99999999999; &amp;#xZZ; &amp;#abc;</p>'],
+    ['<img src="data:image/svg+xml;base64,PHN2ZyBvbmxvYWQ9YWxlcnQoMSk+">', '<img src="data:image/svg+xml;base64,PHN2ZyBvbmxvYWQ9YWxlcnQoMSk+">'],
+    ['<img src="https://rastreio.example/pixel.png">', '<img>'],
+  ];
+  for (const [entrada, esperado] of casos) {
+    const saida = limpo(entrada);
+    assert.equal(saida, esperado, entrada);
+    semVetor(saida);
+  }
+  assert.equal(limpo(null), '');
+  assert.equal(limpo(undefined), '');
+});
+
+test('higienizador não trava com entrada patológica de 200 KB', () => {
+  for (const entrada of ['<a '.repeat(70000), '<a x=a/'.repeat(30000), '<a b="'.repeat(35000), '<'.repeat(200000), '<p>'.repeat(70000), '<a x=y '.repeat(30000) + 'z']) {
+    const inicio = Date.now();
+    const saida = P.higienizarHtml(entrada);
+    assert.ok(Date.now() - inicio < 1000, `lento: ${entrada.slice(0, 10)}`);
+    assert.equal(typeof saida, 'string');
+  }
+  assert.ok(P.higienizarHtml('x'.repeat(300 * 1024)).length <= 200 * 1024);
+});
+

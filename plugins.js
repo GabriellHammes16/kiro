@@ -127,7 +127,81 @@
     }
   }
 
-  const api = { PERMISSOES, METODOS, painelParaHtml, planoDeCarga, validarManifesto, compararVersoes, comparar, precisaConsentir, rotuloDaPermissao, metodosPermitidos, podeChamar };
+  // ---- Higienizador de HTML dos blocos (etapa 2) ----
+  // Lista de permitidos. A segurança não depende de ler o HTML igual ao navegador:
+  // a saída é remontada do zero (tag permitida, atributo permitido entre aspas duplas,
+  // todo texto e valor escapados), então nenhum truque de sintaxe sobrevive à volta.
+  const TAGS = new Set(['p', 'br', 'hr', 'span', 'div', 'strong', 'em', 'b', 'i', 'u', 's', 'code', 'pre', 'blockquote', 'ul', 'ol', 'li', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'table', 'thead', 'tbody', 'tr', 'th', 'td', 'a', 'img', 'svg', 'g', 'path', 'rect', 'circle', 'line', 'polyline', 'polygon', 'text']);
+  const VAZIAS = new Set(['br', 'hr', 'img']);
+  // Somem com todo o conteúdo, não só a tag.
+  const DESCARTAR = new Set(['script', 'style', 'iframe', 'object', 'embed', 'template', 'noscript', 'foreignobject', 'textarea', 'title']);
+  const ATRIBUTOS = new Set(['class', 'title', 'alt', 'colspan', 'rowspan', 'href', 'src', 'width', 'height', 'viewbox', 'd', 'fill', 'stroke', 'stroke-width', 'x', 'y', 'x1', 'y1', 'x2', 'y2', 'cx', 'cy', 'r', 'points', 'text-anchor', 'font-size', 'transform']);
+  const CANONICO = { viewbox: 'viewBox' }; // SVG diferencia maiúsculas
+  const ENTIDADES = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'" };
+  const decodificar = v => v.replace(/&(#x[0-9a-f]+|#[0-9]+|amp|lt|gt|quot|apos);/gi, (m, e) => {
+    if (e[0] !== '#') return ENTIDADES[e.toLowerCase()];
+    const n = e[1] === 'x' || e[1] === 'X' ? parseInt(e.slice(2), 16) : parseInt(e.slice(1), 10);
+    return n <= 0x10ffff ? String.fromCodePoint(n) : m;
+  });
+  function valorPermitido(nome, valor) {
+    // Espaços e controles somem antes de comparar: "java\tscript:" e " javascript:" contam como javascript:.
+    const v = decodificar(valor).replace(/[ - ]/g, '').toLowerCase();
+    if (nome === 'href') return /^(https?:|#)/.test(v);
+    // svg+xml fica: em <img> o SVG roda em modo seguro, sem script nem recurso externo.
+    if (nome === 'src') return /^data:image\/(png|jpeg|gif|webp|svg\+xml)[;,]/.test(v);
+    return !/(javascript|vbscript|data):|expression\(|url\(/.test(v);
+  }
+  // Nome e valor usam o truque (?=(…))\N, que imita grupo atômico: sem ele,
+  // "x=a/b/c" teria muitas leituras e uma entrada sem ">" travaria a página.
+  const TAG = /<(\/?)([a-zA-Z][a-zA-Z0-9:-]*)((?:(?:[\s/]+|(?<=["']))(?=([^\s"'<>/=]+))\4(?:\s*=\s*(?=("[^"]*"|'[^']*'|[^\s"'<>]+))\5)?)*)[\s/]*>/y;
+  const ATRIBUTO = /([^\s"'<>/=]+)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'<>]+)))?/g;
+  /**
+   * HTML de plug-in → HTML seguro para innerHTML. Sem DOM: roda no Node e no navegador.
+   * Tag fora da lista some e deixa o texto; as de DESCARTAR levam o conteúdo junto.
+   */
+  function higienizarHtml(html) {
+    const entrada = String(html ?? '').slice(0, 200 * 1024).replace(/<!--[\s\S]*?(-->|$)/g, '').replace(/<![^>]*>/g, '');
+    const saida = [], abertas = [];
+    let descartando = null, i = 0;
+    while (i < entrada.length) {
+      TAG.lastIndex = i;
+      const m = entrada[i] === '<' ? TAG.exec(entrada) : null;
+      if (!m) {
+        // Texto até o próximo "<" (ou o próprio "<" solto), decodificado e escapado de novo.
+        const fim = entrada.indexOf('<', i + 1);
+        const texto = entrada.slice(i, fim < 0 ? entrada.length : fim);
+        if (!descartando) saida.push(escapar(decodificar(texto)));
+        i += texto.length;
+        continue;
+      }
+      i = TAG.lastIndex;
+      const [bruto, barra, nomeBruto, atributos] = m;
+      const nome = nomeBruto.toLowerCase(), fechando = barra === '/', autoFechada = /\/\s*>$/.test(bruto);
+      if (descartando) { if (fechando && nome === descartando) descartando = null; continue; }
+      if (DESCARTAR.has(nome)) { if (!fechando && !autoFechada) descartando = nome; continue; }
+      if (!TAGS.has(nome)) continue;
+      if (fechando) {
+        const pos = abertas.lastIndexOf(nome);
+        while (pos >= 0 && abertas.length > pos) saida.push(`</${abertas.pop()}>`);
+        continue;
+      }
+      const attrs = [];
+      for (const a of atributos.matchAll(ATRIBUTO)) {
+        const chave = a[1].toLowerCase(), valor = a[2] ?? a[3] ?? a[4] ?? '';
+        if (!ATRIBUTOS.has(chave) || !valorPermitido(chave, valor)) continue;
+        attrs.push(` ${CANONICO[chave] || chave}="${escapar(decodificar(valor))}"`);
+      }
+      if (nome === 'a' && attrs.some(a => a.startsWith(' href='))) attrs.push(' rel="noopener noreferrer"');
+      saida.push(`<${nome}${attrs.join('')}>`);
+      if (VAZIAS.has(nome)) continue;
+      if (autoFechada) saida.push(`</${nome}>`);
+      else abertas.push(nome);
+    }
+    while (abertas.length) saida.push(`</${abertas.pop()}>`);
+    return saida.join('');
+  }
+
+  const api = { PERMISSOES, METODOS, painelParaHtml, higienizarHtml, planoDeCarga, validarManifesto, compararVersoes, comparar, precisaConsentir, rotuloDaPermissao, metodosPermitidos, podeChamar };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.KiroPlugins = api;
 })(globalThis);
