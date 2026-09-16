@@ -7,7 +7,11 @@ const { AgentConfig } = require('../agent/index.cjs');
 let vault, settings;
 // As imagens das notas chegam à janela por este esquema, servido pelo Vault: a página
 // (file://) não lê o disco, e só arquivos de imagem de dentro do cofre passam.
-protocol.registerSchemesAsPrivileged([{ scheme: 'kiro-anexo', privileges: { standard: true, secure: true, supportFetchAPI: true } }]);
+// O código dos plug-ins chega ao worker pelo esquema kiro-plugin, também servido pelo Vault.
+protocol.registerSchemesAsPrivileged([
+  { scheme: 'kiro-anexo', privileges: { standard: true, secure: true, supportFetchAPI: true } },
+  { scheme: 'kiro-plugin', privileges: { standard: true, secure: true, supportFetchAPI: true } },
+]);
 function createWindow() {
   const window = new BrowserWindow({ width: 1280, height: 820, minWidth: 900, minHeight: 620, backgroundColor: '#0a0a0a', title: 'Kiro', icon: join(__dirname, '..', 'kiro-logo.png'), webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true, preload: join(__dirname, 'preload.cjs') } });
   window.loadFile(join(__dirname, '..', 'index.html'));
@@ -50,6 +54,20 @@ else app.whenReady().then(async () => {
       const { data, type } = await vault.readAttachment(relativo);
       return new Response(data, { headers: { 'Content-Type': type, 'X-Content-Type-Options': 'nosniff' } });
     } catch { return new Response('Imagem não encontrada.', { status: 404 }); }
+  });
+  // <id> é o host da URL: kiro-plugin://word-count/index.js. A CSP da resposta é o
+  // que impede o worker do plug-in de abrir conexão por conta própria.
+  protocol.handle('kiro-plugin', async request => {
+    try {
+      const url = new URL(request.url);
+      const arquivo = decodeURIComponent(url.pathname.replace(/^\//, ''));
+      const corpo = await vault.readPluginFile(url.hostname, arquivo);
+      return new Response(corpo, { headers: {
+        'Content-Type': 'text/javascript; charset=utf-8',
+        'X-Content-Type-Options': 'nosniff',
+        'Content-Security-Policy': "default-src 'none'; script-src 'self' kiro-plugin:; connect-src 'none'",
+      } });
+    } catch { return new Response('Plug-in não encontrado.', { status: 404 }); }
   });
   ipcMain.handle('vault:open', async () => { await mkdir(vault.directory, { recursive: true }); return shell.openPath(vault.directory); });
   ipcMain.handle('vault:path', () => vault.directory);

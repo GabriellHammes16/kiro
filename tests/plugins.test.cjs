@@ -93,3 +93,40 @@ test('o espaço do plug-in guarda dados e recusa passar de 1 MB', async () => {
     await assert.rejects(() => vault.writePluginData('word-count', { grande: 'x'.repeat(1024 * 1024) }), /1 MB/);
   } finally { await fs.rm(dir, { recursive: true, force: true }); }
 });
+
+const { spawn } = require('node:child_process');
+
+async function servidorTemporario() {
+  const { dir } = await cofreTemporario();
+  const porta = 4300 + Math.floor(Math.random() * 500);
+  const filho = spawn(process.execPath, ['server.mjs'], {
+    cwd: path.join(__dirname, '..'),
+    env: { ...process.env, PORT: String(porta), KIRO_VAULT: dir },
+    stdio: 'ignore',
+  });
+  for (let i = 0; i < 50; i++) {
+    try { await fetch(`http://127.0.0.1:${porta}/`); break; } catch { await new Promise(r => setTimeout(r, 100)); }
+  }
+  return { porta, dir, parar: async () => { filho.kill(); await fs.rm(dir, { recursive: true, force: true }); } };
+}
+
+test('a rota serve o código do plug-in com os cabeçalhos de segurança', async () => {
+  const s = await servidorTemporario();
+  try {
+    const ok = await fetch(`http://127.0.0.1:${s.porta}/plugins/word-count/index.js`);
+    assert.equal(ok.status, 200);
+    assert.match(ok.headers.get('content-type'), /javascript/);
+    assert.match(ok.headers.get('content-security-policy'), /connect-src 'none'/);
+    assert.equal(ok.headers.get('x-content-type-options'), 'nosniff');
+
+    const json = await fetch(`http://127.0.0.1:${s.porta}/plugins/word-count/manifest.json`);
+    assert.equal(json.status, 404);
+    const fuga = await fetch(`http://127.0.0.1:${s.porta}/plugins/word-count/..%2F..%2Fcaderno.json`);
+    assert.equal(fuga.status, 404);
+    // Caminho absoluto e pasta de outro plug-in também não passam.
+    const absoluto = await fetch(`http://127.0.0.1:${s.porta}/plugins/word-count/${encodeURIComponent('C:\\Windows\\win.ini')}`);
+    assert.equal(absoluto.status, 404);
+    const fundo = await fetch(`http://127.0.0.1:${s.porta}/plugins/word-count/sub/index.js`);
+    assert.equal(fundo.status, 404);
+  } finally { await s.parar(); }
+});

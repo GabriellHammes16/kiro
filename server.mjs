@@ -83,6 +83,21 @@ createServer(async (request, response) => {
         return response.end(corpo);
       } catch { return send(response, 404, { error: 'Fonte não encontrada.' }); }
     }
+    // Código de plug-in: só .js de dentro de .kiro/plugins, com a rede do worker cortada.
+    if (rota.startsWith('/plugins/')) {
+      const partes = rota.slice('/plugins/'.length).split('/');
+      if (request.method !== 'GET' || partes.length !== 2) return send(response, 404, { error: 'Não encontrado.' });
+      try {
+        const corpo = await vault.readPluginFile(decodeURIComponent(partes[0]), decodeURIComponent(partes[1]));
+        response.writeHead(200, {
+          'Content-Type': 'text/javascript; charset=utf-8',
+          'X-Content-Type-Options': 'nosniff',
+          'Content-Security-Policy': "default-src 'none'; script-src 'self' kiro-plugin:; connect-src 'none'",
+          'Cache-Control': 'no-cache',
+        });
+        return response.end(corpo);
+      } catch { return send(response, 404, { error: 'Plug-in não encontrado.' }); }
+    }
     const file = publicFiles[rota];
     if (request.method !== 'GET' || !file) return send(response, 404, { error: 'Não encontrado.' });
     let body = await readFile(join(root, file[0]));
