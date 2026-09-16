@@ -25,8 +25,9 @@ The folder name must equal the `id` in the manifest. Kiro only reads
 `manifest.json` and `.js` files directly inside that folder — no subfolders, no
 other file types. `data.json` appears there once you use `kiro.storage`.
 
-A complete working example lives in `dev-vault/.kiro/plugins/word-count/` in
-this repository. Copying that folder is the fastest way to start.
+A complete working example lives in `examples/plugins/word-count/` in this
+repository, and `npm run dev` copies it into the example vault. Copying that
+folder is the fastest way to start.
 
 ## manifest.json
 

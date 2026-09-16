@@ -7,9 +7,6 @@ outputs/
 vault/
 
 # Cofre de exemplo do npm run dev: recriado por npm run dev:reset
-# Exceção: dev-vault/.kiro/plugins/word-count/ é versionado (git add -f), porque é
-# o plug-in de exemplo que a documentação e o teste usam. O dev:reset apaga a pasta
-# inteira; depois dele, `git checkout -- dev-vault` traz o exemplo de volta.
 dev-vault/
 
 # Resíduo de teste manual da interface

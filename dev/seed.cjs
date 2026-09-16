@@ -5,6 +5,7 @@ const path = require('node:path');
 const { Vault } = require('../vault.cjs');
 
 const DEV_VAULT = path.join(__dirname, '..', 'dev-vault');
+const EXEMPLOS_PLUGINS = path.join(__dirname, '..', 'examples', 'plugins');
 
 const dia = (delta = 0) => {
   const d = new Date();
@@ -116,10 +117,23 @@ function conteudo(agora) {
   };
 }
 
+/** Leva os plug-ins de exemplo para o cofre. Não sobrescreve o que já está lá e
+ * não derruba o seed se a pasta examples/plugins não existir. */
+async function copiarPluginsDeExemplo(diretorio = DEV_VAULT) {
+  const destino = path.join(diretorio, '.kiro', 'plugins');
+  try {
+    await fs.cp(EXEMPLOS_PLUGINS, destino, { recursive: true, force: false, errorOnExist: false });
+  } catch (erro) {
+    if (erro.code !== 'ENOENT') throw erro;
+  }
+}
+
 async function semear(diretorio = DEV_VAULT) {
   const vault = new Vault(diretorio);
   const atual = await vault.load();
-  return vault.save({ ...atual, ...conteudo(Date.now()) });
+  const salvo = await vault.save({ ...atual, ...conteudo(Date.now()) });
+  await copiarPluginsDeExemplo(diretorio);
+  return salvo;
 }
 
 /** Semeia só pasta vazia ou inexistente: nunca mistura exemplo com notas de verdade. */

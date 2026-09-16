@@ -168,7 +168,7 @@ test('o worker é de módulo e importa a parte pura por import', () => {
 });
 
 test('o plug-in de exemplo é válido e pede o mínimo', () => {
-  const pasta = path.join(__dirname, '..', 'dev-vault', '.kiro', 'plugins', 'word-count');
+  const pasta = path.join(__dirname, '..', 'examples', 'plugins', 'word-count');
   const manifesto = JSON.parse(require('node:fs').readFileSync(path.join(pasta, 'manifest.json'), 'utf8'));
   const r = P.validarManifesto(manifesto, { versaoDoKiro: require('../package.json').version });
   assert.equal(r.ok, true, r.erro);
