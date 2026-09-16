@@ -320,3 +320,10 @@ test('abrir a pasta de plug-ins não aceita caminho da página', () => {
   assert.ok(/\n  plugin: '<path /.test(app), 'ícone próprio da aba');
 });
 
+test('plug-ins não aparecem em menu de botão direito; comandos rodam nas Configurações', () => {
+  const app = require('node:fs').readFileSync(path.join(__dirname, '..', 'app.js'), 'utf8');
+  assert.ok(!/rotulo: 'Plug-ins'/.test(app), 'o menu da nota não deve ter submenu de plug-ins');
+  assert.ok(!/closest\?\.\('\.plugin-painel'\)[\s\S]{0,80}abrirMenuContexto/.test(app), 'o card não deve abrir menu de contexto');
+  assert.ok(!/'plugin-comandos'/.test(app), 'o cabeçalho do card não deve ter botão de comandos');
+  assert.ok(/data-comando-plugin=/.test(app), 'a aba Plug-ins deve ter botões de comando');
+});

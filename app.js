@@ -1875,8 +1875,6 @@ function menuDaNota() {
     { rotulo: 'Colar', icone: icone('colar'), acao: colar },
     { separador: true },
     { rotulo: 'Selecionar tudo', icone: icone('selecionar'), acao: a => a.select() },
-    // Comandos de plug-in também com a nota aberta: é aqui que notes.current() faz sentido.
-    ...(comandosDosPlugins().length ? [{ separador: true }, { rotulo: 'Plug-ins', icone: icone('codigo'), filhos: comandosDosPlugins() }] : []),
     { separador: true },
     { rotulo: 'Salvar', icone: icone('salvar'), acao: () => salvarNota() },
     { rotulo: 'Detalhes', icone: icone('detalhes'), acao: () => acaoEditor('detalhes') },
@@ -1976,10 +1974,6 @@ async function extraAction(type,id){
   if(type==='add-habit') habitoModal();
   if(type==='habit-stats') habitosModal();
   if(type==='continuar'){const nota=getNote(id);if(nota){await abrirNota(nota);if(editing?.id===id)abrirNoFim();}}
-  if(type==='plugin-comandos'){
-    const r=document.querySelector(`[data-extra="plugin-comandos"][data-id="${CSS.escape(id)}"]`).getBoundingClientRect();
-    abrirMenuContexto({preventDefault(){},clientX:r.left,clientY:r.bottom},document.body,menuDoPlugin(id));
-  }
 }
 // A restauração é do próprio Vault: ele devolve a nota ou a pasta inteira, com
 // subpastas, anexos e os identificadores originais. Reconstruir isso aqui, como
@@ -2132,13 +2126,8 @@ function cardsDosPlugins() {
   const cartoes = [];
   for (const [id, estado] of pluginsAtivos) {
     const nome = escapeHtml(estado.manifesto?.name || id);
-    const botao = estado.comandos.length
-      ? extraButton('plugin-comandos', icone('codigo'), id, 'icon-button', `Comandos de ${estado.manifesto?.name || id}`)
-      : '';
-    const card = (painel, corpo) => `<section class="card plugin-painel" data-plugin="${escapeHtml(id)}" data-painel="${escapeHtml(painel ? painel.id : '')}"><div class="card-head"><h2>${escapeHtml(painel ? painel.label : estado.manifesto?.name || id)}</h2><span class="plugin-fonte">${nome}</span>${botao}</div><div class="plugin-conteudo">${corpo}</div></section>`;
-    for (const painel of estado.paineis) cartoes.push(card(painel, conteudoDosPaineis.get(chaveDoPainel(id, painel.id)) || '<div class="empty">Carregando…</div>'));
-    // Plug-in só de comandos também aparece: senão não haveria por onde chamá-lo.
-    if (!estado.paineis.length && estado.comandos.length) cartoes.push(card(null, `<div class="empty">${estado.comandos.length === 1 ? 'Um comando disponível' : `${estado.comandos.length} comandos disponíveis`} no menu ao lado.</div>`));
+    // Comandos não ficam aqui: rodam em Configurações → Plug-ins.
+    for (const painel of estado.paineis) cartoes.push(`<section class="card plugin-painel" data-plugin="${escapeHtml(id)}" data-painel="${escapeHtml(painel.id)}"><div class="card-head"><h2>${escapeHtml(painel.label)}</h2><span class="plugin-fonte">${nome}</span></div><div class="plugin-conteudo">${conteudoDosPaineis.get(chaveDoPainel(id, painel.id)) || '<div class="empty">Carregando…</div>'}</div></section>`);
   }
   return cartoes.join('');
 }
@@ -2181,18 +2170,6 @@ function rodarComandoDoPlugin(id, comando) {
     .catch(erro => status(`Plug-in ${pluginsAtivos.get(id)?.manifesto?.name || id}: ${erro.message}`, true));
 }
 
-// Comandos ficam no botão do cabeçalho do card e no botão direito, como os hábitos.
-function menuDoPlugin(id) {
-  const estado = pluginsAtivos.get(id);
-  const comandos = estado?.comandos || [];
-  if (!comandos.length) return [{ rotulo: 'Este plug-in não oferece comandos', icone: icone('codigo'), ativo: () => false, acao: () => {} }];
-  return comandos.map(c => ({ rotulo: c.label, icone: icone('codigo'), acao: () => rodarComandoDoPlugin(id, c.id) }));
-}
-
-// Todos os comandos ativos, já prontos para virar itens de menu.
-const comandosDosPlugins = () => [...pluginsAtivos].flatMap(([id, estado]) =>
-  estado.comandos.map(c => ({ rotulo: `${estado.manifesto?.name || id}: ${c.label}`, icone: icone('codigo'), acao: () => rodarComandoDoPlugin(id, c.id) })));
-
 const itemDePainel = alvo => alvo?.closest('[data-acao][data-plugin]');
 function dispararItemDePainel(alvo) {
   const card = alvo.closest('.plugin-painel');
@@ -2217,10 +2194,6 @@ document.addEventListener('submit', evento => {
   if (!form) return;
   evento.preventDefault();
   acaoDoPainel(form.dataset.plugin, form.closest('.plugin-painel')?.dataset.painel || '', form.dataset.acao || '', Object.fromEntries(new FormData(form)));
-});
-document.addEventListener('contextmenu', evento => {
-  const card = evento.target.closest?.('.plugin-painel');
-  if (card && loaded && !busy && !failed) abrirMenuContexto(evento, document.body, menuDoPlugin(card.dataset.plugin));
 });
 
 // ---- A API do plug-in traduzida para o que o app já faz com o estado ----
@@ -2431,6 +2404,10 @@ function linhaDoPlugin({ id, manifesto }, situacao, erro = '') {
   const m = manifesto, nome = escapeHtml(m ? m.name : id);
   const { novas, hostsNovos } = situacao === 'aguardando' ? novidadesDoPlugin(id, m) : {};
   const ligado = situacao === 'ativo' || situacao === 'parou';
+  // Único lugar onde os comandos rodam; a nota aberta segue aberta por baixo do modal.
+  const comandos = situacao === 'ativo' ? (pluginsAtivos.get(id)?.comandos || [])
+    .map(c => `<button type="button" class="secondary cfg-pequeno" data-comando-plugin="${escapeHtml(id)}" data-comando="${escapeHtml(c.id)}">${icone('plugin')} ${escapeHtml(c.label)}</button>`)
+    .join('') : '';
   // Manifesto inválido não tem o que ligar; o que parou nesta sessão ainda pode ser desligado.
   const chave = m ? `<label class="cfg-chave"><input type="checkbox" data-plugin-id="${escapeHtml(id)}" ${ligado ? 'checked' : ''} aria-label="${ligado ? 'Desativar' : 'Ativar'} ${nome}" /><span class="interruptor" aria-hidden="true"></span></label>` : '';
   return `<div class="cfg-linha cfg-plugin"><span class="cfg-texto">
@@ -2438,6 +2415,7 @@ function linhaDoPlugin({ id, manifesto }, situacao, erro = '') {
     <span class="small-muted">${m ? `Versão ${escapeHtml(m.version)} · por ${escapeHtml(m.author)}` : `Pasta ${escapeHtml(id)}`}</span>
     ${m?.description ? `<span class="small-muted">${escapeHtml(m.description)}</span>` : ''}
     ${m ? itensDePermissao(m, novas, hostsNovos) : ''}
+    ${comandos ? `<div class="cfg-botoes plugin-comandos-cfg">${comandos}</div>` : ''}
     ${situacao === 'aguardando' ? '<p class="cfg-aviso">Uma atualização pediu mais acesso. Ligue de novo para revisar o que é novo.</p>' : ''}
     ${erro ? `<p class="cfg-aviso">${escapeHtml(erro)}</p>` : ''}
   </span>${chave}</div>`;
@@ -2532,8 +2510,10 @@ function ligarAbaPlugins(painel) {
     else desligarPlugin(id);
   });
   painel.addEventListener('click', async evento => {
+    const comando = evento.target.closest('[data-comando-plugin]');
+    if (comando) return rodarComandoDoPlugin(comando.dataset.comandoPlugin, comando.dataset.comando);
     if (evento.target.closest('#cfg-plugins-abrir')) return window.cadernoDesktop.openPluginsFolder();
-const copiar = evento.target.closest('#cfg-plugins-copiar');
+    const copiar = evento.target.closest('#cfg-plugins-copiar');
     if (!copiar) return;
     if (await copiarTexto(painel.querySelector('.cfg-caminho').textContent)) {
       copiar.lastChild.textContent = ' Copiado';
