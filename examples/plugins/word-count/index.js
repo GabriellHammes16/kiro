@@ -34,5 +34,9 @@ export default {
         })),
       };
     });
+
+    // A block draws a ```kiro:word-count fenced block inside a note. It gets the
+    // block's text and returns { html } (sanitized by Kiro) or panel data.
+    kiro.block(async text => ({ html: `<p><strong>${words(text)}</strong> words in this block</p>` }));
   },
 };

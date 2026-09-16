@@ -1189,6 +1189,16 @@ function renderizarMarkdown(fonte, base = 0) {
       const codigo = escapeHtml(corpo.join('\n'));
       const linguagem = escapeHtml(cerca[1].trim() || 'texto');
       const ate = Math.min(j + 1, linhas.length);
+      // ```kiro:<id>: o plug-in desenha depois; a fonte fica na nota, intacta.
+      const doPlugin = cerca[1].trim().match(/^kiro:([a-z0-9][a-z0-9-]{1,39})$/);
+      if (doPlugin) {
+        const fonteDoBloco = corpo.join('\n');
+        saida.push(`<figure class="plugin-bloco" data-plugin="${doPlugin[1]}" data-fonte="${escapeHtml(fonteDoBloco)}" ${abrir(inicio, ate)}><div class="plugin-bloco-conteudo" data-desenho="${pluginsAtivos.has(doPlugin[1]) && conteudoDosBlocos.has(`${doPlugin[1]}\n${fonteDoBloco}`) ? 'pronto' : 'aviso'}">${conteudoDoBloco(doPlugin[1], fonteDoBloco)}</div></figure>`);
+        agendarBlocosDosPlugins();
+        avancar(ate - i);
+        i = j + 1;
+        continue;
+      }
       saida.push(`<figure class="code-area" ${abrir(inicio, ate)}><figcaption><span class="code-lang">${linguagem}</span><button type="button" class="secondary code-copy">Copiar</button></figcaption><pre><code>${codigo}</code></pre></figure>`);
       avancar(ate - i);
       i = j + 1;
@@ -1397,7 +1407,7 @@ function abrirBloco(elemento, cursor = Infinity) {
     const estilo = getComputedStyle(elemento);
     Object.assign(campo.style, { fontSize: estilo.fontSize, fontWeight: estilo.fontWeight, lineHeight: estilo.lineHeight });
   }
-  if (elemento.classList.contains('code-area')) campo.classList.add('bloco-codigo');
+  if (elemento.classList.contains('code-area') || elemento.classList.contains('plugin-bloco')) campo.classList.add('bloco-codigo');
   const item = elemento.tagName === 'LI' ? elemento : null;
   if (item) item.replaceChildren(campo); else elemento.replaceWith(campo);
   return ativarCampo(campo, { inicio, tamanho: fim - inicio, separador: '', item }, cursor);
@@ -1444,6 +1454,8 @@ function cursorNoBloco(bloco, evento) {
     if (!antigo) return fonte.length;
     faixa.setEnd(antigo.startContainer, antigo.startOffset);
   }
+  // Bloco de plug-in: o desenho não corresponde à fonte; o cursor vai para o texto do bloco.
+  if (bloco.classList.contains('plugin-bloco')) return (fonte.indexOf('\n') + 1) || fonte.length;
   let origem = bloco, k = 0;
   const codigo = bloco.querySelector('pre code');
   if (codigo) {
@@ -1710,6 +1722,15 @@ function bindCorpo(corpo) {
     abrirNoPonto(evento);
   });
   corpo.addEventListener('click', evento => {
+    // Link desenhado por plug-in nunca navega a janela: http(s) abre fora (no
+    // aplicativo, o setWindowOpenHandler manda ao navegador do sistema); o resto não faz nada.
+    const linkDoPlugin = evento.target.closest('.plugin-bloco a');
+    if (linkDoPlugin) {
+      evento.preventDefault();
+      const destino = linkDoPlugin.getAttribute('href') || '';
+      if (/^https?:\/\//i.test(destino)) window.open(destino, '_blank', 'noopener,noreferrer');
+      return;
+    }
     const copiar = evento.target.closest('.code-copy');
     if (copiar) return void copiarBloco(copiar);
     const imagem = evento.target.closest('.md-imagem img');
@@ -2060,6 +2081,8 @@ function desativarPlugin(id) {
   estado.worker.terminate();
   pluginsAtivos.delete(id);
   for (const chave of [...conteudoDosPaineis.keys()]) if (chave.startsWith(`${id}\n`)) conteudoDosPaineis.delete(chave);
+  for (const chave of [...conteudoDosBlocos.keys()]) if (chave.startsWith(`${id}\n`)) conteudoDosBlocos.delete(chave);
+  agendarBlocosDosPlugins();   // os blocos dele passam a mostrar o aviso
 }
 
 // Um plug-in problemático cai sozinho: os outros e o Kiro seguem de pé.
@@ -2080,6 +2103,8 @@ async function atenderPlugin(id, data) {
     estado.comandos = (data.registros?.command || []).map(r => ({ id: String(r.id), label: String(r.label || r.id) }));
     estado.paineis = (data.registros?.panel || []).map(r => ({ id: String(r.id), label: String(r.label || r.id) }));
     estado.eventos = (data.registros?.event || []).map(String);
+    estado.desenhaBlocos = (data.registros?.block || []).includes('render');
+    agendarBlocosDosPlugins();
     if (loaded) entregarDia(id);
     // O plug-in fica pronto depois da tela: redesenhar traz os cards dele para o Hoje.
     if (currentView === 'today' && loaded) render();
@@ -2112,8 +2137,8 @@ function chamarPlugin(id, registro, dados) {
   if (!estado) return Promise.reject(new Error('Esse plug-in não está ativo.'));
   const chamada = estado.proxima++;
   return new Promise((resolver, rejeitar) => {
-    const estourou = registro.tipo === 'event'
-      ? () => { estado.pendentes.delete(chamada); rejeitar(new Error('O evento demorou demais para responder.')); }
+    const estourou = registro.tipo === 'event' || registro.tipo === 'block'
+      ? () => { estado.pendentes.delete(chamada); rejeitar(new Error(`O ${registro.tipo === 'block' ? 'bloco' : 'evento'} demorou demais para responder.`)); }
       : () => falharPlugin(id, 'O plug-in demorou demais para responder.');
     const prazo = setTimeout(estourou, LIMITE_CHAMADA);
     estado.pendentes.set(chamada, { resolver, rejeitar, prazo });
@@ -2243,6 +2268,71 @@ function rodarComandoDoPlugin(id, comando) {
   chamarPlugin(id, { tipo: 'command', id: comando }, {})
     .then(() => desenharPaineisDosPlugins())   // o comando pode ter mudado o que o painel mostra
     .catch(erro => status(`Plug-in ${pluginsAtivos.get(id)?.manifesto?.name || id}: ${erro.message}`, true));
+}
+
+// ---- Blocos ```kiro:<id> nas notas ----
+// renderizarMarkdown emite o marcador com o que já houver no cache; depois do desenho,
+// desenharBlocosDosPlugins pede ao plug-in o que falta. Todo HTML do plug-in passa
+// pelo higienizador (ou por painelParaHtml) antes de chegar ao DOM.
+const conteudoDosBlocos = new Map();      // "<id>\n<fonte>" → HTML já limpo
+const blocosEmCurso = new Set();          // mesmas chaves, enquanto o plug-in desenha
+const MAX_BLOCOS_GUARDADOS = 200;
+const avisoDeBloco = texto => `<div class="empty plugin-bloco-aviso">${escapeHtml(texto)}</div>`;
+
+function conteudoDoBloco(id, fonte) {
+  const estado = pluginsAtivos.get(id);
+  if (!estado) return avisoDeBloco(`Plug-in ${id} não está ativo.`);
+  const guardado = conteudoDosBlocos.get(`${id}\n${fonte}`);
+  if (guardado !== undefined) return guardado;
+  // Sem `pronto` ainda não se sabe se ele desenha blocos.
+  if (estado.desenhaBlocos === false) return avisoDeBloco(`Plug-in ${estado.manifesto?.name || id} não desenha blocos.`);
+  return avisoDeBloco('Carregando…');
+}
+
+let blocosAgendados = false;
+function agendarBlocosDosPlugins() {
+  if (blocosAgendados) return;
+  blocosAgendados = true;
+  // Depois que quem chamou renderizarMarkdown puser o HTML na página.
+  setTimeout(() => { blocosAgendados = false; desenharBlocosDosPlugins(); }, 0);
+}
+
+function desenharBlocosDosPlugins() {
+  for (const bloco of document.querySelectorAll('.plugin-bloco[data-plugin]')) {
+    const id = bloco.dataset.plugin, fonte = bloco.dataset.fonte ?? '';
+    const alvo = bloco.querySelector(':scope > .plugin-bloco-conteudo');
+    const estado = pluginsAtivos.get(id), chave = `${id}\n${fonte}`;
+    // Desenho pronto não é reescrito: a fonte do elemento não muda, então o cache também não.
+    const desenho = estado && conteudoDosBlocos.has(chave) ? 'pronto' : 'aviso';
+    if (alvo && !(desenho === 'pronto' && alvo.dataset.desenho === 'pronto')) {
+      alvo.innerHTML = conteudoDoBloco(id, fonte);
+      alvo.dataset.desenho = desenho;
+    }
+    if (!estado?.desenhaBlocos || conteudoDosBlocos.has(chave) || blocosEmCurso.has(chave)) continue;
+    blocosEmCurso.add(chave);
+    chamarPlugin(id, { tipo: 'block', id: 'render' }, { source: fonte }).then(valor => {
+      blocosEmCurso.delete(chave);
+      if (pluginsAtivos.get(id) !== estado) return;   // desativado no meio: nada fica guardado
+      if (conteudoDosBlocos.size >= MAX_BLOCOS_GUARDADOS) conteudoDosBlocos.delete(conteudoDosBlocos.keys().next().value);
+      conteudoDosBlocos.set(chave, htmlDoBloco(valor));
+      agendarBlocosDosPlugins();
+    }, erro => {
+      blocosEmCurso.delete(chave);
+      // Erro não vai para o cache: o próximo desenho da nota tenta de novo.
+      for (const outro of document.querySelectorAll('.plugin-bloco[data-plugin]')) {
+        if (outro.dataset.plugin !== id || outro.dataset.fonte !== fonte) continue;
+        const caixa = outro.querySelector(':scope > .plugin-bloco-conteudo');
+        if (caixa) caixa.innerHTML = avisoDeBloco(`Erro no bloco: ${erro.message}`);
+      }
+    });
+  }
+}
+
+// O retorno do plug-in nunca vai cru para o DOM.
+function htmlDoBloco(valor) {
+  if (valor && typeof valor.html === 'string') return KiroPlugins.higienizarHtml(valor.html);
+  if (valor && typeof valor.type === 'string') return KiroPlugins.painelParaHtml(valor);
+  return avisoDeBloco('O plug-in não devolveu nada para desenhar.');
 }
 
 const itemDePainel = alvo => alvo?.closest('[data-acao][data-plugin]');

@@ -445,3 +445,18 @@ test('app: eventos têm anti-laço, não disparam na primeira carga e avisos de 
   assert.match(app, /aria-live/);
 });
 
+test('bloco kiro:<id> vira marcador com a fonte escapada', () => {
+  const fs = require('node:fs'), path = require('node:path');
+  const app = fs.readFileSync(path.join(__dirname, '..', 'app.js'), 'utf8');
+  const worker = fs.readFileSync(path.join(__dirname, '..', 'plugin-worker.js'), 'utf8');
+  assert.match(app, /plugin-bloco/);
+  assert.match(app, /higienizarHtml/);
+  assert.match(app, /\^kiro:\[a-z0-9\]\[a-z0-9-\]\{1,39\}\$|kiro:\(\[a-z0-9\]/);
+  assert.match(worker, /block: handler =>/);
+  assert.match(worker, /block: \[\.\.\.registros\.block\.keys\(\)\]/);
+  // Bloco que estoura o prazo vira aviso no bloco, não derruba o plug-in.
+  assert.match(app, /registro\.tipo === 'event' \|\| registro\.tipo === 'block'/);
+  // Link dentro do bloco nunca navega a janela: abre fora, com noopener.
+  assert.match(app, /\.plugin-bloco a/);
+});
+

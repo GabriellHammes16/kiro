@@ -11,9 +11,11 @@
 //   { tipo: 'resposta', chamada, valor | erro }   resposta a uma 'chamada' do worker
 //   { tipo: 'acao', chamada, registro: { tipo, id }, dados }
 // (worker → página):
-//   { tipo: 'pronto', registros: { command: [{ id, label }], panel: [{ id, label }], event: ['save'|'create'|'day'] } }
+//   { tipo: 'pronto', registros: { command: [{ id, label }], panel: [{ id, label }], event: ['save'|'create'|'day'], block: ['render'] } }
 // Eventos chegam como 'acao' com registro { tipo: 'event', id: 'save'|'create'|'day' }
 // e dados { note } (save/create) ou { date } (day).
+// Blocos ```kiro:<id> chegam como 'acao' com registro { tipo: 'block', id: 'render' }
+// e dados { source }; o handler devolve { html } ou dados de painel.
 //   { tipo: 'chamada', chamada, metodo, args }    pedido de método da API
 //   { tipo: 'resposta', chamada, valor | erro }   retorno de uma 'acao'
 //   { tipo: 'erro', mensagem }
@@ -21,7 +23,7 @@ import './plugins.js';
 
 const { metodosPermitidos } = globalThis.KiroPlugins;
 const pendentes = new Map();
-const registros = { command: new Map(), panel: new Map(), event: new Map() };
+const registros = { command: new Map(), panel: new Map(), event: new Map(), block: new Map() };
 let proxima = 1;
 let ativado = false;
 
@@ -55,6 +57,8 @@ function montarApi(permissoes) {
     onSave: handler => guardar('event', 'save', 'save', handler),
     onCreate: handler => guardar('event', 'create', 'create', handler),
     onDay: handler => guardar('event', 'day', 'day', handler),
+    // Um desenhista por plug-in: recebe o texto do bloco (string), devolve { html } ou painel.
+    block: handler => guardar('block', 'render', 'render', ({ source } = {}) => handler(String(source ?? ''))),
   };
   for (const metodo of metodosPermitidos(permissoes)) {
     const [grupo, nome] = metodo.includes('.') ? metodo.split('.') : ['', metodo];
@@ -74,7 +78,7 @@ async function ativar({ url, permissoes }) {
   const plugin = modulo.default || modulo;
   if (!plugin || typeof plugin.activate !== 'function') throw new Error('O plug-in precisa exportar activate(kiro).');
   await plugin.activate(montarApi(permissoes));
-  postMessage({ tipo: 'pronto', registros: { command: listar('command'), panel: listar('panel'), event: [...registros.event.keys()] } });
+  postMessage({ tipo: 'pronto', registros: { command: listar('command'), panel: listar('panel'), event: [...registros.event.keys()], block: [...registros.block.keys()] } });
 }
 
 // Um clique num painel ou um comando: a página pede, o plug-in responde.
