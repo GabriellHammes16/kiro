@@ -130,3 +130,39 @@ test('a rota serve o código do plug-in com os cabeçalhos de segurança', async
     assert.equal(fundo.status, 404);
   } finally { await s.parar(); }
 });
+
+test('a API entregue ao plug-in respeita as permissões', () => {
+  const soLeitura = P.metodosPermitidos(['notes:read']);
+  assert.ok(soLeitura.includes('notes.list'));
+  assert.ok(!soLeitura.includes('notes.create'));
+  assert.ok(soLeitura.includes('storage.get'), 'storage não depende de permissão');
+
+  assert.equal(P.podeChamar(['notes:read'], 'notes.create'), false);
+  assert.equal(P.podeChamar(['notes:read', 'notes:write'], 'notes.create'), true);
+  assert.equal(P.podeChamar(['notes:read'], 'fs.readFile'), false, 'método fora da lista nunca passa');
+  // Nem herdado do Object: só o que está em METODOS.
+  assert.equal(P.podeChamar(['notes:read'], 'toString'), false);
+  // Toda permissão exigida pelos métodos existe de verdade.
+  for (const exigida of Object.values(P.METODOS)) if (exigida) assert.ok(P.PERMISSOES.includes(exigida), exigida);
+});
+
+test('o servidor entrega o worker e a parte pura para a página', async () => {
+  const s = await servidorTemporario();
+  try {
+    for (const arquivo of ['/plugins.js', '/plugin-worker.js']) {
+      const r = await fetch(`http://127.0.0.1:${s.porta}${arquivo}`);
+      assert.equal(r.status, 200, arquivo);
+      assert.match(r.headers.get('content-type'), /javascript/);
+    }
+  } finally { await s.parar(); }
+});
+
+test('o worker é de módulo e importa a parte pura por import', () => {
+  const ler = arquivo => require('node:fs').readFileSync(path.join(__dirname, '..', arquivo), 'utf8');
+  const worker = ler('plugin-worker.js');
+  // Worker clássico não serve: import() dinâmico do plug-in só funciona em worker de módulo.
+  assert.match(worker, /^import '\.\/plugins\.js';/m);
+  assert.ok(!/importScripts/.test(worker), 'importScripts não existe em worker de módulo');
+  // A página cria o worker como módulo; a Tarefa 5 depende desta linha.
+  assert.match(ler('index.html'), /<script src="plugins\.js"><\/script>/);
+});

@@ -15,7 +15,7 @@ const vault = new Vault(vaultDirectory);
 const devTools = dev ? (await import('./dev/devtools.mjs')).createDevTools(root) : null;
 if (dev && !process.env.KIRO_VAULT && !process.env.KUROI_VAULT) await (await import('./dev/seed.cjs')).default.semearSeVazio(vaultDirectory);
 const agentConfig = new agentModule.AgentConfig(vaultDirectory);
-const publicFiles = { '/': ['index.html', 'text/html'], '/index.html': ['index.html', 'text/html'], '/app.js': ['app.js', 'text/javascript'], '/domain.js': ['domain.js', 'text/javascript'], '/styles.css': ['styles.css', 'text/css'], '/temas.css': ['temas.css', 'text/css'],'/kiro-logo.png': ['kiro-logo.png', 'image/png'], '/kiro-abertura.png': ['kiro-abertura.png', 'image/png'] };
+const publicFiles = { '/': ['index.html', 'text/html'], '/index.html': ['index.html', 'text/html'], '/app.js': ['app.js', 'text/javascript'], '/domain.js': ['domain.js', 'text/javascript'], '/plugins.js': ['plugins.js', 'text/javascript'], '/plugin-worker.js': ['plugin-worker.js', 'text/javascript'],'/styles.css': ['styles.css', 'text/css'], '/temas.css': ['temas.css', 'text/css'],'/kiro-logo.png': ['kiro-logo.png', 'image/png'], '/kiro-abertura.png': ['kiro-abertura.png', 'image/png'] };
 const allowedHosts = new Set([`localhost:${port}`, `127.0.0.1:${port}`]);
 const send = (res, status, data) => { res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' }); res.end(JSON.stringify(data)); };
 createServer(async (request, response) => {
@@ -102,7 +102,11 @@ createServer(async (request, response) => {
     if (request.method !== 'GET' || !file) return send(response, 404, { error: 'Não encontrado.' });
     let body = await readFile(join(root, file[0]));
     if (devTools && file[0] === 'index.html') body = devTools.injetar(body.toString('utf8'));
-    response.writeHead(200, { 'Content-Type': `${file[1]}; charset=utf-8`, 'Cache-Control': 'no-cache' });
+    // Quem manda no worker é a CSP do arquivo do worker, não a do plug-in importado:
+    // é aqui que a rede do plug-in morre.
+    const cabecalhos = { 'Content-Type': `${file[1]}; charset=utf-8`, 'Cache-Control': 'no-cache' };
+    if (file[0] === 'plugin-worker.js') cabecalhos['Content-Security-Policy'] = "default-src 'none'; script-src 'self' kiro-plugin:; connect-src 'none'";
+    response.writeHead(200, cabecalhos);
     response.end(body);
   } catch (error) { send(response, 400, { error: error.message }); }
 }).listen(port, '127.0.0.1', () => console.log(dev ? `Kiro em desenvolvimento: http://localhost:${port} · cofre ${vaultDirectory}` : `Kiro em http://localhost:${port}`));

@@ -55,7 +55,21 @@
     comparar(registro && registro.network, manifesto.network).novas.length > 0;
   const rotuloDaPermissao = nome => ROTULOS[nome] || nome;
 
-  const api = { PERMISSOES, validarManifesto, compararVersoes, comparar, precisaConsentir, rotuloDaPermissao };
+  // Cada método da API pede uma permissão; storage e interface não pedem nada.
+  // Esta lista é a fronteira: o que não está aqui o plug-in nunca alcança.
+  const METODOS = {
+    'notes.list': 'notes:read', 'notes.get': 'notes:read', 'notes.current': 'notes:read', 'notes.search': 'notes:read',
+    'notes.create': 'notes:write', 'notes.update': 'notes:write', 'notes.trash': 'notes:write', 'notes.move': 'notes:write',
+    'tasks.list': 'tasks:read', 'tasks.create': 'tasks:write', 'tasks.update': 'tasks:write',
+    'habits.list': 'habits:read', 'habits.mark': 'habits:write',
+    'folders.create': 'folders:write',
+    'storage.get': '', 'storage.set': '', 'notify': '',
+  };
+  const tem = (objeto, chave) => Object.prototype.hasOwnProperty.call(objeto, chave);
+  const metodosPermitidos = permissoes => Object.keys(METODOS).filter(m => !METODOS[m] || lista(permissoes).includes(METODOS[m]));
+  const podeChamar = (permissoes, metodo) => tem(METODOS, metodo) && (!METODOS[metodo] || lista(permissoes).includes(METODOS[metodo]));
+
+  const api = { PERMISSOES, METODOS, validarManifesto, compararVersoes, comparar, precisaConsentir, rotuloDaPermissao, metodosPermitidos, podeChamar };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.KiroPlugins = api;
 })(globalThis);
