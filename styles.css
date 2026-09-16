@@ -581,7 +581,6 @@ body, button, input, textarea, select { font-family:var(--fonte-interface); }
 
 /* Hoje: caixa de entrada e para revisar. */
 .caixa-entrada { margin-bottom:0; }
-.caixa-entrada .card-head .small-muted { min-width:22px; padding:1px 8px; border-radius:999px; text-align:center; background:var(--accent-soft); color:var(--acento); }
 .caixa-entrada a.routine-title, .para-revisar a.routine-title { cursor:pointer; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .caixa-entrada a.routine-title:hover, .para-revisar a.routine-title:hover { color:var(--acento); }
 .caixa-entrada .routine-item .secondary { padding:4px 10px; font-size:12px; display:inline-flex; align-items:center; gap:5px; }

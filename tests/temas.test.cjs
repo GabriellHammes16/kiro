@@ -168,3 +168,13 @@ test('card de tema: opcaoTema desenha a mini-janela com ícone e temas.css a est
   const semEstilo = ['tema-icone', 'tema-lateral', 'tema-tela'].filter(c => !new RegExp(`\\.${c}(?![\\w-])[^{}]*\\{`).test(css));
   assert.deepEqual(semEstilo, [], 'classes do card sem regra em temas.css');
 });
+
+test('interface nova acompanha o tema: .plugin-* sem cor fixa e contador do card sem --acento puro', () => {
+  const css = ler('styles.css');
+  const regras = [...css.matchAll(/([^{}]*)\{([^}]*)\}/g)].map(m => ({ seletor: m[1].trim(), corpo: m[2] }));
+  const fixas = regras.filter(r => /\.plugin-/.test(r.seletor) && /#[0-9a-fA-F]{3,8}\b|rgba?\(/.test(r.corpo)).map(r => r.seletor);
+  assert.deepEqual(fixas, [], 'regras .plugin-* com cor fixa');
+  // --acento puro sobre --accent-soft fica abaixo de 4.5:1 em kiro, evangelion e demon-blood.
+  const contadores = regras.filter(r => /\.card-head\s*\.small-muted/.test(r.seletor) && /(^|;)\s*color\s*:\s*var\(--acento\)/.test(r.corpo)).map(r => r.seletor);
+  assert.deepEqual(contadores, [], 'contador do cabeçalho do card com color:var(--acento) (ilegível em alguns temas)');
+});
