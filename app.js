@@ -2391,8 +2391,157 @@ const agentApi = {
   load: () => window.cadernoDesktop ? window.cadernoDesktop.agentConfig() : api('agent-config'),
   save: parcial => window.cadernoDesktop ? window.cadernoDesktop.saveAgentConfig(parcial) : api('agent-config', parcial),
 };
+// ---- Aba Plug-ins ----
+// Tudo aqui age na hora: ligar pede consentimento num modal do Kiro (nunca a
+// caixa nativa do navegador) e só grava depois do "sim"; desligar encerra o worker e tira os cards.
+let escolhasDosPlugins = {};
+
+// Relê a pasta e as escolhas e alinha o que está rodando com o que foi permitido.
+async function lerPlugins() {
+  const [achados, escolhas] = await Promise.all([pluginApi.lista(), pluginApi.escolhas()]);
+  escolhasDosPlugins = escolhas || {};
+  planoDosPlugins = KiroPlugins.planoDeCarga(achados, escolhasDosPlugins, { versaoDoKiro: VERSAO });
+  const liberados = new Set(planoDosPlugins.carregar.map(p => p.id));
+  // Manifesto mudou no disco e passou a pedir mais: para já, e pergunta de novo.
+  let parou = false;
+  for (const id of [...pluginsAtivos.keys()]) if (!liberados.has(id)) { desativarPlugin(id); parou = true; }
+  for (const alvo of planoDosPlugins.carregar) if (!pluginsAtivos.has(alvo.id) && !problemasDosPlugins.has(alvo.id)) ativarPlugin(alvo);
+  if (parou && currentView === 'today' && loaded) render();
+}
+
+// O que o plug-in vai poder fazer, em português; o que ainda não foi concedido ganha o selo "nova".
+function itensDePermissao(m, novas = [], hostsNovos = []) {
+  if (!m.permissions.length) return '<p class="small-muted plugin-permissoes-vazio">Não pede acesso aos seus dados.</p>';
+  return `<ul class="plugin-permissoes">${m.permissions.map(p => {
+    const nova = novas.includes(p) || (p === 'network' && hostsNovos.length > 0);
+    const hosts = p === 'network' && m.network.length ? `: ${m.network.map(h => escapeHtml(h)).join(', ')}` : '';
+    return `<li${nova ? ' class="nova"' : ''}>${escapeHtml(KiroPlugins.rotuloDaPermissao(p))}${hosts}${nova ? ' <span class="plugin-selo">nova</span>' : ''}</li>`;
+  }).join('')}</ul>`;
+}
+const novidadesDoPlugin = (id, m) => ({
+  novas: KiroPlugins.comparar(escolhasDosPlugins[id]?.permissions, m.permissions).novas,
+  hostsNovos: KiroPlugins.comparar(escolhasDosPlugins[id]?.network, m.network).novas,
+});
+
+// Uma linha por plug-in. Todo texto do manifesto entra escapado.
+function linhaDoPlugin({ id, manifesto }, situacao, erro = '') {
+  const m = manifesto, nome = escapeHtml(m ? m.name : id);
+  const { novas, hostsNovos } = situacao === 'aguardando' ? novidadesDoPlugin(id, m) : {};
+  const ligado = situacao === 'ativo' || situacao === 'parou';
+  // Manifesto inválido não tem o que ligar; o que parou nesta sessão ainda pode ser desligado.
+  const chave = m ? `<label class="cfg-chave"><input type="checkbox" data-plugin-id="${escapeHtml(id)}" ${ligado ? 'checked' : ''} aria-label="${ligado ? 'Desativar' : 'Ativar'} ${nome}" /><span class="interruptor" aria-hidden="true"></span></label>` : '';
+  return `<div class="cfg-linha cfg-plugin"><span class="cfg-texto">
+    <span class="cfg-titulo">${nome}</span>
+    <span class="small-muted">${m ? `Versão ${escapeHtml(m.version)} · por ${escapeHtml(m.author)}` : `Pasta ${escapeHtml(id)}`}</span>
+    ${m?.description ? `<span class="small-muted">${escapeHtml(m.description)}</span>` : ''}
+    ${m ? itensDePermissao(m, novas, hostsNovos) : ''}
+    ${situacao === 'aguardando' ? '<p class="cfg-aviso">Uma atualização pediu mais acesso. Ligue de novo para revisar o que é novo.</p>' : ''}
+    ${erro ? `<p class="cfg-aviso">${escapeHtml(erro)}</p>` : ''}
+  </span>${chave}</div>`;
+}
+
+async function conteudoDaAbaPlugins() {
+  try { await lerPlugins(); }
+  catch (erro) { return `<p class="cfg-aviso">Não foi possível ler os plug-ins: ${escapeHtml(erro.message)}</p>`; }
+  const { carregar, pendentes, problemas } = planoDosPlugins;
+  const grupos = [
+    ['Ativos', carregar.filter(p => pluginsAtivos.has(p.id)).map(p => linhaDoPlugin(p, 'ativo'))],
+    ['Aguardando permissão', pendentes.filter(p => p.motivo === 'permissoes-novas').map(p => linhaDoPlugin(p, 'aguardando'))],
+    ['Desligados', pendentes.filter(p => p.motivo === 'desligado').map(p => linhaDoPlugin(p, 'desligado'))],
+    ['Com problema', [
+      ...carregar.filter(p => !pluginsAtivos.has(p.id)).map(p => linhaDoPlugin(p, 'parou', problemasDosPlugins.get(p.id) || 'O plug-in parou nesta sessão.')),
+      ...problemas.map(p => linhaDoPlugin({ id: p.id }, 'problema', p.erro)),
+    ]],
+  ];
+  const lista = grupos.filter(([, linhas]) => linhas.length).map(([titulo, linhas]) => `<h4 class="cfg-subtitulo">${titulo}</h4>${linhas.join('')}`).join('');
+  const separador = (state.vaultPath || '').includes('\\') ? '\\' : '/';
+  const caminho = state.vaultPath ? `${state.vaultPath.replace(/[\\/]+$/, '')}${separador}.kiro${separador}plugins${separador}` : '.kiro/plugins/';
+  const botao = (id, rotulo, nomeIcone) => `<button type="button" class="secondary cfg-pequeno" id="${id}">${icone(nomeIcone)} ${rotulo}</button>`;
+  return `<section class="cfg-grupo">
+    <header class="cfg-grupo-topo"><span class="cfg-texto"><span class="cfg-titulo">Plug-ins</span><span class="small-muted">Cada plug-in roda isolado e só alcança o que você permitir ao ligá-lo.</span></span></header>
+    ${lista || '<p class="small-muted cfg-rodape">Nenhum plug-in encontrado neste cofre.</p>'}
+    <div class="cfg-linha cfg-linha-coluna"><span class="cfg-texto"><span class="cfg-titulo">Pasta de plug-ins</span><span class="small-muted">Cada plug-in é uma pasta com manifest.json e index.js.</span></span>
+      <code class="cfg-caminho">${escapeHtml(caminho)}</code>
+      <div class="cfg-botoes">${window.cadernoDesktop ? botao('cfg-plugins-abrir', 'Abrir pasta de plug-ins', 'pasta-aberta') : ''}${botao('cfg-plugins-copiar', 'Copiar caminho', 'copiar')}</div>
+    </div>
+  </section>`;
+}
+
+async function redesenharAbaPlugins(foco = '') {
+  const painel = $('#painel-plugins');
+  if (!painel) return;
+  const html = await conteudoDaAbaPlugins();
+  if (!painel.isConnected) return;
+  painel.innerHTML = html;
+  if (foco) painel.querySelector(`[data-plugin-id="${CSS.escape(foco)}"]`)?.focus();
+}
+
+function pedirConsentimento(id) {
+  const alvo = planoDosPlugins.pendentes.find(p => p.id === id);
+  if (!alvo) return redesenharAbaPlugins(id);
+  const m = alvo.manifesto, nome = escapeHtml(m.name), aguardando = alvo.motivo === 'permissoes-novas';
+  const { novas, hostsNovos } = aguardando ? novidadesDoPlugin(id, m) : { novas: [], hostsNovos: [] };
+  modal(aguardando ? 'Plug-in pede mais acesso' : 'Ativar plug-in', `<p class="confirmar-texto">${aguardando
+    ? `<strong>${nome}</strong> foi atualizado e agora pede mais do que você tinha permitido. O que está marcado como <span class="plugin-selo">nova</span> ainda não foi concedido.`
+    : `Ativar <strong>${nome}</strong>, de ${escapeHtml(m.author)}?`} Ele vai poder:</p>
+    ${itensDePermissao(m, novas, hostsNovos)}
+    <p class="small-muted plugin-consentimento-nota">Dá para desligar quando quiser, em Configurações → Plug-ins.</p>
+    <div class="form-actions"><button type="button" class="secondary" id="cancel">Cancelar</button><button type="button" class="primary" id="confirmar-plugin">${aguardando ? 'Permitir e ativar' : 'Ativar plug-in'}</button></div>`);
+  const voltar = () => showSettings('plugins');
+  $('#cancel').onclick = voltar;
+  $('#confirmar-plugin').onclick = async () => {
+    const botao = $('#confirmar-plugin');
+    botao.disabled = true;
+    try {
+      // Relê antes de gravar: o arquivo guarda as escolhas de todos os plug-ins.
+      const escolhas = await pluginApi.escolhas();
+      escolhas[id] = { enabled: true, permissions: [...m.permissions], network: [...m.network] };
+      await pluginApi.gravarEscolhas(escolhas);
+    } catch (erro) {
+      botao.disabled = false;
+      return status('Não foi possível ativar o plug-in: ' + erro.message, true);
+    }
+    ativarPlugin({ id, manifesto: m, permissoes: m.permissions });
+    voltar();
+  };
+  $('#confirmar-plugin').focus();
+}
+
+async function desligarPlugin(id) {
+  desativarPlugin(id);
+  problemasDosPlugins.delete(id);
+  if (currentView === 'today' && loaded) render();
+  try {
+    const escolhas = await pluginApi.escolhas();
+    if (escolhas[id]) { escolhas[id] = { ...escolhas[id], enabled: false }; await pluginApi.gravarEscolhas(escolhas); }
+  } catch (erro) { status('Não foi possível guardar a escolha: ' + erro.message, true); }
+  redesenharAbaPlugins(id);
+}
+
+// Eventos por delegação: o conteúdo do painel é redesenhado a cada mudança.
+function ligarAbaPlugins(painel) {
+  painel.addEventListener('change', evento => {
+    const caixa = evento.target.closest('[data-plugin-id]');
+    if (!caixa) return;
+    const id = caixa.dataset.pluginId;
+    // Ligar só vale depois do "sim" no modal: até lá o interruptor volta para desligado.
+    if (caixa.checked) { caixa.checked = false; pedirConsentimento(id); }
+    else desligarPlugin(id);
+  });
+  painel.addEventListener('click', async evento => {
+    if (evento.target.closest('#cfg-plugins-abrir')) return window.cadernoDesktop.openVault();
+    const copiar = evento.target.closest('#cfg-plugins-copiar');
+    if (!copiar) return;
+    if (await copiarTexto(painel.querySelector('.cfg-caminho').textContent)) {
+      copiar.lastChild.textContent = ' Copiado';
+      setTimeout(() => { if (copiar.isConnected) copiar.lastChild.textContent = ' Copiar caminho'; }, 1500);
+    }
+  });
+}
+// ---- Fim da aba Plug-ins ----
+
 // Aparência aplica na hora; as permissões de agente só no botão Salvar.
-const ABAS_CFG = [['personalizacao', 'Personalização', 'realce'], ['sistema', 'Sistema', 'pasta-aberta'], ['integracoes', 'Integrações', 'link'], ['atalhos', 'Atalhos', 'codigo']];
+const ABAS_CFG = [['personalizacao', 'Personalização', 'realce'], ['sistema', 'Sistema', 'pasta-aberta'], ['integracoes', 'Integrações', 'link'], ['plugins', 'Plug-ins', 'codigo'], ['atalhos', 'Atalhos', 'codigo']];
 let abaDasConfiguracoes = 'personalizacao';
 const ATALHOS = [
   ['Ctrl + Espaço', 'Captura rápida', 'De qualquer tela, direto para a caixa de entrada.'],
@@ -2406,7 +2555,10 @@ const ATALHOS = [
 async function showSettings(aba = abaDasConfiguracoes) {
   if (busy || !loaded) return;
   let conf = null, erroConf = '';
-  try { conf = await agentApi.load(); } catch (error) { erroConf = error.message; }
+  const [, abaPlugins] = await Promise.all([
+    agentApi.load().then(c => { conf = c; }, error => { erroConf = error.message; }),
+    conteudoDaAbaPlugins(),
+  ]);
   const cores = lerAparencia();
   const texto = (titulo, detalhe = '', id = '') => `<span class="cfg-texto"><span class="cfg-titulo"${id ? ` id="${id}"` : ''}>${titulo}</span>${detalhe ? `<span class="small-muted">${detalhe}</span>` : ''}</span>`;
   const chave = (id, titulo, marcado, detalhe = '', extra = '') => `<label class="cfg-linha cfg-chave ${extra}">${texto(titulo, detalhe)}<input type="checkbox" data-perm="${id}" ${marcado ? 'checked' : ''} /><span class="interruptor" aria-hidden="true"></span></label>`;
@@ -2461,6 +2613,7 @@ async function showSettings(aba = abaDasConfiguracoes) {
       <p class="small-muted cfg-rodape">Guardado em <code>.kiro/agent.json</code>, dentro do cofre.</p>
     </section>
     <div class="form-actions cfg-acoes"><button type="button" class="primary" id="ai-save" disabled>Salvar permissões</button></div>` : `<p class="cfg-aviso">Não foi possível ler a configuração de agentes: ${escapeHtml(erroConf)}</p>`)}
+    ${painel('plugins', abaPlugins)}
     ${painel('atalhos', `<section class="cfg-grupo">
       <header class="cfg-grupo-topo">${texto('Atalhos', 'Para fazer as coisas sem tirar a mão do teclado.')}</header>
       ${ATALHOS.map(([tecla, titulo, detalhe]) => `<div class="cfg-linha">${texto(titulo, detalhe)}<kbd class="atalho">${tecla}</kbd></div>`).join('')}
@@ -2496,8 +2649,8 @@ async function showSettings(aba = abaDasConfiguracoes) {
   });
   // O card Personalizado mostra as cores manuais atuais.
   const gravarCores = () => { const a = corAtual(); gravarAparencia(a); document.querySelector('.tema-opcao.tema-personalizado').style.cssText = estiloPersonalizado(a); };
-  // Aparência e Sistema agem na hora: não contam como alteração pendente ao fechar a janela.
-  for (const tipo of ['input', 'change']) document.querySelectorAll('.cfg-aparencia, [data-painel="sistema"]').forEach(el => el.addEventListener(tipo, e => e.stopPropagation()));
+  // Aparência, Sistema e Plug-ins agem na hora: não contam como alteração pendente ao fechar a janela.
+  for (const tipo of ['input', 'change']) document.querySelectorAll('.cfg-aparencia, [data-painel="sistema"], [data-painel="plugins"]').forEach(el => el.addEventListener(tipo, e => e.stopPropagation()));
   const avisar = () => { const a = lerAparencia(); $('#acento-aviso').hidden = contraste(a.acento, a.content) >= 3; };
   document.querySelectorAll('input[name="acento"]').forEach(r => r.onchange = () => { document.querySelector('[data-cor="acento"]').value = r.value; gravarCores(); avisar(); });
   avisar();
@@ -2527,6 +2680,8 @@ async function showSettings(aba = abaDasConfiguracoes) {
   $('#cfg-exportar').onclick = exportarDados;
   $('#cfg-importar').onchange = e => { const arquivo = e.target.files[0]; e.target.value = ''; importarDados(arquivo); };
   $('#cfg-lixeira').onclick = () => { closeModal(true); showTrash(); };
+
+  ligarAbaPlugins($('#painel-plugins'));
 
   // Integrações: Salvar só depois de mexer nas permissões.
   if (!conf) return;

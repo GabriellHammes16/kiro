@@ -675,6 +675,18 @@ body, button, input, textarea, select { font-family:var(--fonte-interface); }
 .cfg-chave input:focus-visible + .interruptor { outline:2px solid var(--acento); outline-offset:2px; }
 .cfg-chave:hover .interruptor { background:#4a4a58; }
 .cfg-chave:hover input:checked + .interruptor { background:color-mix(in srgb, var(--accent) 85%, white); }
+
+/* Aba Plug-ins: o interruptor fica no alto da linha, que cresce com a lista de permissões. */
+.cfg-plugin { align-items:flex-start; padding:var(--esp-3) 0; }
+.cfg-plugin > .cfg-chave { position:relative; display:flex; margin-top:2px; }
+.cfg-plugin .cfg-texto { gap:var(--esp-1); }
+.plugin-permissoes { margin:var(--esp-1) 0 0; padding:0; list-style:none; display:grid; gap:2px; font-size:var(--fs-secundario); color:var(--ink); overflow-wrap:anywhere; }
+.plugin-permissoes li::before { content:"•"; color:var(--muted); margin-right:6px; }
+.plugin-permissoes li.nova { color:var(--warning); font-weight:600; }
+.plugin-permissoes-vazio { margin:var(--esp-1) 0 0; }
+.plugin-selo { display:inline-block; padding:0 6px; border-radius:999px; background:color-mix(in srgb, var(--warning) 18%, transparent); color:var(--warning); font-size:var(--fs-legenda); font-weight:650; text-transform:uppercase; letter-spacing:.04em; }
+.modal .plugin-permissoes { margin:0 0 var(--esp-4); font-size:var(--fs-interface); }
+.plugin-consentimento-nota { margin:0 0 var(--esp-2); }
 /* Sem "Permitir agentes", o resto do grupo fica apagado: não vale nada enquanto estiver desligado. */
 .cfg-grupo:has([data-perm="enabled"]:not(:checked)) .cfg-depende { opacity:.45; }
 
