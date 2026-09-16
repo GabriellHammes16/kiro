@@ -1,0 +1,10 @@
+{
+  "id": "word-count",
+  "name": "Word Count",
+  "version": "1.0.0",
+  "author": "Kiro",
+  "description": "Counts words in the open note and lists the longest ones.",
+  "minKiro": "0.14.0",
+  "permissions": ["notes:read"],
+  "network": []
+}

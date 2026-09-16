@@ -155,6 +155,14 @@ updatedAt: 1789189555996
   - o servidor MCP é só stdio e não abre porta de rede.
 - **Uso atual:** o **Claude Desktop** está configurado para usar o MCP do Kiro instalado.
 
+### Plug-ins (etapa 1)
+- Qualquer pessoa escreve um plug-in e instala copiando a pasta para `<cofre>/.kiro/plugins/<id>/`, com `manifest.json` e `index.js`. Não há loja nem download de dentro do app.
+- Como plug-in de terceiro é fronteira de confiança, o código roda num **Web Worker** sem DOM, sem disco e sem rede: ele só fala com o Kiro por mensagem, e a CSP da resposta que serve o arquivo (`connect-src 'none'`) corta a rede sem depender do bom comportamento do plug-in.
+- O manifesto declara **permissões** (`notes:read`, `notes:write`, `tasks:*`, `habits:*`, `folders:write`, `network`), mostradas em português antes de o usuário ativar. Duas barreiras: o objeto `kiro` entregue ao worker só recebe os métodos concedidos, e o hospedeiro confere a permissão de novo a cada chamada. As escolhas ficam em `.kiro/plugins.json`; pedir mais do que foi concedido desliga o plug-in e pergunta de novo.
+- A etapa 1 oferece comandos, avisos, painéis declarativos (o plug-in devolve dados, o Kiro desenha com o tema atual) e `kiro.storage` (1 MB por plug-in). Limites: 3 s para ativar, 5 s por chamada, 2 MB por mensagem.
+- Arquivos: `plugins.js` (parte pura e testável), `plugin-worker.js` (worker do Kiro), hospedeiro no `app.js`, leitura no `vault.cjs` e a rota em `server.mjs`/`electron/main.cjs`. Exemplo em `dev-vault/.kiro/plugins/word-count/`; documentação para autores, em inglês, em `docs/plugins.md`.
+- Ficam para depois: `onSave`/`onCreate`/`onDay` e blocos de Markdown (etapa 2) e `kiro.fetch` com lista fechada de hosts (etapa 3).
+
 ---
 
 ## 5. Como desenvolver e testar
