@@ -10,8 +10,15 @@ let vault, settings;
 // O código dos plug-ins chega ao worker pelo esquema kiro-plugin, também servido pelo Vault.
 protocol.registerSchemesAsPrivileged([
   { scheme: 'kiro-anexo', privileges: { standard: true, secure: true, supportFetchAPI: true } },
-  { scheme: 'kiro-plugin', privileges: { standard: true, secure: true, supportFetchAPI: true } },
+  // corsEnabled: a página é file:// e o worker importa módulos deste esquema (import de módulo é CORS).
+  { scheme: 'kiro-plugin', privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true } },
 ]);
+// Mesma CSP que o server.mjs manda com plugin-worker.js na versão web: é ela que corta a rede do worker.
+const CSP_DO_WORKER = "default-src 'none'; script-src 'self' kiro-plugin:; connect-src 'none'";
+// Host reservado para o código do próprio Kiro: tem ponto, e id de plug-in não pode ter
+// (vault.pluginPath aceita só [a-z0-9-]), então nunca colide com a pasta de um plug-in.
+const HOST_DO_KIRO = 'kiro.app';
+const ARQUIVOS_DO_KIRO = new Set(['plugin-worker.js', 'plugins.js']);
 function createWindow() {
   const window = new BrowserWindow({ width: 1280, height: 820, minWidth: 900, minHeight: 620, backgroundColor: '#0a0a0a', title: 'Kiro', icon: join(__dirname, '..', 'kiro-logo.png'), webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true, preload: join(__dirname, 'preload.cjs') } });
   window.loadFile(join(__dirname, '..', 'index.html'));
@@ -55,17 +62,23 @@ else app.whenReady().then(async () => {
       return new Response(data, { headers: { 'Content-Type': type, 'X-Content-Type-Options': 'nosniff' } });
     } catch { return new Response('Imagem não encontrada.', { status: 404 }); }
   });
-  // <id> é o host da URL: kiro-plugin://word-count/index.js. A CSP da resposta é o
-  // que impede o worker do plug-in de abrir conexão por conta própria.
+  // kiro-plugin://kiro.app/plugin-worker.js (e o plugins.js que ele importa) é o worker do Kiro;
+  // qualquer outro host é o id do plug-in: kiro-plugin://word-count/index.js. Sem cabeçalho,
+  // um worker file:// herdaria a CSP do index.html; servido daqui, vale a CSP da resposta.
   protocol.handle('kiro-plugin', async request => {
     try {
       const url = new URL(request.url);
       const arquivo = decodeURIComponent(url.pathname.replace(/^\//, ''));
-      const corpo = await vault.readPluginFile(url.hostname, arquivo);
+      if (url.hostname === HOST_DO_KIRO && !ARQUIVOS_DO_KIRO.has(arquivo)) throw new Error('Arquivo do Kiro fora da lista.');
+      const corpo = url.hostname === HOST_DO_KIRO
+        ? await readFile(join(__dirname, '..', arquivo))
+        : await vault.readPluginFile(url.hostname, arquivo);
       return new Response(corpo, { headers: {
         'Content-Type': 'text/javascript; charset=utf-8',
         'X-Content-Type-Options': 'nosniff',
-        'Content-Security-Policy': "default-src 'none'; script-src 'self' kiro-plugin:; connect-src 'none'",
+        'Content-Security-Policy': CSP_DO_WORKER,
+        // O worker (host kiro.app) importa o plug-in de outro host: import de módulo exige CORS.
+        'Access-Control-Allow-Origin': '*',
       } });
     } catch { return new Response('Plug-in não encontrado.', { status: 404 }); }
   });
@@ -78,6 +91,8 @@ else app.whenReady().then(async () => {
   ipcMain.handle('plugins:data:get', (_event, id) => vault.readPluginData(String(id || '')));
   ipcMain.handle('plugins:data:set', (_event, id, dados) => vault.writePluginData(String(id || ''), dados));
   ipcMain.handle('vault:open', async () => { await mkdir(vault.directory, { recursive: true }); return shell.openPath(vault.directory); });
+  // O caminho sai do cofre aberto, nunca da página.
+  ipcMain.handle('plugins:open', async () => { const pasta = join(vault.directory, '.kiro', 'plugins'); await mkdir(pasta, { recursive: true }); return shell.openPath(pasta); });
   ipcMain.handle('vault:path', () => vault.directory);
   ipcMain.handle('agent:config:get', () => agentConfig.load());
   ipcMain.handle('agent:config:set', (_event, parcial) => agentConfig.save(parcial));

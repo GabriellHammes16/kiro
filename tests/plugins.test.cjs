@@ -270,7 +270,7 @@ test('os painéis e comandos do plug-in chegam à tela Hoje', () => {
 test('Configurações têm a aba de plug-ins', () => {
   const app = require('node:fs').readFileSync(path.join(__dirname, '..', 'app.js'), 'utf8');
   // assert.ok em vez de match: a falha não despeja o app.js inteiro no terminal.
-  assert.ok(/\['plugins', 'Plug-ins', 'codigo'\]/.test(app), 'a aba existe');
+  assert.ok(/\['plugins', 'Plug-ins', 'plugin'\]/.test(app), 'a aba existe');
   assert.ok(/\['integracoes', 'Integrações', 'link'\], \['plugins', 'Plug-ins'/.test(app), 'logo depois de Integrações');
   // Consentimento é modal do app, nunca a caixa nativa.
   const secao = app.slice(app.indexOf('// ---- Aba Plug-ins ----'), app.indexOf('// ---- Fim da aba Plug-ins ----'));
@@ -279,5 +279,44 @@ test('Configurações têm a aba de plug-ins', () => {
   assert.ok(/rotuloDaPermissao/.test(secao), 'permissões em português');
   // A aba age na hora: mexer nela não pede "descartar alterações" ao fechar.
   assert.ok(/\[data-painel="plugins"\]/.test(app), 'a aba não marca o modal como alterado');
+});
+
+test('no aplicativo o worker vem do esquema, com a mesma CSP da versão web', () => {
+  const ler = arquivo => require('node:fs').readFileSync(path.join(__dirname, '..', arquivo), 'utf8');
+  const main = ler('electron/main.cjs');
+  const csp = "default-src 'none'; script-src 'self' kiro-plugin:; connect-src 'none'";
+  assert.ok(ler('server.mjs').includes(csp), 'a versão web manda esta CSP com o worker');
+  assert.ok(main.includes(`const CSP_DO_WORKER = "${csp}"`), 'o Electron manda a mesma');
+  assert.ok(/'Content-Security-Policy': CSP_DO_WORKER/.test(main), 'e ela vai no cabeçalho do esquema');
+  // Host reservado com ponto: id de plug-in não pode ter ponto, então não colide.
+  assert.ok(/HOST_DO_KIRO = 'kiro\.app'/.test(main));
+  assert.ok(/new Set\(\['plugin-worker\.js', 'plugins\.js'\]\)/.test(main), 'só os dois arquivos do worker saem do app');
+  assert.ok(/corsEnabled: true/.test(main), 'o worker importa o plug-in de outro host: precisa de CORS');
+  assert.ok(ler('app.js').includes("new Worker('kiro-plugin://kiro.app/plugin-worker.js', { type: 'module' })"));
+});
+
+test('o host reservado do worker nunca é id de plug-in válido', async () => {
+  const { dir, vault } = await cofreTemporario();
+  try { await assert.rejects(() => vault.readPluginFile('kiro.app', 'plugin-worker.js'), /inválido/i); }
+  finally { await fs.rm(dir, { recursive: true, force: true }); }
+});
+
+test('a CSP do index.html declara connect-src sem perder o resto', () => {
+  const html = require('node:fs').readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
+  const csp = html.match(/http-equiv="Content-Security-Policy" content="([^"]+)"/)[1];
+  assert.ok(/(^|; )connect-src 'self'(;|$)/.test(csp), 'connect-src explícito');
+  for (const diretiva of ["default-src 'self'", "script-src 'self'", "worker-src 'self' blob: kiro-plugin:", "object-src 'none'", "base-uri 'none'", 'kiro-anexo:']) {
+    assert.ok(csp.includes(diretiva), diretiva);
+  }
+});
+
+test('abrir a pasta de plug-ins não aceita caminho da página', () => {
+  const ler = arquivo => require('node:fs').readFileSync(path.join(__dirname, '..', arquivo), 'utf8');
+  assert.ok(ler('electron/preload.cjs').includes("openPluginsFolder: () => ipcRenderer.invoke('plugins:open')"));
+  assert.ok(/ipcMain\.handle\('plugins:open', async \(\) => \{ const pasta = join\(vault\.directory, '\.kiro', 'plugins'\)/.test(ler('electron/main.cjs')));
+  const app = ler('app.js');
+  const secao = app.slice(app.indexOf('// ---- Aba Plug-ins ----'), app.indexOf('// ---- Fim da aba Plug-ins ----'));
+  assert.ok(secao.includes('openPluginsFolder()'), 'o botão abre a pasta de plug-ins, não a raiz do cofre');
+  assert.ok(/\n  plugin: '<path /.test(app), 'ícone próprio da aba');
 });
 

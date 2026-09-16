@@ -288,6 +288,7 @@ const TRACOS = {
   destaque: '<path d="M9.5 6.5h-3a2 2 0 0 0-2 2v3h5z"/><path d="M19.5 6.5h-3a2 2 0 0 0-2 2v3h5z"/><path d="M9.5 11.5c0 3.4-1.6 5.2-4.5 5.9M19.5 11.5c0 3.4-1.6 5.2-4.5 5.9"/>',
   realce: '<path d="M5 18.5h4.5l8.2-8.2a2.4 2.4 0 1 0-3.4-3.4L5 15.4z"/><path d="M4 21h6.5"/>',
   codigo: '<path d="M9 7.5 4.5 12 9 16.5M15 7.5 19.5 12 15 16.5"/>',
+  plugin: '<path d="M5.5 7.5H9a2 2 0 1 1 4 0h3.5V11a2 2 0 1 1 0 4v4h-11z"/>',
   'codigo-bloco': '<rect x="3.5" y="5" width="17" height="14" rx="2"/><path d="M9.2 9.8 7 12l2.2 2.2M14.8 9.8 17 12l-2.2 2.2"/>',
   tabela: '<rect x="3.5" y="5" width="17" height="14" rx="2"/><path d="M3.5 10h17M9.6 10v9M15.2 10v9"/>',
   regua: '<path d="M4 12h16"/>',
@@ -2044,7 +2045,9 @@ function ativarPlugin({ id, manifesto, permissoes }) {
   problemasDosPlugins.delete(id);
   // `permissoes` é o que o usuário concedeu, não o que o manifesto pede: é isso que vale na checagem.
   const estado = { manifesto, permissoes: [...(permissoes || [])], comandos: [], paineis: [], pendentes: new Map(), proxima: 1 };
-  try { estado.worker = new Worker('plugin-worker.js', { type: 'module' }); }
+  // No aplicativo o worker vem do esquema, com a CSP que corta a rede no cabeçalho
+  // (file:// não tem cabeçalho e herdaria a CSP da página); na web o servidor manda a mesma CSP.
+  try { estado.worker = window.cadernoDesktop ? new Worker('kiro-plugin://kiro.app/plugin-worker.js', { type: 'module' }) : new Worker('plugin-worker.js', { type: 'module' }); }
   catch (erro) { problemasDosPlugins.set(id, erro.message); return; }
   pluginsAtivos.set(id, estado);
   estado.worker.onmessage = ({ data }) => atenderPlugin(id, data || {});
@@ -2529,8 +2532,8 @@ function ligarAbaPlugins(painel) {
     else desligarPlugin(id);
   });
   painel.addEventListener('click', async evento => {
-    if (evento.target.closest('#cfg-plugins-abrir')) return window.cadernoDesktop.openVault();
-    const copiar = evento.target.closest('#cfg-plugins-copiar');
+    if (evento.target.closest('#cfg-plugins-abrir')) return window.cadernoDesktop.openPluginsFolder();
+const copiar = evento.target.closest('#cfg-plugins-copiar');
     if (!copiar) return;
     if (await copiarTexto(painel.querySelector('.cfg-caminho').textContent)) {
       copiar.lastChild.textContent = ' Copiado';
@@ -2541,7 +2544,7 @@ function ligarAbaPlugins(painel) {
 // ---- Fim da aba Plug-ins ----
 
 // Aparência aplica na hora; as permissões de agente só no botão Salvar.
-const ABAS_CFG = [['personalizacao', 'Personalização', 'realce'], ['sistema', 'Sistema', 'pasta-aberta'], ['integracoes', 'Integrações', 'link'], ['plugins', 'Plug-ins', 'codigo'], ['atalhos', 'Atalhos', 'codigo']];
+const ABAS_CFG = [['personalizacao', 'Personalização', 'realce'], ['sistema', 'Sistema', 'pasta-aberta'], ['integracoes', 'Integrações', 'link'], ['plugins', 'Plug-ins', 'plugin'], ['atalhos', 'Atalhos', 'codigo']];
 let abaDasConfiguracoes = 'personalizacao';
 const ATALHOS = [
   ['Ctrl + Espaço', 'Captura rápida', 'De qualquer tela, direto para a caixa de entrada.'],
