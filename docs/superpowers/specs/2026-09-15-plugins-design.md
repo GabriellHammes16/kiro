@@ -171,12 +171,64 @@ Escolhas ficam em `.kiro/plugins.json`:
 
 ## Rede (etapa 3)
 
-`kiro.fetch` é atendido pelo Kiro, não pelo worker. O host confere: esquema
-`https`, host exatamente igual a um dos declarados e concedidos, sem seguir
-redirecionamento para fora da lista, resposta de até 5 MB e 10 s. Cabeçalhos
-proibidos: `cookie`, `authorization` que o plug-in não tenha recebido do usuário.
-Nada do cofre vai junto automaticamente: só o que o plug-in mandar no corpo,
-e ele só conhece o que já tinha permissão de ler.
+Aprovado em 2026-09-16. As molduras isoladas saíram da etapa 3 e viram a etapa 4.
+
+`kiro.fetch(url, { method, headers, body, secret })` é atendido pelo Kiro, nunca
+pelo worker nem pela página: o pedido sobe ao processo principal do Electron (ou
+ao servidor local, na web), que valida de novo e faz a chamada.
+
+Regras, conferidas no Node, no momento da conexão:
+
+- Só `https`, porta 443, host exatamente igual a um dos **concedidos** (não basta
+  estar declarado). Sem usuário/senha na URL.
+- **Proteção contra a rede local (SSRF):** o endereço resolvido na hora de conectar
+  é recusado se for loopback, rede privada, link-local, CGNAT, multicast, reservado
+  ou não especificado, em IPv4 e IPv6 (inclusive IPv4 mapeado em IPv6). A checagem
+  roda no `lookup` da própria conexão, para não haver troca de endereço entre a
+  checagem e a conexão. Host escrito como IP literal é recusado.
+- Redirecionamento só para host também concedido, revalidado a cada salto, até 3.
+- Métodos `GET, POST, PUT, PATCH, DELETE`. Corpo só texto, até 1 MB. Resposta até
+  5 MB e 10 s, devolvida como `{ status, headers, text }`; só os cabeçalhos
+  `content-type`, `content-length`, `etag`, `last-modified`, `cache-control`,
+  `retry-after` voltam ao plug-in.
+- Sem cookies: nada é enviado nem guardado. O plug-in não pode definir `cookie`,
+  `host`, `origin`, `referer`, `authorization`, `proxy-*`, `connection`,
+  `content-length`, `transfer-encoding`.
+- Na versão web, a rota do servidor só atende pedidos da própria página (mesma
+  origem), para um site aberto no navegador não usar o Kiro como ponte.
+
+### Chaves (segredos)
+
+Declaradas no manifesto:
+
+```json
+"secrets": [
+  { "name": "apiKey", "label": "DeepL API key", "host": "api.deepl.com",
+    "header": "Authorization", "format": "DeepL-Auth-Key {value}" }
+]
+```
+
+- `name`: `[a-zA-Z][a-zA-Z0-9_]{0,39}`; `host` precisa estar em `network`;
+  `header` não pode ser um dos cabeçalhos proibidos acima (exceto `authorization`,
+  que é justamente o uso esperado); `format` contém `{value}` uma vez.
+- O usuário digita o valor em Configurações → Plug-ins, num campo de senha. O valor
+  nunca volta para a página nem para o plug-in: a interface só sabe "configurada"
+  ou "não configurada".
+- `kiro.fetch(url, { secret: 'apiKey' })` faz o Kiro montar o cabeçalho, e só quando
+  o host do pedido é exatamente o `host` do segredo. Host diferente é erro.
+- Guarda fora do cofre, por computador. No Electron, cifrado com `safeStorage` no
+  arquivo `plugin-secrets.json` da pasta de dados do app. Na web, em
+  `<pasta de configuração do usuário>/Kiro/plugin-secrets.json` com permissão só
+  do dono, sem cifra (limitação conhecida: sem dependência nova, o Node não alcança
+  o cofre de senhas do sistema). Chave de índice: cofre + plug-in + nome.
+- Um segredo novo numa atualização conta como pedido de mais acesso: pede
+  confirmação de novo.
+
+### Transparência
+
+Cada requisição vai para `.kiro/audit.log` (plug-in, host, método, status, bytes,
+duração — nunca corpo, cabeçalho ou segredo), e a linha do plug-in em
+Configurações mostra as últimas chamadas da sessão.
 
 ## Higienização do HTML (etapa 2)
 
@@ -210,8 +262,10 @@ Lista de permitidos, nunca lista de proibidos:
    hábitos, `kiro.storage`, plug-in de exemplo `word-count`, documentação.
 2. **Reagir e renderizar:** `onSave`, `onCreate`, `onDay`, blocos de Markdown e o
    higienizador.
-3. **Cuidado redobrado:** rede com lista fechada; molduras isoladas para painéis
-   com desenho livre.
+3. **Rede:** `kiro.fetch` com lista fechada, proteção contra a rede local, chaves
+   guardadas fora do cofre e auditoria.
+4. **Molduras isoladas** para painéis com desenho livre (desenho próprio, quando
+   houver um plug-in real que precise).
 
 ## Testes (`node --test`, cofre temporário)
 
