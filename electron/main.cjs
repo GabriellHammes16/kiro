@@ -1,4 +1,6 @@
-const { app, BrowserWindow, ipcMain, Menu, shell, dialog, protocol } = require('electron');
+const { app, BrowserWindow, ipcMain, Menu, shell, dialog, protocol, safeStorage } = require('electron');
+const ligacaoRede = require('../ligacao-rede-plugins.cjs');
+const { criarGuardaDeSegredos } = require('../segredos-plugins.cjs');
 const { readFile, mkdir } = require('node:fs/promises');
 const { join, dirname } = require('node:path');
 const { existsSync } = require('node:fs');
@@ -90,6 +92,21 @@ else app.whenReady().then(async () => {
   ipcMain.handle('plugins:choices:set', (_event, escolhas) => vault.writePluginChoices(escolhas));
   ipcMain.handle('plugins:data:get', (_event, id) => vault.readPluginData(String(id || '')));
   ipcMain.handle('plugins:data:set', (_event, id, dados) => vault.writePluginData(String(id || ''), dados));
+  // kiro.fetch e chaves: tudo é relido do cofre aberto (ligacao-rede-plugins.cjs); a página
+  // só diz qual plug-in e o que ele pediu. Nenhum canal devolve o valor de uma chave.
+  const guarda = criarGuardaDeSegredos({
+    arquivo: join(app.getPath('userData'), 'plugin-secrets.json'),
+    cifrar: v => safeStorage.encryptString(v).toString('base64'),
+    decifrar: v => safeStorage.decryptString(Buffer.from(v, 'base64')),
+  });
+  const contextoDeRede = () => ({ vault, guarda, versaoDoKiro: app.getVersion() });
+  ipcMain.handle('plugins:fetch', (_event, pluginId, pedido) => ligacaoRede.atenderFetch({ ...contextoDeRede(), pluginId, pedido }));
+  ipcMain.handle('plugins:secrets:state', (_event, pluginId) => ligacaoRede.estadoDasChaves({ ...contextoDeRede(), pluginId }));
+  ipcMain.handle('plugins:secrets:set', (_event, pluginId, nome, valor) => {
+    if (!safeStorage.isEncryptionAvailable()) throw new Error('A cifra do sistema não está disponível neste computador; a chave não foi gravada.');
+    return ligacaoRede.gravarChave({ ...contextoDeRede(), pluginId, nome, valor });
+  });
+  ipcMain.handle('plugins:secrets:remove', (_event, pluginId, nome) => ligacaoRede.removerChave({ ...contextoDeRede(), pluginId, nome }));
   ipcMain.handle('vault:open', async () => { await mkdir(vault.directory, { recursive: true }); return shell.openPath(vault.directory); });
   // O caminho sai do cofre aberto, nunca da página.
   ipcMain.handle('plugins:open', async () => { const pasta = join(vault.directory, '.kiro', 'plugins'); await mkdir(pasta, { recursive: true }); return shell.openPath(pasta); });

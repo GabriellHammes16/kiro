@@ -2,8 +2,12 @@ import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+import { EventEmitter } from 'node:events';
+import { homedir } from 'node:os';
 import vaultModule from './vault.cjs';
 import agentModule from './agent/index.cjs';
+import ligacaoRede from './ligacao-rede-plugins.cjs';
+import segredosModule from './segredos-plugins.cjs';
 
 const { Vault } = vaultModule;
 const root = dirname(fileURLToPath(import.meta.url));
@@ -24,6 +28,28 @@ const lerJson = async (request, limite) => {
   let bruto = '';
   for await (const parte of request) { bruto += parte; if (bruto.length > limite) throw new Error('Pedido grande demais.'); }
   return JSON.parse(bruto || '{}');
+};
+// Chaves dos plug-ins na web: fora do cofre, sem cifra (limitação documentada na spec),
+// arquivo só do dono. KIRO_SEGREDOS_ARQUIVO existe para os testes não tocarem a pasta real.
+const arquivoDeSegredos = process.env.KIRO_SEGREDOS_ARQUIVO
+  || (process.platform === 'win32' ? join(process.env.APPDATA || join(homedir(), 'AppData', 'Roaming'), 'Kiro', 'plugin-secrets.json') : join(homedir(), '.config', 'Kiro', 'plugin-secrets.json'));
+const guarda = segredosModule.criarGuardaDeSegredos({ arquivo: arquivoDeSegredos, cifrar: v => v, decifrar: v => v });
+// KIRO_REDE_FALSA=1 é só para os testes (tests/plugins-ligacao-rede.test.cjs): troca o
+// transporte e o DNS por falsos que falham com o código KIRO_REDE_FALSA, sem abrir conexão
+// nem resolver nome. A troca só tira capacidade: ligada por engano, o kiro.fetch apenas falha.
+const falhaFalsa = () => Object.assign(new Error('rede falsa'), { code: 'KIRO_REDE_FALSA' });
+const redeFalsa = process.env.KIRO_REDE_FALSA === '1' ? {
+  requisitar: () => { const req = new EventEmitter(); req.end = () => process.nextTick(() => req.emit('error', falhaFalsa())); req.destroy = () => {}; return req; },
+  lookup: (_host, _opcoes, cb) => cb(falhaFalsa()),
+} : {};
+// Rotas de rede e de chaves: só a própria página. Origin igual à do servidor, ou sem
+// Origin (GET do navegador) mas com Sec-Fetch-Site: same-origin. Um site aberto no
+// navegador não consegue usar o Kiro como ponte nem sondar as chaves.
+const origensPermitidas = [`http://localhost:${port}`, `http://127.0.0.1:${port}`];
+const mesmaOrigem = request => {
+  const site = request.headers['sec-fetch-site'];
+  if (site && site !== 'same-origin') return false;
+  return request.headers.origin ? origensPermitidas.includes(request.headers.origin) : site === 'same-origin';
 };
 const send = (res, status, data) => { res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' }); res.end(JSON.stringify(data)); };
 createServer(async (request, response) => {
@@ -103,6 +129,23 @@ createServer(async (request, response) => {
       const id = decodeURIComponent(rota.slice('/api/plugin-data/'.length));
       if (request.method === 'GET') return send(response, 200, await vault.readPluginData(id));
       if (request.method === 'POST') return send(response, 200, await vault.writePluginData(id, await lerJson(request, 1024 * 1024)));
+    }
+    // kiro.fetch e chaves: a página não é confiável; ligacao-rede-plugins.cjs relê tudo do cofre.
+    if (rota === '/api/plugin-fetch' || rota.startsWith('/api/plugin-secrets/')) {
+      if (!mesmaOrigem(request)) return send(response, 403, { error: 'Só a própria página do Kiro pode usar esta rota.' });
+      const contexto = { vault, guarda, versaoDoKiro: version };
+      try {
+        if (rota === '/api/plugin-fetch') {
+          if (request.method !== 'POST') return send(response, 404, { error: 'Não encontrado.' });
+          const { pluginId, pedido } = await lerJson(request, 3 * 1024 * 1024);
+          return send(response, 200, await ligacaoRede.atenderFetch({ ...contexto, ...redeFalsa, pluginId, pedido }));
+        }
+        const pluginId = decodeURIComponent(rota.slice('/api/plugin-secrets/'.length));
+        if (request.method === 'GET') return send(response, 200, await ligacaoRede.estadoDasChaves({ ...contexto, pluginId }));
+        if (request.method === 'POST') { const { name, value } = await lerJson(request, 16 * 1024); return send(response, 200, await ligacaoRede.gravarChave({ ...contexto, pluginId, nome: name, valor: value })); }
+        if (request.method === 'DELETE') { const { name } = await lerJson(request, 4096); return send(response, 200, await ligacaoRede.removerChave({ ...contexto, pluginId, nome: name })); }
+        return send(response, 404, { error: 'Não encontrado.' });
+      } catch (erro) { return send(response, erro.status || 400, { error: erro.message }); }
     }
     // Código de plug-in: só .js de dentro de .kiro/plugins, com a rede do worker cortada.
     if (rota.startsWith('/plugins/')) {

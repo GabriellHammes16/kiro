@@ -30,6 +30,11 @@ class AuditLog {
       status: entrada.status,
       errorCode: entrada.errorCode || undefined,
       error: entrada.error || undefined,
+      // Rede dos plug-ins: só método, status HTTP, tamanho e duração.
+      method: entrada.method || undefined,
+      httpStatus: entrada.httpStatus ?? undefined,
+      bytes: entrada.bytes ?? undefined,
+      durationMs: entrada.durationMs ?? undefined,
       // Ganchos para um Undo futuro: o Vault já guarda um snapshot por gravação.
       revisionBefore: entrada.revisionBefore || undefined,
       revisionAfter: entrada.revisionAfter || undefined,

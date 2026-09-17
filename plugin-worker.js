@@ -17,6 +17,8 @@
 // Blocos ```kiro:<id> chegam como 'acao' com registro { tipo: 'block', id: 'render' }
 // e dados { source }; o handler devolve { html } ou dados de painel.
 //   { tipo: 'chamada', chamada, metodo, args }    pedido de método da API
+//   kiro.fetch, só com network concedida, vira metodo 'fetch', args [url, { method, headers, body, secret }],
+//   e volta { status, headers, text }. Quem chama a rede é o Electron ou o servidor, nunca o worker.
 //   { tipo: 'resposta', chamada, valor | erro }   retorno de uma 'acao'
 //   { tipo: 'erro', mensagem }
 import './plugins.js';

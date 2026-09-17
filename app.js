@@ -2038,6 +2038,17 @@ const pluginApi = {
   gravarEscolhas: e => window.cadernoDesktop ? window.cadernoDesktop.savePluginChoices(e) : api('plugin-choices', e),
   dados: id => window.cadernoDesktop ? window.cadernoDesktop.pluginData(id) : api(`plugin-data/${encodeURIComponent(id)}`),
   gravarDados: (id, d) => window.cadernoDesktop ? window.cadernoDesktop.savePluginData(id, d) : api(`plugin-data/${encodeURIComponent(id)}`, d),
+  fetch: (id, pedido) => window.cadernoDesktop ? window.cadernoDesktop.pluginFetch(id, pedido) : api('plugin-fetch', { pluginId: id, pedido }),
+  // Chaves: só "configurada ou não" volta; o valor vai e nunca retorna.
+  chaves: id => window.cadernoDesktop ? window.cadernoDesktop.pluginSecrets(id) : api(`plugin-secrets/${encodeURIComponent(id)}`),
+  gravarChave: (id, nome, valor) => window.cadernoDesktop ? window.cadernoDesktop.savePluginSecret(id, nome, valor) : api(`plugin-secrets/${encodeURIComponent(id)}`, { name: nome, value: valor }),
+  removerChave: async (id, nome) => {
+    if (window.cadernoDesktop) return window.cadernoDesktop.removePluginSecret(id, nome);
+    const r = await fetch(`/api/plugin-secrets/${encodeURIComponent(id)}`, { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: nome }) });
+    const dados = await r.json();
+    if (!r.ok) throw new Error(dados.error || 'Não foi possível remover a chave.');
+    return dados;
+  },
 };
 // No aplicativo instalado a página é file://: o código do plug-in vem pelo esquema próprio.
 const urlDoPlugin = id => window.cadernoDesktop ? `kiro-plugin://${id}/index.js` : `/plugins/${id}/index.js`;
@@ -2381,6 +2392,30 @@ async function gravar(origem) {
   if (!await save(origem)) throw new Error('Não foi possível gravar no cofre.');
 }
 
+// kiro.fetch: a página só repassa. Quem valida, injeta a chave e faz a chamada é o
+// processo principal (Electron) ou o servidor, relendo as permissões do cofre.
+const chamadasDeRede = new Map();   // id → últimas 10 chamadas da sessão: { quando, metodo, host, status, bytes, ms }
+async function fetchDoPlugin(id, url, init) {
+  const opcoes = init && typeof init === 'object' ? init : {};
+  const pedido = { url, method: opcoes.method, headers: opcoes.headers, body: opcoes.body, secret: opcoes.secret };
+  let host = '';
+  try { host = new URL(String(url)).hostname; } catch { /* o validador explica */ }
+  const inicio = performance.now();
+  const anotar = (status, bytes) => {
+    const lista = [{ quando: Date.now(), metodo: String(opcoes.method || 'GET').toUpperCase().slice(0, 10), host, status, bytes, ms: Math.round(performance.now() - inicio) }, ...(chamadasDeRede.get(id) || [])];
+    chamadasDeRede.set(id, lista.slice(0, 10));
+  };
+  try {
+    const r = await pluginApi.fetch(id, pedido);
+    anotar(r.status, r.bytes);
+    return { status: r.status, headers: r.headers, text: r.text };
+  } catch (erro) {
+    anotar('erro', 0);
+    // O IPC do Electron embrulha a mensagem ("Error invoking remote method ..."): o plug-in recebe só o motivo.
+    throw new Error(String(erro.message).replace(/^Error invoking remote method '[^']+': (Error: )?/, ''));
+  }
+}
+
 async function executarMetodo(id, metodo, args) {
   const [a, b] = args;
   switch (metodo) {
@@ -2491,6 +2526,7 @@ async function executarMetodo(id, metodo, args) {
       return true;
     }
     case 'notify': { avisoDePlugin(id, String(a ?? ''), !!(b && b.error)); return true; }
+    case 'fetch': return fetchDoPlugin(id, a, b);
     default: throw new Error(`Método desconhecido: ${metodo}.`);
   }
 }
@@ -2643,7 +2679,7 @@ function pedirConsentimento(id) {
     try {
       // Relê antes de gravar: o arquivo guarda as escolhas de todos os plug-ins.
       const escolhas = await pluginApi.escolhas();
-      escolhas[id] = { enabled: true, permissions: [...m.permissions], network: [...m.network] };
+      escolhas[id] = { enabled: true, permissions: [...m.permissions], network: [...m.network], secrets: (m.secrets || []).map(s => s.name) };
       await pluginApi.gravarEscolhas(escolhas);
     } catch (erro) {
       botao.disabled = false;
