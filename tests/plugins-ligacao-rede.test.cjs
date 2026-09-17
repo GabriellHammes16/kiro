@@ -146,3 +146,23 @@ test('fetch do plug-in só passa pela API do Kiro', () => {
   // Nenhum IPC de chave devolve valor: não existe canal de leitura de valor.
   assert.ok(!/secrets:(get|value|valor)/.test(preload + ler('electron/main.cjs')));
 });
+
+test('aba Plug-ins: campo de chave de senha, valor nunca lido de volta e últimas chamadas', () => {
+  const app = ler('app.js');
+  const aba = app.slice(app.indexOf('// ---- Aba Plug-ins ----'), app.indexOf('// ---- Fim da aba Plug-ins ----'));
+  assert.match(aba, /type="password"[^>]*autocomplete="off"[^>]*spellcheck="false"/, 'campo de senha sem preenchimento automático');
+  assert.match(aba, /<label for="/, 'cada campo tem rótulo associado');
+  assert.match(aba, /aria-live="polite"/);
+  assert.match(aba, /Configurada/);
+  assert.match(aba, /Não configurada/);
+  assert.match(aba, /pluginApi\.gravarChave\(/);
+  assert.match(aba, /pluginApi\.removerChave\(/);
+  // O valor só sai do campo para o envio: nunca é guardado nem vira HTML.
+  const usosDoValor = aba.match(/\.value\b/g) || [];
+  assert.equal(usosDoValor.length, 2, 'lê o campo uma vez para enviar e limpa uma vez');
+  assert.match(aba, /campo\.value = ''/);
+  assert.ok(!/\b(confirm|alert)\(/.test(aba), 'nada de caixa nativa');
+  assert.match(aba, /Últimas chamadas/);
+  assert.match(aba, /chamadasDeRede\.get\(/);
+  assert.match(aba, /segredosNovos/, 'aguardando permissão mostra qual chave é nova');
+});

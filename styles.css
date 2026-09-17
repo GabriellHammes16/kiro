@@ -898,3 +898,14 @@ body, button, input, textarea, select { font-family:var(--fonte-interface); }
 .plugin-bloco-conteudo img, .plugin-bloco-conteudo svg { max-width:100%; height:auto; }
 .plugin-bloco-conteudo a { color:var(--acento); cursor:pointer; }
 .plugin-bloco-aviso { padding:0; color:var(--muted); font-size:var(--fs-secundario, 13px); }
+
+/* Configurações → Plug-ins: chaves (campo de senha) e últimas chamadas de rede. Só variáveis de tema. */
+.plugin-chaves, .plugin-chamadas { display:grid; gap:var(--esp-3, 12px); margin-top:var(--esp-2, 8px); }
+.plugin-chave { display:grid; gap:2px; margin:0; }
+.plugin-chave-rotulo { font-size:var(--fs-secundario, 13px); font-weight:650; color:var(--ink); }
+.plugin-chave-campos { display:flex; flex-wrap:wrap; gap:var(--esp-2, 8px); align-items:center; margin-top:var(--esp-1, 4px); }
+.plugin-chave-campo { flex:1 1 180px; min-width:0; min-height:var(--alt-p, 28px); padding:0 10px; border:1px solid var(--line); border-radius:var(--raio-controle, 8px); background:var(--campo); color:var(--ink); }
+.plugin-chave-campo:focus-visible { outline:2px solid var(--acento); outline-offset:2px; }
+.plugin-chave-msg:empty { display:none; }
+.plugin-chave-msg.erro { color:var(--warning); font-weight:600; }
+.plugin-chamadas .plugin-tabela td { white-space:nowrap; }

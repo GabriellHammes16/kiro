@@ -2593,19 +2593,52 @@ function itensDePermissao(m, novas = [], hostsNovos = []) {
   if (!m.permissions.length) return '<p class="small-muted plugin-permissoes-vazio">Não pede acesso aos seus dados.</p>';
   return `<ul class="plugin-permissoes">${m.permissions.map(p => {
     const nova = novas.includes(p) || (p === 'network' && hostsNovos.length > 0);
-    const hosts = p === 'network' && m.network.length ? `: ${m.network.map(h => escapeHtml(h)).join(', ')}` : '';
+    const hosts = p === 'network' && m.network.length ? `, só nestes sites: ${m.network.map(h => escapeHtml(h)).join(', ')}` : '';
     return `<li${nova ? ' class="nova"' : ''}>${escapeHtml(KiroPlugins.rotuloDaPermissao(p))}${hosts}${nova ? ' <span class="plugin-selo">nova</span>' : ''}</li>`;
   }).join('')}</ul>`;
 }
 const novidadesDoPlugin = (id, m) => ({
   novas: KiroPlugins.comparar(escolhasDosPlugins[id]?.permissions, m.permissions).novas,
   hostsNovos: KiroPlugins.comparar(escolhasDosPlugins[id]?.network, m.network).novas,
+  segredosNovos: KiroPlugins.comparar(escolhasDosPlugins[id]?.secrets, m.secrets.map(s => s.name)).novas,
 });
+const seloNova = '<span class="plugin-selo">nova</span>';
+
+// Consentimento: as chaves que o plug-in vai usar e para onde cada uma vai.
+function itensDeChaves(m, segredosNovos = []) {
+  if (!m.secrets.length) return '';
+  return `<p class="confirmar-texto">Ele pode usar chaves que você configurar depois em Configurações → Plug-ins. Cada chave só é enviada ao site indicado, e o plug-in nunca vê o valor:</p>
+    <ul class="plugin-permissoes">${m.secrets.map(s => `<li${segredosNovos.includes(s.name) ? ' class="nova"' : ''}>${escapeHtml(s.label)}, enviada só para ${escapeHtml(s.host)}${segredosNovos.includes(s.name) ? ` ${seloNova}` : ''}</li>`).join('')}</ul>`;
+}
+
+// Uma chave: o valor vai do campo direto para o envio e o campo é limpo; da chave só se sabe se está configurada.
+function itemDaChave(id, s, configurada, nova) {
+  const campo = `chave-${escapeHtml(id)}-${escapeHtml(s.name)}`;
+  return `<form class="plugin-chave" data-chave-plugin="${escapeHtml(id)}" data-chave="${escapeHtml(s.name)}">
+    <label for="${campo}" class="plugin-chave-rotulo">${escapeHtml(s.label)}${nova ? ` ${seloNova}` : ''}</label>
+    <span class="small-muted">Enviada só para ${escapeHtml(s.host)} · <span class="plugin-chave-estado">${configurada ? 'Configurada' : 'Não configurada'}</span></span>
+    <span class="plugin-chave-campos">
+      <input id="${campo}" class="plugin-chave-campo" type="password" autocomplete="off" spellcheck="false" required aria-describedby="${campo}-msg" placeholder="Colar a chave" />
+      <button type="submit" class="secondary cfg-pequeno">Salvar</button>
+      <button type="button" class="secondary cfg-pequeno" data-remover-chave ${configurada ? '' : 'hidden'}>Remover</button>
+    </span>
+    <span class="plugin-chave-msg small-muted" id="${campo}-msg" role="status" aria-live="polite"></span>
+  </form>`;
+}
+
+const tamanhoLegivel = b => !(b > 0) ? '—' : b < 1024 ? `${b} B` : b < 1048576 ? `${(b / 1024).toFixed(1)} KB` : `${(b / 1048576).toFixed(1)} MB`;
+function ultimasChamadas(id) {
+  const lista = chamadasDeRede.get(id) || [];
+  const linhas = lista.map(c => `<tr><td>${new Date(c.quando).toLocaleTimeString('pt-BR')}</td><td>${escapeHtml(c.metodo)}</td><td>${escapeHtml(c.host || '?')}</td><td>${escapeHtml(c.status ?? '')}</td><td>${tamanhoLegivel(c.bytes)}</td></tr>`).join('');
+  return `<div class="plugin-chamadas"><span class="plugin-chave-rotulo">Últimas chamadas</span>${lista.length
+    ? `<div class="plugin-tabela-rolagem"><table class="plugin-tabela"><thead><tr><th scope="col">Hora</th><th scope="col">Método</th><th scope="col">Site</th><th scope="col">Status</th><th scope="col">Tamanho</th></tr></thead><tbody>${linhas}</tbody></table></div>`
+    : '<span class="small-muted">Nenhuma chamada nesta sessão.</span>'}</div>`;
+}
 
 // Uma linha por plug-in. Todo texto do manifesto entra escapado.
-function linhaDoPlugin({ id, manifesto }, situacao, erro = '') {
+function linhaDoPlugin({ id, manifesto }, situacao, erro = '', chaves = {}) {
   const m = manifesto, nome = escapeHtml(m ? m.name : id);
-  const { novas, hostsNovos } = situacao === 'aguardando' ? novidadesDoPlugin(id, m) : {};
+  const { novas, hostsNovos, segredosNovos = [] } = situacao === 'aguardando' ? novidadesDoPlugin(id, m) : {};
   const ligado = situacao === 'ativo' || situacao === 'parou';
   // Único lugar onde os comandos rodam; a nota aberta segue aberta por baixo do modal.
   const comandos = situacao === 'ativo' ? (pluginsAtivos.get(id)?.comandos || [])
@@ -2618,8 +2651,10 @@ function linhaDoPlugin({ id, manifesto }, situacao, erro = '') {
     <span class="small-muted">${m ? `Versão ${escapeHtml(m.version)} · por ${escapeHtml(m.author)}` : `Pasta ${escapeHtml(id)}`}</span>
     ${m?.description ? `<span class="small-muted">${escapeHtml(m.description)}</span>` : ''}
     ${m ? itensDePermissao(m, novas, hostsNovos) : ''}
+    ${m?.secrets.length ? `<div class="plugin-chaves">${m.secrets.map(s => itemDaChave(id, s, !!chaves[s.name], segredosNovos.includes(s.name))).join('')}</div>` : ''}
+    ${situacao === 'ativo' && m.permissions.includes('network') ? ultimasChamadas(id) : ''}
     ${comandos ? `<div class="cfg-botoes plugin-comandos-cfg">${comandos}</div>` : ''}
-    ${situacao === 'aguardando' ? '<p class="cfg-aviso">Uma atualização pediu mais acesso. Ligue de novo para revisar o que é novo.</p>' : ''}
+    ${situacao === 'aguardando' ? `<p class="cfg-aviso">Uma atualização pediu mais acesso${segredosNovos.length ? ` (chave nova: ${segredosNovos.map(n => escapeHtml(m.secrets.find(s => s.name === n)?.label || n)).join(', ')})` : ''}. Ligue de novo para revisar o que é novo.</p>` : ''}
     ${erro ? `<p class="cfg-aviso">${escapeHtml(erro)}</p>` : ''}
   </span>${chave}</div>`;
 }
@@ -2628,12 +2663,15 @@ async function conteudoDaAbaPlugins() {
   try { await lerPlugins(); }
   catch (erro) { return `<p class="cfg-aviso">Não foi possível ler os plug-ins: ${escapeHtml(erro.message)}</p>`; }
   const { carregar, pendentes, problemas } = planoDosPlugins;
+  // Estado das chaves ({ nome: true }); se não der para ler, aparecem como não configuradas.
+  const comChaves = [...carregar, ...pendentes].filter(p => p.manifesto?.secrets.length);
+  const chaves = Object.fromEntries(await Promise.all(comChaves.map(p => pluginApi.chaves(p.id).then(c => [p.id, c || {}], () => [p.id, {}]))));
   const grupos = [
-    ['Ativos', carregar.filter(p => pluginsAtivos.has(p.id)).map(p => linhaDoPlugin(p, 'ativo'))],
-    ['Aguardando permissão', pendentes.filter(p => p.motivo === 'permissoes-novas').map(p => linhaDoPlugin(p, 'aguardando'))],
-    ['Desligados', pendentes.filter(p => p.motivo === 'desligado').map(p => linhaDoPlugin(p, 'desligado'))],
+    ['Ativos', carregar.filter(p => pluginsAtivos.has(p.id)).map(p => linhaDoPlugin(p, 'ativo', '', chaves[p.id]))],
+    ['Aguardando permissão', pendentes.filter(p => p.motivo === 'permissoes-novas').map(p => linhaDoPlugin(p, 'aguardando', '', chaves[p.id]))],
+    ['Desligados', pendentes.filter(p => p.motivo === 'desligado').map(p => linhaDoPlugin(p, 'desligado', '', chaves[p.id]))],
     ['Com problema', [
-      ...carregar.filter(p => !pluginsAtivos.has(p.id)).map(p => linhaDoPlugin(p, 'parou', problemasDosPlugins.get(p.id) || 'O plug-in parou nesta sessão.')),
+      ...carregar.filter(p => !pluginsAtivos.has(p.id)).map(p => linhaDoPlugin(p, 'parou', problemasDosPlugins.get(p.id) || 'O plug-in parou nesta sessão.', chaves[p.id])),
       ...problemas.map(p => linhaDoPlugin({ id: p.id }, 'problema', p.erro)),
     ]],
   ];
@@ -2664,11 +2702,12 @@ function pedirConsentimento(id) {
   const alvo = planoDosPlugins.pendentes.find(p => p.id === id);
   if (!alvo) return redesenharAbaPlugins(id);
   const m = alvo.manifesto, nome = escapeHtml(m.name), aguardando = alvo.motivo === 'permissoes-novas';
-  const { novas, hostsNovos } = aguardando ? novidadesDoPlugin(id, m) : { novas: [], hostsNovos: [] };
+  const { novas, hostsNovos, segredosNovos } = aguardando ? novidadesDoPlugin(id, m) : { novas: [], hostsNovos: [], segredosNovos: [] };
   modal(aguardando ? 'Plug-in pede mais acesso' : 'Ativar plug-in', `<p class="confirmar-texto">${aguardando
     ? `<strong>${nome}</strong> foi atualizado e agora pede mais do que você tinha permitido. O que está marcado como <span class="plugin-selo">nova</span> ainda não foi concedido.`
     : `Ativar <strong>${nome}</strong>, de ${escapeHtml(m.author)}?`} Ele vai poder:</p>
     ${itensDePermissao(m, novas, hostsNovos)}
+    ${itensDeChaves(m, segredosNovos)}
     <p class="small-muted plugin-consentimento-nota">Dá para desligar quando quiser, em Configurações → Plug-ins.</p>
     <div class="form-actions"><button type="button" class="secondary" id="cancel">Cancelar</button><button type="button" class="primary" id="confirmar-plugin">${aguardando ? 'Permitir e ativar' : 'Ativar plug-in'}</button></div>`);
   const voltar = () => showSettings('plugins');
@@ -2712,7 +2751,43 @@ function ligarAbaPlugins(painel) {
     if (caixa.checked) { caixa.checked = false; pedirConsentimento(id); }
     else desligarPlugin(id);
   });
+  // Chaves: o valor sai do campo direto para o envio e o campo é limpo antes da resposta,
+  // dê certo ou não. O que volta é só o estado.
+  const acaoDaChave = async (form, enviar, sucesso) => {
+    const msg = form.querySelector('.plugin-chave-msg'), botoes = form.querySelectorAll('button');
+    botoes.forEach(b => { b.disabled = true; });
+    try {
+      const estado = await enviar();
+      const configurada = !!estado?.[form.dataset.chave];
+      form.querySelector('.plugin-chave-estado').textContent = configurada ? 'Configurada' : 'Não configurada';
+      form.querySelector('[data-remover-chave]').hidden = !configurada;
+      msg.classList.remove('erro');
+      msg.textContent = sucesso;
+    } catch (erro) {
+      msg.classList.add('erro');
+      // O IPC do Electron embrulha a mensagem ("Error invoking remote method ..."): fica só o motivo.
+      msg.textContent = String(erro.message).replace(/^Error invoking remote method '[^']+': (Error: )?/, '');
+    } finally {
+      botoes.forEach(b => { b.disabled = false; });
+      // Botão desabilitado ou escondido perde o foco: devolve ao campo, sem jogar o teclado para o topo.
+      if (!form.contains(document.activeElement)) form.querySelector('input').focus();
+    }
+  };
+  painel.addEventListener('submit', evento => {
+    const form = evento.target.closest('[data-chave]');
+    if (!form) return;
+    evento.preventDefault();
+    const campo = form.querySelector('input');
+    const envio = pluginApi.gravarChave(form.dataset.chavePlugin, form.dataset.chave, campo.value);
+    campo.value = '';
+    acaoDaChave(form, () => envio, 'Chave salva.');
+  });
   painel.addEventListener('click', async evento => {
+    const remover = evento.target.closest('[data-remover-chave]');
+    if (remover) {
+      const form = remover.closest('[data-chave]');
+      return acaoDaChave(form, () => pluginApi.removerChave(form.dataset.chavePlugin, form.dataset.chave), 'Chave removida.');
+    }
     const comando = evento.target.closest('[data-comando-plugin]');
     if (comando) return rodarComandoDoPlugin(comando.dataset.comandoPlugin, comando.dataset.comando);
     if (evento.target.closest('#cfg-plugins-abrir')) return window.cadernoDesktop.openPluginsFolder();
@@ -2810,9 +2885,11 @@ async function showSettings(aba = abaDasConfiguracoes) {
   // Abas: clique ou setas esquerda/direita; a última aberta volta na próxima vez.
   const abas = [...document.querySelectorAll('.cfg-aba')];
   const mostrar = id => {
+    const trocou = $('#painel-plugins')?.hidden;
     abaDasConfiguracoes = id;
     abas.forEach(b => { const ativa = b.dataset.aba === id; b.setAttribute('aria-selected', ativa); b.tabIndex = ativa ? 0 : -1; });
     document.querySelectorAll('.cfg-painel').forEach(p => { p.hidden = p.dataset.painel !== id; });
+    if (id === 'plugins' && trocou) redesenharAbaPlugins();   // estado das chaves e últimas chamadas em dia
   };
   abas.forEach((b, i) => {
     b.onclick = () => mostrar(b.dataset.aba);
