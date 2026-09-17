@@ -1,0 +1,10 @@
+{
+  "id": "wikipedia-summary",
+  "name": "Wikipedia Summary",
+  "version": "1.0.0",
+  "author": "Kiro",
+  "description": "Draws the Portuguese Wikipedia summary of a title inside a note.",
+  "minKiro": "0.14.0",
+  "permissions": ["network"],
+  "network": ["pt.wikipedia.org"]
+}

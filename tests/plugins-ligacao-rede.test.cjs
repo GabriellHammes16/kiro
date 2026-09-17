@@ -166,3 +166,25 @@ test('aba Plug-ins: campo de chave de senha, valor nunca lido de volta e última
   assert.match(aba, /chamadasDeRede\.get\(/);
   assert.match(aba, /segredosNovos/, 'aguardando permissão mostra qual chave é nova');
 });
+
+test('exemplo wikipedia-summary e documentação da rede', () => {
+  const P = require('../plugins.js');
+  const pasta = path.join('examples', 'plugins', 'wikipedia-summary');
+  const bruto = JSON.parse(ler(path.join(pasta, 'manifest.json')));
+  const r = P.validarManifesto(bruto, { versaoDoKiro: JSON.parse(ler('package.json')).version });
+  assert.ok(r.ok, r.erro);
+  assert.deepEqual(r.manifesto.permissions, ['network']);
+  assert.deepEqual(r.manifesto.network, ['pt.wikipedia.org']);
+  assert.equal(bruto.secrets, undefined);
+  const codigo = ler(path.join(pasta, 'index.js'));
+  assert.match(codigo, /kiro\.fetch\(/);
+  assert.match(codigo, /kiro\.block\(/);
+  assert.match(codigo, /pt\.wikipedia\.org\/api\/rest_v1\/page\/summary\//);
+
+  const doc = ler('docs/plugins.md');
+  for (const trecho of ['kiro.fetch(url', '"secrets"', 'local network', 'audit.log', 'wikipedia-summary', 'plugin-secrets.json'])
+    assert.ok(doc.includes(trecho), `docs/plugins.md fala de ${trecho}`);
+  const pendente = doc.slice(doc.indexOf('## Not available yet'));
+  assert.ok(!/kiro\.fetch|Stage 3/i.test(pendente), 'a rede não está mais em "Not available yet"');
+  assert.ok(!/not available yet\*? \(stage 3\)/i.test(doc));
+});

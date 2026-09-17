@@ -6,11 +6,11 @@ step, no dependencies, no install flow: you copy a folder into a vault and the
 owner of that vault turns it on.
 
 Your code runs inside a Web Worker with no DOM, no disk and no network. Every
-time it wants something from the vault it asks Kiro, and Kiro checks the
+time it wants something from the vault, or from a web API, it asks Kiro, and Kiro checks the
 permissions the user granted before answering. That is the whole security model:
 you declare what you need, the user agrees to it, and nothing else is reachable.
 
-This document describes **stages 1 and 2**, which are what ships today. Features
+This document describes **stages 1 to 3**, which are what ships today. Features
 marked *not available yet* are designed but not implemented; writing code
 against them now will simply fail.
 
@@ -26,8 +26,9 @@ The folder name must equal the `id` in the manifest. Kiro only reads
 `manifest.json` and `.js` files directly inside that folder — no subfolders, no
 other file types. `data.json` appears there once you use `kiro.storage`.
 
-A complete working example lives in `examples/plugins/word-count/` in this
-repository, and `npm run dev` copies it into the example vault. Copying that
+Two complete working examples live in this repository: `examples/plugins/word-count/`
+(commands, panels, blocks) and `examples/plugins/wikipedia-summary/` (a block
+that calls a web API with `kiro.fetch`). `npm run dev` copies both into the example vault. Copying that
 folder is the fastest way to start.
 
 ## manifest.json
@@ -54,7 +55,8 @@ folder is the fastest way to start.
 | `version` | Required. `major.minor.patch`, e.g. `1.0.0`. |
 | `minKiro` | Required. Same format. The plugin is refused when it is newer than the running Kiro. |
 | `permissions` | Optional list. Only the names in the table below; an unknown name refuses the whole plugin. |
-| `network` | Optional list of exact hosts, e.g. `api.example.com`. No wildcards, no scheme, no path. A non-empty list also requires the `network` permission. Network itself is stage 3, so keep this empty for now. |
+| `network` | Optional list of exact hosts, e.g. `api.example.com`. No wildcards, no scheme, no path. A non-empty list also requires the `network` permission. |
+| `secrets` | Optional list of API keys the user types in. See [Secrets](#secrets). |
 
 An invalid manifest does not disable one feature — it stops the plugin from
 loading at all, and the reason is shown in Settings → Plug-ins.
@@ -62,8 +64,9 @@ loading at all, and the reason is shown in Settings → Plug-ins.
 ## Permissions
 
 Ask for the least you can. Every permission is shown to the user in plain
-language before they turn the plugin on, and adding one later switches the
-plugin off until they agree again. Removing one is silent.
+language before they turn the plugin on, together with every host in `network`
+and every key in `secrets`. Adding a permission, a host or a secret in an update
+switches the plugin off until they agree again. Removing one is silent.
 
 | Permission | What it unlocks |
 |---|---|
@@ -74,7 +77,7 @@ plugin off until they agree again. Removing one is silent.
 | `habits:read` | `habits.list` |
 | `habits:write` | `habits.mark` |
 | `folders:write` | `folders.create` |
-| `network` | `kiro.fetch` — *not available yet* (stage 3) |
+| `network` | `kiro.fetch`, only to the hosts listed in `network` that the user granted |
 
 `kiro.command`, `kiro.panel`, `kiro.notify`, `kiro.storage`, `kiro.onDay` and
 `kiro.block` need no permission: they only touch your own plugin.
@@ -226,6 +229,176 @@ kiro.folders.create(path)
 Writes go through exactly the same path as the user interface, so history,
 atomic writes and the trash all keep working.
 
+### kiro.fetch(url, { method, headers, body, secret })
+
+Requires the `network` permission. The worker itself still has no network: the
+request goes up to Kiro — the Electron main process in the desktop app, the
+local server on the web — which re-reads your manifest and the user's choices
+from the vault, validates everything again and makes the call.
+
+```js
+const response = await kiro.fetch('https://pt.wikipedia.org/api/rest_v1/page/summary/Brasil', {
+  method: 'GET',                         // optional, default GET
+  headers: { accept: 'application/json' },
+  // body: 'text only',
+  // secret: 'apiKey',                   // see Secrets below
+});
+// → { status: 200, headers: { 'content-type': 'application/json; ...' }, text: '{...}' }
+const page = JSON.parse(response.text);
+```
+
+**What resolves and what rejects.** Any HTTP answer resolves, including 404 or
+500 — check `status` yourself. The promise rejects only when the request is
+refused or never gets an answer: invalid URL, host not granted, timeout, a
+response that is too large, a failed connection. The rejection is a regular
+`Error` with Kiro's message.
+
+**The request.**
+
+- `url` must be `https://host/path`, port 443 only, no user or password in the
+  URL, at most 8192 characters, with no spaces, backslashes or control
+  characters. The fragment (`#...`) is dropped and never leaves the computer.
+- The host must **exactly** equal one of the hosts in your `network` list that
+  the user granted. No wildcards, no subdomains; `api.example.com.` (trailing
+  dot) is a different host. A host written as an IP address
+  (`https://93.184.216.34/`) is refused — use the name.
+- `method`: `GET`, `POST`, `PUT`, `PATCH` or `DELETE`. Anything else is refused.
+- `headers`: a plain object of string values, up to 4096 characters each, no
+  line breaks, no duplicates in different letter case. These names are refused:
+  `cookie`, `cookie2`, `set-cookie`, `host`, `origin`, `referer`,
+  `authorization`, `proxy-authorization`, `connection`, `content-length`,
+  `transfer-encoding`, `te`, `trailer`, `upgrade`, `keep-alive`, `expect`, and
+  anything starting with `proxy-` or `sec-`. Kiro sets `user-agent: Kiro-Plugins`
+  and `content-length` itself. To send an API key, use `secret`, not a header.
+- `body`: a string, up to 1 MB. Send JSON with `JSON.stringify` and a
+  `content-type` header. Without a body, `content-type` is not sent.
+- No cookies: none are sent and none are kept.
+
+**The response.** `{ status, headers, text }`. `text` is the body decoded as
+UTF-8, up to 5 MB. Only these response headers come back, when present:
+`content-type`, `content-length`, `etag`, `last-modified`, `cache-control`,
+`retry-after`.
+
+**Redirects.** `301`, `302`, `303`, `307` and `308` are followed only when the
+new location is also a granted host, and every hop is checked again with the
+same rules — https, port 443, no IP address, local network protection. At most 3
+redirects. A `303`, or a `301`/`302` answering a `POST`, continues as a `GET`
+without the body. A `secret` header is only sent to the secret's own host, so it
+is dropped on a hop to any other granted host.
+
+**Local network protection.** A granted host name could still point to your
+router, `localhost` or a machine on the local network. Kiro checks the address
+the name resolves to *while connecting* — inside the connection's own DNS
+lookup, so the address checked is the address used — and refuses the request if
+any resolved address is loopback, private, link-local, CGNAT (`100.64.0.0/10`),
+multicast, reserved, documentation or unspecified, in IPv4 and IPv6, including
+IPv4 mapped or embedded in IPv6 (`::ffff:…`, NAT64, 6to4, Teredo).
+
+**Limits.** 10 s for the whole request, redirects included; 1 MB sent; 5 MB
+received.
+
+**On the web** the local server only accepts these requests from Kiro's own
+page (same origin), so a website open in the browser cannot use Kiro as a
+bridge.
+
+**Typical errors.**
+
+| Message | Why |
+|---|---|
+| `Host não liberado: api.example.com.` | Not in `network`, or the user has not granted it |
+| `Só endereços https são permitidos.` | `http://` or another scheme |
+| `Use o nome do host, não um endereço IP.` | IP address in the URL |
+| `Cabeçalho não permitido: cookie.` | A forbidden header, see the list above |
+| `Método não permitido: HEAD.` | Only GET, POST, PUT, PATCH, DELETE |
+| `O corpo passa de 1 MB.` | Request body too large |
+| `O host aponta para a rede local; conexão recusada.` | The name resolved to a local or reserved address |
+| `Redirecionamento recusado: host não liberado: …` | A redirect left your granted hosts |
+| `Muitos redirecionamentos (limite de 3).` | More than 3 hops |
+| `O pedido passou do limite de tempo (10 s).` | No complete answer in 10 s |
+| `A resposta passou do limite de tamanho (5242880 bytes).` | Response larger than 5 MB |
+| `Falha na conexão com host: ENOTFOUND.` | DNS or connection failure; only the error code is kept |
+| `Segredo (chave) não declarado: apiKey.` | `secret` is not in your manifest |
+| `O segredo apiKey só vale para o host api.example.com.` | `secret` used with another host |
+| `A chave apiKey não está configurada.` | The user has not typed the key yet |
+| `O plug-in não tem a permissão network.` | Permission not granted |
+
+Messages are in Portuguese, like the rest of Kiro's interface. Match on
+`status` for HTTP results, and show the rejection message to the user as-is.
+
+**Audit.** Every call, successful or not, adds a line to `.kiro/audit.log` in the
+vault with the plugin id, host, method, HTTP status, bytes received, duration and
+the error message when it failed — never the URL path, headers, body or secret.
+Settings → Plug-ins also shows the last 10 calls of the session under each
+active plugin with network access (time, method, host, status, size), refreshed
+when the tab opens.
+
+## Secrets
+
+Some APIs need a key. The user types it in; your code never sees it. Declare it
+in the manifest:
+
+```json
+"permissions": ["network"],
+"network": ["api.deepl.com"],
+"secrets": [
+  { "name": "apiKey", "label": "DeepL API key", "host": "api.deepl.com",
+    "header": "Authorization", "format": "DeepL-Auth-Key {value}" }
+]
+```
+
+| Field | Rules |
+|---|---|
+| `name` | A letter followed by letters, digits or `_`, up to 40 characters. Unique in the list. It is what you pass as `secret`. |
+| `label` | Up to 80 characters. Shown to the user next to the field. |
+| `host` | Must be in your `network` list. The key is only ever sent to this host. |
+| `header` | The header Kiro fills in. Any header name except the forbidden ones above — `Authorization` is the exception, since it is exactly what a key is for. |
+| `format` | Up to 120 characters, no line breaks, with `{value}` exactly once. Kiro replaces it with the key: `Bearer {value}`, `DeepL-Auth-Key {value}`, or just `{value}`. |
+
+Use it by name:
+
+```js
+const response = await kiro.fetch('https://api.deepl.com/v2/translate', {
+  method: 'POST',
+  headers: { 'content-type': 'application/json' },
+  body: JSON.stringify({ text: ['Olá'], target_lang: 'EN' }),
+  secret: 'apiKey',
+});
+```
+
+Kiro builds the `header: format` line with the stored value, only when the
+request host is exactly the secret's `host`; any other host is an error. If the
+user has not configured the key yet, the call rejects with
+`A chave apiKey não está configurada.` — tell the user to open Settings.
+
+**How the user configures it.** In Settings → Plug-ins, the plugin's row —
+whether the plugin is on, off or waiting for permission — lists each declared
+secret with its label, "Enviada só para <host>" and its state, *Configurada* or
+*Não configurada*. The user pastes the key into a password field and presses
+*Salvar*; the field is cleared right away, whether saving worked or not, and
+"Chave salva." or the error appears below it. A configured key shows *Remover*,
+which removes it immediately, without a confirmation step.
+When turning the plugin on, the consent dialog lists each key with its host; a
+key added by an update is marked as new and the plugin waits for permission
+again. The value is never shown again — not to the page, not to your plugin, not in
+logs, the audit log or error messages. The interface only knows whether a key is
+configured.
+
+**Where it is stored.** Outside the vault, per computer, indexed by vault,
+plugin and name — a synced or shared vault never carries keys, and each computer
+asks for them again.
+
+- **Desktop app:** encrypted with the operating system's key store (Electron
+  `safeStorage`) in `plugin-secrets.json` in the app's data folder. If the system
+  encryption is not available, the key is not saved.
+- **Web version:** `plugin-secrets.json` in the user's configuration folder
+  (`%APPDATA%\Kiro\` on Windows, `~/.config/Kiro/` elsewhere), readable only by
+  the owner, **not encrypted**. This is a known limitation: without adding a
+  dependency, Node cannot reach the system's password store. Anyone who can read
+  your user files can read these keys.
+
+Turning a plugin off does not erase its keys; the user removes them with
+*Remover*.
+
 ## Panels
 
 `render()` returns one of these shapes. Kiro draws it with the user's current
@@ -341,6 +514,10 @@ the web); clicking any other link does nothing.
 | Block HTML | 200 KB | Cut before sanitizing |
 | Message size | 2 MB | The message is refused |
 | `kiro.storage` | 1 MB | `storage.set` rejects |
+| `kiro.fetch` time | 10 s, redirects included | The call rejects |
+| `kiro.fetch` request body | 1 MB | The call rejects |
+| `kiro.fetch` response | 5 MB | The call rejects |
+| `kiro.fetch` redirects | 3 | The call rejects |
 
 An unhandled exception, a crash or silence past a timeout shuts down that one
 worker. Other plugins and Kiro itself keep running.
@@ -349,9 +526,11 @@ worker. Other plugins and Kiro itself keep running.
 
 - The file system. There is no read-file-by-path, no write-file-by-path, and no
   way to run a command. Nothing outside the vault exists for you.
-- The network, unless stage 3 lands and the user grants specific hosts. The
-  response that serves your code carries `connect-src 'none'`, so an attempt
-  fails at the browser level rather than relying on you behaving.
+- The network directly. The response that serves your code carries
+  `connect-src 'none'`, so `fetch`, `XMLHttpRequest` or `WebSocket` from the
+  worker fail at the browser level. The only way out is `kiro.fetch`, to hosts
+  the user granted, never to the local network.
+- The value of a secret.
 - Kiro's screen. No DOM, no window, no other plugin's data. Panels and blocks are
   the only ways to draw: panels are drawn by Kiro from the data you return, and
   block HTML is sanitized before it is shown.
@@ -374,12 +553,8 @@ worker. Other plugins and Kiro itself keep running.
 
 Designed, specified, and coming in a later stage. Do not write code against it.
 
-**Stage 3 — network**
+**Stage 4 — isolated frames**
 
-```js
-kiro.fetch(url, { method, headers, body })   // permission: network
-```
-
-Kiro, not the worker, will make the request: `https` only, the host must exactly
-match one you declared and the user granted, redirects off the list are not
-followed, and the response is capped at 5 MB and 10 s.
+Panels with free-form drawing of your own, in an isolated frame, beyond the panel
+shapes and sanitized block HTML available today. It will only be built when a
+real plugin needs it.
