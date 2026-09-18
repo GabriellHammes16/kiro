@@ -334,10 +334,10 @@ class Vault {
     }
     return achados;
   }
-  /** Só código: o worker do Kiro importa .js e mais nada. */
+  /** Código e telas: .js para o worker, .html e .css para as molduras. */
   async readPluginFile(id,arquivo){
     const alvo=await this.pluginPath(id,arquivo);
-    if(!/\.js$/i.test(arquivo))throw new Error('Só arquivos .js de plug-in são servidos.');
+    if(!/\.(js|html|css)$/i.test(arquivo))throw new Error('Só arquivos .js, .html ou .css de plug-in são servidos.');
     const info=await fs.stat(alvo);
     if(!info.isFile()||info.size>PLUGIN_FILE_LIMIT)throw new Error('Arquivo de plug-in inválido.');
     return fs.readFile(alvo);
