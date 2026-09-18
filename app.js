@@ -2808,6 +2808,7 @@ function pedirConsentimento(id) {
     ${itensDePermissao(m, novas, hostsNovos)}
     ${itensDeChaves(m, segredosNovos)}
     ${m.page ? `<p class="small-muted plugin-tela-propria">Tem uma tela própria (“${escapeHtml(m.page.title)}”), que aparece na barra lateral.</p>` : ''}
+    ${m.permissions.some(p => p.endsWith(':read')) ? `<p class="small-muted plugin-aviso-tela">As telas de plug-in rodam isoladas e sem rede, mas o navegador não deixa bloquear por completo o envio por WebRTC. Um plug-in que lê seus dados só deve ser ativado se você confia em quem o escreveu.</p>` : ''}
     <p class="small-muted plugin-consentimento-nota">Dá para desligar quando quiser, em Configurações → Plug-ins.</p>
     <div class="form-actions"><button type="button" class="secondary" id="cancel">Cancelar</button><button type="button" class="primary" id="confirmar-plugin">${aguardando ? 'Permitir e ativar' : 'Ativar plug-in'}</button></div>`);
   const voltar = () => showSettings('plugins');
