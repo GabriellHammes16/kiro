@@ -8,6 +8,7 @@ import vaultModule from './vault.cjs';
 import agentModule from './agent/index.cjs';
 import ligacaoRede from './ligacao-rede-plugins.cjs';
 import segredosModule from './segredos-plugins.cjs';
+import KiroPlugins from './plugins.js';
 
 const { Vault } = vaultModule;
 const root = dirname(fileURLToPath(import.meta.url));
@@ -19,7 +20,7 @@ const vault = new Vault(vaultDirectory);
 const devTools = dev ? (await import('./dev/devtools.mjs')).createDevTools(root) : null;
 if (dev && !process.env.KIRO_VAULT && !process.env.KUROI_VAULT) await (await import('./dev/seed.cjs')).default.semearSeVazio(vaultDirectory);
 const agentConfig = new agentModule.AgentConfig(vaultDirectory);
-const publicFiles = { '/': ['index.html', 'text/html'], '/index.html': ['index.html', 'text/html'], '/app.js': ['app.js', 'text/javascript'], '/domain.js': ['domain.js', 'text/javascript'], '/plugins.js': ['plugins.js', 'text/javascript'], '/plugin-worker.js': ['plugin-worker.js', 'text/javascript'],'/styles.css': ['styles.css', 'text/css'], '/temas.css': ['temas.css', 'text/css'],'/kiro-logo.png': ['kiro-logo.png', 'image/png'], '/kiro-abertura.png': ['kiro-abertura.png', 'image/png'] };
+const publicFiles = { '/': ['index.html', 'text/html'], '/index.html': ['index.html', 'text/html'], '/app.js': ['app.js', 'text/javascript'], '/domain.js': ['domain.js', 'text/javascript'], '/plugins.js': ['plugins.js', 'text/javascript'], '/plugin-worker.js': ['plugin-worker.js', 'text/javascript'], '/kiro-frame.js': ['kiro-frame.js', 'text/javascript'],'/styles.css': ['styles.css', 'text/css'], '/temas.css': ['temas.css', 'text/css'],'/kiro-logo.png': ['kiro-logo.png', 'image/png'], '/kiro-abertura.png': ['kiro-abertura.png', 'image/png'] };
 const allowedHosts = new Set([`localhost:${port}`, `127.0.0.1:${port}`]);
 const { version } = JSON.parse(await readFile(join(root, 'package.json'), 'utf8'));
 // Corpo JSON com teto de tamanho: o erro sobe para o catch e vira 400.
@@ -147,18 +148,25 @@ createServer(async (request, response) => {
         return send(response, 404, { error: 'Não encontrado.' });
       } catch (erro) { return send(response, erro.status || 400, { error: erro.message }); }
     }
-    // Código de plug-in: só .js de dentro de .kiro/plugins, com a rede do worker cortada.
+    // Código e tela do plug-in: só .js/.html/.css de dentro de .kiro/plugins. O .js segue
+    // com a CSP do worker (rede cortada); o .html vira moldura isolada com o runtime injetado.
     if (rota.startsWith('/plugins/')) {
       const partes = rota.slice('/plugins/'.length).split('/');
       if (request.method !== 'GET' || partes.length !== 2) return send(response, 404, { error: 'Não encontrado.' });
       try {
-        const corpo = await vault.readPluginFile(decodeURIComponent(partes[0]), decodeURIComponent(partes[1]));
-        response.writeHead(200, {
-          'Content-Type': 'text/javascript; charset=utf-8',
-          'X-Content-Type-Options': 'nosniff',
-          'Content-Security-Policy': "default-src 'none'; script-src 'self' kiro-plugin:; connect-src 'none'",
-          'Cache-Control': 'no-cache',
-        });
+        const id = decodeURIComponent(partes[0]), arquivo = decodeURIComponent(partes[1]);
+        const tipo = KiroPlugins.tipoDoArquivoDoPlugin(arquivo);
+        let corpo = await vault.readPluginFile(id, arquivo);
+        const cabecalhos = { 'Content-Type': tipo, 'X-Content-Type-Options': 'nosniff', 'Cache-Control': 'no-cache',
+          'Content-Security-Policy': "default-src 'none'; script-src 'self' kiro-plugin:; connect-src 'none'" };
+        // Tela de plug-in: sandbox e rede cortada na própria resposta, com o runtime do Kiro injetado.
+        if (tipo.startsWith('text/html')) {
+          const origem = `http://${request.headers.host}`;   // já conferido em allowedHosts
+          corpo = KiroPlugins.injetarScriptsDaMoldura(corpo.toString('utf8'), '/kiro-frame.js');
+          cabecalhos['Content-Security-Policy'] = KiroPlugins.cspDaMoldura(origem);
+          cabecalhos['X-DNS-Prefetch-Control'] = 'off';
+        }
+        response.writeHead(200, cabecalhos);
         return response.end(corpo);
       } catch { return send(response, 404, { error: 'Plug-in não encontrado.' }); }
     }

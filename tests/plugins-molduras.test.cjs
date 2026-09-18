@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
 const os = require('node:os');
 const path = require('node:path');
+const { spawn } = require('node:child_process');
 const P = require('../plugins.js');
 const { Vault } = require('../vault.cjs');
 
@@ -80,4 +81,41 @@ test('readPluginFile serve .js, .html e .css e recusa o resto', async t => {
   assert.equal(String(await vault.readPluginFile('habit-heatmap', 'style.css')), 'p{}');
   await assert.rejects(() => vault.readPluginFile('habit-heatmap', 'manifest.json'), /js/i);
   await assert.rejects(() => vault.readPluginFile('habit-heatmap', 'a.svg'), /js/i);
+});
+
+test('servidor entrega a tela com sandbox, sem rede e com o runtime injetado', async t => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'kiro-molduras-http-'));
+  const pasta = path.join(dir, '.kiro', 'plugins', 'habit-heatmap');
+  await fs.mkdir(pasta, { recursive: true });
+  await fs.writeFile(path.join(pasta, 'page.html'), '<html><head></head><body><script src="page.js"></script></body></html>');
+  await fs.writeFile(path.join(pasta, 'style.css'), 'p{}');
+  const port = 14000 + Math.floor(Math.random() * 20000);
+  const child = spawn(process.execPath, ['server.mjs'], { cwd: path.join(__dirname, '..'), env: { ...process.env, PORT: String(port), KIRO_VAULT: dir }, windowsHide: true });
+  t.after(async () => {
+    if (child.exitCode === null) { const parou = new Promise(r => child.once('exit', r)); child.kill(); await parou; }
+    await fs.rm(dir, { recursive: true, force: true });
+  });
+  await new Promise((resolve, reject) => {
+    const prazo = setTimeout(() => reject(new Error('Servidor não iniciou')), 8000);
+    child.stdout.once('data', () => { clearTimeout(prazo); resolve(); });
+    child.once('exit', code => { clearTimeout(prazo); reject(new Error(`Servidor terminou: ${code}`)); });
+  });
+  const base = `http://127.0.0.1:${port}`;
+  const tela = await fetch(`${base}/plugins/habit-heatmap/page.html`);
+  assert.equal(tela.status, 200);
+  assert.match(tela.headers.get('content-type'), /^text\/html/);
+  assert.equal(tela.headers.get('x-dns-prefetch-control'), 'off');
+  const csp = tela.headers.get('content-security-policy');
+  assert.match(csp, /sandbox allow-scripts/);
+  assert.match(csp, /connect-src 'none'/);
+  assert.ok(csp.includes(`script-src ${base}`), csp);
+  assert.ok(csp.includes(`frame-ancestors ${base}`), csp);
+  assert.match(await tela.text(), /<head><script src="\/kiro-frame\.js"><\/script><\/head>/);
+  const css = await fetch(`${base}/plugins/habit-heatmap/style.css`);
+  assert.match(css.headers.get('content-type'), /^text\/css/);
+  // .js continua com a CSP do worker, sem injeção.
+  assert.equal((await fetch(`${base}/plugins/habit-heatmap/manifest.json`)).status, 404);
+  const runtime = await fetch(`${base}/kiro-frame.js`);
+  assert.equal(runtime.status, 200);
+  assert.match(await runtime.text(), /RTCPeerConnection/);
 });

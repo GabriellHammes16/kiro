@@ -290,7 +290,7 @@ test('no aplicativo o worker vem do esquema, com a mesma CSP da versão web', ()
   assert.ok(/'Content-Security-Policy': CSP_DO_WORKER/.test(main), 'e ela vai no cabeçalho do esquema');
   // Host reservado com ponto: id de plug-in não pode ter ponto, então não colide.
   assert.ok(/HOST_DO_KIRO = 'kiro\.app'/.test(main));
-  assert.ok(/new Set\(\['plugin-worker\.js', 'plugins\.js'\]\)/.test(main), 'só os dois arquivos do worker saem do app');
+  assert.ok(/new Set\(\['plugin-worker\.js', 'plugins\.js', 'kiro-frame\.js'\]\)/.test(main), 'só os arquivos do Kiro saem do app');
   assert.ok(/corsEnabled: true/.test(main), 'o worker importa o plug-in de outro host: precisa de CORS');
   assert.ok(ler('app.js').includes("new Worker('kiro-plugin://kiro.app/plugin-worker.js', { type: 'module' })"));
 });

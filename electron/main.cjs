@@ -1,6 +1,7 @@
 const { app, BrowserWindow, ipcMain, Menu, shell, dialog, protocol, safeStorage } = require('electron');
 const ligacaoRede = require('../ligacao-rede-plugins.cjs');
 const { criarGuardaDeSegredos } = require('../segredos-plugins.cjs');
+const KiroPlugins = require('../plugins.js');
 const { readFile, mkdir } = require('node:fs/promises');
 const { join, dirname } = require('node:path');
 const { existsSync } = require('node:fs');
@@ -20,7 +21,7 @@ const CSP_DO_WORKER = "default-src 'none'; script-src 'self' kiro-plugin:; conne
 // Host reservado para o código do próprio Kiro: tem ponto, e id de plug-in não pode ter
 // (vault.pluginPath aceita só [a-z0-9-]), então nunca colide com a pasta de um plug-in.
 const HOST_DO_KIRO = 'kiro.app';
-const ARQUIVOS_DO_KIRO = new Set(['plugin-worker.js', 'plugins.js']);
+const ARQUIVOS_DO_KIRO = new Set(['plugin-worker.js', 'plugins.js', 'kiro-frame.js']);
 function createWindow() {
   const window = new BrowserWindow({ width: 1280, height: 820, minWidth: 900, minHeight: 620, backgroundColor: '#0a0a0a', title: 'Kiro', icon: join(__dirname, '..', 'kiro-logo.png'), webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true, preload: join(__dirname, 'preload.cjs') } });
   window.loadFile(join(__dirname, '..', 'index.html'));
@@ -72,16 +73,17 @@ else app.whenReady().then(async () => {
       const url = new URL(request.url);
       const arquivo = decodeURIComponent(url.pathname.replace(/^\//, ''));
       if (url.hostname === HOST_DO_KIRO && !ARQUIVOS_DO_KIRO.has(arquivo)) throw new Error('Arquivo do Kiro fora da lista.');
-      const corpo = url.hostname === HOST_DO_KIRO
-        ? await readFile(join(__dirname, '..', arquivo))
-        : await vault.readPluginFile(url.hostname, arquivo);
-      return new Response(corpo, { headers: {
-        'Content-Type': 'text/javascript; charset=utf-8',
-        'X-Content-Type-Options': 'nosniff',
-        'Content-Security-Policy': CSP_DO_WORKER,
-        // O worker (host kiro.app) importa o plug-in de outro host: import de módulo exige CORS.
-        'Access-Control-Allow-Origin': '*',
-      } });
+      const tipo = url.hostname === HOST_DO_KIRO ? 'text/javascript; charset=utf-8' : KiroPlugins.tipoDoArquivoDoPlugin(arquivo);
+      let corpo = url.hostname === HOST_DO_KIRO ? await readFile(join(__dirname, '..', arquivo)) : await vault.readPluginFile(url.hostname, arquivo);
+      const cabecalhos = { 'Content-Type': tipo, 'X-Content-Type-Options': 'nosniff', 'Content-Security-Policy': CSP_DO_WORKER, 'Access-Control-Allow-Origin': '*' };
+      // Tela de plug-in: sandbox e rede cortada na própria resposta, com o runtime do Kiro injetado.
+      if (tipo.startsWith('text/html')) {
+        corpo = KiroPlugins.injetarScriptsDaMoldura(corpo.toString('utf8'), `kiro-plugin://${HOST_DO_KIRO}/kiro-frame.js`);
+        cabecalhos['Content-Security-Policy'] = KiroPlugins.cspDaMoldura('kiro-plugin:');
+        cabecalhos['X-DNS-Prefetch-Control'] = 'off';
+        delete cabecalhos['Access-Control-Allow-Origin'];
+      }
+      return new Response(corpo, { headers: cabecalhos });
     } catch { return new Response('Plug-in não encontrado.', { status: 404 }); }
   });
   // Plug-ins: a lista da pasta, as escolhas do usuário e o espaço de cada plug-in.
