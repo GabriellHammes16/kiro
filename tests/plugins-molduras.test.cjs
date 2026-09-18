@@ -56,13 +56,14 @@ test('CSP da moldura: sandbox, sem rede, só a própria origem', () => {
   assert.doesNotMatch(app, /frame-ancestors/);   // página file:// não casa com nada: o Electron omite
 });
 
-test('injeção do kiro-frame.js vem antes de qualquer script do plug-in', () => {
+test('injeção do kiro-frame.js vem sempre no início do documento (ou logo após o doctype)', () => {
   const tag = '<script src="/kiro-frame.js"></script>';
-  assert.equal(P.injetarScriptsDaMoldura('<html><head><title>x</title></head></html>', '/kiro-frame.js'), `<html><head>${tag}<title>x</title></head></html>`);
-  assert.equal(P.injetarScriptsDaMoldura('<HEAD data-x="1"><script src="a.js"></script>', '/kiro-frame.js'), `<HEAD data-x="1">${tag}<script src="a.js"></script>`);
-  assert.equal(P.injetarScriptsDaMoldura('<p>sem head</p>', '/kiro-frame.js'), `${tag}<p>sem head</p>`);
-  // head falso dentro de comentário ou texto não engana: se houver script antes do <head>, vai para o início.
-  assert.equal(P.injetarScriptsDaMoldura('<script src="a.js"></script><head>', '/kiro-frame.js'), `${tag}<script src="a.js"></script><head>`);
+  assert.equal(P.injetarScriptsDaMoldura('<html><head><title>x</title></head></html>', '/kiro-frame.js'), `${tag}<html><head><title>x</title></head></html>`);
+  assert.equal(P.injetarScriptsDaMoldura('<p>sem doctype</p>', '/kiro-frame.js'), `${tag}<p>sem doctype</p>`);
+  assert.equal(P.injetarScriptsDaMoldura('<!doctype html><html></html>', '/kiro-frame.js'), `<!doctype html>${tag}<html></html>`);
+  assert.equal(P.injetarScriptsDaMoldura('  <!DOCTYPE HTML>\n<html></html>', '/kiro-frame.js'), `  <!DOCTYPE HTML>${tag}\n<html></html>`);
+  // <head> "falso" dentro de um comentário não engana mais: a busca por <head> foi removida.
+  assert.equal(P.injetarScriptsDaMoldura('<!doctype html><!-- <head> --><html><script src="a.js"></script></html>', '/kiro-frame.js'), `<!doctype html>${tag}<!-- <head> --><html><script src="a.js"></script></html>`);
 });
 
 test('variáveis do tema incluem as 15 cores e as fontes', () => {
@@ -110,7 +111,7 @@ test('servidor entrega a tela com sandbox, sem rede e com o runtime injetado', a
   assert.match(csp, /connect-src 'none'/);
   assert.ok(csp.includes(`script-src ${base}`), csp);
   assert.ok(csp.includes(`frame-ancestors ${base}`), csp);
-  assert.match(await tela.text(), /<head><script src="\/kiro-frame\.js"><\/script><\/head>/);
+  assert.match(await tela.text(), /^<script src="\/kiro-frame\.js"><\/script><html><head><\/head>/);
   const css = await fetch(`${base}/plugins/habit-heatmap/style.css`);
   assert.match(css.headers.get('content-type'), /^text\/css/);
   // .js continua com a CSP do worker, sem injeção.
