@@ -23,8 +23,9 @@ function dateLabel(date) { return date === today() ? "Hoje" : new Intl.DateTimeF
 function updateCount() { const open = state.tasks.filter(t => !t.done).length; document.querySelector("#task-count").textContent = open || ""; }
 function getNote(id) { return state.notes.find(n => n.id === id); }
 function render() {
+  if (currentView.startsWith('plugin:') && !pluginsAtivos.get(currentView.slice(7))?.manifesto?.page) currentView = 'today';
+  // Recalculado depois da queda para 'today': senão a página "não está ativo" ainda desenharia.
   const paginaDoPlugin = currentView.startsWith('plugin:') ? currentView.slice(7) : null;
-  if (paginaDoPlugin && !pluginsAtivos.get(paginaDoPlugin)?.manifesto?.page) currentView = 'today';
   document.querySelectorAll(".nav-item").forEach(x => x.classList.toggle("active", x.dataset.view === currentView));
   const views = { today: renderToday, notes: renderNotes, tasks: renderTasks, studies: renderCofre, graph: renderGraph };
   document.querySelector(".app-shell").classList.toggle("cofre-aberto", currentView === "studies");
@@ -2180,7 +2181,8 @@ function desenharNavDosPlugins() {
 function renderPaginaDoPlugin(id) {
   const estado = pluginsAtivos.get(id), page = estado?.manifesto?.page;
   if (!page) return `<div class="empty">Este plug-in não está ativo.</div>`;
-  const chave = `${id}\npage`;
+  // Prefixo "pagina:" evita colidir com a chave de um painel ou bloco de mesmo nome.
+  const chave = `${id}\npagina:`;
   dadosDasMolduras.set(chave, null);
   return `<section class="plugin-pagina" data-plugin="${escapeHtml(id)}">${molduraHtml(id, page.file, 0, chave)}</section>`;
 }
@@ -2197,6 +2199,8 @@ window.addEventListener('message', ({ source, data }) => {
     const { min, max } = KiroPlugins.ALTURA_DA_MOLDURA;
     if (Number.isFinite(data.valor)) moldura.style.height = `${Math.min(max, Math.max(min, Math.round(data.valor)))}px`;
   } else if (data.tipo === 'link') {
+    // Sem clique recente não abre nada: um clique dentro do iframe também ativa a página pai.
+    if (!navigator.userActivation?.isActive) return;
     let url; try { url = new URL(String(data.url)); } catch { return; }
     // No app, window.open cai no setWindowOpenHandler, que abre http(s) no navegador do sistema.
     if (url.protocol === 'http:' || url.protocol === 'https:') window.open(url.href, '_blank', 'noopener,noreferrer');
@@ -2297,6 +2301,9 @@ function avisoDePlugin(id, texto, erro = false) {
 // O conteúdo já desenhado fica guardado para o redesenho não piscar.
 const conteudoDosPaineis = new Map();     // "<id>\n<painel>" → HTML já montado
 const chaveDoPainel = (id, painel) => `${id}\n${painel}`;
+// Chave da moldura (dadosDasMolduras/data-chave) é diferente da chave do cache do painel:
+// painel "page" e a página cheia do plug-in não podem colidir na mesma moldura.
+const chaveDaMolduraDoPainel = (id, painel) => `${id}\npainel:${painel}`;
 const seletorDoPainel = (id, painel) => `.plugin-painel[data-plugin="${CSS.escape(id)}"][data-painel="${CSS.escape(painel)}"]`;
 
 // Um card por painel registrado; o cabeçalho traz o rótulo do painel e o nome do plug-in.
@@ -2326,11 +2333,12 @@ function guardarPainel(id, painel, dados) {
   if (dados && typeof dados.frame === 'string') {
     const m = KiroPlugins.validarMoldura(dados);
     if (!m.ok) return guardarPainel(id, painel, { type: 'text', text: m.erro });
-    dadosDasMolduras.set(chave, m.data);
+    const chaveMoldura = chaveDaMolduraDoPainel(id, painel);
+    dadosDasMolduras.set(chaveMoldura, m.data);
     const viva = alvo?.querySelector(':scope > iframe.plugin-moldura');
     // Mesmo arquivo: a tela continua viva e só recebe os dados novos.
     if (viva && viva.dataset.arquivo === m.frame) { viva.contentWindow?.postMessage({ tipo: 'dados', data: m.data }, '*'); return; }
-    conteudoDosPaineis.set(chave, molduraHtml(id, m.frame, m.height, chave));
+    conteudoDosPaineis.set(chave, molduraHtml(id, m.frame, m.height, chaveMoldura));
   } else conteudoDosPaineis.set(chave, KiroPlugins.painelParaHtml(dados, { pluginId: id }));
   if (alvo) alvo.innerHTML = conteudoDosPaineis.get(chave);
 }
@@ -2362,6 +2370,9 @@ function rodarComandoDoPlugin(id, comando) {
 // pelo higienizador (ou por painelParaHtml) antes de chegar ao DOM.
 const conteudoDosBlocos = new Map();      // "<id>\n<fonte>" → HTML já limpo
 const blocosEmCurso = new Set();          // mesmas chaves, enquanto o plug-in desenha
+// Chave da moldura (dadosDasMolduras/data-chave), com prefixo para não colidir com
+// a chave de um painel ou com a página cheia do plug-in que tenham a mesma fonte.
+const chaveDaMolduraDoBloco = (id, fonte) => `${id}\nbloco:${fonte}`;
 const MAX_BLOCOS_GUARDADOS = 200;
 const avisoDeBloco = texto => `<div class="empty plugin-bloco-aviso">${escapeHtml(texto)}</div>`;
 
@@ -2402,9 +2413,10 @@ function desenharBlocosDosPlugins() {
       if (conteudoDosBlocos.size >= MAX_BLOCOS_GUARDADOS) {
         const descartada = conteudoDosBlocos.keys().next().value;
         conteudoDosBlocos.delete(descartada);
-        dadosDasMolduras.delete(descartada);
+        const corte = descartada.indexOf('\n');
+        dadosDasMolduras.delete(chaveDaMolduraDoBloco(descartada.slice(0, corte), descartada.slice(corte + 1)));
       }
-      conteudoDosBlocos.set(chave, htmlDoBloco(valor, id, chave));
+      conteudoDosBlocos.set(chave, htmlDoBloco(valor, id, chaveDaMolduraDoBloco(id, fonte)));
       agendarBlocosDosPlugins();
     }, erro => {
       blocosEmCurso.delete(chave);
