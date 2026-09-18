@@ -230,6 +230,97 @@ Cada requisição vai para `.kiro/audit.log` (plug-in, host, método, status, by
 duração — nunca corpo, cabeçalho ou segredo), e a linha do plug-in em
 Configurações mostra as últimas chamadas da sessão.
 
+## Molduras isoladas (etapa 4)
+
+Aprovado em 2026-09-17. O plug-in ganha telas próprias com HTML, CSS e
+JavaScript do autor (desenho livre, canvas, clique, arrastar), em dois lugares:
+
+- **Bloco e painel:** o `render` do bloco ou a função do painel pode devolver
+  `{ frame: 'chart.html', data, height }` no lugar de HTML/itens. O Kiro põe uma
+  moldura ali. `height` inicial de 40 a 2000 px (padrão 240).
+- **Página cheia:** o manifesto declara
+  `"page": { "title": "Heatmap", "file": "page.html" }`. Plug-in ativo com `page`
+  ganha um item no grupo "Plug-ins" da barra lateral (o grupo só existe se houver
+  pelo menos um); a página ocupa a área de conteúdo, como Hoje e Tarefas.
+
+`frame` e `page.file`: nome de arquivo `.html` da pasta do plug-in
+(`[a-z0-9][a-z0-9._-]{0,60}\.html`, sem barra). `page.title`: texto puro, até 40
+caracteres. Moldura não é permissão nova: a tela só alcança o que o plug-in já
+pode. O consentimento mostra a linha "Tem uma tela própria" quando o manifesto
+declara `page`; ganhar `page` numa atualização não pede confirmação de novo.
+
+### Isolamento
+
+- A moldura é `<iframe sandbox="allow-scripts">`, **sem** `allow-same-origin`:
+  origem opaca, sem acesso à página do Kiro, a cookies, `localStorage` ou
+  IndexedDB; sem formulário enviado, janela nova, `alert` ou navegação da janela
+  de cima.
+- O arquivo `.html` do plug-in é servido pelo Kiro com
+  `Content-Security-Policy: sandbox allow-scripts; default-src 'none';
+  script-src 'self' kiro-plugin:; style-src 'self' 'unsafe-inline' kiro-plugin:;
+  img-src 'self' data: kiro-plugin:; font-src 'self' data:; connect-src 'none';
+  form-action 'none'; base-uri 'none'; frame-ancestors 'self'` (na web,
+  `frame-ancestors` troca o `'none'` geral do servidor; no Electron a página é
+  `file://` e o `frame-ancestors` é omitido). A diretiva `sandbox` garante o
+  isolamento mesmo se alguém abrir a URL direto. O `index.html` passa a permitir
+  `frame-src 'self' kiro-plugin:`. Primeira tarefa do plano: confirmar no
+  navegador e no Electron que `'self'` casa com a URL da moldura mesmo com origem
+  opaca; se não casar, a CSP usa a origem explícita (`http://localhost:<porta>`
+  ou `kiro-plugin://<id>`) no lugar de `'self'`.
+- Onde é servido: web `/plugins/<id>/<arquivo>`; Electron
+  `kiro-plugin://<id>/<arquivo>`. `readPluginFile` passa a servir `.js`, `.html`
+  e `.css` (tipo de conteúdo pela extensão), sempre de dentro da pasta.
+- Ao servir `.html`, o Kiro injeta logo após `<head>` (ou no início, se não
+  houver) `<script src="/kiro-frame.js">` (web) ou
+  `<script src="kiro-plugin://kiro.app/kiro-frame.js">` (Electron). É esse
+  script que cria o `kiro` da tela.
+- O hospedeiro identifica o plug-in pela moldura: guarda
+  `iframe.contentWindow → { id, registro }` e descarta mensagem cujo
+  `event.source` não está no mapa. Id escrito na mensagem é ignorado.
+- Links: a tela chama `kiro.openLink(url)`; o Kiro só abre `http`/`https`, fora
+  do app (Electron `shell.openExternal`, web `window.open` com `noopener`).
+- Desativar ou remover o plug-in remove as molduras e o item da barra lateral.
+
+### API da tela (`kiro-frame.js`)
+
+O mesmo `kiro` do worker, montado pelas permissões que o hospedeiro manda no
+aperto de mão: `notes`, `tasks`, `habits`, `storage`, `fetch`, `notify`. Não há
+`command`, `panel`, `block` nem eventos (são do worker). Mais:
+
+- `kiro.data`: o `data` que o bloco/painel devolveu (na página, `null`);
+  `kiro.onData(fn)` recebe o novo `data` quando o bloco/painel é redesenhado.
+- `kiro.resize(altura)`: 40 a 2000 px; na página não faz nada.
+- `kiro.openLink(url)`.
+- Tema: o hospedeiro manda as 15 variáveis de cor do tema (`--bg`, `--ink`,
+  `--acento`, …) e as de fonte no aperto de mão e a cada troca de aparência;
+  `kiro-frame.js` aplica em `:root`, então `var(--acento)` funciona na tela.
+
+Protocolo (postMessage, alvo `'*'` porque a origem é opaca; nada é enviado que o
+plug-in já não possa ler): tela → Kiro `{tipo:'pronto'}`,
+`{tipo:'chamada',chamada,metodo,args}`, `{tipo:'altura',valor}`,
+`{tipo:'link',url}`; Kiro → tela `{tipo:'ativar',permissoes,data,tema}`,
+`{tipo:'resposta',chamada,valor|erro}`, `{tipo:'dados',data}`,
+`{tipo:'tema',tema}`. As chamadas passam pelo mesmo `podeChamar` e pelo mesmo
+atendimento do worker (`atenderPlugin`/`executarMetodo`), com os mesmos limites.
+
+### Exemplo
+
+`examples/plugins/habit-heatmap/`: `habits:read`; bloco `kiro:habit-heatmap`
+devolve `{ frame: 'heatmap.html', data }` com um mapa de calor das últimas
+semanas (hover mostra o dia) e `page` abre o mesmo desenho em tela cheia.
+
+### Testes
+
+- Manifesto: `page` válido passa; arquivo sem `.html`, com barra ou `..`,
+  `title` vazio ou longo recusa.
+- `readPluginFile` serve `.html`/`.css`/`.js` com o tipo certo e recusa o resto.
+- Injeção do `kiro-frame.js` no HTML (com e sem `<head>`).
+- Resposta do bloco/painel com `frame` é validada (arquivo, altura).
+- Navegador, com um plug-in de ataque na moldura: `fetch`, `parent.document`,
+  `top.location = …`, `localStorage`, `window.open` e `form.submit` falham;
+  mensagem forjada com id de outro plug-in é ignorada; chamada sem permissão é
+  recusada.
+
 ## Higienização do HTML (etapa 2)
 
 Lista de permitidos, nunca lista de proibidos:
@@ -264,8 +355,8 @@ Lista de permitidos, nunca lista de proibidos:
    higienizador.
 3. **Rede:** `kiro.fetch` com lista fechada, proteção contra a rede local, chaves
    guardadas fora do cofre e auditoria.
-4. **Molduras isoladas** para painéis com desenho livre (desenho próprio, quando
-   houver um plug-in real que precise).
+4. **Molduras isoladas:** telas do plug-in em bloco, painel e página cheia na
+   barra lateral, com o exemplo `habit-heatmap`.
 
 ## Testes (`node --test`, cofre temporário)
 
