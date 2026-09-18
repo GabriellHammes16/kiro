@@ -1,0 +1,11 @@
+{
+  "id": "habit-heatmap",
+  "name": "Habit Heatmap",
+  "version": "1.0.0",
+  "author": "Kiro",
+  "description": "Draws a heatmap of your habits, inside a note and on its own page.",
+  "minKiro": "0.14.0",
+  "permissions": ["habits:read"],
+  "network": [],
+  "page": { "title": "Habit Heatmap", "file": "heatmap.html" }
+}

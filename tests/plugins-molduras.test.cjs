@@ -119,3 +119,19 @@ test('servidor entrega a tela com sandbox, sem rede e com o runtime injetado', a
   assert.equal(runtime.status, 200);
   assert.match(await runtime.text(), /RTCPeerConnection/);
 });
+
+test('exemplo habit-heatmap: manifesto válido, tela e docs', async () => {
+  const raiz = path.join(__dirname, '..');
+  const versao = require('../package.json').version;
+  const m = JSON.parse(await fs.readFile(path.join(raiz, 'examples/plugins/habit-heatmap/manifest.json'), 'utf8'));
+  const r = P.validarManifesto(m, { versaoDoKiro: versao });
+  assert.equal(r.ok, true, r.erro);
+  assert.deepEqual(r.manifesto.permissions, ['habits:read']);
+  assert.deepEqual(r.manifesto.page, { title: 'Habit Heatmap', file: 'heatmap.html' });
+  const html = await fs.readFile(path.join(raiz, 'examples/plugins/habit-heatmap/heatmap.html'), 'utf8');
+  assert.match(html, /heatmap\.js/);
+  assert.doesNotMatch(html, /<script>(?!\s*<\/script>)/);   // sem script inline: a CSP não deixa
+  const docs = await fs.readFile(path.join(raiz, 'docs/plugins.md'), 'utf8');
+  for (const trecho of ['kiro.ready', 'kiro.resize', 'kiro.openLink', 'kiro.onData', '"page"', 'frame']) assert.ok(docs.includes(trecho), trecho);
+  assert.doesNotMatch(docs, /Stage 4 — isolated frames/);
+});

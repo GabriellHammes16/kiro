@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <style>
+    body { margin: 0; padding: 12px; background: transparent; color: var(--ink); font: 13px var(--fonte-interface, system-ui); }
+    .grade { display: grid; grid-auto-flow: column; grid-template-rows: repeat(7, 14px); gap: 4px; }
+    .dia { width: 14px; height: 14px; border-radius: 3px; background: var(--panel-raised); }
+    .dia[data-n="1"] { background: color-mix(in srgb, var(--acento) 35%, transparent); }
+    .dia[data-n="2"] { background: color-mix(in srgb, var(--acento) 65%, transparent); }
+    .dia[data-n="3"] { background: var(--acento); }
+    #dica { min-height: 18px; margin-top: 8px; color: var(--muted); }
+  </style>
+</head>
+<body>
+  <div class="grade" id="grade" role="img" aria-label="Habit heatmap"></div>
+  <div id="dica"></div>
+  <script src="heatmap.js"></script>
+</body>
+</html>

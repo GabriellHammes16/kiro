@@ -10,9 +10,7 @@ time it wants something from the vault, or from a web API, it asks Kiro, and Kir
 permissions the user granted before answering. That is the whole security model:
 you declare what you need, the user agrees to it, and nothing else is reachable.
 
-This document describes **stages 1 to 3**, which are what ships today. Features
-marked *not available yet* are designed but not implemented; writing code
-against them now will simply fail.
+This document describes everything that ships today, stages 1 to 4.
 
 ## Folder layout
 
@@ -26,10 +24,12 @@ The folder name must equal the `id` in the manifest. Kiro only reads
 `manifest.json` and `.js` files directly inside that folder — no subfolders, no
 other file types. `data.json` appears there once you use `kiro.storage`.
 
-Two complete working examples live in this repository: `examples/plugins/word-count/`
-(commands, panels, blocks) and `examples/plugins/wikipedia-summary/` (a block
-that calls a web API with `kiro.fetch`). `npm run dev` copies both into the example vault. Copying that
-folder is the fastest way to start.
+Three complete working examples live in this repository: `examples/plugins/word-count/`
+(commands, panels, blocks), `examples/plugins/wikipedia-summary/` (a block
+that calls a web API with `kiro.fetch`), and `examples/plugins/habit-heatmap/`
+(a frame — see [Frames (custom UI)](#frames-custom-ui) below). `npm run dev`
+copies all three into the example vault. Copying one of these folders is the
+fastest way to start.
 
 ## manifest.json
 
@@ -57,6 +57,7 @@ folder is the fastest way to start.
 | `permissions` | Optional list. Only the names in the table below; an unknown name refuses the whole plugin. |
 | `network` | Optional list of exact hosts, e.g. `api.example.com`. No wildcards, no scheme, no path. A non-empty list also requires the `network` permission. |
 | `secrets` | Optional list of API keys the user types in. See [Secrets](#secrets). |
+| `page` | Optional `{ title, file }`. Gives the plugin its own full-page screen, opened from a "Plug-ins" entry in the sidebar. See [Frames (custom UI)](#frames-custom-ui). |
 
 An invalid manifest does not disable one feature — it stops the plugin from
 loading at all, and the reason is shown in Settings → Plug-ins.
@@ -501,6 +502,105 @@ spaces and control characters:
 block opens it outside Kiro (the system browser in the desktop app, a new tab on
 the web); clicking any other link does nothing.
 
+## Frames (custom UI)
+
+Panels and block HTML cover lists, tables, forms and short text — Kiro draws
+them from the data you return. When you need to draw something yourself —
+a chart, a grid, anything with its own interaction — return a **frame**
+instead: an isolated `<iframe>` running your own `.html`/`.js`/`.css` files
+from your plugin folder, sandboxed away from Kiro and from the rest of the
+page.
+
+Prefer a panel or block shape whenever one fits: they cost you no HTML, no
+CSP, no message-passing, and they inherit the theme automatically. Reach for
+a frame only when free-form drawing is the point.
+
+### Returning a frame
+
+Both `kiro.block` and `kiro.panel` can return `{ frame, data, height }`
+instead of `{ html }` or a panel shape:
+
+```js
+kiro.block(source => ({ frame: 'chart.html', data: { weeks: 12 }, height: 240 }));
+```
+
+| Field | Rules |
+|---|---|
+| `frame` | Required. The name of an `.html` file in your plugin folder — no subfolders, no `..`. |
+| `data` | Optional. Anything JSON-serializable; handed to the frame as `kiro.data`. |
+| `height` | Optional pixels, 40–2000, default 240. Only the initial height for a block; call `kiro.resize` from inside the frame afterwards. |
+
+### The page
+
+Declare `"page": { "title", "file" }` in the manifest (see the table above) to
+give your plugin a full-page screen of its own `.html` file, opened from a
+"Plug-ins" group in the sidebar. It is the same kind of frame, but on its own
+screen: `kiro.resize` does nothing there (nothing needs to shrink or grow),
+and `kiro.data` is `null` (nothing handed it a block's `data`).
+
+### What the frame can do
+
+Your `.html` file is served with its own CSP, isolated from Kiro's page and
+from the worker. Kiro injects a small runtime before your own scripts run,
+exposing `window.kiro`:
+
+- `kiro.ready` — a promise that resolves with `kiro` once the frame is wired
+  up. Do your first draw inside `.then`, not at the top of the script — the
+  vault methods below don't exist until then.
+- `kiro.data` — the `data` you returned, or `null` on the page.
+- `kiro.onData(fn)` — called with the new `data` whenever the block or panel
+  redraws with the same frame file and hands you a fresh `data`.
+- `kiro.resize(px)` — asks Kiro to change the block's height, clamped to
+  40–2000. Call it after you know your content's real height. No-op on the
+  page.
+- `kiro.openLink(url)` — opens an `http:`/`https:` URL outside Kiro (the
+  system browser on desktop, a new tab on the web). Any other scheme is
+  refused. This is how a frame opens links: normal `<a>` navigation is
+  blocked by the sandbox.
+- The same vault methods as the worker (`kiro.notes`, `kiro.tasks`,
+  `kiro.habits`, `kiro.storage`, `kiro.fetch`, `kiro.notify`), filtered by
+  the permissions your plugin was granted — exactly the same two checks as
+  everywhere else in this document. `kiro.command`, `kiro.panel`,
+  `kiro.block` and the event handlers are **not** available inside a frame:
+  registration only happens in `activate`, in the worker.
+
+### What the frame cannot do
+
+- No inline `<script>` — the CSP's `script-src` names only Kiro's own origin,
+  so only `<script src="...">` to a file in your plugin folder runs.
+- No direct network access — `fetch`/`XMLHttpRequest`/`WebSocket` fail at the
+  browser level (`connect-src 'none'`). Use `kiro.fetch` instead.
+- No `localStorage`, `sessionStorage`, `IndexedDB` or cookies — the frame's
+  origin is opaque, so browser storage is unavailable or wiped on reload
+  anyway. Use `kiro.storage`.
+- No submitted `<form>`, no pop-up, no top-level navigation, no WebRTC — all
+  blocked by the sandbox attribute or stripped by the runtime.
+
+### Theme
+
+The frame receives the same CSS custom properties as the rest of Kiro's
+interface, kept in sync when the user switches theme, so plain CSS like
+`color: var(--acento)` themes correctly with no JavaScript. The full list:
+`--bg`, `--panel`, `--panel-raised`, `--sidebar-bg`, `--content-bg`,
+`--campo`, `--ink`, `--muted`, `--line`, `--acento`, `--acento-2`,
+`--acento-forte`, `--acento-escuro`, `--acento-texto`, `--primario-texto`,
+`--fonte-interface`, `--fonte-leitura`, `--fonte-codigo`.
+
+### Example
+
+`examples/plugins/habit-heatmap/` draws a heatmap of habit completions with
+`kiro.habits.list()`, both inside a ` ```kiro:habit-heatmap ` block and as its
+own page — the same `heatmap.html` serves both, reading `kiro.data?.weeks` in
+the block and defaulting to 26 weeks on the page.
+
+### Redrawing
+
+Inside a note, redrawing a block recreates its frame from scratch — the
+`<iframe>` reloads, just like any other block redraw. A panel is different:
+if two renders return the same `frame` file, Kiro reuses the existing
+`<iframe>` and delivers the new `data` through `kiro.onData` instead of
+reloading it.
+
 ## Limits
 
 | Limit | Value | What happens |
@@ -518,6 +618,7 @@ the web); clicking any other link does nothing.
 | `kiro.fetch` request body | 1 MB | The call rejects |
 | `kiro.fetch` response | 5 MB | The call rejects |
 | `kiro.fetch` redirects | 3 | The call rejects |
+| Frame height | 40–2000 px | Clamped to the nearest bound |
 
 An unhandled exception, a crash or silence past a timeout shuts down that one
 worker. Other plugins and Kiro itself keep running.
@@ -531,9 +632,10 @@ worker. Other plugins and Kiro itself keep running.
   worker fail at the browser level. The only way out is `kiro.fetch`, to hosts
   the user granted, never to the local network.
 - The value of a secret.
-- Kiro's screen. No DOM, no window, no other plugin's data. Panels and blocks are
-  the only ways to draw: panels are drawn by Kiro from the data you return, and
-  block HTML is sanitized before it is shown.
+- Kiro's screen. No DOM, no window, no other plugin's data. Panels are drawn
+  by Kiro from the data you return, block HTML is sanitized before it is
+  shown, and a frame draws only inside its own sandboxed `<iframe>` — it never
+  reaches the rest of the page.
 - Anything you did not declare. Calling a method your permissions do not cover
   throws, even if you reach it some other way.
 
@@ -548,13 +650,5 @@ worker. Other plugins and Kiro itself keep running.
   so `try`/`catch` around a vault call tells you what was refused.
 - Editing the files takes effect on the next load: toggle the plugin off and on
   in Settings.
-
-## Not available yet
-
-Designed, specified, and coming in a later stage. Do not write code against it.
-
-**Stage 4 — isolated frames**
-
-Panels with free-form drawing of your own, in an isolated frame, beyond the panel
-shapes and sanitized block HTML available today. It will only be built when a
-real plugin needs it.
+- A frame shares the app's developer console too, tagged with its plugin id
+  and file — open dev tools and look there when a drawing doesn't show up.

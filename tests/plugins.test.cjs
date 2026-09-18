@@ -465,9 +465,8 @@ test('documentação da etapa 2 está em dia', () => {
   const doc = fs.readFileSync(path.join(__dirname, '..', 'docs', 'plugins.md'), 'utf8');
   for (const termo of ['onSave', 'onCreate', 'onDay', 'kiro.block', 'sanitiz']) assert.ok(doc.includes(termo), `docs/plugins.md deve cobrir ${termo}`);
   assert.ok(!/onSave[^\n]*not available yet/i.test(doc), 'onSave não pode continuar marcado como indisponível');
-  // A seção de pendências só pode falar das molduras isoladas (etapa 4).
-  const pendente = doc.split(/^## Not available yet/m)[1] || '';
-  for (const termo of ['onSave', 'onCreate', 'onDay', 'kiro.block']) assert.ok(!pendente.includes(termo), `${termo} não pode estar em "Not available yet"`);
-  assert.match(pendente, /Stage 4/);
+  // Etapa 4 (molduras isoladas) já saiu: "Not available yet" não existe mais.
+  assert.doesNotMatch(doc, /^## Not available yet/m);
+  assert.doesNotMatch(doc, /Stage 4/);
 });
 
