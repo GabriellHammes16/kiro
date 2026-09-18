@@ -10,7 +10,8 @@ async function desenhar(semanas) {
   const total = habitos.length || 1;
   const hoje = new Date();
   const inicio = new Date(hoje);
-  inicio.setDate(hoje.getDate() - (semanas * 7 - 1) - hoje.getDay());
+  // Começa num domingo: cada linha da grade é um dia da semana, e a última coluna termina hoje.
+  inicio.setDate(hoje.getDate() - (semanas - 1) * 7 - hoje.getDay());
   grade.textContent = '';
   for (let d = new Date(inicio); d <= hoje; d.setDate(d.getDate() + 1)) {
     const dia = iso(d), n = feitos.get(dia) || 0;
