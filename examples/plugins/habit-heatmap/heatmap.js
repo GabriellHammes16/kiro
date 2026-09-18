@@ -1,6 +1,7 @@
 const grade = document.getElementById('grade');
 const dica = document.getElementById('dica');
-const iso = d => d.toISOString().slice(0, 10);
+// Data local, não UTC: toISOString() vira o dia à noite conforme o fuso do usuário.
+const iso = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
 async function desenhar(semanas) {
   const habitos = await kiro.habits.list();
@@ -23,5 +24,5 @@ async function desenhar(semanas) {
 
 kiro.ready.then(k => {
   desenhar(k.data?.weeks || 26).catch(erro => { dica.textContent = erro.message; });
-  k.onData(data => desenhar(data?.weeks || 26));
+  k.onData(data => desenhar(data?.weeks || 26).catch(erro => { dica.textContent = erro.message; }));
 });
