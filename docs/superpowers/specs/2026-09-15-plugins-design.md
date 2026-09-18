@@ -263,10 +263,10 @@ declara `page`; ganhar `page` numa atualização não pede confirmação de novo
   `frame-ancestors` troca o `'none'` geral do servidor; no Electron a página é
   `file://` e o `frame-ancestors` é omitido). A diretiva `sandbox` garante o
   isolamento mesmo se alguém abrir a URL direto. O `index.html` passa a permitir
-  `frame-src 'self' kiro-plugin:`. Primeira tarefa do plano: confirmar no
-  navegador e no Electron que `'self'` casa com a URL da moldura mesmo com origem
-  opaca; se não casar, a CSP usa a origem explícita (`http://localhost:<porta>`
-  ou `kiro-plugin://<id>`) no lugar de `'self'`.
+  `frame-src 'self' kiro-plugin:`. Na CSP da moldura, `'self'` é trocado pela
+  origem explícita (`http://<host>` na web, `kiro-plugin:` no Electron): numa
+  origem opaca `'self'` é ambíguo. `kiro-frame.js` apaga os construtores de WebRTC
+  (não cobertos por `connect-src`) e a resposta leva `X-DNS-Prefetch-Control: off`.
 - Onde é servido: web `/plugins/<id>/<arquivo>`; Electron
   `kiro-plugin://<id>/<arquivo>`. `readPluginFile` passa a servir `.js`, `.html`
   e `.css` (tipo de conteúdo pela extensão), sempre de dentro da pasta.
@@ -283,8 +283,8 @@ declara `page`; ganhar `page` numa atualização não pede confirmação de novo
 
 ### API da tela (`kiro-frame.js`)
 
-O mesmo `kiro` do worker, montado pelas permissões que o hospedeiro manda no
-aperto de mão: `notes`, `tasks`, `habits`, `storage`, `fetch`, `notify`. Não há
+O mesmo `kiro` do worker, montado pela lista de métodos permitidos que o
+hospedeiro manda no aperto de mão (disponível depois de `await kiro.ready`): `notes`, `tasks`, `habits`, `storage`, `fetch`, `notify`. Não há
 `command`, `panel`, `block` nem eventos (são do worker). Mais:
 
 - `kiro.data`: o `data` que o bloco/painel devolveu (na página, `null`);
@@ -298,7 +298,7 @@ aperto de mão: `notes`, `tasks`, `habits`, `storage`, `fetch`, `notify`. Não h
 Protocolo (postMessage, alvo `'*'` porque a origem é opaca; nada é enviado que o
 plug-in já não possa ler): tela → Kiro `{tipo:'pronto'}`,
 `{tipo:'chamada',chamada,metodo,args}`, `{tipo:'altura',valor}`,
-`{tipo:'link',url}`; Kiro → tela `{tipo:'ativar',permissoes,data,tema}`,
+`{tipo:'link',url}`; Kiro → tela `{tipo:'ativar',metodos,data,tema}`,
 `{tipo:'resposta',chamada,valor|erro}`, `{tipo:'dados',data}`,
 `{tipo:'tema',tema}`. As chamadas passam pelo mesmo `podeChamar` e pelo mesmo
 atendimento do worker (`atenderPlugin`/`executarMetodo`), com os mesmos limites.
