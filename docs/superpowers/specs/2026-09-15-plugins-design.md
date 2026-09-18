@@ -265,15 +265,22 @@ declara `page`; ganhar `page` numa atualização não pede confirmação de novo
   isolamento mesmo se alguém abrir a URL direto. O `index.html` passa a permitir
   `frame-src 'self' kiro-plugin:`. Na CSP da moldura, `'self'` é trocado pela
   origem explícita (`http://<host>` na web, `kiro-plugin:` no Electron): numa
-  origem opaca `'self'` é ambíguo. `kiro-frame.js` apaga os construtores de WebRTC
-  (não cobertos por `connect-src`) e a resposta leva `X-DNS-Prefetch-Control: off`.
+  origem opaca `'self'` é ambíguo. A moldura não tem rede nenhuma:
+  `fetch`/`XHR`/`WebSocket`/beacon, imagem, fonte, navegação, pop-up e formulário
+  são todos bloqueados por CSP e sandbox. WebRTC não tem essa garantia forte:
+  `kiro-frame.js` apaga os construtores de WebRTC (`RTCPeerConnection` e afins)
+  como reforço, mas o motor do navegador não tem diretiva de CSP para WebRTC, então
+  isso é best-effort, não uma barreira garantida. A resposta leva
+  `X-DNS-Prefetch-Control: off`.
 - Onde é servido: web `/plugins/<id>/<arquivo>`; Electron
   `kiro-plugin://<id>/<arquivo>`. `readPluginFile` passa a servir `.js`, `.html`
   e `.css` (tipo de conteúdo pela extensão), sempre de dentro da pasta.
-- Ao servir `.html`, o Kiro injeta logo após `<head>` (ou no início, se não
-  houver) `<script src="/kiro-frame.js">` (web) ou
-  `<script src="kiro-plugin://kiro.app/kiro-frame.js">` (Electron). É esse
-  script que cria o `kiro` da tela.
+- Ao servir `.html`, o Kiro injeta sempre no início do documento (logo após um
+  `<!doctype>` inicial, se houver) `<script src="/kiro-frame.js">` (web) ou
+  `<script src="kiro-plugin://kiro.app/kiro-frame.js">` (Electron). Nunca
+  procura `<head>`: um `<head>` "falso" dentro de comentário ou texto do
+  plug-in não muda onde o script entra. É esse script que cria o `kiro` da
+  tela.
 - O hospedeiro identifica o plug-in pela moldura: guarda
   `iframe.contentWindow → { id, registro }` e descarta mensagem cujo
   `event.source` não está no mapa. Id escrito na mensagem é ignorado.

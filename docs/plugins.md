@@ -20,9 +20,11 @@ This document describes everything that ships today, stages 1 to 4.
   index.js
 ```
 
-The folder name must equal the `id` in the manifest. Kiro only reads
-`manifest.json` and `.js` files directly inside that folder — no subfolders, no
-other file types. `data.json` appears there once you use `kiro.storage`.
+The folder name must equal the `id` in the manifest. Kiro reads `manifest.json`
+directly inside that folder, plus `.js`, `.html` and `.css` files it serves to
+your worker and your frames — no subfolders, no other file types. An
+`<img src="icon.png">` or a local font file will not load: images and fonts
+must be `data:` URLs. `data.json` appears there once you use `kiro.storage`.
 
 Three complete working examples live in this repository: `examples/plugins/word-count/`
 (commands, panels, blocks), `examples/plugins/wikipedia-summary/` (a block
@@ -57,7 +59,7 @@ fastest way to start.
 | `permissions` | Optional list. Only the names in the table below; an unknown name refuses the whole plugin. |
 | `network` | Optional list of exact hosts, e.g. `api.example.com`. No wildcards, no scheme, no path. A non-empty list also requires the `network` permission. |
 | `secrets` | Optional list of API keys the user types in. See [Secrets](#secrets). |
-| `page` | Optional `{ title, file }`. Gives the plugin its own full-page screen, opened from a "Plug-ins" entry in the sidebar. See [Frames (custom UI)](#frames-custom-ui). |
+| `page` | Optional `{ title, file }`. Gives the plugin its own full-page screen, opened from a "Plug-ins" entry in the sidebar. `title` is 1–40 characters; `file` must match `[a-z0-9][a-z0-9._-]{0,60}\.html` — no slash, no subfolder. See [Frames (custom UI)](#frames-custom-ui). |
 
 An invalid manifest does not disable one feature — it stops the plugin from
 loading at all, and the reason is shown in Settings → Plug-ins.
@@ -548,33 +550,43 @@ exposing `window.kiro`:
   up. Do your first draw inside `.then`, not at the top of the script — the
   vault methods below don't exist until then.
 - `kiro.data` — the `data` you returned, or `null` on the page.
-- `kiro.onData(fn)` — called with the new `data` whenever the block or panel
-  redraws with the same frame file and hands you a fresh `data`.
+- `kiro.onData(fn)` — panels only. Called with the new `data` whenever a panel
+  redraws with the same frame file and hands you a fresh `data`. A block's
+  frame is never reused this way: a block redraw always recreates the
+  `<iframe>` from scratch (see [Redrawing](#redrawing)).
 - `kiro.resize(px)` — asks Kiro to change the block's height, clamped to
   40–2000. Call it after you know your content's real height. No-op on the
   page.
 - `kiro.openLink(url)` — opens an `http:`/`https:` URL outside Kiro (the
   system browser on desktop, a new tab on the web). Any other scheme is
   refused. This is how a frame opens links: normal `<a>` navigation is
-  blocked by the sandbox.
+  blocked by the sandbox. **Must be called from a user click** (or another
+  gesture that counts as one) — Kiro ignores the request otherwise, so a
+  frame cannot open a link on load or from a timer.
 - The same vault methods as the worker (`kiro.notes`, `kiro.tasks`,
-  `kiro.habits`, `kiro.storage`, `kiro.fetch`, `kiro.notify`), filtered by
-  the permissions your plugin was granted — exactly the same two checks as
-  everywhere else in this document. `kiro.command`, `kiro.panel`,
+  `kiro.habits`, `kiro.folders`, `kiro.storage`, `kiro.fetch`, `kiro.notify`),
+  filtered by the permissions your plugin was granted — exactly the same two
+  checks as everywhere else in this document. `kiro.command`, `kiro.panel`,
   `kiro.block` and the event handlers are **not** available inside a frame:
   registration only happens in `activate`, in the worker.
 
 ### What the frame cannot do
 
-- No inline `<script>` — the CSP's `script-src` names only Kiro's own origin,
-  so only `<script src="...">` to a file in your plugin folder runs.
-- No direct network access — `fetch`/`XMLHttpRequest`/`WebSocket` fail at the
-  browser level (`connect-src 'none'`). Use `kiro.fetch` instead.
+- No inline `<script>` and no inline event-handler attribute (`onclick=`,
+  `onload=`, …) — the CSP's `script-src` names only Kiro's own origin, so only
+  `<script src="...">` to a file in your plugin folder runs.
+- No network access whatsoever — `fetch`/`XMLHttpRequest`/`WebSocket`/beacons,
+  remote images and fonts, and navigation all fail at the browser level
+  (`connect-src 'none'`, an explicit-origin `script-src`/`img-src`/`font-src`).
+  Use `kiro.fetch` instead.
 - No `localStorage`, `sessionStorage`, `IndexedDB` or cookies — the frame's
   origin is opaque, so browser storage is unavailable or wiped on reload
   anyway. Use `kiro.storage`.
-- No submitted `<form>`, no pop-up, no top-level navigation, no WebRTC — all
-  blocked by the sandbox attribute or stripped by the runtime.
+- No submitted `<form>`, no pop-up, no top-level navigation — blocked by the
+  sandbox attribute. `RTCPeerConnection` and related WebRTC constructors are
+  deleted by Kiro's runtime as a best effort, but this is not a hard
+  guarantee: browsers have no CSP directive that restricts WebRTC, so it is
+  not covered by the sandbox or CSP the way network and navigation are.
 
 ### Theme
 
@@ -650,5 +662,9 @@ worker. Other plugins and Kiro itself keep running.
   so `try`/`catch` around a vault call tells you what was refused.
 - Editing the files takes effect on the next load: toggle the plugin off and on
   in Settings.
-- A frame shares the app's developer console too, tagged with its plugin id
-  and file — open dev tools and look there when a drawing doesn't show up.
+- A frame shares the app's developer console too — its messages show up under
+  the frame's own URL (not tagged with your plugin id), so look for the file
+  name you passed as `frame`. Open dev tools and check there when a drawing
+  doesn't show up. On the web version, a `frame` naming a file that does not
+  exist shows the browser's own "refused to connect" page inside the
+  `<iframe>`.
