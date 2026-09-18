@@ -909,3 +909,4 @@ body, button, input, textarea, select { font-family:var(--fonte-interface); }
 .plugin-chave-msg:empty { display:none; }
 .plugin-chave-msg.erro { color:var(--warning); font-weight:600; }
 .plugin-chamadas .plugin-tabela td { white-space:nowrap; }
+.plugin-moldura { display: block; width: 100%; border: 0; border-radius: var(--raio, 10px); background: transparent; color-scheme: normal; }

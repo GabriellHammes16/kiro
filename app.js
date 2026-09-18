@@ -2093,6 +2093,8 @@ function desativarPlugin(id) {
   pluginsAtivos.delete(id);
   for (const chave of [...conteudoDosPaineis.keys()]) if (chave.startsWith(`${id}\n`)) conteudoDosPaineis.delete(chave);
   for (const chave of [...conteudoDosBlocos.keys()]) if (chave.startsWith(`${id}\n`)) conteudoDosBlocos.delete(chave);
+  for (const chave of [...dadosDasMolduras.keys()]) if (chave.startsWith(`${id}\n`)) dadosDasMolduras.delete(chave);
+  for (const f of document.querySelectorAll(`iframe.plugin-moldura[data-plugin="${CSS.escape(id)}"]`)) f.remove();
   agendarBlocosDosPlugins();   // os blocos dele passam a mostrar o aviso
 }
 
@@ -2130,15 +2132,53 @@ async function atenderPlugin(id, data) {
     clearTimeout(pendente.prazo);
     return data.erro ? pendente.rejeitar(new Error(data.erro)) : pendente.resolver(data.valor);
   }
-  if (data.tipo !== 'chamada') return;
+  if (data.tipo === 'chamada') return responderChamada(id, estado, data, m => estado.worker.postMessage(m));
+}
+
+// Worker e moldura passam pela mesma porta: permissão conferida de novo, mesmos limites.
+async function responderChamada(id, estado, data, enviar) {
   try {
     if (!KiroPlugins.podeChamar(estado.permissoes, data.metodo)) throw new Error(`Sem permissão para ${data.metodo}.`);
     const valor = await executarMetodo(id, data.metodo, Array.isArray(data.args) ? data.args : []);
     if (JSON.stringify(valor ?? null).length > LIMITE_MENSAGEM) throw new Error('A resposta passou de 2 MB.');
-    estado.worker.postMessage({ tipo: 'resposta', chamada: data.chamada, valor: valor ?? null });
+    if (pluginsAtivos.get(id) === estado) enviar({ tipo: 'resposta', chamada: data.chamada, valor: valor ?? null });
   } catch (erro) {
-    if (pluginsAtivos.get(id) === estado) estado.worker.postMessage({ tipo: 'resposta', chamada: data.chamada, erro: erro.message });
+    if (pluginsAtivos.get(id) === estado) enviar({ tipo: 'resposta', chamada: data.chamada, erro: erro.message });
   }
+}
+
+// ---- Molduras (etapa 4) ----
+// A tela do plug-in roda num iframe sandbox sem allow-same-origin (origem opaca) e com a
+// CSP da resposta cortando a rede. O plug-in é achado pela moldura que mandou a mensagem,
+// nunca por um id escrito nela.
+const urlDaTela = (id, arquivo) => window.cadernoDesktop ? `kiro-plugin://${id}/${arquivo}` : `/plugins/${id}/${arquivo}`;
+const dadosDasMolduras = new Map();       // chave da moldura → data passado pelo bloco/painel
+const molduraHtml = (id, arquivo, altura, chave) =>
+  `<iframe class="plugin-moldura" sandbox="allow-scripts" referrerpolicy="no-referrer" loading="lazy" title="${escapeHtml(pluginsAtivos.get(id)?.manifesto?.name || id)}" data-plugin="${escapeHtml(id)}" data-arquivo="${escapeHtml(arquivo)}" data-chave="${escapeHtml(chave)}" style="height:${Number(altura) || KiroPlugins.ALTURA_DA_MOLDURA.padrao}px" src="${escapeHtml(urlDaTela(id, arquivo))}"></iframe>`;
+const temaAtual = () => { const css = getComputedStyle(document.documentElement); return Object.fromEntries(KiroPlugins.VARIAVEIS_DO_TEMA.map(v => [v, css.getPropertyValue(v).trim()])); };
+const molduraDe = janela => [...document.querySelectorAll('iframe.plugin-moldura')].find(f => f.contentWindow === janela);
+
+window.addEventListener('message', ({ source, data }) => {
+  const moldura = source && molduraDe(source);
+  if (!moldura || !data || typeof data !== 'object') return;   // só mensagem de uma moldura nossa
+  const id = moldura.dataset.plugin, estado = pluginsAtivos.get(id);
+  if (!estado) return;
+  const enviar = m => moldura.contentWindow?.postMessage(m, '*');
+  if (data.tipo === 'pronto') enviar({ tipo: 'ativar', metodos: KiroPlugins.metodosPermitidos(estado.permissoes), data: dadosDasMolduras.get(moldura.dataset.chave) ?? null, tema: temaAtual() });
+  else if (data.tipo === 'chamada') responderChamada(id, estado, data, enviar);
+  else if (data.tipo === 'altura' && !moldura.closest('.plugin-pagina')) {
+    const { min, max } = KiroPlugins.ALTURA_DA_MOLDURA;
+    if (Number.isFinite(data.valor)) moldura.style.height = `${Math.min(max, Math.max(min, Math.round(data.valor)))}px`;
+  } else if (data.tipo === 'link') {
+    let url; try { url = new URL(String(data.url)); } catch { return; }
+    // No app, window.open cai no setWindowOpenHandler, que abre http(s) no navegador do sistema.
+    if (url.protocol === 'http:' || url.protocol === 'https:') window.open(url.href, '_blank', 'noopener,noreferrer');
+  }
+});
+// Troca de aparência: as telas abertas recebem as variáveis novas.
+function avisarTemaAsMolduras() {
+  const tema = temaAtual();
+  for (const f of document.querySelectorAll('iframe.plugin-moldura')) f.contentWindow?.postMessage({ tipo: 'tema', tema }, '*');
 }
 
 // Pede ao plug-in que rode um comando, desenhe um painel ou trate um evento.
@@ -2254,10 +2294,18 @@ function desenharPaineisDosPlugins() {
 }
 
 function guardarPainel(id, painel, dados) {
-  const html = KiroPlugins.painelParaHtml(dados, { pluginId: id });
-  conteudoDosPaineis.set(chaveDoPainel(id, painel), html);
+  const chave = chaveDoPainel(id, painel);
   const alvo = document.querySelector(`${seletorDoPainel(id, painel)} .plugin-conteudo`);
-  if (alvo) alvo.innerHTML = html;
+  if (dados && typeof dados.frame === 'string') {
+    const m = KiroPlugins.validarMoldura(dados);
+    if (!m.ok) return guardarPainel(id, painel, { type: 'text', text: m.erro });
+    dadosDasMolduras.set(chave, m.data);
+    const viva = alvo?.querySelector(':scope > iframe.plugin-moldura');
+    // Mesmo arquivo: a tela continua viva e só recebe os dados novos.
+    if (viva && viva.dataset.arquivo === m.frame) { viva.contentWindow?.postMessage({ tipo: 'dados', data: m.data }, '*'); return; }
+    conteudoDosPaineis.set(chave, molduraHtml(id, m.frame, m.height, chave));
+  } else conteudoDosPaineis.set(chave, KiroPlugins.painelParaHtml(dados, { pluginId: id }));
+  if (alvo) alvo.innerHTML = conteudoDosPaineis.get(chave);
 }
 
 /**
@@ -2324,8 +2372,12 @@ function desenharBlocosDosPlugins() {
     chamarPlugin(id, { tipo: 'block', id: 'render' }, { source: fonte }).then(valor => {
       blocosEmCurso.delete(chave);
       if (pluginsAtivos.get(id) !== estado) return;   // desativado no meio: nada fica guardado
-      if (conteudoDosBlocos.size >= MAX_BLOCOS_GUARDADOS) conteudoDosBlocos.delete(conteudoDosBlocos.keys().next().value);
-      conteudoDosBlocos.set(chave, htmlDoBloco(valor));
+      if (conteudoDosBlocos.size >= MAX_BLOCOS_GUARDADOS) {
+        const descartada = conteudoDosBlocos.keys().next().value;
+        conteudoDosBlocos.delete(descartada);
+        dadosDasMolduras.delete(descartada);
+      }
+      conteudoDosBlocos.set(chave, htmlDoBloco(valor, id, chave));
       agendarBlocosDosPlugins();
     }, erro => {
       blocosEmCurso.delete(chave);
@@ -2340,7 +2392,14 @@ function desenharBlocosDosPlugins() {
 }
 
 // O retorno do plug-in nunca vai cru para o DOM.
-function htmlDoBloco(valor) {
+function htmlDoBloco(valor, id, chave) {
+  if (valor && typeof valor.frame === 'string') {
+    const m = KiroPlugins.validarMoldura(valor);
+    if (!m.ok) return avisoDeBloco(m.erro);
+    dadosDasMolduras.set(chave, m.data);
+    // ponytail: redesenhar a nota recria a moldura (a tela recarrega); guardar o iframe vivo se algum plug-in precisar de estado.
+    return molduraHtml(id, m.frame, m.height, chave);
+  }
   if (valor && typeof valor.html === 'string') return KiroPlugins.higienizarHtml(valor.html);
   if (valor && typeof valor.type === 'string') return KiroPlugins.painelParaHtml(valor);
   return avisoDeBloco('O plug-in não devolveu nada para desenhar.');
@@ -2564,6 +2623,7 @@ function aplicarAparencia(valores) {
 function gravarAparencia(a) {
   try { localStorage.setItem('kiro.aparencia', JSON.stringify(a)); } catch { /* janela privada: só aplica na sessão */ }
   aplicarAparencia(a);
+  avisarTemaAsMolduras();
 }
 const CAIXAS = [['read','Ler notas'],['create','Criar notas'],['update','Editar notas'],['delete','Excluir notas (vai para a lixeira)']];
 const agentApi = {
