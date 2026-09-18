@@ -910,3 +910,8 @@ body, button, input, textarea, select { font-family:var(--fonte-interface); }
 .plugin-chave-msg.erro { color:var(--warning); font-weight:600; }
 .plugin-chamadas .plugin-tabela td { white-space:nowrap; }
 .plugin-moldura { display: block; width: 100%; border: 0; border-radius: var(--raio, 10px); background: transparent; color-scheme: normal; }
+.nav-plugins { margin-top:12px; display:grid; gap:2px; }
+.nav-plugins .nav-grupo { margin:0 0 4px 12px; font-size:11px; letter-spacing:.06em; text-transform:uppercase; color:var(--muted); }
+.plugin-pagina { height:100%; min-height:calc(100vh - 48px); display:flex; }
+.plugin-pagina .plugin-moldura { flex:1; height:auto !important; border-radius:0; }
+.app-shell.pagina-plugin-aberta > .content { padding:0; }

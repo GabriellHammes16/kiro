@@ -23,14 +23,19 @@ function dateLabel(date) { return date === today() ? "Hoje" : new Intl.DateTimeF
 function updateCount() { const open = state.tasks.filter(t => !t.done).length; document.querySelector("#task-count").textContent = open || ""; }
 function getNote(id) { return state.notes.find(n => n.id === id); }
 function render() {
+  const paginaDoPlugin = currentView.startsWith('plugin:') ? currentView.slice(7) : null;
+  if (paginaDoPlugin && !pluginsAtivos.get(paginaDoPlugin)?.manifesto?.page) currentView = 'today';
   document.querySelectorAll(".nav-item").forEach(x => x.classList.toggle("active", x.dataset.view === currentView));
   const views = { today: renderToday, notes: renderNotes, tasks: renderTasks, studies: renderCofre, graph: renderGraph };
   document.querySelector(".app-shell").classList.toggle("cofre-aberto", currentView === "studies");
   document.querySelector(".app-shell").classList.toggle("lateral-recolhida", lateralRecolhida);
   document.querySelector(".app-shell").classList.toggle("grafo-aberto", currentView === "graph");
+  document.querySelector(".app-shell").classList.toggle("pagina-plugin-aberta", !!paginaDoPlugin);
   const app = document.querySelector("#app");
   cancelAnimationFrame(grafoRaf); grafoRaf = null; fecharSugestoes();
-  app.innerHTML = views[currentView]();
+  // A página cheia do plug-in não é recriada a cada redesenho: a tela guarda estado próprio.
+  const viva = paginaDoPlugin && app.querySelector(`:scope > .plugin-pagina[data-plugin="${CSS.escape(paginaDoPlugin)}"]`);
+  if (!viva) app.innerHTML = paginaDoPlugin ? renderPaginaDoPlugin(paginaDoPlugin) : views[currentView]();
   // Animar só na troca de tela: um redesenho comum não deve piscar.
   if (renderedView !== currentView) { app.classList.remove("view-enter"); void app.offsetWidth; app.classList.add("view-enter"); renderedView = currentView; }
   bindView(); updateCount();
@@ -2096,6 +2101,8 @@ function desativarPlugin(id) {
   for (const chave of [...dadosDasMolduras.keys()]) if (chave.startsWith(`${id}\n`)) dadosDasMolduras.delete(chave);
   for (const f of document.querySelectorAll(`iframe.plugin-moldura[data-plugin="${CSS.escape(id)}"]`)) f.remove();
   agendarBlocosDosPlugins();   // os blocos dele passam a mostrar o aviso
+  desenharNavDosPlugins();
+  if (currentView === `plugin:${id}`) { currentView = 'today'; if (loaded) render(); }
 }
 
 // Um plug-in problemático cai sozinho: os outros e o Kiro seguem de pé.
@@ -2118,6 +2125,7 @@ async function atenderPlugin(id, data) {
     estado.eventos = (data.registros?.event || []).map(String);
     estado.desenhaBlocos = (data.registros?.block || []).includes('render');
     agendarBlocosDosPlugins();
+    desenharNavDosPlugins();
     if (loaded) entregarDia(id);
     // O plug-in fica pronto depois da tela: redesenhar traz os cards dele para o Hoje.
     if (currentView === 'today' && loaded) render();
@@ -2157,6 +2165,25 @@ const molduraHtml = (id, arquivo, altura, chave) =>
   `<iframe class="plugin-moldura" sandbox="allow-scripts" referrerpolicy="no-referrer" loading="lazy" title="${escapeHtml(pluginsAtivos.get(id)?.manifesto?.name || id)}" data-plugin="${escapeHtml(id)}" data-arquivo="${escapeHtml(arquivo)}" data-chave="${escapeHtml(chave)}" style="height:${Number(altura) || KiroPlugins.ALTURA_DA_MOLDURA.padrao}px" src="${escapeHtml(urlDaTela(id, arquivo))}"></iframe>`;
 const temaAtual = () => { const css = getComputedStyle(document.documentElement); return Object.fromEntries(KiroPlugins.VARIAVEIS_DO_TEMA.map(v => [v, css.getPropertyValue(v).trim()])); };
 const molduraDe = janela => [...document.querySelectorAll('iframe.plugin-moldura')].find(f => f.contentWindow === janela);
+
+// Plug-ins com `page` no manifesto ganham um item no grupo "Plug-ins" da barra lateral.
+function desenharNavDosPlugins() {
+  const nav = document.querySelector('#nav-plugins');
+  if (!nav) return;
+  const comPagina = [...pluginsAtivos].filter(([, e]) => e.manifesto?.page);
+  nav.hidden = !comPagina.length;
+  nav.innerHTML = comPagina.length ? `<p class="nav-grupo">Plug-ins</p>${comPagina.map(([id, e]) =>
+    `<button class="nav-item${currentView === `plugin:${id}` ? ' active' : ''}" data-view="plugin:${escapeHtml(id)}"><span class="rotulo-icone" data-icone="plugin"></span> ${escapeHtml(e.manifesto.page.title)}</button>`).join('')}` : '';
+  for (const b of nav.querySelectorAll('.nav-item')) b.onclick = () => { if (loaded) irPara(b.dataset.view); };
+  desenharIconesFixos();
+}
+function renderPaginaDoPlugin(id) {
+  const estado = pluginsAtivos.get(id), page = estado?.manifesto?.page;
+  if (!page) return `<div class="empty">Este plug-in não está ativo.</div>`;
+  const chave = `${id}\npage`;
+  dadosDasMolduras.set(chave, null);
+  return `<section class="plugin-pagina" data-plugin="${escapeHtml(id)}">${molduraHtml(id, page.file, 0, chave)}</section>`;
+}
 
 window.addEventListener('message', ({ source, data }) => {
   const moldura = source && molduraDe(source);
@@ -2768,6 +2795,7 @@ function pedirConsentimento(id) {
     : `Ativar <strong>${nome}</strong>, de ${escapeHtml(m.author)}?`} Ele vai poder:</p>
     ${itensDePermissao(m, novas, hostsNovos)}
     ${itensDeChaves(m, segredosNovos)}
+    ${m.page ? `<p class="small-muted plugin-tela-propria">Tem uma tela própria (“${escapeHtml(m.page.title)}”), que aparece na barra lateral.</p>` : ''}
     <p class="small-muted plugin-consentimento-nota">Dá para desligar quando quiser, em Configurações → Plug-ins.</p>
     <div class="form-actions"><button type="button" class="secondary" id="cancel">Cancelar</button><button type="button" class="primary" id="confirmar-plugin">${aguardando ? 'Permitir e ativar' : 'Ativar plug-in'}</button></div>`);
   const voltar = () => showSettings('plugins');
