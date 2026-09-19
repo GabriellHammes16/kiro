@@ -249,6 +249,71 @@
     return { tema, skin, ...cores };
   }
   const classesDaAparencia = a => { const v = aparenciaValida(a); return [`tema-${v.tema}`, `skin-${v.skin}`]; };
+  // ---- Painel da direita: menções não vinculadas, sumário e árvore de etiquetas ----
+  // Compara sem maiúsculas nem acentos, caractere a caractere, mantendo o tamanho do
+  // texto: os índices achados valem no texto original.
+  const umPraUm = c => { const s = c.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase(); return s.length === c.length ? s : c; };
+  const semAcento = texto => [...texto].map(umPraUm).join('');
+  const LETRA = /[\p{L}\p{N}_]/u;
+  // Posições onde o título aparece como palavra inteira fora de [[links]].
+  function ocorrenciasSoltas(corpo, titulo) {
+    const alvo = semAcento(String(titulo || '').trim());
+    if (alvo.length < 3) return [];
+    const texto = semAcento(String(corpo || '').replace(/\[\[[^\]\n]*\]\]/g, m => ' '.repeat(m.length)));
+    const achadas = [];
+    for (let i = texto.indexOf(alvo); i !== -1; i = texto.indexOf(alvo, i + 1)) {
+      const antes = texto[i - 1], depois = texto[i + alvo.length];
+      if ((antes && LETRA.test(antes)) || (depois && LETRA.test(depois))) continue;
+      achadas.push(i);
+    }
+    return achadas;
+  }
+  function mencoesNaoVinculadas(notas, nota) {
+    return notas.filter(n => n.id !== nota.id).flatMap(n => {
+      const corpo = n.body || '';
+      const [i] = ocorrenciasSoltas(corpo, nota.title);
+      if (i === undefined) return [];
+      const ini = corpo.lastIndexOf('\n', i) + 1, fim = corpo.indexOf('\n', i);
+      return [{ nota: n, trecho: corpo.slice(ini, fim === -1 ? undefined : fim).trim() }];
+    });
+  }
+  function vincularMencao(corpo, titulo) {
+    const t = String(titulo || '').trim();
+    const [i] = ocorrenciasSoltas(corpo, t);
+    if (i === undefined) return corpo;
+    const original = corpo.slice(i, i + t.length);
+    return corpo.slice(0, i) + (original === t ? `[[${t}]]` : `[[${t}|${original}]]`) + corpo.slice(i + t.length);
+  }
+  // Títulos Markdown (# a ######) fora de blocos de código cercados.
+  function sumario(corpo) {
+    const itens = [];
+    let cerca = null;
+    for (const linha of String(corpo || '').split('\n')) {
+      const c = /^\s{0,3}(`{3,}|~{3,})/.exec(linha);
+      if (c) { if (!cerca) cerca = c[1][0]; else if (c[1][0] === cerca) cerca = null; continue; }
+      if (cerca) continue;
+      const h = /^\s{0,3}(#{1,6})\s+(.*?)(?:\s+#+)?\s*$/.exec(linha);
+      if (h && h[2].trim()) itens.push({ nivel: h[1].length, texto: h[2].trim(), indice: itens.length });
+    }
+    return itens;
+  }
+  // Etiquetas aninhadas por "/": cada nó conta as notas dele e das filhas, sem repetir nota.
+  function arvoreDeEtiquetas(notas) {
+    const raiz = new Map();
+    for (const nota of notas) for (const tag of tags(nota)) {
+      let nivel = raiz, caminho = '';
+      for (const parte of String(tag).split('/').filter(Boolean)) {
+        caminho = caminho ? `${caminho}/${parte}` : parte;
+        if (!nivel.has(parte)) nivel.set(parte, { nome: parte, caminho, notas: new Set(), filhos: new Map() });
+        const no = nivel.get(parte);
+        no.notas.add(nota.id);
+        nivel = no.filhos;
+      }
+    }
+    const saida = mapa => [...mapa.values()].sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'))
+      .map(no => ({ nome: no.nome, caminho: no.caminho, total: no.notas.size, filhos: saida(no.filhos) }));
+    return saida(raiz);
+  }
   // ---- Atalhos de teclado (os que dá para trocar em Configurações → Atalhos) ----
   // Combinação é texto: modificadores na ordem Ctrl, Alt, Shift e depois a tecla ("Ctrl+Shift+K").
   const ATALHOS_EDITAVEIS = [
@@ -257,6 +322,7 @@
     ['novaNota', 'Nova nota', '', 'Ctrl+N'],
     ['salvar', 'Salvar a nota aberta', '', 'Ctrl+S'],
     ['lateral', 'Recolher a barra lateral', 'Alterna entre a barra completa e só os ícones.', 'Ctrl+\\'],
+    ['painelDireito', 'Painel da direita', 'Links, sumário e etiquetas da nota, na tela de Pastas.', 'Ctrl+Shift+L'],
   ];
   // Teclas que o sistema e o editor já usam: trocá-las quebraria copiar, colar, desfazer…
   const RESERVADOS = new Set(['Ctrl+C', 'Ctrl+V', 'Ctrl+X', 'Ctrl+Z', 'Ctrl+Y', 'Ctrl+A', 'Ctrl+Shift+Z', 'Ctrl+W', 'Ctrl+T', 'Ctrl+R', 'Ctrl+P', 'Ctrl+F', 'Alt+F4']);
@@ -291,7 +357,7 @@
     return atalhos;
   }
 
-  const api = { ATALHOS_EDITAVEIS, combinacaoDoEvento, rotuloDaCombinacao, problemaDoAtalho, atalhosValidos, TEMAS, SKINS, APARENCIA_PADRAO, luminancia, contraste, corValida, aparenciaValida, classesDaAparencia, FOLDER_COLORS, folderColor,habitStats, habitDays, withHabits, validFrequency, localDate, safeUrl, validateState, normalize, isImagePath, wikiLinks, tags, findLinkedNote, mentions, inInbox, withoutInbox, toReview, linkQuery, linkSuggestions, validFolderName, folderPaths, descendants, upgradeBackup, pathKey };
+  const api = { ATALHOS_EDITAVEIS, combinacaoDoEvento, rotuloDaCombinacao, problemaDoAtalho, atalhosValidos, TEMAS, SKINS, APARENCIA_PADRAO, luminancia, contraste, corValida, aparenciaValida, classesDaAparencia, FOLDER_COLORS, folderColor, habitStats, habitDays, withHabits, validFrequency, localDate, safeUrl, validateState, normalize, isImagePath, wikiLinks, tags, findLinkedNote, mentions, inInbox, withoutInbox, toReview, linkQuery, linkSuggestions, validFolderName, folderPaths, descendants, upgradeBackup, pathKey, mencoesNaoVinculadas, vincularMencao, sumario, arvoreDeEtiquetas };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Kiro = api;
 })(globalThis);
