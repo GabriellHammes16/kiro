@@ -465,8 +465,33 @@ function alternarLateral() {
 }
 // Modo cofre: árvore à esquerda, nota à direita, sem a navegação principal.
 // A casinha devolve o usuário à tela inicial, onde a navegação completa vive.
+// Título mostrado na aba: da nota salva, ou "Nova nota" para o rascunho ainda sem título.
+function tituloDaAba(id) {
+  if (id === KiroAbas.RASCUNHO) return 'Nova nota';
+  const nota = getNote(id);
+  return nota ? (nota.title || 'Sem título') : 'Sem título';
+}
+function barraDeAbas(painel) {
+  const p = abas.paineis[painel];
+  if (!p) return '';
+  const itens = p.abas.map(id => `<button type="button" class="aba${p.ativa === id ? ' ativa' : ''}" role="tab" aria-selected="${p.ativa === id}" data-painel="${painel}" data-aba="${escapeHtml(id)}" draggable="true"><span class="aba-titulo">${escapeHtml(tituloDaAba(id))}</span><span class="aba-fechar" data-fechar-aba role="button" aria-label="Fechar aba">×</span></button>`).join('');
+  return `<div class="abas-barra" data-painel="${painel}" role="tablist">${itens}<button type="button" class="icon-button aba-nova" data-nova-aba="${painel}" aria-label="Nova aba">${icone('mais')}</button></div>`;
+}
 function renderCofre() {
   if (expanded === null) expanded = new Set(state.folders.map(f => f.id));
+  // Carregado uma única vez, depois que o cofre (e o vaultPath) já foram lidos.
+  if (!abasCarregadas) {
+    abasCarregadas = true;
+    try { const salvo = JSON.parse(localStorage.getItem('kiro.abas:' + (state.vaultPath || ''))); if (salvo) abas = salvo; } catch { /* janela privada: vale só nesta sessão */ }
+  }
+  abas = KiroAbas.limpar(abas, state.notes.map(n => n.id));
+  // Sem editor aberto mas com aba ativa (voltando de outra tela ou de uma recarga): reabre a nota dela.
+  if (!editing) {
+    const ativa = KiroAbas.notaAtiva(abas);
+    if (ativa === KiroAbas.RASCUNHO) abas = KiroAbas.fechar(abas, abas.ativo, KiroAbas.RASCUNHO);
+    else if (ativa) { const nota = getNote(ativa); if (nota) editing = { ...nota, tags: [...(nota.tags || [])], links: [...(nota.links || [])] }; }
+  }
+  gravarAbas();
   const arvore = treeMarkup('', 0) || '<div class="empty">Crie uma pasta para começar.</div>';
   const direita = editing ? renderEditor() : `<div class="cofre-vazio">
     <p>Escolha uma nota na árvore ao lado.</p>
@@ -488,8 +513,25 @@ function renderCofre() {
     <div class="cofre-divisor" role="separator" aria-orientation="vertical" aria-label="Largura da árvore de pastas" tabindex="0" aria-valuemin="${LARGURA_ARVORE.min}" aria-valuemax="${LARGURA_ARVORE.max}" aria-valuenow="${larguraArvore}" title="Arraste para ajustar a largura · dois cliques voltam ao padrão"></div>
     <footer class="cofre-rodape"><span class="small-muted">${state.folders.length} pasta${state.folders.length === 1 ? '' : 's'} · ${state.notes.length} nota${state.notes.length === 1 ? '' : 's'}</span></footer>
   </aside>
-  <section class="cofre-nota">${direita}</section>
+  <section class="cofre-nota">${barraDeAbas(0)}<div class="cofre-nota-corpo">${direita}</div></section>
 </div>`;
+}
+// Liga os cliques da barra de abas de uma metade: trocar, fechar (× ou botão do meio) e +.
+function bindAbas(painel) {
+  const barra = document.querySelector(`.abas-barra[data-painel="${painel}"]`);
+  if (!barra) return;
+  barra.addEventListener('click', e => {
+    if (e.target.closest('[data-nova-aba]')) { abrirNota(notaVazia(), { novaAba: true, painel }); return; }
+    const aba = e.target.closest('.aba');
+    if (!aba) return;
+    if (e.target.closest('[data-fechar-aba]')) fecharAba(painel, aba.dataset.aba);
+    else abrirPorId(aba.dataset.aba, { painel });
+  });
+  barra.addEventListener('auxclick', e => {
+    if (e.button !== 1) return;
+    const aba = e.target.closest('.aba');
+    if (aba) { e.preventDefault(); fecharAba(painel, aba.dataset.aba); }
+  });
 }
 function bindView() {
   document.querySelector('#add-note')?.addEventListener('click',()=>abrirNota(notaVazia()));
@@ -510,12 +552,13 @@ function bindView() {
     document.querySelector('.cofre-lateral')?.addEventListener('click',e=>{if(e.target.closest('[data-cofre="alternar"]')||(lateralRecolhida&&!e.target.closest('button')))alternarLateral();});
     document.querySelector('#add-note-cofre')?.addEventListener('click',()=>abrirNota(notaVazia()));
     ligarDivisorDaArvore();
+    bindAbas(0);
     if(editing)bindEditor();
     return;
   }
   enhanceView();
 }
-function action(type,id) {
+function action(type,id,evento) {
   // Abrir/fechar é só visual: continua funcionando durante um salvamento ou após falha.
   if(type==="toggle-folder"){
     if(!expanded)return;
@@ -524,7 +567,7 @@ function action(type,id) {
     return;
   }
   if (busy || failed || !loaded) return;
-  if(type==="new-subfolder") folderModal({title:"",description:"",parentId:id}); if(type==="toggle-habit") marcarHabito(id); if(type==="toggle-habit-day"){const [habito,dia]=id.split("|");marcarHabito(habito,dia);} if(type==="toggle-task"){const t=state.tasks.find(x=>x.id===id);t.done=!t.done;save();render();} if(type==="toggle-note-task") marcarTarefaDaNota(id); if(type==="edit-note") abrirNota(getNote(id)); if(type==="new-note-folder") abrirNota(notaVazia({folderId:id})); if(type==="edit-task") taskModal(state.tasks.find(x=>x.id===id)); if(type==="edit-folder") folderModal(state.folders.find(x=>x.id===id)); if(type==="delete-task"){state.tasks=state.tasks.filter(x=>x.id!==id);save();render();} if(type==="delete-folder") deleteFolder(id); }
+  if(type==="new-subfolder") folderModal({title:"",description:"",parentId:id}); if(type==="toggle-habit") marcarHabito(id); if(type==="toggle-habit-day"){const [habito,dia]=id.split("|");marcarHabito(habito,dia);} if(type==="toggle-task"){const t=state.tasks.find(x=>x.id===id);t.done=!t.done;save();render();} if(type==="toggle-note-task") marcarTarefaDaNota(id); if(type==="edit-note") abrirPorId(id,{novaAba:Boolean(evento?.ctrlKey||evento?.metaKey)}); if(type==="new-note-folder") abrirNota(notaVazia({folderId:id})); if(type==="edit-task") taskModal(state.tasks.find(x=>x.id===id)); if(type==="edit-folder") folderModal(state.folders.find(x=>x.id===id)); if(type==="delete-task"){state.tasks=state.tasks.filter(x=>x.id!==id);save();render();} if(type==="delete-folder") deleteFolder(id); }
 // Excluir uma pasta leva junto suas subpastas; as notas continuam no cofre, na raiz.
 function deleteFolder(id) {
   const ids=Kiro.descendants(state.folders,id);
@@ -586,6 +629,10 @@ let aguardandoCofre=false;   // primeira abertura no aplicativo: nada é lido at
 // null = ainda não semeado; na primeira exibição a árvore abre inteira.
 let expanded=null, renderedView=null, editing=null, editorDirty=false, grafoRaf=null, blocoAberto=null;
 const notaVazia = (extra={}) => ({title:"",body:"",links:[],tags:[],folderId:"",...extra});
+// Abas da tela de Pastas: modelo puro (abas.js), sempre limpo contra state.notes. Memória por cofre.
+let abas = KiroAbas.vazio(), abasCarregadas = false;
+function gravarAbas() { try { localStorage.setItem('kiro.abas:' + (state.vaultPath || ''), JSON.stringify(abas)); } catch { /* janela privada: vale só nesta sessão */ } }
+const idDaAba = nota => nota.id || KiroAbas.RASCUNHO;
 const $ = selector => document.querySelector(selector);
 const templates={
   study:{title:'Resumo de estudo',body:'# Objetivo\n\n## Ideias principais\n\n## Exemplos\n\n## Perguntas\n\n## Próximos passos\n- [ ] Revisar\n'},
@@ -664,11 +711,25 @@ function capturaRapida(){
   campo.focus();
 }
 // ---- Editor de documento: a nota ocupa a página inteira, como um processador de texto. ----
-async function abrirNota(nota){
+async function abrirNota(nota,{novaAba=false,painel}={}){
   if(editing&&editorDirty&&!await salvarNota())return;
+  abas=KiroAbas.abrir(abas,idDaAba(nota),{novaAba,painel});
+  gravarAbas();
   editing={...nota,tags:[...(nota.tags||[])],links:[...(nota.links||[])]};
   if(editing.id)ultimaNota=editing.id; // centro do grafo local
   editorDirty=false;currentView='studies';render();
+}
+// Acha a nota pelo id (usado pela árvore e pela barra de abas) e abre.
+function abrirPorId(id,opcoes){ const nota=getNote(id); if(nota) abrirNota(nota,opcoes); }
+// Fecha uma aba: salva a nota em edição se for ela e tiver alterações; a nova aba ativa vira o editor.
+async function fecharAba(painel,id){
+  if(editing&&idDaAba(editing)===id&&editorDirty&&!await salvarNota())return;
+  abas=KiroAbas.fechar(abas,painel,id);
+  gravarAbas();
+  const ativa=KiroAbas.notaAtiva(abas);
+  const nota=ativa===KiroAbas.RASCUNHO?notaVazia():ativa?getNote(ativa):null;
+  editing=nota?{...nota,tags:[...(nota.tags||[])],links:[...(nota.links||[])]}:null;
+  editorDirty=false;render();
 }
 async function irPara(destino){ if(editing) return void await sairDoEditor(destino); currentView=destino; render(); }
 async function sairDoEditor(destino){
@@ -2049,7 +2110,7 @@ function abrirMenuContexto(evento, area, itens = menuDaNota()) {
 }
 async function acaoEditor(tipo){
   if(tipo==='salvar')return void await salvarNota();
-  if(tipo==='fechar'){ if(editorDirty && !await salvarNota()) return; editing=null; render(); return; }
+  if(tipo==='fechar'){ if(editing) await fecharAba(abas.ativo,idDaAba(editing)); return; }
   if(tipo==='detalhes'){const d=$('#doc-details');d.hidden=!d.hidden;return;}
   if(tipo==='lixeira'){
     if(busy||failed||!loaded||!confirm(`Mover "${editing.title}" para a lixeira?`))return;
@@ -2062,9 +2123,11 @@ async function salvarNota(){
   if(!editing.title.trim()){status('Dê um título à nota antes de salvar.',true);$('#doc-title')?.focus();return false;}
   // Salvar redesenha a nota; quem estava digitando volta para o mesmo ponto.
   const retomar=blocoAberto&&document.activeElement===blocoAberto.campo?{inicio:blocoAberto.inicio,cursor:blocoAberto.campo.selectionStart}:null;
+  const eraNova=!editing.id;
   const salva={...editing,id:editing.id||uid(),title:editing.title.trim(),createdAt:editing.createdAt||Date.now(),updatedAt:Date.now()};
   state.notes=editing.id?state.notes.map(n=>n.id===editing.id?salva:n):[salva,...state.notes];
   editing=salva;
+  if(eraNova){abas=KiroAbas.trocarId(abas,KiroAbas.RASCUNHO,salva.id);gravarAbas();}
   if(!await save())return false;
   const atual=getNote(salva.id);
   if(atual)editing={...atual,tags:[...(atual.tags||[])],links:[...(atual.links||[])]};
@@ -3238,8 +3301,14 @@ document.addEventListener('drop',e=>{
 });
 document.addEventListener('click',e=>{
   const extra=e.target.closest('[data-extra]');if(extra){e.preventDefault();extraAction(extra.dataset.extra,extra.dataset.id);return;}
-  const el=e.target.closest('[data-action]');if(el){e.preventDefault();action(el.dataset.action,el.dataset.id);return;}
+  const el=e.target.closest('[data-action]');if(el){e.preventDefault();action(el.dataset.action,el.dataset.id,e);return;}
   const go=e.target.closest('[data-go]');if(go){irPara(go.dataset.go);}
+});
+// Botão do meio num link de nota (árvore, cartão, menção…) abre em aba nova, como Ctrl+clique.
+document.addEventListener('auxclick',e=>{
+  if(e.button!==1||busy||failed||!loaded)return;
+  const el=e.target.closest('[data-action="edit-note"]');
+  if(el){e.preventDefault();abrirPorId(el.dataset.id,{novaAba:true});}
 });
 document.querySelectorAll('.nav-item').forEach(b=>b.onclick=()=>{if(loaded)irPara(b.dataset.view);});
 $('#new-note').onclick=()=>{if(loaded&&!busy&&!failed)abrirNota(notaVazia());};
