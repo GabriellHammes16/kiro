@@ -477,6 +477,28 @@ function barraDeAbas(painel) {
   const itens = p.abas.map(id => `<button type="button" class="aba${p.ativa === id ? ' ativa' : ''}" role="tab" aria-selected="${p.ativa === id}" data-painel="${painel}" data-aba="${escapeHtml(id)}" draggable="true"><span class="aba-titulo">${escapeHtml(tituloDaAba(id))}</span><span class="aba-fechar" data-fechar-aba role="button" aria-label="Fechar aba">×</span></button>`).join('');
   return `<div class="abas-barra" data-painel="${painel}" role="tablist">${itens}<button type="button" class="icon-button aba-nova" data-nova-aba="${painel}" aria-label="Nova aba">${icone('mais')}</button></div>`;
 }
+// Vazio de uma metade sem aba nenhuma: mesmo convite de sempre, com o + já sabendo em qual metade abrir.
+function cofreVazioMarkup(painel) {
+  return `<div class="cofre-vazio">
+    <p>Escolha uma nota na árvore ao lado.</p>
+    <button class="secondary" data-cofre-nova="${painel}">${icone('mais')} Nova nota</button>
+  </div>`;
+}
+// Metade em leitura: a versão salva da nota (getNote), nunca o que está em `editing`.
+function renderLeitura(id, painel) {
+  const nota = id === KiroAbas.RASCUNHO ? notaVazia() : getNote(id);
+  if (!nota) return cofreVazioMarkup(painel);
+  return `<article class="doc-leitura" data-painel="${painel}"><h1 class="doc-leitura-titulo">${escapeHtml(nota.title || 'Sem título')}</h1>${renderizarMarkdown(nota.body)}</article>`;
+}
+// O que vai dentro do corpo de uma metade: a metade ativa mostra o editor (ou o vazio); a outra, leitura.
+function conteudoMetade(painel) {
+  if (abas.ativo === painel) return editing ? renderEditor() : cofreVazioMarkup(painel);
+  const ativa = abas.paineis[painel]?.ativa;
+  return ativa ? renderLeitura(ativa, painel) : cofreVazioMarkup(painel);
+}
+function metadeMarkup(painel) {
+  return `<section class="cofre-metade${abas.ativo === painel ? ' ativa' : ''}" data-painel="${painel}">${barraDeAbas(painel)}<div class="cofre-nota-corpo">${conteudoMetade(painel)}</div></section>`;
+}
 function renderCofre() {
   if (expanded === null) expanded = new Set(state.folders.map(f => f.id));
   // `abas` é por cofre: troca de cofre (inclusive a primeira vez) recarrega do localStorage daquele vaultPath.
@@ -494,10 +516,9 @@ function renderCofre() {
   }
   gravarAbas();
   const arvore = treeMarkup('', 0) || '<div class="empty">Crie uma pasta para começar.</div>';
-  const direita = editing ? renderEditor() : `<div class="cofre-vazio">
-    <p>Escolha uma nota na árvore ao lado.</p>
-    <button class="secondary" id="add-note-cofre">${icone('mais')} Nova nota</button>
-  </div>`;
+  const notas = abas.paineis.length === 2
+    ? `<div class="cofre-metades" style="--proporcao:${abas.proporcao}">${metadeMarkup(0)}<div class="metades-divisor" role="separator" aria-orientation="vertical" tabindex="0" aria-label="Divisão entre as notas" aria-valuemin="20" aria-valuemax="80" aria-valuenow="${Math.round(abas.proporcao * 100)}"></div>${metadeMarkup(1)}</div>`
+    : `<section class="cofre-nota">${barraDeAbas(0)}<div class="cofre-nota-corpo">${conteudoMetade(0)}</div></section>`;
   return `<div class="cofre">
   <aside class="cofre-lateral">
     <header class="cofre-topo">
@@ -514,10 +535,20 @@ function renderCofre() {
     <div class="cofre-divisor" role="separator" aria-orientation="vertical" aria-label="Largura da árvore de pastas" tabindex="0" aria-valuemin="${LARGURA_ARVORE.min}" aria-valuemax="${LARGURA_ARVORE.max}" aria-valuenow="${larguraArvore}" title="Arraste para ajustar a largura · dois cliques voltam ao padrão"></div>
     <footer class="cofre-rodape"><span class="small-muted">${state.folders.length} pasta${state.folders.length === 1 ? '' : 's'} · ${state.notes.length} nota${state.notes.length === 1 ? '' : 's'}</span></footer>
   </aside>
-  <section class="cofre-nota">${barraDeAbas(0)}<div class="cofre-nota-corpo">${direita}</div></section>
+  ${notas}
 </div>`;
 }
-// Liga os cliques da barra de abas de uma metade: trocar, fechar (× ou botão do meio) e +.
+// Itens do menu de contexto de uma aba: mandar para o outro lado, fechar, fechar as outras.
+function itensDaAba(painel, id) {
+  const destino = painel === 0 ? 1 : 0;
+  return [
+    { rotulo: painel === 0 ? 'Abrir à direita' : 'Abrir à esquerda', icone: icone(painel === 0 ? 'direita' : 'esquerda'), acao: () => { abas = KiroAbas.mover(abas, painel, id, destino); gravarAbas(); abrirPorId(id, { painel: destino }); } },
+    { separador: true },
+    { rotulo: 'Fechar', icone: icone('fechar'), acao: () => fecharAba(painel, id) },
+    { rotulo: 'Fechar as outras', icone: icone('lixeira'), acao: () => fecharOutrasAbas(painel, id) },
+  ];
+}
+// Liga os cliques da barra de abas de uma metade: trocar, fechar (× ou botão do meio), + e arrastar/menu.
 function bindAbas(painel) {
   const barra = document.querySelector(`.abas-barra[data-painel="${painel}"]`);
   if (!barra) return;
@@ -532,6 +563,108 @@ function bindAbas(painel) {
     if (e.button !== 1) return;
     const aba = e.target.closest('.aba');
     if (aba) { e.preventDefault(); fecharAba(painel, aba.dataset.aba); }
+  });
+  barra.addEventListener('contextmenu', e => {
+    const aba = e.target.closest('.aba');
+    if (aba) abrirMenuContexto(e, document.body, itensDaAba(painel, aba.dataset.aba));
+  });
+  barra.addEventListener('dragstart', e => {
+    const aba = e.target.closest('.aba');
+    if (!aba) return;
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/x-kiro-aba', JSON.stringify({ painel, id: aba.dataset.aba }));
+  });
+}
+// Em qual metade a aba arrastada deve cair: sobre uma barra de abas ou metade existente, a delas;
+// senão, metade direita da área vira painel 1, esquerda vira painel 0.
+function metadeAlvo(evento, area) {
+  const barra = evento.target.closest('.abas-barra');
+  if (barra) return Number(barra.dataset.painel);
+  const metade = evento.target.closest('.cofre-metade');
+  if (metade) return Number(metade.dataset.painel);
+  const r = area.getBoundingClientRect();
+  return (evento.clientX - r.left) > r.width / 2 ? 1 : 0;
+}
+// Arrastar uma aba sobre a área de notas: dividir (metade direita) ou mover para o outro lado.
+function bindDragDeAbas() {
+  const area = document.querySelector('.cofre-nota, .cofre-metades');
+  if (!area) return;
+  const limpar = () => area.querySelectorAll('.destino-direita').forEach(el => el.classList.remove('destino-direita'));
+  area.addEventListener('dragover', e => {
+    if (!e.dataTransfer?.types.includes('text/x-kiro-aba')) return;
+    e.preventDefault();
+    limpar();
+    if (metadeAlvo(e, area) === 1) (area.querySelector('.cofre-metade[data-painel="1"]') || area).classList.add('destino-direita');
+  });
+  area.addEventListener('dragleave', e => { if (!area.contains(e.relatedTarget)) limpar(); });
+  area.addEventListener('drop', e => {
+    if (!e.dataTransfer?.types.includes('text/x-kiro-aba')) return;
+    e.preventDefault();
+    limpar();
+    let dados; try { dados = JSON.parse(e.dataTransfer.getData('text/x-kiro-aba') || 'null'); } catch { dados = null; }
+    if (!dados) return;
+    const alvo = metadeAlvo(e, area);
+    if (dados.painel === alvo) return;
+    abas = KiroAbas.mover(abas, dados.painel, dados.id, alvo);
+    gravarAbas();
+    abrirPorId(dados.id, { painel: alvo });
+  });
+}
+// Clicar na metade em leitura (fora de link, imagem, etiqueta ou bloco de plug-in) ativa a nota nela.
+function bindLeitura(painel) {
+  const artigo = document.querySelector(`.doc-leitura[data-painel="${painel}"]`);
+  if (!artigo) return;
+  artigo.addEventListener('click', evento => {
+    const linkDoPlugin = evento.target.closest('.plugin-bloco a');
+    if (linkDoPlugin) { evento.preventDefault(); const destino = linkDoPlugin.getAttribute('href') || ''; if (/^https?:\/\//i.test(destino)) window.open(destino, '_blank', 'noopener,noreferrer'); return; }
+    const copiar = evento.target.closest('.code-copy');
+    if (copiar) return void copiarBloco(copiar);
+    const imagem = evento.target.closest('.md-imagem img');
+    if (imagem) { evento.preventDefault(); return void abrirImagemInteira(imagem.src, imagem.alt); }
+    const etiqueta = evento.target.closest('.md-tag');
+    if (etiqueta) return void buscarEtiqueta(etiqueta.textContent);
+    const link = evento.target.closest('.wikilink');
+    if (link) { evento.preventDefault(); seguirWikilink(link, painel); return; }
+    const ativa = abas.paineis[painel]?.ativa;
+    if (ativa) abrirPorId(ativa, { painel });
+  });
+}
+// Divisória entre as duas metades: arrastar (com limite de 320px por lado), setas do teclado, dois cliques voltam ao meio.
+function bindDivisorDasMetades() {
+  const divisor = document.querySelector('.metades-divisor'), area = document.querySelector('.cofre-metades');
+  if (!divisor || !area) return;
+  const aplicar = (p, gravar) => {
+    abas = KiroAbas.proporcao(abas, p);
+    area.style.setProperty('--proporcao', abas.proporcao);
+    divisor.setAttribute('aria-valuenow', Math.round(abas.proporcao * 100));
+    if (gravar) gravarAbas();
+  };
+  const paraFracao = clientX => {
+    const r = area.getBoundingClientRect();
+    const min = Math.min(0.5, Math.max(0, 320 / r.width));
+    return Math.max(min, Math.min(1 - min, (clientX - r.left) / r.width));
+  };
+  divisor.addEventListener('pointerdown', e => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    divisor.setPointerCapture(e.pointerId);
+    document.body.classList.add('arrastando-divisor');
+    const mover = ev => aplicar(paraFracao(ev.clientX), false);
+    const soltar = () => {
+      divisor.removeEventListener('pointermove', mover);
+      document.body.classList.remove('arrastando-divisor');
+      aplicar(abas.proporcao, true);
+    };
+    divisor.addEventListener('pointermove', mover);
+    divisor.addEventListener('pointerup', soltar, { once: true });
+    divisor.addEventListener('pointercancel', soltar, { once: true });
+  });
+  divisor.addEventListener('dblclick', () => aplicar(0.5, true));
+  divisor.addEventListener('keydown', e => {
+    const passo = e.key === 'ArrowLeft' ? -0.02 : e.key === 'ArrowRight' ? 0.02 : 0;
+    if (!passo) return;
+    e.preventDefault();
+    aplicar(abas.proporcao + passo, true);
   });
 }
 function bindView() {
@@ -551,9 +684,14 @@ function bindView() {
     document.querySelector('[data-cofre="casa"]')?.addEventListener('click',()=>irPara('today'));
     // Delegado: a seta esconde ou mostra; com a barra recolhida, clicar na faixa também reabre.
     document.querySelector('.cofre-lateral')?.addEventListener('click',e=>{if(e.target.closest('[data-cofre="alternar"]')||(lateralRecolhida&&!e.target.closest('button')))alternarLateral();});
-    document.querySelector('#add-note-cofre')?.addEventListener('click',()=>abrirNota(notaVazia()));
+    document.querySelectorAll('[data-cofre-nova]').forEach(b=>b.addEventListener('click',()=>abrirNota(notaVazia(),{painel:Number(b.dataset.cofreNova)})));
     ligarDivisorDaArvore();
-    bindAbas(0);
+    abas.paineis.forEach((_,painel)=>bindAbas(painel));
+    bindDragDeAbas();
+    if(abas.paineis.length===2){
+      bindDivisorDasMetades();
+      for(const painel of [0,1]) if(abas.ativo!==painel) bindLeitura(painel);
+    }
     if(editing)bindEditor();
     return;
   }
@@ -732,10 +870,26 @@ async function fecharAba(painel,id){
   if(editing&&idDaAba(editing)===id&&editorDirty&&!await salvarNota())return;
   abas=KiroAbas.fechar(abas,painel,id);
   gravarAbas();
+  atualizarEditingConformeAtiva();
+  render();
+}
+// Fecha as outras abas da metade (mantém só `id`); se uma delas era a nota em edição, salva antes.
+async function fecharOutrasAbas(painel,id){
+  const p=abas.paineis[painel];
+  if(editing&&p?.abas.includes(idDaAba(editing))&&idDaAba(editing)!==id&&editorDirty&&!await salvarNota())return;
+  abas=KiroAbas.fecharOutras(abas,painel,id);
+  gravarAbas();
+  atualizarEditingConformeAtiva();
+  render();
+}
+// Depois de fechar aba(s), `editing` só é reconstruído se a nota ativa mudou de fato — senão
+// edições não salvas do lado que continua ativo seriam sobrescritas pela versão salva no cofre.
+function atualizarEditingConformeAtiva(){
   const ativa=KiroAbas.notaAtiva(abas);
+  if(editing&&idDaAba(editing)===ativa)return;
   const nota=ativa===KiroAbas.RASCUNHO?notaVazia():ativa?getNote(ativa):null;
   editing=nota?{...nota,tags:[...(nota.tags||[])],links:[...(nota.links||[])]}:null;
-  editorDirty=false;render();
+  editorDirty=false;
 }
 async function irPara(destino){ if(editing) return void await sairDoEditor(destino); currentView=destino; render(); }
 async function sairDoEditor(destino){
@@ -1472,9 +1626,9 @@ async function buscarEtiqueta(texto) {
   busca.value = texto;
   busca.dispatchEvent(new Event('input'));
 }
-function seguirWikilink(link) {
+function seguirWikilink(link, painel) {
   const alvo = link.dataset.id ? getNote(link.dataset.id) : notaVazia({ title: link.dataset.alvo });
-  return abrirNota(alvo);
+  return abrirNota(alvo, { painel });
 }
 const ajustarAltura = campo => { campo.style.height = 'auto'; campo.style.height = campo.scrollHeight + 'px'; };
 

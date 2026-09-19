@@ -124,6 +124,11 @@ updatedAt: 1789189555996
 - **Arrastar nota para uma pasta.**
 - **Botão direito na nota:** abrir e mover para.
 - **Botão direito na pasta:** nova nota, nova subpasta, renomear ou mover, cor e excluir.
+- **Abas e tela dividida:** cada nota aberta vira uma aba; a tela pode dividir em até duas metades,
+  cada uma com sua própria barra de abas (arrastar uma aba para o lado, ou o menu do botão direito
+  nela). Só uma nota fica editável por vez (a metade ativa); a outra mostra a versão salva em
+  leitura, com os links clicáveis. Abas, divisão e proporção da divisória ficam salvas por cofre no
+  `localStorage`, nunca no cofre. Modelo puro e testado em `abas.js` (`KiroAbas`).
 
 ### Tarefas
 - Tarefas com data, prioridade e nota vinculada (o link abre a nota).
