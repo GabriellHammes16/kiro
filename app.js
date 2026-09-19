@@ -542,7 +542,7 @@ function renderCofre() {
 function itensDaAba(painel, id) {
   const destino = painel === 0 ? 1 : 0;
   return [
-    { rotulo: painel === 0 ? 'Abrir à direita' : 'Abrir à esquerda', icone: icone(painel === 0 ? 'direita' : 'esquerda'), acao: () => { abas = KiroAbas.mover(abas, painel, id, destino); gravarAbas(); abrirPorId(id, { painel: destino }); } },
+    { rotulo: painel === 0 ? 'Abrir à direita' : 'Abrir à esquerda', icone: icone(painel === 0 ? 'direita' : 'esquerda'), acao: async () => { if (!await salvarAntesDeTrocar()) return; abas = KiroAbas.mover(abas, painel, id, destino); gravarAbas(); abrirPorId(id, { painel: destino }); } },
     { separador: true },
     { rotulo: 'Fechar', icone: icone('fechar'), acao: () => fecharAba(painel, id) },
     { rotulo: 'Fechar as outras', icone: icone('lixeira'), acao: () => fecharOutrasAbas(painel, id) },
@@ -589,7 +589,9 @@ function metadeAlvo(evento, area) {
 function bindDragDeAbas() {
   const area = document.querySelector('.cofre-nota, .cofre-metades');
   if (!area) return;
-  const limpar = () => area.querySelectorAll('.destino-direita').forEach(el => el.classList.remove('destino-direita'));
+  // `area` mesma pode ter recebido a classe (caso de uma metade só, sem destino[data-painel="1"]);
+  // limpar precisa tirar dela também, não só dos filhos.
+  const limpar = () => { area.classList.remove('destino-direita'); area.querySelectorAll('.destino-direita').forEach(el => el.classList.remove('destino-direita')); };
   area.addEventListener('dragover', e => {
     if (!e.dataTransfer?.types.includes('text/x-kiro-aba')) return;
     e.preventDefault();
@@ -597,7 +599,8 @@ function bindDragDeAbas() {
     if (metadeAlvo(e, area) === 1) (area.querySelector('.cofre-metade[data-painel="1"]') || area).classList.add('destino-direita');
   });
   area.addEventListener('dragleave', e => { if (!area.contains(e.relatedTarget)) limpar(); });
-  area.addEventListener('drop', e => {
+  area.addEventListener('dragend', limpar);
+  area.addEventListener('drop', async e => {
     if (!e.dataTransfer?.types.includes('text/x-kiro-aba')) return;
     e.preventDefault();
     limpar();
@@ -605,6 +608,7 @@ function bindDragDeAbas() {
     if (!dados) return;
     const alvo = metadeAlvo(e, area);
     if (dados.painel === alvo) return;
+    if (!await salvarAntesDeTrocar()) return;
     abas = KiroAbas.mover(abas, dados.painel, dados.id, alvo);
     gravarAbas();
     abrirPorId(dados.id, { painel: alvo });
@@ -614,7 +618,7 @@ function bindDragDeAbas() {
 function bindLeitura(painel) {
   const artigo = document.querySelector(`.doc-leitura[data-painel="${painel}"]`);
   if (!artigo) return;
-  artigo.addEventListener('click', evento => {
+  artigo.addEventListener('click', async evento => {
     const linkDoPlugin = evento.target.closest('.plugin-bloco a');
     if (linkDoPlugin) { evento.preventDefault(); const destino = linkDoPlugin.getAttribute('href') || ''; if (/^https?:\/\//i.test(destino)) window.open(destino, '_blank', 'noopener,noreferrer'); return; }
     const copiar = evento.target.closest('.code-copy');
@@ -626,7 +630,7 @@ function bindLeitura(painel) {
     const link = evento.target.closest('.wikilink');
     if (link) { evento.preventDefault(); seguirWikilink(link, painel); return; }
     const ativa = abas.paineis[painel]?.ativa;
-    if (ativa) abrirPorId(ativa, { painel });
+    if (ativa && await salvarAntesDeTrocar()) abrirPorId(ativa, { painel });
   });
 }
 // Divisória entre as duas metades: arrastar (com limite de 320px por lado), setas do teclado, dois cliques voltam ao meio.
@@ -852,6 +856,9 @@ function capturaRapida(){
 // ---- Editor de documento: a nota ocupa a página inteira, como um processador de texto. ----
 async function abrirNota(nota,{novaAba=false,painel}={}){
   if(editing&&editorDirty&&!await salvarNota())return;
+  // O salvamento acima pode ter trocado o objeto da nota em state.notes (ela ganhou id, ou o
+  // conteúdo mudou); relê pelo id para nunca reabrir a versão antiga por cima da recém-salva.
+  if(nota.id)nota=getNote(nota.id)||nota;
   // Rascunho vazio (sem título, sem digitar nada) abandonado ao trocar de nota: some, não fica para sempre.
   if(editing&&!editing.id){
     const onde=abas.paineis.findIndex(p=>p.abas.includes(KiroAbas.RASCUNHO));
@@ -865,18 +872,23 @@ async function abrirNota(nota,{novaAba=false,painel}={}){
 }
 // Acha a nota pelo id (usado pela árvore e pela barra de abas) e abre.
 function abrirPorId(id,opcoes){ const nota=getNote(id); if(nota) abrirNota(nota,opcoes); }
-// Fecha uma aba: salva a nota em edição se for ela e tiver alterações; a nova aba ativa vira o editor.
+// Salva a nota em edição (se houver e estiver suja) antes de qualquer ação que possa trocar qual
+// nota fica em `editing` — fechar aba, "fechar as outras", mover/arrastar para o outro lado ou
+// ativar a metade em leitura. Sem isto, fechar ou mover algo do lado inativo poderia trocar a
+// metade ativa (KiroAbas também faz isso) e `atualizarEditingConformeAtiva` sobrescreveria uma
+// edição não salva do lado que era o ativo com a versão salva no cofre.
+async function salvarAntesDeTrocar(){ return !(editing&&editorDirty)||await salvarNota(); }
+// Fecha uma aba: salva a nota em edição se houver alterações; a nova aba ativa vira o editor.
 async function fecharAba(painel,id){
-  if(editing&&idDaAba(editing)===id&&editorDirty&&!await salvarNota())return;
+  if(!await salvarAntesDeTrocar())return;
   abas=KiroAbas.fechar(abas,painel,id);
   gravarAbas();
   atualizarEditingConformeAtiva();
   render();
 }
-// Fecha as outras abas da metade (mantém só `id`); se uma delas era a nota em edição, salva antes.
+// Fecha as outras abas da metade (mantém só `id`); salva a nota em edição antes, se houver.
 async function fecharOutrasAbas(painel,id){
-  const p=abas.paineis[painel];
-  if(editing&&p?.abas.includes(idDaAba(editing))&&idDaAba(editing)!==id&&editorDirty&&!await salvarNota())return;
+  if(!await salvarAntesDeTrocar())return;
   abas=KiroAbas.fecharOutras(abas,painel,id);
   gravarAbas();
   atualizarEditingConformeAtiva();
@@ -884,7 +896,10 @@ async function fecharOutrasAbas(painel,id){
 }
 // Depois de fechar aba(s), `editing` só é reconstruído se a nota ativa mudou de fato — senão
 // edições não salvas do lado que continua ativo seriam sobrescritas pela versão salva no cofre.
+// Chamadores já passaram por `salvarAntesDeTrocar`, então `editorDirty` aqui deveria ser sempre
+// falso; o guard abaixo é só uma rede de segurança contra descartar edição por engano.
 function atualizarEditingConformeAtiva(){
+  if(editing&&editorDirty)return;
   const ativa=KiroAbas.notaAtiva(abas);
   if(editing&&idDaAba(editing)===ativa)return;
   const nota=ativa===KiroAbas.RASCUNHO?notaVazia():ativa?getNote(ativa):null;
