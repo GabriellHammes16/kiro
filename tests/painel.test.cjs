@@ -46,3 +46,9 @@ test('árvore de etiquetas: aninhadas por barra, cada nota conta uma vez', () =>
     { nome: 'ideia', caminho: 'ideia', total: 1, filhos: [] },
   ]);
 });
+
+test('título com | ou colchetes não vira link', () => {
+  assert.equal(K.vincularMencao('veja a|b aqui', 'A|B'), 'veja a|b aqui');
+  assert.equal(K.vincularMencao('veja a]b aqui', 'A]B'), 'veja a]b aqui');
+  assert.deepEqual(K.mencoesNaoVinculadas([n('alvo', 'A|B', ''), n('outra', 'B', 'veja a|b aqui')], n('alvo', 'A|B', '')), []);
+});

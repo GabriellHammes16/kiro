@@ -259,6 +259,8 @@
   function ocorrenciasSoltas(corpo, titulo) {
     const alvo = semAcento(String(titulo || '').trim());
     if (alvo.length < 3) return [];
+    // Título com |, [ ou ] não pode virar [[link]] seguro: wikiLinks não vai parsear.
+    if (/[|[\]]/.test(String(titulo || '').trim())) return [];
     const texto = semAcento(String(corpo || '').replace(/\[\[[^\]\n]*\]\]/g, m => ' '.repeat(m.length)));
     const achadas = [];
     for (let i = texto.indexOf(alvo); i !== -1; i = texto.indexOf(alvo, i + 1)) {
