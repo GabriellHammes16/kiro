@@ -479,9 +479,10 @@ function barraDeAbas(painel) {
 }
 function renderCofre() {
   if (expanded === null) expanded = new Set(state.folders.map(f => f.id));
-  // Carregado uma única vez, depois que o cofre (e o vaultPath) já foram lidos.
-  if (!abasCarregadas) {
-    abasCarregadas = true;
+  // `abas` é por cofre: troca de cofre (inclusive a primeira vez) recarrega do localStorage daquele vaultPath.
+  if (abasDoCofre !== state.vaultPath) {
+    abasDoCofre = state.vaultPath;
+    abas = KiroAbas.vazio();
     try { const salvo = JSON.parse(localStorage.getItem('kiro.abas:' + (state.vaultPath || ''))); if (salvo) abas = salvo; } catch { /* janela privada: vale só nesta sessão */ }
   }
   abas = KiroAbas.limpar(abas, state.notes.map(n => n.id));
@@ -630,7 +631,7 @@ let aguardandoCofre=false;   // primeira abertura no aplicativo: nada é lido at
 let expanded=null, renderedView=null, editing=null, editorDirty=false, grafoRaf=null, blocoAberto=null;
 const notaVazia = (extra={}) => ({title:"",body:"",links:[],tags:[],folderId:"",...extra});
 // Abas da tela de Pastas: modelo puro (abas.js), sempre limpo contra state.notes. Memória por cofre.
-let abas = KiroAbas.vazio(), abasCarregadas = false;
+let abas = KiroAbas.vazio(), abasDoCofre = undefined; // vaultPath a que `abas` pertence (undefined = ainda nenhum)
 function gravarAbas() { try { localStorage.setItem('kiro.abas:' + (state.vaultPath || ''), JSON.stringify(abas)); } catch { /* janela privada: vale só nesta sessão */ } }
 const idDaAba = nota => nota.id || KiroAbas.RASCUNHO;
 const $ = selector => document.querySelector(selector);
@@ -713,6 +714,11 @@ function capturaRapida(){
 // ---- Editor de documento: a nota ocupa a página inteira, como um processador de texto. ----
 async function abrirNota(nota,{novaAba=false,painel}={}){
   if(editing&&editorDirty&&!await salvarNota())return;
+  // Rascunho vazio (sem título, sem digitar nada) abandonado ao trocar de nota: some, não fica para sempre.
+  if(editing&&!editing.id){
+    const onde=abas.paineis.findIndex(p=>p.abas.includes(KiroAbas.RASCUNHO));
+    if(onde!==-1)abas=KiroAbas.fechar(abas,onde,KiroAbas.RASCUNHO);
+  }
   abas=KiroAbas.abrir(abas,idDaAba(nota),{novaAba,painel});
   gravarAbas();
   editing={...nota,tags:[...(nota.tags||[])],links:[...(nota.links||[])]};
