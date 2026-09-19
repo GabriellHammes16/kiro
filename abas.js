@@ -73,6 +73,12 @@
   }
 
   function trocarId(e, antigo, novo) {
+    if (antigo === novo) return e;
+    const ja = ondeEsta(e, novo);
+    if (ja !== -1) {
+      const onde = ondeEsta(e, antigo);
+      return onde === -1 ? e : ativar(fechar(e, onde, antigo), ondeEsta(fechar(e, onde, antigo), novo), novo);
+    }
     const r = copia(e);
     for (const p of r.paineis) {
       p.abas = p.abas.map(x => (x === antigo ? novo : x));

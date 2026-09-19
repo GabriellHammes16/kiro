@@ -80,6 +80,15 @@ test('trocarId troca o rascunho pelo id salvo', () => {
   assert.deepEqual(e.paineis[0], { abas: ['n1'], ativa: 'n1' });
 });
 
+test('trocarId fecha a aba antiga se o novo id já existe', () => {
+  const e = A.trocarId({ paineis: [{ abas: ['a'], ativa: 'a' }, { abas: ['x'], ativa: 'x' }], ativo: 0, proporcao: 0.5 }, 'a', 'x');
+  const idsCombinados = e.paineis.flatMap(p => p.abas);
+  assert(!idsCombinados.includes('a'), 'a deve estar fechada');
+  assert.equal(idsCombinados.filter(id => id === 'x').length, 1, 'x deve aparecer uma única vez');
+  assert.equal(e.paineis.length, 1, 'deve haver uma única metade');
+  assert.deepEqual(e.paineis[0], { abas: ['x'], ativa: 'x' });
+});
+
 test('limpar recusa lixo, tira ids inexistentes e repetidos e junta metade vazia', () => {
   for (const lixo of [null, 'x', 1, [], {}, { paineis: [] }, { paineis: 'x' }, { paineis: [{}, {}, {}] }]) assert.deepEqual(A.limpar(lixo, ['a']), A.vazio());
   const sujo = { paineis: [{ abas: ['a', 'x', 'a', 7], ativa: 'x' }, { abas: ['x'], ativa: 'x' }], ativo: 1, proporcao: 9 };
