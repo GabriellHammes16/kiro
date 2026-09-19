@@ -1075,3 +1075,38 @@ body, button, input, textarea, select { font-family:var(--fonte-interface); }
 /* A aba ativa não encolhe até sumir o título: as outras cedem espaço (e a barra rola). */
 .aba { flex:0 1 auto; min-width:64px; }
 .aba.ativa { flex-shrink:0; }
+
+/* ---- Painel da direita (links de volta/saída, sumário, etiquetas da nota em edição) ---- */
+.painel-direito { position:relative; flex:0 0 auto; height:100vh; min-width:0; display:flex; flex-direction:column;
+  background:var(--sidebar-bg,#11161D); border-left:1px solid var(--line); }
+.painel-direito-divisor { position:absolute; top:0; left:0; bottom:0; width:7px; z-index:2; cursor:col-resize; touch-action:none; }
+.painel-direito-divisor::after { content:""; position:absolute; top:0; bottom:0; left:0; width:2px; background:transparent; transition:background-color var(--rapido) var(--curva); }
+.painel-direito-divisor:hover::after, .painel-direito-divisor:focus-visible::after, .arrastando-divisor .painel-direito-divisor::after { background:var(--acento); }
+.painel-direito-divisor:focus-visible { outline:none; }
+.painel-direito-topo { display:flex; gap:2px; padding:8px 10px; flex:0 0 auto; border-bottom:1px solid var(--line); }
+.painel-direito-topo .icon-button[aria-pressed="true"] { color:var(--acento); background:var(--accent-soft); }
+.painel-direito-corpo { flex:1 1 auto; overflow-y:auto; padding:12px 14px 24px; }
+.painel-direito-vazio { padding:8px 0; }
+.painel-filtro { width:100%; margin-bottom:10px; }
+.painel-secao + .painel-secao { margin-top:18px; }
+.painel-secao h3 { margin:0 0 6px; font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); font-weight:600; }
+.painel-item { padding:6px 4px; border-radius:8px; display:flex; flex-direction:column; align-items:flex-start; gap:2px; }
+.painel-item:hover { background:var(--accent-soft); }
+.painel-item[hidden] { display:none; }
+.painel-item-titulo, .painel-link, .painel-sumario-item, .painel-etiqueta { background:none; border:none; padding:0; font:inherit; color:var(--ink); cursor:pointer; text-align:left; }
+.painel-item-titulo:hover, .painel-link:hover, .painel-sumario-item:hover, .painel-etiqueta:hover { color:var(--acento); }
+.painel-item-titulo { font-weight:600; }
+.painel-lista, .painel-sumario, .painel-etiquetas-lista { list-style:none; margin:0; padding:0; }
+.painel-lista li, .painel-sumario li { margin:1px 0; }
+.painel-link, .painel-sumario-item { display:block; width:100%; padding:6px 4px; border-radius:8px; }
+.painel-link:hover, .painel-sumario-item:hover { background:var(--accent-soft); }
+.painel-link.ausente { color:var(--muted); font-style:italic; }
+.painel-sumario-item { padding-left:calc(4px + (var(--nivel,1) - 1) * 14px); }
+.painel-etiqueta-item, .painel-etiquetas-lista summary { display:flex; align-items:center; justify-content:space-between; gap:6px; padding:6px 4px; border-radius:8px; cursor:pointer; }
+.painel-etiquetas-lista summary:hover, .painel-etiqueta-item:hover { background:var(--accent-soft); }
+.painel-etiqueta-total { color:var(--muted); font-size:12px; }
+.painel-etiquetas-lista .painel-etiquetas-lista { padding-left:14px; }
+/* Com muitas abas (barra rolável), o botão do painel fica preso à borda direita, como o ⌄. */
+.painel-direito-alternar { flex:0 0 auto; margin-left:2px; position:sticky; right:0; z-index:2; background:var(--sidebar-bg,#11161D); }
+.abas-barra:has(.painel-direito-alternar) .abas-menu { right:28px; }
+@media (max-width:900px) { .painel-direito, .painel-direito-alternar { display:none; } }

@@ -131,6 +131,12 @@ updatedAt: 1789189555996
   mostrar a versão salva em leitura, com os links clicáveis. Abas, divisão e proporção da divisória
   ficam salvas por cofre no `localStorage`, nunca no cofre. Modelo puro e testado em `abas.js`
   (`KiroAbas`).
+- **Painel da direita:** botão ◨ no fim da barra de abas da última coluna (ou Ctrl+Shift+L) abre um
+  painel com 4 abas sobre a nota em edição — Links de volta (menções vinculadas e não vinculadas,
+  com filtro e botão Vincular), Links de saída, Sumário (clicar rola até o título) e Etiquetas
+  (aninhadas por `/`, clicar abre a busca). Aberto/aba/largura ficam no `localStorage`; some abaixo
+  de 900px. Lógica pura em `domain.js` (`mencoesNaoVinculadas`, `vincularMencao`, `sumario`,
+  `arvoreDeEtiquetas`).
 
 ### Tarefas
 - Tarefas com data, prioridade e nota vinculada (o link abre a nota).

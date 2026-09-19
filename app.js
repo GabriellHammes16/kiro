@@ -330,6 +330,12 @@ const TRACOS = {
   'tema-cyber-lain': '<path d="M3.5 4.5Q12 10.5 20.5 4.5M3.5 8Q12 13.5 20.5 8"/><path d="m5.5 14 3 2.5-3 2.5M11.5 19h6"/>',
   'tema-makoto-shinkai': '<path d="M3.5 19.5h6l2-2 2 2h7"/><circle cx="7.5" cy="12" r="2"/><path d="M9.2 10.9 19.5 4.5M9.5 12.4l11-2.9"/><circle cx="17" cy="14" r=".7" fill="currentColor"/>',
   'tema-jojo-stand': '<path d="M12 4.4l2.1 5.7 6.1.2-4.8 3.8 1.7 5.9-5.1-3.4-5.1 3.4 1.7-5.9-4.8-3.8 6.1-.2z"/><path d="M3.5 3.5l1.8 1.8M20.5 3.5l-1.8 1.8"/>',
+  // Painel da direita: links de volta/saída, sumário e etiquetas.
+  'link-volta': '<path d="M19 6v12"/><path d="M14 12H5"/><path d="M9 7 4 12l5 5"/>',
+  'link-saida': '<path d="M5 6v12"/><path d="M10 12h9"/><path d="M15 7 20 12l-5 5"/>',
+  sumario: '<path d="M5 6.5h14M5 12h10M5 17.5h6"/>',
+  etiqueta: '<path d="M4 4.8v6.2c0 .5.2 1 .6 1.4l7 7c.8.8 2 .8 2.8 0l6-6c.8-.8.8-2 0-2.8l-7-7a2 2 0 0 0-1.4-.6H5.8A1.8 1.8 0 0 0 4 4.8Z"/><circle cx="8.5" cy="8.5" r="1.2"/>',
+  'painel-direito': '<rect x="3.5" y="4.5" width="17" height="15" rx="2"/><path d="M15.5 4.5v15"/>',
 };
 const icone = (nome, classe = '') => `<svg class="icone${classe ? ' ' + classe : ''}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">${TRACOS[nome] || ''}</svg>`;
 // Ícones do HTML fixo: o marcador data-icone vira desenho quando o app abre.
@@ -418,6 +424,61 @@ function ligarDivisorDaArvore() {
   // O clique na faixa recolhida reabre a árvore; o divisor não deve disparar isso.
   divisor.addEventListener('click', e => e.stopPropagation());
 }
+// Painel da direita (links, sumário e etiquetas), só na tela de Pastas: aberto/aba/largura ficam
+// no navegador (localStorage), nunca no cofre — mesmo modelo da largura da árvore, espelhado
+// (a divisória fica na borda esquerda do painel, que mora à direita das colunas).
+const PAINEL_DIREITO_ABAS = ['volta', 'saida', 'sumario', 'etiquetas'];
+const PAINEL_DIREITO_LARGURA = { min: 220, max: 520, padrao: 300 };
+const larguraPainelValida = n => { const v = n === null || n === undefined || n === '' ? NaN : Number(n); return Math.round(Number.isFinite(v) ? Math.min(PAINEL_DIREITO_LARGURA.max, Math.max(PAINEL_DIREITO_LARGURA.min, v)) : PAINEL_DIREITO_LARGURA.padrao); };
+function painelDireitoValido(salvo) {
+  const s = salvo && typeof salvo === 'object' && !Array.isArray(salvo) ? salvo : {};
+  return { aberto: s.aberto === true, aba: PAINEL_DIREITO_ABAS.includes(s.aba) ? s.aba : 'volta', largura: larguraPainelValida(s.largura) };
+}
+let painelDireito = painelDireitoValido((() => { try { return JSON.parse(lerPreferencia('painelDireito') || 'null'); } catch { return null; } })());
+function gravarPainelDireito() { try { localStorage.setItem('kiro.painelDireito', JSON.stringify(painelDireito)); } catch { /* janela privada: vale só nesta sessão */ } }
+function aplicarLarguraPainelDireito(largura, gravar = false) {
+  painelDireito.largura = larguraPainelValida(largura);
+  const el = document.querySelector('.painel-direito');
+  if (el) el.style.width = `${painelDireito.largura}px`;
+  document.querySelector('.painel-direito-divisor')?.setAttribute('aria-valuenow', painelDireito.largura);
+  if (gravar) gravarPainelDireito();
+}
+function ligarDivisorDoPainelDireito() {
+  const divisor = document.querySelector('.painel-direito-divisor'), painel = document.querySelector('.painel-direito');
+  if (!divisor || !painel) return;
+  divisor.addEventListener('pointerdown', e => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    divisor.setPointerCapture(e.pointerId);
+    document.body.classList.add('arrastando-divisor');
+    const direita = painel.getBoundingClientRect().right;
+    const mover = ev => aplicarLarguraPainelDireito(direita - ev.clientX);
+    const soltar = () => {
+      divisor.removeEventListener('pointermove', mover);
+      document.body.classList.remove('arrastando-divisor');
+      aplicarLarguraPainelDireito(painelDireito.largura, true);
+    };
+    divisor.addEventListener('pointermove', mover);
+    divisor.addEventListener('pointerup', soltar, { once: true });
+    divisor.addEventListener('pointercancel', soltar, { once: true });
+  });
+  divisor.addEventListener('dblclick', () => aplicarLarguraPainelDireito(PAINEL_DIREITO_LARGURA.padrao, true));
+  divisor.addEventListener('keydown', e => {
+    const passo = e.key === 'ArrowLeft' ? 16 : e.key === 'ArrowRight' ? -16 : 0;
+    if (e.key === 'Home') { e.preventDefault(); return aplicarLarguraPainelDireito(PAINEL_DIREITO_LARGURA.padrao, true); }
+    if (!passo) return;
+    e.preventDefault();
+    aplicarLarguraPainelDireito(painelDireito.largura + passo, true);
+  });
+  divisor.addEventListener('click', e => e.stopPropagation());
+}
+// Só age na tela de Pastas: o atalho (global) não deve mexer no painel quando aberto em outra tela.
+function alternarPainelDireito() {
+  if (currentView !== 'studies') return;
+  painelDireito.aberto = !painelDireito.aberto;
+  gravarPainelDireito();
+  render();
+}
 // Atalhos que dá para trocar em Configurações → Atalhos (o padrão e a validação ficam no domain.js).
 let atalhos = Kiro.atalhosValidos((() => { try { return JSON.parse(lerPreferencia('atalhos') || 'null'); } catch { return null; } })());
 const teclaDe = id => Kiro.rotuloDaCombinacao(atalhos[id]);
@@ -481,7 +542,11 @@ function barraDeAbas(painel) {
   // metade: não há aria-controls/tabpanel nem navegação por setas, então não é o padrão ARIA
   // tabs completo — só um grupo rotulado.
   const itens = p.abas.map(id => { const titulo = escapeHtml(tituloDaAba(id)); return `<div class="aba${p.ativa === id ? ' ativa' : ''}" data-painel="${painel}" data-aba="${escapeHtml(id)}" draggable="true"><button type="button" class="aba-abrir" aria-current="${p.ativa === id}"><span class="aba-titulo">${titulo}</span></button><button type="button" class="aba-fechar" data-fechar-aba aria-label="Fechar aba ${titulo}">×</button></div>`; }).join('');
-  return `<div class="abas-barra" data-painel="${painel}" role="group" aria-label="Abas">${itens}<button type="button" class="icon-button aba-nova" data-nova-aba="${painel}" aria-label="Nova aba">${icone('mais')}</button><button type="button" class="icon-button abas-menu" data-menu-abas="${painel}" aria-label="Opções das abas desta coluna" aria-haspopup="menu" title="Opções das abas">${icone('abaixo')}</button></div>`;
+  // O botão do painel da direita só aparece na última coluna, depois do menu ⌄ dela.
+  const botaoPainel = painel === abas.paineis.length - 1
+    ? `<button type="button" class="icon-button painel-direito-alternar" data-painel-direito aria-pressed="${painelDireito.aberto}" title="Painel da direita (${teclaDe('painelDireito')})" aria-label="Painel da direita">${icone('painel-direito')}</button>`
+    : '';
+  return `<div class="abas-barra" data-painel="${painel}" role="group" aria-label="Abas">${itens}<button type="button" class="icon-button aba-nova" data-nova-aba="${painel}" aria-label="Nova aba">${icone('mais')}</button><button type="button" class="icon-button abas-menu" data-menu-abas="${painel}" aria-label="Opções das abas desta coluna" aria-haspopup="menu" title="Opções das abas">${icone('abaixo')}</button>${botaoPainel}</div>`;
 }
 // Vazio de uma metade sem aba nenhuma: mesmo convite de sempre, com o + já sabendo em qual metade abrir.
 function cofreVazioMarkup(painel) {
@@ -515,6 +580,105 @@ function cabeOutraColuna() {
   const area = document.querySelector('.cofre-metades');
   return !area || area.getBoundingClientRect().width / (abas.paineis.length + 1) >= LARGURA_MIN_COLUNA;
 }
+// ---- Painel da direita: links de volta, links de saída, sumário e etiquetas de `editing` ----
+function painelItemMarkup(nota, trecho, vincular) {
+  return `<div class="painel-item" data-painel-titulo="${escapeHtml(nota.title || '')}">
+    <button type="button" class="painel-item-titulo" data-abrir-nota="${nota.id}">${escapeHtml(nota.title || 'Sem título')}</button>
+    <span class="small-muted">${escapeHtml(trecho.slice(0, 160))}</span>
+    ${vincular ? `<button type="button" class="secondary cfg-pequeno" data-vincular="${nota.id}">Vincular</button>` : ''}
+  </div>`;
+}
+function painelVoltaMarkup() {
+  const resolveParaEditing = l => Kiro.findLinkedNote(state.notes, l.target)?.id === editing.id;
+  const vinculadas = Kiro.mentions(state.notes, editing);
+  const naoVinculadas = Kiro.mencoesNaoVinculadas(state.notes, editing);
+  const vinculadasHtml = vinculadas.map(n => {
+    const linha = n.body.split('\n').find(l => Kiro.wikiLinks(l).some(resolveParaEditing)) || '';
+    return painelItemMarkup(n, textoPlano(linha), false);
+  }).join('') || '<p class="small-muted">Nenhuma.</p>';
+  const naoVinculadasHtml = naoVinculadas.map(({ nota, trecho }) => painelItemMarkup(nota, textoPlano(trecho), true)).join('') || '<p class="small-muted">Nenhuma.</p>';
+  return `<input type="search" class="painel-filtro" placeholder="Filtrar" aria-label="Filtrar links de volta" />
+  <section class="painel-secao"><h3>Menções vinculadas (${vinculadas.length})</h3>${vinculadasHtml}</section>
+  <section class="painel-secao"><h3>Menções não vinculadas (${naoVinculadas.length})</h3>${naoVinculadasHtml}</section>`;
+}
+function painelSaidaMarkup() {
+  const vistos = new Set();
+  const links = Kiro.wikiLinks(editing.body).filter(l => { const chave = Kiro.pathKey(l.target); if (vistos.has(chave)) return false; vistos.add(chave); return true; });
+  if (!links.length) return '<p class="small-muted">Esta nota não tem links de saída.</p>';
+  return `<ul class="painel-lista">${links.map(l => {
+    const nota = Kiro.findLinkedNote(state.notes, l.target);
+    return `<li><button type="button" class="painel-link${nota ? '' : ' ausente'}" data-link-saida-id="${nota ? escapeHtml(nota.id) : ''}" data-link-saida-alvo="${escapeHtml(l.target)}">${escapeHtml(l.label)}${nota ? '' : ' <span class="small-muted">não existe ainda</span>'}</button></li>`;
+  }).join('')}</ul>`;
+}
+function painelSumarioMarkup() {
+  const itens = Kiro.sumario(editing.body);
+  if (!itens.length) return '<p class="small-muted">Nenhum título nesta nota.</p>';
+  return `<ul class="painel-sumario">${itens.map(it => `<li style="--nivel:${it.nivel}"><button type="button" class="painel-sumario-item" data-sumario-indice="${it.indice}">${escapeHtml(it.texto)}</button></li>`).join('')}</ul>`;
+}
+function etiquetaItemMarkup(no) {
+  const linha = `<button type="button" class="painel-etiqueta" data-etiqueta="${escapeHtml(no.caminho)}">${escapeHtml(no.nome)}</button><span class="painel-etiqueta-total">${no.total}</span>`;
+  if (!no.filhos.length) return `<li class="painel-etiqueta-item">${linha}</li>`;
+  return `<li><details open><summary>${linha}</summary><ul class="painel-etiquetas-lista">${no.filhos.map(etiquetaItemMarkup).join('')}</ul></details></li>`;
+}
+function painelEtiquetasMarkup() {
+  const arvore = Kiro.arvoreDeEtiquetas(state.notes);
+  if (!arvore.length) return '<p class="small-muted">Nenhuma etiqueta ainda.</p>';
+  return `<ul class="painel-etiquetas-lista painel-etiquetas-raiz">${arvore.map(etiquetaItemMarkup).join('')}</ul>`;
+}
+function painelDireitoConteudo() {
+  if (!editing) return '<p class="small-muted painel-direito-vazio">Abra uma nota para ver os links, o sumário e as etiquetas dela.</p>';
+  if (painelDireito.aba === 'saida') return painelSaidaMarkup();
+  if (painelDireito.aba === 'sumario') return painelSumarioMarkup();
+  if (painelDireito.aba === 'etiquetas') return painelEtiquetasMarkup();
+  return painelVoltaMarkup();
+}
+function painelDireitoMarkup() {
+  if (!painelDireito.aberto) return '';
+  const abasDoPainel = [['volta', 'link-volta', 'Links de volta'], ['saida', 'link-saida', 'Links de saída'], ['sumario', 'sumario', 'Sumário'], ['etiquetas', 'etiqueta', 'Etiquetas']];
+  const botoes = abasDoPainel.map(([id, ic, rotulo]) => `<button type="button" class="icon-button" data-painel-aba="${id}" aria-pressed="${painelDireito.aba === id}" title="${rotulo}" aria-label="${rotulo}">${icone(ic)}</button>`).join('');
+  return `<aside class="painel-direito" style="width:${painelDireito.largura}px" aria-label="Painel da direita">
+    <div class="painel-direito-divisor" role="separator" aria-orientation="vertical" aria-label="Largura do painel da direita" tabindex="0" aria-valuemin="${PAINEL_DIREITO_LARGURA.min}" aria-valuemax="${PAINEL_DIREITO_LARGURA.max}" aria-valuenow="${painelDireito.largura}" title="Arraste para ajustar a largura · dois cliques voltam ao padrão"></div>
+    <div class="painel-direito-topo" role="group" aria-label="Abas do painel">${botoes}</div>
+    <div class="painel-direito-corpo">${painelDireitoConteudo()}</div>
+  </aside>`;
+}
+// Liga o botão ◨, a troca de aba, a divisória, o filtro e os cliques do conteúdo do painel.
+function bindPainelDireito() {
+  document.querySelectorAll('[data-painel-direito]').forEach(b => b.addEventListener('click', () => alternarPainelDireito()));
+  const painel = document.querySelector('.painel-direito');
+  if (!painel) return;
+  ligarDivisorDoPainelDireito();
+  painel.querySelectorAll('[data-painel-aba]').forEach(b => b.addEventListener('click', () => { painelDireito.aba = b.dataset.painelAba; gravarPainelDireito(); render(); }));
+  painel.querySelector('.painel-filtro')?.addEventListener('input', e => {
+    const q = Kiro.normalize(e.target.value);
+    painel.querySelectorAll('.painel-item').forEach(it => { it.hidden = Boolean(q) && !Kiro.normalize(it.dataset.painelTitulo || '').includes(q); });
+  });
+  painel.querySelector('.painel-direito-corpo')?.addEventListener('click', async e => {
+    const abrir = e.target.closest('[data-abrir-nota]');
+    if (abrir) return void abrirPorId(abrir.dataset.abrirNota);
+    const vincular = e.target.closest('[data-vincular]');
+    if (vincular) return void await vincularMencaoNaOutraNota(vincular.dataset.vincular);
+    const doSumario = e.target.closest('[data-sumario-indice]');
+    if (doSumario) return void rolarParaTitulo(Number(doSumario.dataset.sumarioIndice));
+    const link = e.target.closest('[data-link-saida-id], [data-link-saida-alvo]');
+    if (link) { const id = link.dataset.linkSaidaId; return void (id ? abrirPorId(id) : abrirNota(notaVazia({ title: link.dataset.linkSaidaAlvo }))); }
+    const etiqueta = e.target.closest('[data-etiqueta]');
+    if (etiqueta) { e.preventDefault(); buscarEtiqueta('#' + etiqueta.dataset.etiqueta); }
+  });
+}
+// Troca a 1ª ocorrência solta do título da nota em edição por [[link]] na outra nota, e salva.
+async function vincularMencaoNaOutraNota(id) {
+  if (!editing) return;
+  if (editing.id === id && editorDirty) return void status('Salve a nota aberta antes de vincular.', true);
+  const outra = getNote(id);
+  if (!outra) return;
+  state.notes = state.notes.map(n => n.id === id ? { ...n, body: Kiro.vincularMencao(n.body, editing.title), updatedAt: Date.now() } : n);
+  await save();
+}
+// Rola a nota em edição até o indice-ésimo título (mesma ordem de Kiro.sumario).
+function rolarParaTitulo(indice) {
+  document.querySelectorAll('#doc-corpo h1, #doc-corpo h2, #doc-corpo h3, #doc-corpo h4, #doc-corpo h5, #doc-corpo h6')[indice]?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+}
 function renderCofre() {
   if (expanded === null) expanded = new Set(state.folders.map(f => f.id));
   garantirAbasDoCofre();
@@ -534,6 +698,7 @@ function renderCofre() {
   gravarAbas();
   const arvore = treeMarkup('', 0) || '<div class="empty">Crie uma pasta para começar.</div>';
   const notas = colunasMarkup();
+  const painel = painelDireitoMarkup();
   return `<div class="cofre">
   <aside class="cofre-lateral">
     <header class="cofre-topo">
@@ -551,6 +716,7 @@ function renderCofre() {
     <footer class="cofre-rodape"><span class="small-muted">${state.folders.length} pasta${state.folders.length === 1 ? '' : 's'} · ${state.notes.length} nota${state.notes.length === 1 ? '' : 's'}</span></footer>
   </aside>
   ${notas}
+  ${painel}
 </div>`;
 }
 // Itens do menu de contexto de uma aba: nova coluna à direita, mover para a coluna vizinha, fechar.
@@ -779,6 +945,7 @@ function bindView() {
     bindDivisoresDasColunas();
     abas.paineis.forEach((_,painel)=>{if(abas.ativo!==painel)bindLeitura(painel);});
     if(editing)bindEditor();
+    bindPainelDireito();
     return;
   }
   enhanceView();
@@ -3693,6 +3860,7 @@ const ACOES_DOS_ATALHOS={
   novaNota:()=>{if(loaded&&!failed&&!busy&&!$('#modal-root').firstChild)abrirNota(notaVazia());},
   salvar:()=>salvarNota(),
   lateral:()=>alternarLateralCompacta(),
+  painelDireito:()=>alternarPainelDireito(),
 };
 document.addEventListener('keydown',e=>{
   if(e.key==='Escape') closeModal();
