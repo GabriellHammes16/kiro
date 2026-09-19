@@ -268,6 +268,8 @@ const TRACOS = {
   grafo: '<circle cx="6" cy="7" r="2.3"/><circle cx="18" cy="8" r="2.3"/><circle cx="11" cy="17.6" r="2.3"/><path d="M8.2 7.6 15.8 8.4M7.2 9.1l2.7 6.4M16.5 10.1l-4 5.5"/>',
   nota: '<path d="M12 3.6 20.4 12 12 20.4 3.6 12z"/>',
   mais: '<path d="M12 5.5v13M5.5 12h13"/>',
+  abaixo: '<path d="M6.5 9.5 12 15l5.5-5.5"/>',
+  marcado: '<path d="M5.5 12.5 10 17l8.5-9.5"/>',
   calendario: '<rect x="3.5" y="5.5" width="17" height="14.5" rx="2"/><path d="M8 3.5v4M16 3.5v4M3.5 10.5h17"/>',
   exportar: '<path d="M12 4v10M8.2 10.8 12 14.5l3.8-3.7"/><path d="M5 16.5V18a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-1.5"/>',
   importar: '<path d="M12 14.5v-10M8.2 7.7 12 4l3.8 3.7"/><path d="M5 16.5V18a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-1.5"/>',
@@ -479,7 +481,7 @@ function barraDeAbas(painel) {
   // metade: não há aria-controls/tabpanel nem navegação por setas, então não é o padrão ARIA
   // tabs completo — só um grupo rotulado.
   const itens = p.abas.map(id => { const titulo = escapeHtml(tituloDaAba(id)); return `<div class="aba${p.ativa === id ? ' ativa' : ''}" data-painel="${painel}" data-aba="${escapeHtml(id)}" draggable="true"><button type="button" class="aba-abrir" aria-current="${p.ativa === id}"><span class="aba-titulo">${titulo}</span></button><button type="button" class="aba-fechar" data-fechar-aba aria-label="Fechar aba ${titulo}">×</button></div>`; }).join('');
-  return `<div class="abas-barra" data-painel="${painel}" role="group" aria-label="Abas">${itens}<button type="button" class="icon-button aba-nova" data-nova-aba="${painel}" aria-label="Nova aba">${icone('mais')}</button></div>`;
+  return `<div class="abas-barra" data-painel="${painel}" role="group" aria-label="Abas">${itens}<button type="button" class="icon-button aba-nova" data-nova-aba="${painel}" aria-label="Nova aba">${icone('mais')}</button><button type="button" class="icon-button abas-menu" data-menu-abas="${painel}" aria-label="Opções das abas desta coluna" aria-haspopup="menu" title="Opções das abas">${icone('abaixo')}</button></div>`;
 }
 // Vazio de uma metade sem aba nenhuma: mesmo convite de sempre, com o + já sabendo em qual metade abrir.
 function cofreVazioMarkup(painel) {
@@ -501,7 +503,17 @@ function conteudoMetade(painel) {
   return ativa ? renderLeitura(ativa, painel) : cofreVazioMarkup(painel);
 }
 function metadeMarkup(painel) {
-  return `<section class="cofre-metade${abas.ativo === painel ? ' ativa' : ''}" data-painel="${painel}">${barraDeAbas(painel)}<div class="cofre-nota-corpo">${conteudoMetade(painel)}</div></section>`;
+  return `<section class="cofre-metade${abas.ativo === painel ? ' ativa' : ''}" data-painel="${painel}" style="flex-grow:${abas.larguras[painel]}">${barraDeAbas(painel)}<div class="cofre-nota-corpo">${conteudoMetade(painel)}</div></section>`;
+}
+// Colunas lado a lado; entre duas vizinhas, uma divisória que ajusta a largura das duas.
+const LARGURA_MIN_COLUNA = 260;
+function colunasMarkup() {
+  return `<div class="cofre-metades">${abas.paineis.map((_, i) => (i ? `<div class="metades-divisor" data-divisor="${i - 1}" role="separator" aria-orientation="vertical" tabindex="0" aria-label="Largura das colunas ${i} e ${i + 1}" title="Arraste para ajustar · dois cliques deixam as colunas iguais"></div>` : '') + metadeMarkup(i)).join('')}</div>`;
+}
+// Cabe mais uma coluna com a largura mínima na área de notas?
+function cabeOutraColuna() {
+  const area = document.querySelector('.cofre-metades');
+  return !area || area.getBoundingClientRect().width / (abas.paineis.length + 1) >= LARGURA_MIN_COLUNA;
 }
 function renderCofre() {
   if (expanded === null) expanded = new Set(state.folders.map(f => f.id));
@@ -521,9 +533,7 @@ function renderCofre() {
   }
   gravarAbas();
   const arvore = treeMarkup('', 0) || '<div class="empty">Crie uma pasta para começar.</div>';
-  const notas = abas.paineis.length === 2
-    ? `<div class="cofre-metades" style="--proporcao:${abas.proporcao}">${metadeMarkup(0)}<div class="metades-divisor" role="separator" aria-orientation="vertical" tabindex="0" aria-label="Divisão entre as notas" aria-valuemin="20" aria-valuemax="80" aria-valuenow="${Math.round(abas.proporcao * 100)}"></div>${metadeMarkup(1)}</div>`
-    : `<section class="cofre-nota">${barraDeAbas(0)}<div class="cofre-nota-corpo">${conteudoMetade(0)}</div></section>`;
+  const notas = colunasMarkup();
   return `<div class="cofre">
   <aside class="cofre-lateral">
     <header class="cofre-topo">
@@ -543,14 +553,29 @@ function renderCofre() {
   ${notas}
 </div>`;
 }
-// Itens do menu de contexto de uma aba: mandar para o outro lado, fechar, fechar as outras.
+// Itens do menu de contexto de uma aba: nova coluna à direita, mover para a coluna vizinha, fechar.
 function itensDaAba(painel, id) {
-  const destino = painel === 0 ? 1 : 0;
+  const n = abas.paineis.length;
   return [
-    { rotulo: painel === 0 ? 'Abrir à direita' : 'Abrir à esquerda', icone: icone(painel === 0 ? 'direita' : 'esquerda'), acao: () => moverAba(painel, id, destino) },
+    { rotulo: 'Abrir em nova coluna à direita', icone: icone('direita'), acao: () => moverAba(painel, id, painel + 1, { nova: true }) },
+    ...(painel > 0 ? [{ rotulo: 'Mover para a coluna da esquerda', icone: icone('esquerda'), acao: () => moverAba(painel, id, painel - 1) }] : []),
+    ...(painel < n - 1 ? [{ rotulo: 'Mover para a coluna da direita', icone: icone('direita'), acao: () => moverAba(painel, id, painel + 1) }] : []),
     { separador: true },
     { rotulo: 'Fechar', icone: icone('fechar'), acao: () => fecharAba(painel, id) },
     { rotulo: 'Fechar as outras', icone: icone('fechar'), acao: () => fecharOutrasAbas(painel, id) },
+  ];
+}
+// Menu ⌄ de uma coluna: nova aba, levar a ativa para uma coluna nova, fechar tudo e a lista
+// das abas (a ativa marcada), para trocar de aba mesmo quando os títulos estão cortados.
+function itensDoMenuDasAbas(painel) {
+  const p = abas.paineis[painel];
+  if (!p) return [];
+  return [
+    { rotulo: 'Nova aba', icone: icone('mais'), acao: () => abrirNota(notaVazia(), { novaAba: true, painel }) },
+    ...(p.ativa ? [{ rotulo: 'Abrir em nova coluna à direita', icone: icone('direita'), acao: () => moverAba(painel, p.ativa, painel + 1, { nova: true }) }] : []),
+    ...(p.abas.length ? [{ rotulo: 'Fechar tudo', icone: icone('fechar'), acao: () => fecharColuna(painel) }] : []),
+    ...(p.abas.length ? [{ separador: true }] : []),
+    ...p.abas.map(id => ({ rotulo: tituloDaAba(id), icone: id === p.ativa ? icone('marcado') : '', acao: () => (id === KiroAbas.RASCUNHO ? null : abrirPorId(id, { painel })) })),
   ];
 }
 // Liga os cliques da barra de abas de uma metade: trocar, fechar (× ou botão do meio), + e arrastar/menu.
@@ -559,6 +584,13 @@ function bindAbas(painel) {
   if (!barra) return;
   barra.addEventListener('click', e => {
     if (e.target.closest('[data-nova-aba]')) { abrirNota(notaVazia(), { novaAba: true, painel }); return; }
+    const botaoMenu = e.target.closest('[data-menu-abas]');
+    if (botaoMenu) {
+      if (menuAberto?._origem === botaoMenu) return void fecharMenuContexto();
+      const r = botaoMenu.getBoundingClientRect();
+      abrirMenuContexto({ preventDefault() {}, clientX: r.left, clientY: r.bottom + 4 }, document.body, itensDoMenuDasAbas(painel), { compacto: true, origem: botaoMenu, direita: r.right });
+      return;
+    }
     const aba = e.target.closest('.aba');
     if (!aba) return;
     if (e.target.closest('[data-fechar-aba]')) fecharAba(painel, aba.dataset.aba);
@@ -579,7 +611,7 @@ function bindAbas(painel) {
   });
   barra.addEventListener('contextmenu', e => {
     const aba = e.target.closest('.aba');
-    if (aba) abrirMenuContexto(e, document.body, itensDaAba(painel, aba.dataset.aba));
+    if (aba) abrirMenuContexto(e, document.body, itensDaAba(painel, aba.dataset.aba), { compacto: true });
   });
   barra.addEventListener('dragstart', e => {
     const aba = e.target.closest('.aba');
@@ -588,41 +620,72 @@ function bindAbas(painel) {
     e.dataTransfer.setData('text/x-kiro-aba', JSON.stringify({ painel, id: aba.dataset.aba }));
   });
 }
-// Em qual metade a aba arrastada deve cair: sobre uma barra de abas ou metade existente, a delas;
-// senão, metade direita da área vira painel 1, esquerda vira painel 0.
-function metadeAlvo(evento, area) {
+// Onde soltar: na barra de abas de uma coluna, entra nela; na folha, as faixas de um quarto
+// nas bordas criam uma coluna nova daquele lado e o meio entra na coluna.
+function alvoDoArraste(evento) {
   const barra = evento.target.closest('.abas-barra');
-  if (barra) return Number(barra.dataset.painel);
-  const metade = evento.target.closest('.cofre-metade');
-  if (metade) return Number(metade.dataset.painel);
-  const r = area.getBoundingClientRect();
-  return (evento.clientX - r.left) > r.width / 2 ? 1 : 0;
+  if (barra) return { painel: Number(barra.dataset.painel), nova: false };
+  const coluna = evento.target.closest('.cofre-metade');
+  if (!coluna) return null;
+  const painel = Number(coluna.dataset.painel), r = coluna.getBoundingClientRect(), x = (evento.clientX - r.left) / r.width;
+  if (x > 0.75) return { painel: painel + 1, nova: true, lado: 'direita', coluna: painel };
+  if (x < 0.25) return { painel, nova: true, lado: 'esquerda', coluna: painel };
+  return { painel, nova: false };
 }
-// Arrastar uma aba sobre a área de notas: dividir (metade direita) ou mover para o outro lado.
+// Arrastar uma aba ou uma nota da árvore sobre as colunas.
+const TIPO_ABA = 'text/x-kiro-aba', TIPO_NOTA = 'text/kiro-nota';
+const tipoArrastado = e => [TIPO_ABA, TIPO_NOTA].find(t => e.dataTransfer?.types.includes(t)) || null;
 function bindDragDeAbas() {
-  const area = document.querySelector('.cofre-nota, .cofre-metades');
+  const area = document.querySelector('.cofre-metades');
   if (!area) return;
-  // `area` mesma pode ter recebido a classe (caso de uma metade só, sem destino[data-painel="1"]);
-  // limpar precisa tirar dela também, não só dos filhos.
-  const limpar = () => { area.classList.remove('destino-direita'); area.querySelectorAll('.destino-direita').forEach(el => el.classList.remove('destino-direita')); };
+  const CLASSES = ['destino-coluna', 'destino-direita', 'destino-esquerda', 'destino-aba'];
+  const limpar = () => area.querySelectorAll(CLASSES.map(c => '.' + c).join(',')).forEach(el => el.classList.remove(...CLASSES));
+  // Sem espaço para outra coluna, a borda vale como o meio: entra na coluna.
+  const alvoPossivel = e => { const a = alvoDoArraste(e); return a?.nova && !cabeOutraColuna() ? { painel: a.coluna, nova: false } : a; };
   area.addEventListener('dragover', e => {
-    if (!e.dataTransfer?.types.includes('text/x-kiro-aba')) return;
+    const tipo = tipoArrastado(e);
+    if (!tipo) return;
+    const alvo = alvoPossivel(e);
+    if (!alvo) return;
     e.preventDefault();
+    if (tipo === TIPO_NOTA) e.dataTransfer.dropEffect = 'copy';
     limpar();
-    if (metadeAlvo(e, area) === 1) (area.querySelector('.cofre-metade[data-painel="1"]') || area).classList.add('destino-direita');
+    const barra = e.target.closest('.abas-barra');
+    if (barra) return void barra.classList.add('destino-aba');
+    const coluna = area.querySelector(`.cofre-metade[data-painel="${alvo.nova ? alvo.coluna : alvo.painel}"]`);
+    coluna?.classList.add(alvo.nova ? `destino-${alvo.lado}` : 'destino-coluna');
   });
   area.addEventListener('dragleave', e => { if (!area.contains(e.relatedTarget)) limpar(); });
   area.addEventListener('dragend', limpar);
   area.addEventListener('drop', async e => {
-    if (!e.dataTransfer?.types.includes('text/x-kiro-aba')) return;
-    e.preventDefault();
+    const tipo = tipoArrastado(e);
+    if (!tipo) return;
+    const alvo = alvoPossivel(e);
     limpar();
-    let dados; try { dados = JSON.parse(e.dataTransfer.getData('text/x-kiro-aba') || 'null'); } catch { dados = null; }
+    if (!alvo) return;
+    e.preventDefault();
+    e.stopPropagation();   // a árvore também escuta drop de nota (para mover de pasta)
+    if (tipo === TIPO_NOTA) {
+      const id = e.dataTransfer.getData(TIPO_NOTA);
+      if (id) await abrirNotaArrastada(id, alvo);
+      return;
+    }
+    let dados; try { dados = JSON.parse(e.dataTransfer.getData(TIPO_ABA) || 'null'); } catch { dados = null; }
     if (!dados) return;
-    const alvo = metadeAlvo(e, area);
-    if (dados.painel === alvo) return;
-    await moverAba(dados.painel, dados.id, alvo);
+    if (!alvo.nova && dados.painel === alvo.painel) return;
+    await moverAba(dados.painel, dados.id, alvo.painel, { nova: alvo.nova });
   });
+}
+// Nota arrastada da árvore: abre (ou ativa, se já estiver aberta) e leva para o destino —
+// uma coluna existente ou uma coluna nova na posição pedida.
+async function abrirNotaArrastada(id, alvo) {
+  if (!getNote(id)) return;
+  const perto = Math.min(alvo.nova ? alvo.coluna : alvo.painel, abas.paineis.length - 1);
+  await abrirPorId(id, { novaAba: true, painel: perto });
+  const onde = abas.paineis.findIndex(p => p.abas.includes(id));
+  if (onde === -1) return;
+  if (alvo.nova) await moverAba(onde, id, alvo.painel, { nova: true });
+  else if (onde !== alvo.painel) await moverAba(onde, id, alvo.painel);
 }
 // Clicar na metade em leitura (fora de link, imagem, etiqueta ou bloco de plug-in) ativa a nota nela.
 function bindLeitura(painel) {
@@ -643,50 +706,54 @@ function bindLeitura(painel) {
     if (ativa && await salvarAntesDeTrocar()) abrirPorId(ativa, { painel });
   });
 }
-// Divisória entre as duas metades: arrastar (com limite de 320px por lado), setas do teclado, dois cliques voltam ao meio.
-function bindDivisorDasMetades() {
-  const divisor = document.querySelector('.metades-divisor'), area = document.querySelector('.cofre-metades');
-  if (!divisor || !area) return;
-  // Clampa a 320px por lado no mínimo; compartilhado por arrastar, setas do teclado e duplo clique
-  // (antes só o arrastar respeitava esse limite — teclado/duplo clique podiam encolher um lado
-  // abaixo de 320px numa janela estreita).
-  const clampFracao = p => {
-    const r = area.getBoundingClientRect();
-    const min = Math.min(0.5, Math.max(0, 320 / r.width));
-    return Math.max(min, Math.min(1 - min, p));
-  };
-  const aplicar = (p, gravar) => {
-    abas = KiroAbas.proporcao(abas, clampFracao(p));
-    area.style.setProperty('--proporcao', abas.proporcao);
-    divisor.setAttribute('aria-valuenow', Math.round(abas.proporcao * 100));
+// Divisórias entre colunas: cada uma ajusta só as duas vizinhas (arrastar, setas do teclado),
+// sempre com pelo menos LARGURA_MIN_COLUNA px em cada; dois cliques deixam todas iguais.
+function bindDivisoresDasColunas() {
+  const area = document.querySelector('.cofre-metades');
+  if (!area) return;
+  const colunas = () => [...area.querySelectorAll(':scope > .cofre-metade')];
+  const aplicar = (larguras, gravar) => {
+    abas = KiroAbas.larguras(abas, larguras);
+    colunas().forEach((c, i) => { c.style.flexGrow = abas.larguras[i]; });
     if (gravar) gravarAbas();
   };
-  const paraFracao = clientX => {
-    const r = area.getBoundingClientRect();
-    return (clientX - r.left) / r.width;
+  // Nova fração da coluna i (o resto do par vai para i+1), limitada pela largura mínima em px.
+  const ajustar = (i, fracaoDaEsquerda, gravar) => {
+    const l = [...abas.larguras], par = l[i] + l[i + 1];
+    const pxTotal = colunas().reduce((t, c) => t + c.getBoundingClientRect().width, 0);
+    const min = Math.min(par / 2, LARGURA_MIN_COLUNA / pxTotal);
+    l[i] = Math.max(min, Math.min(par - min, fracaoDaEsquerda));
+    l[i + 1] = par - l[i];
+    aplicar(l, gravar);
   };
-  divisor.addEventListener('pointerdown', e => {
-    if (e.button !== 0) return;
-    e.preventDefault();
-    divisor.setPointerCapture(e.pointerId);
-    document.body.classList.add('arrastando-divisor');
-    const mover = ev => aplicar(paraFracao(ev.clientX), false);
-    const soltar = () => {
-      divisor.removeEventListener('pointermove', mover);
-      document.body.classList.remove('arrastando-divisor');
-      aplicar(abas.proporcao, true);
-    };
-    divisor.addEventListener('pointermove', mover);
-    divisor.addEventListener('pointerup', soltar, { once: true });
-    divisor.addEventListener('pointercancel', soltar, { once: true });
-  });
-  divisor.addEventListener('dblclick', () => aplicar(0.5, true));
-  divisor.addEventListener('keydown', e => {
-    const passo = e.key === 'ArrowLeft' ? -0.02 : e.key === 'ArrowRight' ? 0.02 : 0;
-    if (!passo) return;
-    e.preventDefault();
-    aplicar(abas.proporcao + passo, true);
-  });
+  for (const divisor of area.querySelectorAll('.metades-divisor')) {
+    const i = Number(divisor.dataset.divisor);
+    divisor.addEventListener('pointerdown', e => {
+      if (e.button !== 0) return;
+      e.preventDefault();
+      divisor.setPointerCapture(e.pointerId);
+      document.body.classList.add('arrastando-divisor');
+      const cols = colunas(), inicio = cols[i].getBoundingClientRect().left;
+      const pxDoPar = cols[i].getBoundingClientRect().width + cols[i + 1].getBoundingClientRect().width;
+      const par = abas.larguras[i] + abas.larguras[i + 1];
+      const mover = ev => ajustar(i, ((ev.clientX - inicio) / pxDoPar) * par, false);
+      const soltar = () => {
+        divisor.removeEventListener('pointermove', mover);
+        document.body.classList.remove('arrastando-divisor');
+        aplicar(abas.larguras, true);
+      };
+      divisor.addEventListener('pointermove', mover);
+      divisor.addEventListener('pointerup', soltar, { once: true });
+      divisor.addEventListener('pointercancel', soltar, { once: true });
+    });
+    divisor.addEventListener('dblclick', () => aplicar(abas.paineis.map(() => 1), true));
+    divisor.addEventListener('keydown', e => {
+      const passo = e.key === 'ArrowLeft' ? -0.02 : e.key === 'ArrowRight' ? 0.02 : 0;
+      if (!passo) return;
+      e.preventDefault();
+      ajustar(i, abas.larguras[i] + passo, true);
+    });
+  }
 }
 function bindView() {
   document.querySelector('#add-note')?.addEventListener('click',()=>abrirNota(notaVazia()));
@@ -709,10 +776,8 @@ function bindView() {
     ligarDivisorDaArvore();
     abas.paineis.forEach((_,painel)=>bindAbas(painel));
     bindDragDeAbas();
-    if(abas.paineis.length===2){
-      bindDivisorDasMetades();
-      for(const painel of [0,1]) if(abas.ativo!==painel) bindLeitura(painel);
-    }
+    bindDivisoresDasColunas();
+    abas.paineis.forEach((_,painel)=>{if(abas.ativo!==painel)bindLeitura(painel);});
     if(editing)bindEditor();
     return;
   }
@@ -906,7 +971,7 @@ async function abrirNota(nota,{novaAba=false,painel}={}){
   editorDirty=false;currentView='studies';render();
 }
 // Acha a nota pelo id (usado pela árvore e pela barra de abas) e abre.
-function abrirPorId(id,opcoes){ const nota=getNote(id); if(nota) abrirNota(nota,opcoes); }
+function abrirPorId(id,opcoes){ const nota=getNote(id); return nota?abrirNota(nota,opcoes):Promise.resolve(); }
 // Salva a nota em edição (se houver e estiver suja) antes de qualquer ação que possa trocar qual
 // nota fica em `editing` — fechar aba, "fechar as outras", mover/arrastar para o outro lado ou
 // ativar a metade em leitura. Sem isto, fechar ou mover algo do lado inativo poderia trocar a
@@ -919,19 +984,30 @@ async function salvarAntesDeTrocar(){ return !(editing&&editorDirty)||await salv
 // o rascunho "sumiria" (o id antigo não existe mais em lugar nenhum). Só o rascunho *em edição* é
 // resolvido assim: um rascunho inativo (existe na aba mas não é quem está sendo editado agora) não
 // tem relação com `editing`, então mover ele não deve tocar no id de uma nota diferente e suja.
-async function moverAba(painel,id,destino){
+async function moverAba(painel,id,destino,{nova=false}={}){
+  if(nova&&!cabeOutraColuna())return status('Não cabe outra coluna nesta largura. Feche uma coluna ou aumente a janela.',true);
   const draftEmEdicao=id===KiroAbas.RASCUNHO&&editing&&!editing.id;
   if(!await salvarAntesDeTrocar())return;
   if(draftEmEdicao&&editing?.id)id=editing.id;
-  abas=KiroAbas.mover(abas,painel,id,destino);
+  abas=KiroAbas.mover(abas,painel,id,destino,{nova});
   gravarAbas();
   if(id===KiroAbas.RASCUNHO){render();return;} // ainda é o rascunho (sem salvar nada); `editing` já é ele.
-  abrirPorId(id,{painel:destino});
+  // Com colunas criadas ou removidas, o índice muda: a aba está onde o modelo diz.
+  return abrirPorId(id,{painel:abas.paineis.findIndex(p=>p.abas.includes(id))});
 }
 // Fecha uma aba: salva a nota em edição se houver alterações; a nova aba ativa vira o editor.
 async function fecharAba(painel,id){
   if(!await salvarAntesDeTrocar())return;
   abas=KiroAbas.fechar(abas,painel,id);
+  gravarAbas();
+  atualizarEditingConformeAtiva();
+  render();
+}
+// Fecha todas as abas de uma coluna (a coluna some, se não for a única); salva antes.
+async function fecharColuna(painel){
+  if(!await salvarAntesDeTrocar())return;
+  // O índice da coluna só muda quando ela esvazia, no último fechamento.
+  for(const id of [...(abas.paineis[painel]?.abas||[])]) abas=KiroAbas.fechar(abas,painel,id);
   gravarAbas();
   atualizarEditingConformeAtiva();
   render();
@@ -2283,8 +2359,18 @@ function fecharMenuContexto() {
   menuAberto = null;
   document.removeEventListener('pointerdown', aoClicarFora, true);
   document.removeEventListener('keydown', aoTeclarNoMenu, true);
+  document.removeEventListener('scroll', aoRolarFora, true);
+  window.removeEventListener('blur', fecharMenuContexto);
+  window.removeEventListener('resize', fecharMenuContexto);
 }
-const aoClicarFora = e => { if (!menuAberto || !menuAberto.contains(e.target)) fecharMenuContexto(); };
+// Clique fora fecha. No botão que abriu o menu, quem decide é o próprio botão (abre/fecha),
+// senão o menu fecharia no pressionar e reabriria no clique.
+const aoClicarFora = e => {
+  if (menuAberto?._origem?.contains(e.target)) return;
+  if (!menuAberto || !menuAberto.contains(e.target)) fecharMenuContexto();
+};
+// A barra de abas rola sozinha para mostrar o botão que recebeu foco ao abrir o menu: isso não conta.
+const aoRolarFora = e => { if (!menuAberto?.contains(e.target) && !e.target.classList?.contains('abas-barra')) fecharMenuContexto(); };
 const aoTeclarNoMenu = e => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); fecharMenuContexto(); } };
 function montarNivel(itens, area) {
   const nivel = document.createElement('div');
@@ -2319,19 +2405,27 @@ function montarNivel(itens, area) {
   }
   return nivel;
 }
-function abrirMenuContexto(evento, area, itens = menuDaNota()) {
+// `opcoes.compacto` deixa o menu mais justo; `opcoes.origem` é o botão que o abriu (clicar
+// nele de novo fecha); `opcoes.direita` alinha a borda direita do menu a essa coordenada.
+function abrirMenuContexto(evento, area, itens = menuDaNota(), opcoes = {}) {
   evento.preventDefault();
   fecharMenuContexto();
   const menu = montarNivel(itens, area);
+  if (opcoes.compacto) menu.classList.add('ctx-compacto');
+  menu._origem = opcoes.origem || null;
   menu.style.visibility = 'hidden';
   document.body.appendChild(menu);
   const largura = menu.offsetWidth, altura = menu.offsetHeight;
-  menu.style.left = Math.max(8, Math.min(evento.clientX, window.innerWidth - largura - 8)) + 'px';
+  const x = opcoes.direita !== undefined ? opcoes.direita - largura : evento.clientX;
+  menu.style.left = Math.max(8, Math.min(x, window.innerWidth - largura - 8)) + 'px';
   menu.style.top = Math.max(8, Math.min(evento.clientY, window.innerHeight - altura - 8)) + 'px';
   menu.style.visibility = '';
   menuAberto = menu;
   document.addEventListener('pointerdown', aoClicarFora, true);
   document.addEventListener('keydown', aoTeclarNoMenu, true);
+  document.addEventListener('scroll', aoRolarFora, true);
+  window.addEventListener('blur', fecharMenuContexto);
+  window.addEventListener('resize', fecharMenuContexto);
 }
 async function acaoEditor(tipo){
   if(tipo==='salvar')return void await salvarNota();

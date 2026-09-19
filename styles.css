@@ -1020,3 +1020,58 @@ body, button, input, textarea, select { font-family:var(--fonte-interface); }
 .cofre-topo > .icon-button { flex-shrink:0; }
 .cofre-acoes { margin-left:auto; flex-shrink:0; }
 @container (max-width:250px) { .cofre-nome { display:none; } }
+
+/* ---- Páginas como folhas arredondadas e aba ativa encaixada na página ----
+   A moldura (barra de abas e o entorno) tem a cor da barra lateral; a folha, a do conteúdo.
+   A aba ativa tem a cor da folha e curvas invertidas embaixo, então parece sair dela. */
+.cofre-nota, .cofre-metade { background:var(--sidebar-bg,#11161D); }
+.cofre-nota-corpo { background:var(--content-bg,#0B0F14); border-radius:14px; margin:0 8px 8px; }
+/* Começa depois do canto arredondado da folha (margem 8 + raio 14), para a aba não ficar sobre a curva. */
+.abas-barra { height:40px; align-items:flex-end; padding:6px 12px 0 22px; gap:2px; border-bottom:0; overflow-y:hidden; }
+.aba { position:relative; height:34px; border-right:0; border-radius:10px 10px 0 0; }
+.aba:not(.ativa):hover { background:color-mix(in srgb, var(--ink) 6%, transparent); }
+.aba.ativa { background:var(--content-bg,#0B0F14); z-index:1; }
+.aba.ativa::before, .aba.ativa::after { content:""; position:absolute; bottom:0; width:10px; height:10px; pointer-events:none; }
+.aba.ativa::before { left:-10px; background:radial-gradient(circle at 0 0, transparent 10px, var(--content-bg,#0B0F14) 10.5px); }
+.aba.ativa::after { right:-10px; background:radial-gradient(circle at 100% 0, transparent 10px, var(--content-bg,#0B0F14) 10.5px); }
+/* Metade em leitura: a aba ativa dela fica um pouco apagada, para ficar claro onde se edita. */
+.cofre-metade:not(.ativa) .aba.ativa { color:var(--muted); }
+/* Soltar uma nota arrastada na barra de abas: abre numa aba nova ali. */
+.abas-barra.destino-aba { box-shadow:inset 0 -2px 0 var(--acento); background:color-mix(in srgb, var(--acento) 8%, var(--sidebar-bg,#11161D)); }
+.cofre-nota.destino-direita::after, .cofre-metade.destino-direita::after { border-radius:14px; inset:40px 8px 8px 8px; }
+.cofre-nota.destino-direita::after { left:50%; }
+@media (max-width:780px) { .cofre-nota-corpo { margin:0 4px 4px; border-radius:10px; } }
+/* O × sempre ocupa o lugar dele (só fica invisível): selecionar ou passar o mouse não muda a largura da aba. */
+.aba-fechar { display:flex; visibility:hidden; }
+.aba.ativa .aba-fechar, .aba:hover .aba-fechar, .aba:focus-within .aba-fechar { visibility:visible; }
+
+/* ---- Colunas (quantas couberem): cada uma cresce pela fração dela, com largura mínima ---- */
+.cofre-metades { display:flex; flex:1 1 0; min-width:0; }
+.cofre-metade { flex:1 1 0; min-width:260px; }
+.metades-divisor { flex:0 0 7px; }
+/* Onde a aba ou a nota vai cair: a coluna inteira, ou a faixa da borda que vira coluna nova. */
+.cofre-metade.destino-coluna::after, .cofre-metade.destino-direita::after, .cofre-metade.destino-esquerda::after {
+  content:""; position:absolute; top:40px; bottom:8px; left:8px; right:8px; border-radius:14px; pointer-events:none; z-index:1;
+  background:color-mix(in srgb, var(--acento) 16%, transparent); }
+.cofre-metade.destino-direita::after { left:auto; width:calc(50% - 8px); box-shadow:inset -3px 0 0 var(--acento); }
+.cofre-metade.destino-esquerda::after { right:auto; width:calc(50% - 8px); box-shadow:inset 3px 0 0 var(--acento); }
+@media (max-width:900px) {
+  .cofre-metades { flex-direction:column; }
+  .cofre-metade { min-width:0; flex:none !important; }
+}
+/* A margem interna da folha segue a largura da coluna, não a da janela: coluna estreita, margem pequena. */
+.cofre-metade { container-type:inline-size; }
+.cofre-nota-corpo { padding-left:clamp(16px, 6cqi, 72px); padding-right:clamp(16px, 6cqi, 72px); }
+/* Botão ⌄ de opções da coluna: sempre no fim da barra, depois do +. */
+.abas-menu { flex:0 0 auto; align-self:center; margin-left:auto; margin-right:2px; width:26px; height:26px; }
+.abas-menu { position:sticky; right:0; z-index:2; background:var(--sidebar-bg,#11161D); }
+/* Menus das abas: mais justos que os menus do texto. */
+.ctx-menu.ctx-compacto { min-width:0; max-width:260px; padding:4px; border-radius:10px; gap:0; }
+.ctx-compacto .ctx-item { gap:8px; padding:5px 8px; font-size:12.5px; border-radius:6px; }
+.ctx-compacto .ctx-icone { width:14px; }
+.ctx-compacto .ctx-icone .icone { width:14px; height:14px; }
+.ctx-compacto .ctx-rotulo { overflow:hidden; text-overflow:ellipsis; }
+.ctx-compacto .ctx-sep { margin:3px 4px; }
+/* A aba ativa não encolhe até sumir o título: as outras cedem espaço (e a barra rola). */
+.aba { flex:0 1 auto; min-width:64px; }
+.aba.ativa { flex-shrink:0; }
