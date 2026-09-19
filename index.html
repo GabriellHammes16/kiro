@@ -13,20 +13,20 @@
     <div id="abertura" role="presentation"><img src="kiro-abertura.png" alt="" /></div>
     <div class="app-shell">
       <aside class="sidebar">
-        <div class="brand"><img class="brand-logo" src="kiro-logo.png" alt="Logo Kiro" /><span>Kiro</span></div>
-        <button class="new-note" id="new-note"><span class="rotulo-icone" data-icone="mais"></span> Nova nota</button>
-        <button class="quiet-button" id="daily-note"><span class="rotulo-icone" data-icone="calendario"></span> Nota diária</button>
-        <button class="quiet-button" id="go-note" title="Ctrl+O"><span class="rotulo-icone" data-icone="ir-para"></span> Ir para nota</button>
+        <div class="sidebar-topo"><button class="icon-button lateral-alternar" id="alternar-lateral" data-icone="esquerda" aria-label="Recolher barra lateral" title="Recolher barra lateral (Ctrl+\)" aria-expanded="true"></button></div>
+        <button class="new-note" id="new-note"><span class="rotulo-icone" data-icone="mais"></span><span class="rotulo">Nova nota</span></button>
+        <button class="quiet-button" id="daily-note"><span class="rotulo-icone" data-icone="calendario"></span><span class="rotulo">Nota diária</span></button>
+        <button class="quiet-button" id="go-note" title="Ctrl+O"><span class="rotulo-icone" data-icone="ir-para"></span><span class="rotulo">Ir para nota</span></button>
         <nav aria-label="Navegação principal">
-          <button class="nav-item active" data-view="today"><span class="rotulo-icone" data-icone="hoje"></span> Hoje</button>
-          <button class="nav-item" data-view="notes"><span class="rotulo-icone" data-icone="notas"></span> Notas</button>
-          <button class="nav-item" data-view="tasks"><span class="rotulo-icone" data-icone="tarefas"></span> Tarefas <b id="task-count"></b></button>
-          <button class="nav-item" data-view="studies"><span class="rotulo-icone" data-icone="pastas"></span> Pastas</button>
-          <button class="nav-item" data-view="graph"><span class="rotulo-icone" data-icone="grafo"></span> Grafo</button>
+          <button class="nav-item active" data-view="today"><span class="rotulo-icone" data-icone="hoje"></span><span class="rotulo">Hoje</span></button>
+          <button class="nav-item" data-view="notes"><span class="rotulo-icone" data-icone="notas"></span><span class="rotulo">Notas</span></button>
+          <button class="nav-item" data-view="tasks"><span class="rotulo-icone" data-icone="tarefas"></span><span class="rotulo">Tarefas</span> <b id="task-count"></b></button>
+          <button class="nav-item" data-view="studies"><span class="rotulo-icone" data-icone="pastas"></span><span class="rotulo">Pastas</span></button>
+          <button class="nav-item" data-view="graph"><span class="rotulo-icone" data-icone="grafo"></span><span class="rotulo">Grafo</span></button>
         </nav>
         <nav id="nav-plugins" class="nav-plugins" aria-label="Plug-ins" hidden></nav>
         <div class="sidebar-bottom">
-          <button class="quiet-button" id="settings"><span class="rotulo-icone" data-icone="detalhes"></span> Configurações</button>
+          <button class="quiet-button" id="settings"><span class="rotulo-icone" data-icone="detalhes"></span><span class="rotulo">Configurações</span></button>
         </div>
       </aside>
       <main id="app" class="content" tabindex="-1"></main>

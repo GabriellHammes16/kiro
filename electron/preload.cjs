@@ -6,6 +6,8 @@ contextBridge.exposeInMainWorld('cadernoDesktop', {
   openPluginsFolder: () => ipcRenderer.invoke('plugins:open'),
   vaultPath: () => ipcRenderer.invoke('vault:path'),
   chooseVault: () => ipcRenderer.invoke('vault:choose'),
+  firstRun: () => ipcRenderer.invoke('vault:first-run'),
+  setupVault: modo => ipcRenderer.invoke('vault:setup', modo),
   trash: () => ipcRenderer.invoke('vault:trash'),
   restore: pedido => ipcRenderer.invoke('vault:restore', pedido),
   saveAttachment: pedido => ipcRenderer.invoke('vault:attachment', pedido),

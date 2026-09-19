@@ -483,14 +483,26 @@ class KiroAgentApi {
     const rotulo = args.label === undefined || args.label === null ? null : String(args.label).trim();
     const state = await this.load();
     const origem = this.#acharNota(state, { id: args.fromId, path: args.fromPath });
-    let titulo;
-    if (args.toId || args.toPath) titulo = this.#acharNota(state, { id: args.toId, path: args.toPath }).title;
-    else if (typeof args.toTitle === 'string' && args.toTitle.trim()) titulo = args.toTitle.trim();
+    let titulo, alvo = null, rotuloFinal = rotulo;
+    if (args.toId || args.toPath) {
+      alvo = this.#acharNota(state, { id: args.toId, path: args.toPath });
+      titulo = alvo.title;
+      // Outra nota com o mesmo título ganharia o [[Título]]: o link vai pelo caminho do
+      // arquivo (que o Kiro também resolve) e o título fica como rótulo visível.
+      if (findLinkedNote(state.notes, titulo)?.id !== alvo.id && alvo.file) {
+        titulo = alvo.file.replace(/\.md$/i, '');
+        rotuloFinal = rotulo || alvo.title;
+      }
+    } else if (typeof args.toTitle === 'string' && args.toTitle.trim()) titulo = args.toTitle.trim();
     else throw new AgentError('INVALID_INPUT', 'Informe o destino por toId, toPath ou toTitle.');
     if (titulo.includes(']]') || titulo.includes('[[')) throw new AgentError('INVALID_INPUT', 'O destino do link não pode conter colchetes.');
 
-    const marcacao = rotulo ? `[[${titulo}|${rotulo}]]` : `[[${titulo}]]`;
-    if (wikiLinks(origem.body).some(l => pathKey(l.target) === pathKey(titulo))) {
+    const marcacao = rotuloFinal ? `[[${titulo}|${rotuloFinal}]]` : `[[${titulo}]]`;
+    // Com a nota de destino conhecida, "já ligada" é apontar para ela, escrito de qualquer jeito.
+    const jaLigada = alvo
+      ? wikiLinks(origem.body).some(l => findLinkedNote(state.notes, l.target)?.id === alvo.id)
+      : wikiLinks(origem.body).some(l => pathKey(l.target) === pathKey(titulo));
+    if (jaLigada) {
       return { success: true, alreadyLinked: true, markup: marcacao, note: this.#resumo(state, origem) };
     }
     const resultado = await this.updateNote({ id: origem.id, content: marcacao, mode: 'append' }, contexto);

@@ -249,7 +249,49 @@
     return { tema, skin, ...cores };
   }
   const classesDaAparencia = a => { const v = aparenciaValida(a); return [`tema-${v.tema}`, `skin-${v.skin}`]; };
-  const api = { TEMAS, SKINS, APARENCIA_PADRAO, luminancia, contraste, corValida, aparenciaValida, classesDaAparencia, FOLDER_COLORS, folderColor,habitStats, habitDays, withHabits, validFrequency, localDate, safeUrl, validateState, normalize, isImagePath, wikiLinks, tags, findLinkedNote, mentions, inInbox, withoutInbox, toReview, linkQuery, linkSuggestions, validFolderName, folderPaths, descendants, upgradeBackup, pathKey };
+  // ---- Atalhos de teclado (os que dá para trocar em Configurações → Atalhos) ----
+  // Combinação é texto: modificadores na ordem Ctrl, Alt, Shift e depois a tecla ("Ctrl+Shift+K").
+  const ATALHOS_EDITAVEIS = [
+    ['captura', 'Captura rápida', 'De qualquer tela, direto para a caixa de entrada.', 'Ctrl+Space'],
+    ['irPara', 'Ir para nota', 'Busca uma nota pelo título.', 'Ctrl+O'],
+    ['novaNota', 'Nova nota', '', 'Ctrl+N'],
+    ['salvar', 'Salvar a nota aberta', '', 'Ctrl+S'],
+    ['lateral', 'Recolher a barra lateral', 'Alterna entre a barra completa e só os ícones.', 'Ctrl+\\'],
+  ];
+  // Teclas que o sistema e o editor já usam: trocá-las quebraria copiar, colar, desfazer…
+  const RESERVADOS = new Set(['Ctrl+C', 'Ctrl+V', 'Ctrl+X', 'Ctrl+Z', 'Ctrl+Y', 'Ctrl+A', 'Ctrl+Shift+Z', 'Ctrl+W', 'Ctrl+T', 'Ctrl+R', 'Ctrl+P', 'Ctrl+F', 'Alt+F4']);
+  const MODIFICADORES = new Set(['Control', 'Shift', 'Alt', 'Meta', 'AltGraph', 'CapsLock']);
+  function combinacaoDoEvento(e) {
+    if (!e || MODIFICADORES.has(e.key) || !e.key) return null;
+    const tecla = e.code === 'Space' || e.key === ' ' ? 'Space' : e.key.length === 1 ? e.key.toUpperCase() : e.key;
+    return [(e.ctrlKey || e.metaKey) && 'Ctrl', e.altKey && 'Alt', e.shiftKey && 'Shift', tecla].filter(Boolean).join('+');
+  }
+  const rotuloDaCombinacao = c => String(c).split(/\+(?=.)/).map(p => p === 'Space' ? 'Espaço' : p).join(' + ');
+  // Sem Ctrl ou Alt, a tecla atrapalharia a escrita; F1–F12 sozinhas não atrapalham.
+  const combinacaoAceita = c => typeof c === 'string' && c.length <= 40 && (/^(Ctrl|Alt)\+./.test(c) || /^(Shift\+)?F([1-9]|1[0-2])$/.test(c));
+  function problemaDoAtalho(combinacao, atuais, id) {
+    if (!combinacaoAceita(combinacao)) return 'Use uma combinação com Ctrl ou Alt (ou uma tecla F1–F12).';
+    if (RESERVADOS.has(combinacao)) return `${rotuloDaCombinacao(combinacao)} é reservado do sistema ou do editor.`;
+    const dono = ATALHOS_EDITAVEIS.find(([outro]) => outro !== id && atuais[outro] === combinacao);
+    return dono ? `${rotuloDaCombinacao(combinacao)} já é o atalho de ${dono[1]}.` : '';
+  }
+  function atalhosValidos(salvos) {
+    const s = salvos && typeof salvos === 'object' && !Array.isArray(salvos) ? salvos : {};
+    const padrao = id => ATALHOS_EDITAVEIS.find(([x]) => x === id)[3];
+    const atalhos = Object.fromEntries(ATALHOS_EDITAVEIS.map(([id]) => {
+      const c = s[id];
+      return [id, combinacaoAceita(c) && !RESERVADOS.has(c) ? c : padrao(id)];
+    }));
+    // Repetido: quem não está no padrão volta para ele, até sobrar tudo distinto.
+    for (let volta = 0; volta < ATALHOS_EDITAVEIS.length; volta++) {
+      const repetidos = ATALHOS_EDITAVEIS.filter(([id]) => atalhos[id] !== padrao(id) && Object.keys(atalhos).some(o => o !== id && atalhos[o] === atalhos[id]));
+      if (!repetidos.length) break;
+      for (const [id] of repetidos) atalhos[id] = padrao(id);
+    }
+    return atalhos;
+  }
+
+  const api = { ATALHOS_EDITAVEIS, combinacaoDoEvento, rotuloDaCombinacao, problemaDoAtalho, atalhosValidos, TEMAS, SKINS, APARENCIA_PADRAO, luminancia, contraste, corValida, aparenciaValida, classesDaAparencia, FOLDER_COLORS, folderColor,habitStats, habitDays, withHabits, validFrequency, localDate, safeUrl, validateState, normalize, isImagePath, wikiLinks, tags, findLinkedNote, mentions, inInbox, withoutInbox, toReview, linkQuery, linkSuggestions, validFolderName, folderPaths, descendants, upgradeBackup, pathKey };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Kiro = api;
 })(globalThis);

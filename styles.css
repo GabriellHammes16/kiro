@@ -283,10 +283,10 @@ select:focus-visible, textarea:focus-visible, .tree-row:focus-visible {
 .app-shell.cofre-aberto > .sidebar { display:none; }
 .app-shell.cofre-aberto > .content { padding:0; }
 /* Sem a navegação principal, a barra de status começa logo depois da árvore. */
-.app-shell.cofre-aberto ~ #save-status { left:236px; right:0; transition:left .2s ease; }
+.app-shell.cofre-aberto ~ #save-status { left:var(--largura-arvore, 272px); right:0; transition:left .2s ease; }
 .cofre { display:flex; align-items:stretch; min-height:100vh; }
-.cofre-lateral { flex:0 0 272px; display:flex; flex-direction:column; min-width:0; height:100vh; position:sticky; top:0; overflow:hidden;
-  background:transparent; border-right:1px solid rgba(255,255,255,.05); transition:flex-basis .2s ease; }
+.cofre-lateral { flex:0 0 var(--largura-arvore, 272px); display:flex; flex-direction:column; min-width:0; height:100vh; position:sticky; top:0; overflow:hidden;
+  background:var(--sidebar-bg,#11161D); border-right:1px solid var(--line); transition:flex-basis .2s ease; }
 .cofre-topo { display:flex; align-items:center; gap:6px; padding:12px 10px 8px; }
 .cofre-nome { flex:1; font-size:12px; text-transform:uppercase; letter-spacing:1.4px; color:var(--muted); font-weight:600; opacity:.7; }
 /* Ações da árvore e a seta de esconder só aparecem quando o mouse chega nela. */
@@ -915,3 +915,74 @@ body, button, input, textarea, select { font-family:var(--fonte-interface); }
 .plugin-pagina { height:100%; min-height:calc(100vh - 48px); display:flex; }
 .plugin-pagina .plugin-moldura { flex:1; height:auto !important; border-radius:0; }
 .app-shell.pagina-plugin-aberta > .content { padding:0; }
+
+/* ---- Barra lateral: topo sem marca e modo compacto (só ícones) ---- */
+.sidebar-topo { display:flex; justify-content:flex-end; margin:-12px -6px 12px; }
+.lateral-alternar { color:var(--muted); }
+.lateral-alternar:hover { color:var(--ink); }
+.lateral-alternar .icone { width:17px; height:17px; transition:transform var(--medio) var(--curva); }
+@media (min-width:781px) {
+  .sidebar { transition:flex-basis .2s ease, width .2s ease, padding .2s ease; }
+  .app-shell.lateral-compacta > .sidebar { flex-basis:64px; width:64px; padding-left:8px; padding-right:8px; }
+  .app-shell.lateral-compacta ~ #save-status, .app-shell.lateral-compacta.grafo-aberto ~ #save-status { left:64px; }
+  .app-shell.lateral-compacta .sidebar-topo { justify-content:center; margin:-12px 0 12px; }
+  .app-shell.lateral-compacta .lateral-alternar .icone { transform:rotate(180deg); }
+  /* Some da tela, não do leitor de tela: o nome continua sendo o rótulo do botão. */
+  .app-shell.lateral-compacta .sidebar .rotulo, .app-shell.lateral-compacta .nav-grupo {
+    position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; }
+  .app-shell.lateral-compacta .sidebar :is(.new-note, .quiet-button, .nav-item) { justify-content:center; gap:0; min-height:44px; padding-left:0; padding-right:0; }
+  .app-shell.lateral-compacta .sidebar .nav-item { position:relative; }
+  .app-shell.lateral-compacta .nav-item b { position:absolute; top:3px; right:3px; min-width:16px; margin:0; padding:0 4px; font-size:10px; line-height:15px; }
+  .app-shell.lateral-compacta .nav-plugins { border-top:1px solid var(--line); padding-top:8px; }
+  .app-shell.lateral-compacta .sidebar-bottom { padding-left:0; padding-right:0; }
+}
+
+/* ---- Atalhos editáveis ---- */
+.atalho-linha { flex-wrap:wrap; }
+.atalho-controles { display:inline-flex; align-items:center; gap:var(--esp-2); }
+.atalho-linha.gravando kbd { color:var(--acento); border-color:var(--acento); }
+.atalho-erro { flex-basis:100%; color:#ffc5a9; font-size:var(--fs-legenda); }
+.atalho-erro:empty { display:none; }
+.atalho-restaurar { margin-top:var(--esp-2); }
+
+/* ---- Boas-vindas (primeira abertura no aplicativo) ---- */
+#boas-vindas { position:fixed; inset:0; z-index:900; display:grid; place-items:center; padding:24px; overflow:auto;
+  background:radial-gradient(ellipse at 50% 0%, color-mix(in srgb, var(--acento) 12%, transparent), transparent 60%), var(--bg); }
+.bv-caixa { width:min(560px, 100%); text-align:center; }
+.bv-logo { width:72px; height:72px; object-fit:contain; margin-bottom:var(--esp-4); filter:drop-shadow(0 4px 18px color-mix(in srgb, var(--acento-forte) 30%, transparent)); }
+#boas-vindas h1 { margin:0 0 var(--esp-2); font-size:28px; letter-spacing:-.4px; color:var(--ink); }
+.bv-sub { margin:0 auto var(--esp-5, 24px); max-width:52ch; text-wrap:balance; color:var(--muted); line-height:1.55; }
+.bv-opcoes { display:grid; gap:var(--esp-3); text-align:left; }
+.bv-opcao { display:flex; align-items:center; gap:var(--esp-3); width:100%; min-height:60px; padding:var(--esp-2) var(--esp-4) var(--esp-2) var(--esp-2); text-align:left;
+  border:1px solid var(--line); border-radius:12px; background:var(--panel); color:var(--ink); font-size:15px; font-weight:600; cursor:pointer;
+  transition:border-color var(--rapido) var(--curva), background-color var(--rapido) var(--curva); }
+.bv-opcao:hover, .bv-opcao:focus-visible { border-color:var(--acento); background:var(--panel-raised); }
+.bv-opcao:disabled { opacity:.6; cursor:progress; }
+.bv-icone { flex:0 0 40px; height:40px; display:grid; place-items:center; border-radius:10px; color:var(--acento); background:color-mix(in srgb, var(--acento) 14%, transparent); }
+.bv-icone .icone { width:20px; height:20px; }
+.bv-titulo { flex:1; min-width:0; }
+.bv-seta { width:18px; height:18px; color:var(--muted); transition:transform var(--rapido) var(--curva), color var(--rapido) var(--curva); }
+.bv-opcao:hover .bv-seta, .bv-opcao:focus-visible .bv-seta { color:var(--acento); transform:translateX(2px); }
+.bv-erro { min-height:1.4em; margin:var(--esp-3) 0 0; color:#ffc5a9; font-size:13px; }
+.bv-erro:empty { min-height:0; }
+.bv-rodape { margin:var(--esp-3) 0 0; color:var(--muted); font-size:12px; }
+
+/* Sem tarefas abertas, o contador some em vez de virar uma pílula vazia. */
+.nav-item b:empty { display:none; }
+
+/* ---- Divisória ajustável da árvore de Pastas ---- */
+.cofre-divisor { position:absolute; top:0; right:0; bottom:0; width:7px; z-index:2; cursor:col-resize; touch-action:none; }
+.cofre-divisor::after { content:""; position:absolute; top:0; bottom:0; right:0; width:2px; background:transparent; transition:background-color var(--rapido) var(--curva); }
+.cofre-divisor:hover::after, .cofre-divisor:focus-visible::after, .arrastando-divisor .cofre-divisor::after { background:var(--acento); }
+.cofre-divisor:focus-visible { outline:none; }
+/* Durante o arraste: sem transição (a largura segue o mouse) e sem selecionar texto. */
+.arrastando-divisor, .arrastando-divisor * { cursor:col-resize !important; user-select:none; }
+.arrastando-divisor .cofre-lateral, .arrastando-divisor #save-status { transition:none; }
+.app-shell.lateral-recolhida .cofre-divisor { display:none; }
+@media (max-width:780px) { .cofre-divisor { display:none; } }
+
+/* Árvore estreita: o rótulo "Cofre" sai antes de qualquer botão; a seta de recolher nunca some. */
+.cofre-lateral { container-type:inline-size; }
+.cofre-topo > .icon-button { flex-shrink:0; }
+.cofre-acoes { margin-left:auto; flex-shrink:0; }
+@container (max-width:250px) { .cofre-nome { display:none; } }

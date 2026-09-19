@@ -122,6 +122,22 @@ test('pastas e links: create_folder, backlinks e links de saída', async t => {
   assert.equal(voltando.backlinks[0].title, 'Origem');
 });
 
+test('link para nota com título repetido aponta para a nota pedida, não para a homônima', async t => {
+  const { toolkit } = await montar(t);
+  const bio = await toolkit.call('create_note', { title: 'Resumo', folder: 'Biologia', content: 'bio' }, cliente);
+  const quimica = await toolkit.call('create_note', { title: 'Resumo', folder: 'Química', content: 'química' }, cliente);
+  const origem = await toolkit.call('create_note', { title: 'Origem', content: 'começo' }, cliente);
+
+  const criado = await toolkit.call('create_note_link', { fromId: origem.note.id, toId: quimica.note.id }, cliente);
+  assert.match(criado.markup, /\|Resumo\]\]$/);   // o texto continua mostrando o título
+  assert.equal((await toolkit.call('get_backlinks', { id: quimica.note.id }, cliente)).total, 1);
+  assert.equal((await toolkit.call('get_backlinks', { id: bio.note.id }, cliente)).total, 0);
+  // Pedir de novo a mesma nota não duplica; pedir a homônima cria outro link.
+  assert.equal((await toolkit.call('create_note_link', { fromId: origem.note.id, toId: quimica.note.id }, cliente)).alreadyLinked, true);
+  assert.equal((await toolkit.call('create_note_link', { fromId: origem.note.id, toId: bio.note.id }, cliente)).alreadyLinked, false);
+  assert.equal((await toolkit.call('get_backlinks', { id: bio.note.id }, cliente)).total, 1);
+});
+
 test('tags podem ser somadas, removidas e usadas na busca', async t => {
   const { toolkit } = await montar(t);
   const nota = await toolkit.call('create_note', { title: 'Estudo', content: 'texto', tags: ['ia'] }, cliente);

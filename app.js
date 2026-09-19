@@ -373,6 +373,79 @@ function toggleFolder(id) {
 // quem usava o aplicativo com o nome anterior não perde o que tinha escolhido.
 const lerPreferencia = chave => { try { return localStorage.getItem(`kiro.${chave}`) ?? localStorage.getItem(`kuroi.${chave}`); } catch { return null; } };
 let lateralRecolhida = lerPreferencia('lateralRecolhida') === '1';
+// Largura da árvore de Pastas: arrastar a linha entre a árvore e a nota; fica no navegador.
+// O mínimo cabe a casinha, as três ações e a seta de recolher.
+const LARGURA_ARVORE = { min: 200, max: 480, padrao: 272 };
+// Sem valor salvo (null) vale o padrão; arrastar até a borda (0) para no mínimo.
+const larguraValida = n => { const v = n === null || n === undefined || n === '' ? NaN : Number(n); return Math.round(Number.isFinite(v) ? Math.min(LARGURA_ARVORE.max, Math.max(LARGURA_ARVORE.min, v)) : LARGURA_ARVORE.padrao); };
+let larguraArvore = larguraValida(lerPreferencia('larguraArvore'));
+function aplicarLarguraArvore(largura, gravar = false) {
+  larguraArvore = larguraValida(largura);
+  // Na raiz: a barra de status fica fora do .app-shell e também usa a largura.
+  document.documentElement.style.setProperty('--largura-arvore', `${larguraArvore}px`);
+  document.querySelector('.cofre-divisor')?.setAttribute('aria-valuenow', larguraArvore);
+  if (gravar) try { localStorage.setItem('kiro.larguraArvore', String(larguraArvore)); } catch { /* janela privada: vale só nesta sessão */ }
+}
+function ligarDivisorDaArvore() {
+  const divisor = document.querySelector('.cofre-divisor'), arvore = document.querySelector('.cofre-lateral');
+  if (!divisor || !arvore) return;
+  divisor.addEventListener('pointerdown', e => {
+    if (e.button !== 0 || lateralRecolhida) return;
+    e.preventDefault();
+    divisor.setPointerCapture(e.pointerId);
+    document.body.classList.add('arrastando-divisor');
+    const esquerda = arvore.getBoundingClientRect().left;
+    const mover = ev => aplicarLarguraArvore(ev.clientX - esquerda);
+    const soltar = () => {
+      divisor.removeEventListener('pointermove', mover);
+      document.body.classList.remove('arrastando-divisor');
+      aplicarLarguraArvore(larguraArvore, true);
+    };
+    divisor.addEventListener('pointermove', mover);
+    divisor.addEventListener('pointerup', soltar, { once: true });
+    divisor.addEventListener('pointercancel', soltar, { once: true });
+  });
+  divisor.addEventListener('dblclick', () => aplicarLarguraArvore(LARGURA_ARVORE.padrao, true));
+  divisor.addEventListener('keydown', e => {
+    const passo = e.key === 'ArrowLeft' ? -16 : e.key === 'ArrowRight' ? 16 : 0;
+    if (e.key === 'Home') { e.preventDefault(); return aplicarLarguraArvore(LARGURA_ARVORE.padrao, true); }
+    if (!passo) return;
+    e.preventDefault();
+    aplicarLarguraArvore(larguraArvore + passo, true);
+  });
+  // O clique na faixa recolhida reabre a árvore; o divisor não deve disparar isso.
+  divisor.addEventListener('click', e => e.stopPropagation());
+}
+// Atalhos que dá para trocar em Configurações → Atalhos (o padrão e a validação ficam no domain.js).
+let atalhos = Kiro.atalhosValidos((() => { try { return JSON.parse(lerPreferencia('atalhos') || 'null'); } catch { return null; } })());
+const teclaDe = id => Kiro.rotuloDaCombinacao(atalhos[id]);
+let gravandoAtalho = false;   // enquanto Configurações escuta a combinação nova, os atalhos não disparam
+// Barra lateral principal compacta: só os ícones. O nome de cada item continua no
+// .rotulo (escondido só visualmente, para leitor de tela) e vira dica ao passar o mouse.
+let lateralCompacta = lerPreferencia('lateralCompacta') === '1';
+function aplicarLateralCompacta() {
+  document.querySelector('.app-shell').classList.toggle('lateral-compacta', lateralCompacta);
+  const acao = lateralCompacta ? 'Expandir barra lateral' : 'Recolher barra lateral';
+  const botao = document.querySelector('#alternar-lateral');
+  botao.setAttribute('aria-label', acao);
+  botao.setAttribute('aria-expanded', String(!lateralCompacta));
+  botao.title = `${acao} (${teclaDe('lateral')})`;
+  for (const item of document.querySelectorAll('.sidebar :is(.new-note, .quiet-button, .nav-item)')) {
+    const rotulo = item.querySelector('.rotulo')?.textContent.trim();
+    if (!rotulo) continue;
+    if (item.id === 'go-note') item.dataset.dica = teclaDe('irPara');
+    item.dataset.dica ??= item.getAttribute('title') || '';   // a dica original, se houver
+    const original = item.dataset.dica;
+    if (lateralCompacta) item.title = original ? `${rotulo} (${original})` : rotulo;
+    else if (original) item.title = original;
+    else item.removeAttribute('title');
+  }
+}
+function alternarLateralCompacta() {
+  lateralCompacta = !lateralCompacta;
+  try { localStorage.setItem('kiro.lateralCompacta', lateralCompacta ? '1' : '0'); } catch { /* janela privada: vale só nesta sessão */ }
+  aplicarLateralCompacta();
+}
 function botaoLateral() {
   const acao = lateralRecolhida ? 'Mostrar barra lateral' : 'Esconder barra lateral';
   return `<button class="icon-button cofre-alternar" data-cofre="alternar" title="${acao}" aria-label="${acao}" aria-expanded="${!lateralRecolhida}">${icone(lateralRecolhida ? 'direita' : 'esquerda')}</button>`;
@@ -412,6 +485,7 @@ function renderCofre() {
       ${botaoLateral()}
     </header>
     <div class="tree">${arvore}</div>
+    <div class="cofre-divisor" role="separator" aria-orientation="vertical" aria-label="Largura da árvore de pastas" tabindex="0" aria-valuemin="${LARGURA_ARVORE.min}" aria-valuemax="${LARGURA_ARVORE.max}" aria-valuenow="${larguraArvore}" title="Arraste para ajustar a largura · dois cliques voltam ao padrão"></div>
     <footer class="cofre-rodape"><span class="small-muted">${state.folders.length} pasta${state.folders.length === 1 ? '' : 's'} · ${state.notes.length} nota${state.notes.length === 1 ? '' : 's'}</span></footer>
   </aside>
   <section class="cofre-nota">${direita}</section>
@@ -435,6 +509,7 @@ function bindView() {
     // Delegado: a seta esconde ou mostra; com a barra recolhida, clicar na faixa também reabre.
     document.querySelector('.cofre-lateral')?.addEventListener('click',e=>{if(e.target.closest('[data-cofre="alternar"]')||(lateralRecolhida&&!e.target.closest('button')))alternarLateral();});
     document.querySelector('#add-note-cofre')?.addEventListener('click',()=>abrirNota(notaVazia()));
+    ligarDivisorDaArvore();
     if(editing)bindEditor();
     return;
   }
@@ -507,6 +582,7 @@ function folderModal(folder={title:"",description:"",parentId:""}) { modal(folde
   if(expanded){expanded.add(saved.id);if(parentId)expanded.add(parentId);}
   save();closeModal(true);currentView="studies";render();}; }
 let busy=false, failed=false, loaded=false, modalDirty=false, lastDay=today();
+let aguardandoCofre=false;   // primeira abertura no aplicativo: nada é lido até escolher o cofre
 // null = ainda não semeado; na primeira exibição a árvore abre inteira.
 let expanded=null, renderedView=null, editing=null, editorDirty=false, grafoRaf=null, blocoAberto=null;
 const notaVazia = (extra={}) => ({title:"",body:"",links:[],tags:[],folderId:"",...extra});
@@ -531,7 +607,7 @@ setTimeout(fecharAbertura,4000);
 function status(message,error=false){$('#save-status').textContent=message;$('#save-status').classList.toggle('error',error);}
 function setBusy(value){busy=value;document.body.classList.toggle('saving',value);$('.app-shell').inert=value;$('#modal-root').inert=value;}
 async function reload(manual=false){
-  if(busy||(!manual&&(failed||editorDirty||$('#modal-root').firstChild)))return;
+  if(aguardandoCofre||busy||(!manual&&(failed||editorDirty||$('#modal-root').firstChild)))return;
   if(manual&&(failed||modalDirty||editorDirty)&&!confirm('Recarregar descarta alterações ainda não salvas nesta janela. Exporte seus dados ou copie o texto antes de continuar. Recarregar?'))return;
   setBusy(true);
   try{
@@ -566,7 +642,7 @@ const extraButton=(action,label,id='',cls='secondary',nome='')=>`<button type="b
 function enhanceView(){
   if(currentView!=='today')return;
   // Captura numa faixa própria logo abaixo da frase, na largura dos cards: não depende de quantas linhas a frase ocupa.
-  $('.page-head').insertAdjacentHTML('afterend',`<div class="hoje-acoes"><form id="capture-form" class="capture add-link"><label for="capture-text" class="sr-only">Captura rápida</label>${icone('mais')}<input id="capture-text" required autocomplete="off" placeholder="Capturar uma ideia, pergunta ou lembrete…" /><kbd class="atalho" title="De qualquer tela">Ctrl + Espaço</kbd><button class="primary">Guardar</button></form>${extraButton('daily',`${icone('calendario')} Nota diária`,'','secondary')}</div>`);
+  $('.page-head').insertAdjacentHTML('afterend',`<div class="hoje-acoes"><form id="capture-form" class="capture add-link"><label for="capture-text" class="sr-only">Captura rápida</label>${icone('mais')}<input id="capture-text" required autocomplete="off" placeholder="Capturar uma ideia, pergunta ou lembrete…" /><kbd class="atalho" title="De qualquer tela">${teclaDe('captura')}</kbd><button class="primary">Guardar</button></form>${extraButton('daily',`${icone('calendario')} Nota diária`,'','secondary')}</div>`);
   $('#capture-form').onsubmit=async e=>{e.preventDefault();if(await capturar($('#capture-text').value))$('#capture-text')?.focus();};
   desenharPaineisDosPlugins();
 }
@@ -609,8 +685,10 @@ function renderEditor(){
 <div class="doc-corpo" id="doc-corpo" data-vazio="Clique para escrever. [[Nome da nota]] conecta ideias e #tag marca a nota.">${renderizarMarkdown(nota.body)}</div>${renderMencoes(nota)}`;
 }
 // Quem cita esta nota, com a linha do [[link]] como trecho. Nota ainda não salva não tem quem a cite.
+// "Mencionada em" no pé da nota: opcional, desligado por padrão (Configurações → Personalização).
+let mostrarMencoes = lerPreferencia('mostrarMencoes') === '1';
 function renderMencoes(nota){
-  if(!nota.id)return '';
+  if(!mostrarMencoes||!nota.id)return '';
   const citam=Kiro.mentions(state.notes,nota); if(!citam.length)return '';
   const resolve=l=>Kiro.findLinkedNote(state.notes,l.target)?.id===nota.id;
   const itens=citam.map(n=>{
@@ -1133,7 +1211,9 @@ function imagensNaFonte(fonte) {
 function matematica(fonte, bloco) {
   if (typeof katex === 'undefined') return `<code>${escapeHtml(fonte)}</code>`;
   try {
-    return katex.renderToString(fonte, { displayMode: bloco, throwOnError: false, output: 'html', strict: false, trust: false });
+    // O KaTeX quebra linha dentro do caminho SVG da raiz e das chaves; parágrafos e citações
+    // trocam \n por <br />, o que partia o desenho. No SVG, quebra de linha vale espaço.
+    return katex.renderToString(fonte, { displayMode: bloco, throwOnError: false, output: 'html', strict: false, trust: false }).replace(/\n/g, ' ');
   } catch (erro) {
     return `<span class="math-erro" title="${escapeHtml(erro.message)}">${escapeHtml(fonte)}</span>`;
   }
@@ -2174,9 +2254,10 @@ function desenharNavDosPlugins() {
   const comPagina = [...pluginsAtivos].filter(([, e]) => e.manifesto?.page);
   nav.hidden = !comPagina.length;
   nav.innerHTML = comPagina.length ? `<p class="nav-grupo">Plug-ins</p>${comPagina.map(([id, e]) =>
-    `<button class="nav-item${currentView === `plugin:${id}` ? ' active' : ''}" data-view="plugin:${escapeHtml(id)}"><span class="rotulo-icone" data-icone="plugin"></span> ${escapeHtml(e.manifesto.page.title)}</button>`).join('')}` : '';
+    `<button class="nav-item${currentView === `plugin:${id}` ? ' active' : ''}" data-view="plugin:${escapeHtml(id)}"><span class="rotulo-icone" data-icone="plugin"></span><span class="rotulo">${escapeHtml(e.manifesto.page.title)}</span></button>`).join('')}` : '';
   for (const b of nav.querySelectorAll('.nav-item')) b.onclick = () => { if (loaded) irPara(b.dataset.view); };
   desenharIconesFixos();
+  aplicarLateralCompacta();   // os itens novos também ganham a dica no modo compacto
 }
 function renderPaginaDoPlugin(id) {
   const estado = pluginsAtivos.get(id), page = estado?.manifesto?.page;
@@ -2905,15 +2986,67 @@ function ligarAbaPlugins(painel) {
 // Aparência aplica na hora; as permissões de agente só no botão Salvar.
 const ABAS_CFG = [['personalizacao', 'Personalização', 'realce'], ['sistema', 'Sistema', 'pasta-aberta'], ['integracoes', 'Integrações', 'link'], ['plugins', 'Plug-ins', 'plugin'], ['atalhos', 'Atalhos', 'codigo']];
 let abaDasConfiguracoes = 'personalizacao';
-const ATALHOS = [
-  ['Ctrl + Espaço', 'Captura rápida', 'De qualquer tela, direto para a caixa de entrada.'],
-  ['Ctrl + O', 'Ir para nota', 'Busca uma nota pelo título.'],
-  ['Ctrl + N', 'Nova nota', ''],
-  ['Ctrl + S', 'Salvar a nota aberta', ''],
+// Fixos: fazem parte do editor e dos menus, não dá para trocar.
+const ATALHOS_FIXOS = [
   ['[[', 'Ligar a outra nota', 'Mostra sugestões de títulos enquanto você digita.'],
   ['Botão direito', 'Menus rápidos', 'Na árvore de pastas, nas notas, nos hábitos e dentro do texto.'],
   ['Esc', 'Fechar janela ou menu', ''],
 ];
+const atalhosNoPadrao = () => Kiro.ATALHOS_EDITAVEIS.every(([id, , , padrao]) => atalhos[id] === padrao);
+function linhasDeAtalhos(texto) {
+  return Kiro.ATALHOS_EDITAVEIS.map(([id, titulo, detalhe]) => `<div class="cfg-linha atalho-linha" data-atalho="${id}">${texto(titulo, detalhe)}<span class="atalho-controles"><kbd class="atalho">${teclaDe(id)}</kbd><button type="button" class="secondary cfg-pequeno" data-alterar-atalho="${id}" aria-label="Alterar atalho de ${titulo}">Alterar</button></span><span class="atalho-erro" role="status" aria-live="polite"></span></div>`).join('')
+    + `<div class="form-actions atalho-restaurar"${atalhosNoPadrao() ? ' hidden' : ''}><button type="button" class="secondary cfg-pequeno" id="atalhos-padrao">Restaurar padrões</button></div>`;
+}
+function gravarAtalhos(novos) {
+  atalhos = Kiro.atalhosValidos(novos);
+  try { localStorage.setItem('kiro.atalhos', JSON.stringify(atalhos)); } catch { /* janela privada: vale só nesta sessão */ }
+  aplicarLateralCompacta();   // dicas da barra lateral com a tecla nova
+}
+// Clicar em "Alterar" escuta a próxima combinação. Esc cancela; combinação ruim mostra o motivo.
+function ligarAbaAtalhos(texto) {
+  const caixa = $('#atalhos-editaveis');
+  if (!caixa) return;
+  const redesenhar = foco => {
+    caixa.innerHTML = linhasDeAtalhos(texto);
+    ligarAbaAtalhos(texto);
+    if (foco) caixa.querySelector(foco)?.focus();
+  };
+  caixa.querySelector('#atalhos-padrao')?.addEventListener('click', () => {
+    gravarAtalhos({});
+    redesenhar('[data-alterar-atalho]');
+  });
+  for (const botao of caixa.querySelectorAll('[data-alterar-atalho]')) botao.onclick = () => {
+    const id = botao.dataset.alterarAtalho, linha = botao.closest('.atalho-linha');
+    const kbd = linha.querySelector('kbd'), erro = linha.querySelector('.atalho-erro');
+    const voltar = () => redesenhar(`[data-alterar-atalho="${id}"]`);
+    const encerrar = () => { gravandoAtalho = false; window.removeEventListener('keydown', ouvir, true); botao.removeEventListener('blur', aoSair); };
+    // Tirar o foco do botão (clicar fora, Tab) desiste da gravação.
+    const aoSair = () => { encerrar(); redesenhar(); };
+    const ouvir = e => {
+      // Janela fechada no meio da gravação (sem blur): larga o teclado de volta.
+      if (!linha.isConnected) return encerrar();
+      if (e.key === 'Tab') return;   // Tab segue navegando e o blur cancela
+      // Fase de captura na janela: nada mais (nem o Esc que fecha a janela) vê esta tecla.
+      e.preventDefault(); e.stopPropagation();
+      if (e.key === 'Escape') { encerrar(); return voltar(); }
+      const combinacao = Kiro.combinacaoDoEvento(e);
+      if (!combinacao) return;   // só o modificador por enquanto
+      const problema = Kiro.problemaDoAtalho(combinacao, atalhos, id);
+      if (problema) { erro.textContent = problema; return; }
+      encerrar();
+      gravarAtalhos({ ...atalhos, [id]: combinacao });
+      voltar();
+    };
+    gravandoAtalho = true;
+    linha.classList.add('gravando');
+    kbd.textContent = 'Pressione as teclas…';
+    botao.textContent = 'Cancelar';
+    erro.textContent = '';
+    window.addEventListener('keydown', ouvir, true);
+    botao.addEventListener('blur', aoSair);
+    botao.onclick = () => { encerrar(); voltar(); };
+  };
+}
 async function showSettings(aba = abaDasConfiguracoes) {
   if (busy || !loaded) return;
   let conf = null, erroConf = '';
@@ -2951,6 +3084,10 @@ async function showSettings(aba = abaDasConfiguracoes) {
       <div class="cfg-linha cfg-linha-coluna">${texto('Skin', '', 'skin-rotulo')}
         <div class="skins" role="radiogroup" aria-labelledby="skin-rotulo">${SKINS.map(([id, nome, desc]) => `<label class="skin-opcao"><input type="radio" name="skin" value="${id}" class="sr-only" ${cores.skin === id ? 'checked' : ''} /><span class="skin-nome">${nome}</span><span class="skin-desc">${desc}</span></label>`).join('')}</div>
       </div>
+    </section>
+    <section class="cfg-grupo">
+      <header class="cfg-grupo-topo">${texto('Notas', 'O que aparece junto do texto da nota aberta.')}</header>
+      <label class="cfg-linha cfg-chave">${texto('Mostrar “Mencionada em”', 'Lista, no fim da nota, as notas que apontam para ela com [[links]].')}<input type="checkbox" id="cfg-mencoes" ${mostrarMencoes ? 'checked' : ''} /><span class="interruptor" aria-hidden="true"></span></label>
     </section>`)}
     ${painel('sistema', `<section class="cfg-grupo">
       <header class="cfg-grupo-topo">${texto('Cofre', 'A pasta onde suas notas ficam, como arquivos Markdown.')}</header>
@@ -2978,12 +3115,23 @@ async function showSettings(aba = abaDasConfiguracoes) {
     ${painel('plugins', abaPlugins)}
     ${painel('atalhos', `<section class="cfg-grupo">
       <header class="cfg-grupo-topo">${texto('Atalhos', 'Para fazer as coisas sem tirar a mão do teclado.')}</header>
-      ${ATALHOS.map(([tecla, titulo, detalhe]) => `<div class="cfg-linha">${texto(titulo, detalhe)}<kbd class="atalho">${tecla}</kbd></div>`).join('')}
+      <div id="atalhos-editaveis">${linhasDeAtalhos(texto)}</div>
+      ${ATALHOS_FIXOS.map(([tecla, titulo, detalhe]) => `<div class="cfg-linha">${texto(titulo, detalhe)}<kbd class="atalho">${tecla}</kbd></div>`).join('')}
     </section>`)}
     </div>
   </div>`);
 
   // Abas: clique ou setas esquerda/direita; a última aberta volta na próxima vez.
+  ligarAbaAtalhos(texto);
+  // Grava na hora: não há o que "descartar" ao fechar a janela.
+  $('#cfg-mencoes')?.addEventListener('change', e => {
+    mostrarMencoes = e.target.checked;
+    try { localStorage.setItem('kiro.mostrarMencoes', mostrarMencoes ? '1' : '0'); } catch { /* janela privada: vale só nesta sessão */ }
+    e.stopPropagation();   // senão o "change" chega à janela e a marca como alterada
+    modalDirty = false;
+    document.querySelector('.doc-mencoes')?.remove();
+    if (editing) $('#doc-corpo')?.insertAdjacentHTML('afterend', renderMencoes(editing));
+  });
   const abas = [...document.querySelectorAll('.cfg-aba')];
   const mostrar = id => {
     const trocou = $('#painel-plugins')?.hidden;
@@ -3146,22 +3294,86 @@ function irParaNota(){
   lista.addEventListener('click',e=>{const b=e.target.closest('[data-i]');if(b)abrir(achadas[+b.dataset.i]);});
   desenhar();campo.focus();
 }
+const ACOES_DOS_ATALHOS={
+  captura:()=>capturaRapida(),
+  irPara:()=>irParaNota(),
+  novaNota:()=>{if(loaded&&!failed&&!busy&&!$('#modal-root').firstChild)abrirNota(notaVazia());},
+  salvar:()=>salvarNota(),
+  lateral:()=>alternarLateralCompacta(),
+};
 document.addEventListener('keydown',e=>{
   if(e.key==='Escape') closeModal();
-  if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='o'){e.preventDefault();irParaNota();}
-  if(e.ctrlKey&&e.code==='Space'){e.preventDefault();capturaRapida();}
-  if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='n'){e.preventDefault();if(loaded&&!failed&&!busy&&!$('#modal-root').firstChild)abrirNota(notaVazia());}
-  if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='s'&&editing){e.preventDefault();salvarNota();}
+  if(gravandoAtalho||aguardandoCofre)return;
+  const combinacao=Kiro.combinacaoDoEvento(e);
+  const acao=Object.keys(atalhos).find(id=>atalhos[id]===combinacao);
+  if(acao==='salvar'&&!editing)return;
+  if(acao){e.preventDefault();ACOES_DOS_ATALHOS[acao]();}
 });
 window.addEventListener('beforeunload',e=>{if(busy||failed||modalDirty||editorDirty){e.preventDefault();e.returnValue='';}});
 window.addEventListener('focus',()=>reload());
 setInterval(()=>{if(document.hidden)return;if(lastDay!==today()){lastDay=today();if(loaded&&!busy)render();}reload();if(loaded)for(const id of pluginsAtivos.keys())entregarDia(id);},5000);
 desenharIconesFixos();
 aplicarAparencia();
-reload();
-// Plug-ins entram em paralelo com o cofre: só precisam da versão do Kiro, que é
-// o que o manifesto compara em minKiro.
-(async () => {
-  try { VERSAO = await pluginApi.versao() || VERSAO; } catch { /* sem versão, o minKiro não é conferido */ }
-  await carregarPlugins();
-})();
+aplicarLateralCompacta();
+aplicarLarguraArvore(larguraArvore);
+document.querySelector('#alternar-lateral').onclick = alternarLateralCompacta;
+iniciar();
+
+// ---- Início ----
+// No aplicativo, a primeira abertura (sem cofre escolhido) mostra as boas-vindas antes
+// de ler qualquer coisa; nos outros casos o cofre abre direto, como sempre.
+async function iniciar() {
+  const inicio = window.cadernoDesktop ? await window.cadernoDesktop.firstRun().catch(() => null) : null;
+  if (inicio?.primeiraVez) { aguardandoCofre = true; return mostrarBoasVindas(inicio.padrao); }
+  comecar();
+}
+function comecar() {
+  reload();
+  // Plug-ins entram em paralelo com o cofre: só precisam da versão do Kiro, que é
+  // o que o manifesto compara em minKiro.
+  (async () => {
+    try { VERSAO = await pluginApi.versao() || VERSAO; } catch { /* sem versão, o minKiro não é conferido */ }
+    await carregarPlugins();
+  })();
+}
+function mostrarBoasVindas(padrao) {
+  fecharAbertura();
+  const opcao = (modo, nomeIcone, titulo, dica = '') => `<button type="button" class="bv-opcao" data-modo="${modo}"${dica ? ` title="${dica}"` : ''}><span class="bv-icone">${icone(nomeIcone)}</span><span class="bv-titulo">${titulo}</span>${icone('direita', 'bv-seta')}</button>`;
+  const tela = document.createElement('div');
+  tela.id = 'boas-vindas';
+  tela.setAttribute('role', 'dialog');
+  tela.setAttribute('aria-modal', 'true');
+  tela.setAttribute('aria-labelledby', 'bv-titulo');
+  tela.innerHTML = `<div class="bv-caixa">
+    <img class="bv-logo" src="kiro-logo.png" alt="" />
+    <h1 id="bv-titulo">Boas-vindas ao Kiro</h1>
+    <p class="bv-sub">Suas notas ficam numa pasta do seu computador, em arquivos Markdown que qualquer editor abre. Escolha onde.</p>
+    <div class="bv-opcoes">
+      ${opcao('criar', 'mais', 'Criar um cofre novo')}
+      ${opcao('abrir', 'pasta-aberta', 'Abrir uma pasta existente')}
+      ${opcao('padrao', 'pastas', 'Usar a pasta padrão', escapeHtml(padrao))}
+    </div>
+    <p class="bv-erro" role="alert"></p>
+    <p class="bv-rodape">Dá para trocar depois em Configurações → Sistema.</p>
+  </div>`;
+  document.body.append(tela);
+  $('.app-shell').inert = true;
+  const botoes = [...tela.querySelectorAll('.bv-opcao')], erro = tela.querySelector('.bv-erro');
+  for (const botao of botoes) botao.onclick = async () => {
+    botoes.forEach(b => { b.disabled = true; });
+    erro.textContent = '';
+    try {
+      const pronto = await window.cadernoDesktop.setupVault(botao.dataset.modo);
+      if (!pronto) { botoes.forEach(b => { b.disabled = false; }); return botao.focus(); }   // janela de pasta cancelada
+      tela.remove();
+      $('.app-shell').inert = false;
+      aguardandoCofre = false;
+      comecar();
+    } catch (e) {
+      erro.textContent = 'Não foi possível usar essa pasta: ' + String(e.message).replace(/^Error invoking remote method '[^']+': (Error: )?/, '');
+      botoes.forEach(b => { b.disabled = false; });
+      botao.focus();
+    }
+  };
+  botoes[0].focus();
+}

@@ -2,12 +2,12 @@ const { app, BrowserWindow, ipcMain, Menu, shell, dialog, protocol, safeStorage 
 const ligacaoRede = require('../ligacao-rede-plugins.cjs');
 const { criarGuardaDeSegredos } = require('../segredos-plugins.cjs');
 const KiroPlugins = require('../plugins.js');
-const { readFile, mkdir } = require('node:fs/promises');
+const { readFile, readdir, mkdir } = require('node:fs/promises');
 const { join, dirname } = require('node:path');
 const { existsSync } = require('node:fs');
 const { Vault, atomicWrite } = require('../vault.cjs');
 const { AgentConfig } = require('../agent/index.cjs');
-let vault, settings;
+let vault, settings, primeiraVez = false;
 // As imagens das notas chegam à janela por este esquema, servido pelo Vault: a página
 // (file://) não lê o disco, e só arquivos de imagem de dentro do cofre passam.
 // O código dos plug-ins chega ao worker pelo esquema kiro-plugin, também servido pelo Vault.
@@ -45,11 +45,46 @@ else app.whenReady().then(async () => {
     directory = DEV_VAULT;
   } else {
     try { directory = JSON.parse(await readFile(settings, 'utf8')).directory || directory; }
-    catch (error) { if (error.code !== 'ENOENT') throw error; }
+    catch (error) {
+      if (error.code !== 'ENOENT') throw error;
+      // Sem escolha salva e sem cofre na pasta padrão (nem na do KUROI): primeira abertura.
+      // Nada é criado ainda; a tela de boas-vindas pergunta onde as notas vão ficar.
+      primeiraVez = !existsSync(directory);
+    }
   }
-  vault = new Vault(directory);
-  let agentConfig = new AgentConfig(directory);
-  ipcMain.handle('vault:load', () => vault.load());
+  vault = primeiraVez ? null : new Vault(directory);
+  let agentConfig = primeiraVez ? null : new AgentConfig(directory);
+  ipcMain.handle('vault:first-run', () => (primeiraVez ? { primeiraVez: true, padrao: directory } : { primeiraVez: false }));
+  // Boas-vindas: 'padrao' usa Documentos/Kiro/vault; 'criar' e 'abrir' perguntam a pasta.
+  ipcMain.handle('vault:setup', async (event, modo) => {
+    if (!primeiraVez) throw new Error('O cofre já foi escolhido.');
+    let pasta = directory;
+    if (modo === 'criar' || modo === 'abrir') {
+      const criar = modo === 'criar';
+      const resultado = await dialog.showOpenDialog(BrowserWindow.fromWebContents(event.sender), {
+        title: criar ? 'Onde criar o cofre do Kiro' : 'Abrir uma pasta de notas como cofre',
+        buttonLabel: criar ? 'Criar cofre aqui' : 'Abrir cofre',
+        defaultPath: app.getPath('documents'),
+        properties: ['openDirectory', 'createDirectory'],
+      });
+      if (resultado.canceled || !resultado.filePaths[0]) return null;
+      pasta = resultado.filePaths[0];
+      // Criar numa pasta que já tem coisas (Documentos, por exemplo) não mistura as notas
+      // com o resto: o cofre vira a subpasta "Kiro". Pasta vazia vira o próprio cofre.
+      if (criar && (await readdir(pasta)).length) pasta = join(pasta, 'Kiro');
+    } else if (modo !== 'padrao') throw new Error('Opção de cofre inválida.');
+    const escolhido = new Vault(pasta);
+    await escolhido.load();
+    await atomicWrite(settings, JSON.stringify({ directory: escolhido.directory }));
+    vault = escolhido;
+    agentConfig = new AgentConfig(escolhido.directory);
+    primeiraVez = false;
+    return { directory: escolhido.directory };
+  });
+  ipcMain.handle('vault:load', () => {
+    if (!vault) throw new Error('Escolha onde ficam suas notas para começar.');
+    return vault.load();
+  });
   ipcMain.handle('vault:save', (_event, state) => vault.save(state));
   ipcMain.handle('vault:trash', () => vault.trash());
   ipcMain.handle('vault:restore', (_event, pedido) => vault.restore(pedido));
