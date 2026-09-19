@@ -474,8 +474,12 @@ function tituloDaAba(id) {
 function barraDeAbas(painel) {
   const p = abas.paineis[painel];
   if (!p) return '';
-  const itens = p.abas.map(id => `<button type="button" class="aba${p.ativa === id ? ' ativa' : ''}" role="tab" aria-selected="${p.ativa === id}" data-painel="${painel}" data-aba="${escapeHtml(id)}" draggable="true"><span class="aba-titulo">${escapeHtml(tituloDaAba(id))}</span><span class="aba-fechar" data-fechar-aba role="button" aria-label="Fechar aba">×</span></button>`).join('');
-  return `<div class="abas-barra" data-painel="${painel}" role="tablist">${itens}<button type="button" class="icon-button aba-nova" data-nova-aba="${painel}" aria-label="Nova aba">${icone('mais')}</button></div>`;
+  // Wrapper <div> (não interativo) com dois botões irmãos: nada de botão dentro de botão
+  // (não focável, não anunciado por leitor de tela). role=group em vez de tablist/tab pela
+  // metade: não há aria-controls/tabpanel nem navegação por setas, então não é o padrão ARIA
+  // tabs completo — só um grupo rotulado.
+  const itens = p.abas.map(id => { const titulo = escapeHtml(tituloDaAba(id)); return `<div class="aba${p.ativa === id ? ' ativa' : ''}" data-painel="${painel}" data-aba="${escapeHtml(id)}" draggable="true"><button type="button" class="aba-abrir" aria-current="${p.ativa === id}"><span class="aba-titulo">${titulo}</span></button><button type="button" class="aba-fechar" data-fechar-aba aria-label="Fechar aba ${titulo}">×</button></div>`; }).join('');
+  return `<div class="abas-barra" data-painel="${painel}" role="group" aria-label="Abas">${itens}<button type="button" class="icon-button aba-nova" data-nova-aba="${painel}" aria-label="Nova aba">${icone('mais')}</button></div>`;
 }
 // Vazio de uma metade sem aba nenhuma: mesmo convite de sempre, com o + já sabendo em qual metade abrir.
 function cofreVazioMarkup(painel) {
@@ -501,18 +505,19 @@ function metadeMarkup(painel) {
 }
 function renderCofre() {
   if (expanded === null) expanded = new Set(state.folders.map(f => f.id));
-  // `abas` é por cofre: troca de cofre (inclusive a primeira vez) recarrega do localStorage daquele vaultPath.
-  if (abasDoCofre !== state.vaultPath) {
-    abasDoCofre = state.vaultPath;
-    abas = KiroAbas.vazio();
-    try { const salvo = JSON.parse(localStorage.getItem('kiro.abas:' + (state.vaultPath || ''))); if (salvo) abas = salvo; } catch { /* janela privada: vale só nesta sessão */ }
-  }
+  garantirAbasDoCofre();
   abas = KiroAbas.limpar(abas, state.notes.map(n => n.id));
-  // Sem editor aberto mas com aba ativa (voltando de outra tela ou de uma recarga): reabre a nota dela.
+  // Sem editor aberto (voltando de outra tela ou de uma recarga), ou a nota em edição ficou
+  // desatualizada em relação à aba ativa (ex.: uma recarga em segundo plano apagou a nota que
+  // estava aberta): reabre a nota da aba ativa. Nunca troca `editing` enquanto houver algo não salvo.
   if (!editing) {
     const ativa = KiroAbas.notaAtiva(abas);
     if (ativa === KiroAbas.RASCUNHO) abas = KiroAbas.fechar(abas, abas.ativo, KiroAbas.RASCUNHO);
     else if (ativa) { const nota = getNote(ativa); if (nota) editing = { ...nota, tags: [...(nota.tags || [])], links: [...(nota.links || [])] }; }
+  } else if (!editorDirty && idDaAba(editing) !== KiroAbas.notaAtiva(abas)) {
+    const ativa = KiroAbas.notaAtiva(abas);
+    const nota = ativa && ativa !== KiroAbas.RASCUNHO ? getNote(ativa) : null;
+    editing = nota ? { ...nota, tags: [...(nota.tags || [])], links: [...(nota.links || [])] } : null;
   }
   gravarAbas();
   const arvore = treeMarkup('', 0) || '<div class="empty">Crie uma pasta para começar.</div>';
@@ -542,10 +547,10 @@ function renderCofre() {
 function itensDaAba(painel, id) {
   const destino = painel === 0 ? 1 : 0;
   return [
-    { rotulo: painel === 0 ? 'Abrir à direita' : 'Abrir à esquerda', icone: icone(painel === 0 ? 'direita' : 'esquerda'), acao: async () => { if (!await salvarAntesDeTrocar()) return; abas = KiroAbas.mover(abas, painel, id, destino); gravarAbas(); abrirPorId(id, { painel: destino }); } },
+    { rotulo: painel === 0 ? 'Abrir à direita' : 'Abrir à esquerda', icone: icone(painel === 0 ? 'direita' : 'esquerda'), acao: () => moverAba(painel, id, destino) },
     { separador: true },
     { rotulo: 'Fechar', icone: icone('fechar'), acao: () => fecharAba(painel, id) },
-    { rotulo: 'Fechar as outras', icone: icone('lixeira'), acao: () => fecharOutrasAbas(painel, id) },
+    { rotulo: 'Fechar as outras', icone: icone('fechar'), acao: () => fecharOutrasAbas(painel, id) },
   ];
 }
 // Liga os cliques da barra de abas de uma metade: trocar, fechar (× ou botão do meio), + e arrastar/menu.
@@ -563,6 +568,14 @@ function bindAbas(painel) {
     if (e.button !== 1) return;
     const aba = e.target.closest('.aba');
     if (aba) { e.preventDefault(); fecharAba(painel, aba.dataset.aba); }
+  });
+  // Delete ou Ctrl+W com o foco numa aba fecha ela, sem precisar mirar no × com o mouse.
+  barra.addEventListener('keydown', e => {
+    if (e.key !== 'Delete' && !(e.key === 'w' && (e.ctrlKey || e.metaKey))) return;
+    const aba = e.target.closest('.aba');
+    if (!aba) return;
+    e.preventDefault();
+    fecharAba(painel, aba.dataset.aba);
   });
   barra.addEventListener('contextmenu', e => {
     const aba = e.target.closest('.aba');
@@ -608,10 +621,7 @@ function bindDragDeAbas() {
     if (!dados) return;
     const alvo = metadeAlvo(e, area);
     if (dados.painel === alvo) return;
-    if (!await salvarAntesDeTrocar()) return;
-    abas = KiroAbas.mover(abas, dados.painel, dados.id, alvo);
-    gravarAbas();
-    abrirPorId(dados.id, { painel: alvo });
+    await moverAba(dados.painel, dados.id, alvo);
   });
 }
 // Clicar na metade em leitura (fora de link, imagem, etiqueta ou bloco de plug-in) ativa a nota nela.
@@ -637,16 +647,23 @@ function bindLeitura(painel) {
 function bindDivisorDasMetades() {
   const divisor = document.querySelector('.metades-divisor'), area = document.querySelector('.cofre-metades');
   if (!divisor || !area) return;
+  // Clampa a 320px por lado no mínimo; compartilhado por arrastar, setas do teclado e duplo clique
+  // (antes só o arrastar respeitava esse limite — teclado/duplo clique podiam encolher um lado
+  // abaixo de 320px numa janela estreita).
+  const clampFracao = p => {
+    const r = area.getBoundingClientRect();
+    const min = Math.min(0.5, Math.max(0, 320 / r.width));
+    return Math.max(min, Math.min(1 - min, p));
+  };
   const aplicar = (p, gravar) => {
-    abas = KiroAbas.proporcao(abas, p);
+    abas = KiroAbas.proporcao(abas, clampFracao(p));
     area.style.setProperty('--proporcao', abas.proporcao);
     divisor.setAttribute('aria-valuenow', Math.round(abas.proporcao * 100));
     if (gravar) gravarAbas();
   };
   const paraFracao = clientX => {
     const r = area.getBoundingClientRect();
-    const min = Math.min(0.5, Math.max(0, 320 / r.width));
-    return Math.max(min, Math.min(1 - min, (clientX - r.left) / r.width));
+    return (clientX - r.left) / r.width;
   };
   divisor.addEventListener('pointerdown', e => {
     if (e.button !== 0) return;
@@ -774,7 +791,17 @@ let expanded=null, renderedView=null, editing=null, editorDirty=false, grafoRaf=
 const notaVazia = (extra={}) => ({title:"",body:"",links:[],tags:[],folderId:"",...extra});
 // Abas da tela de Pastas: modelo puro (abas.js), sempre limpo contra state.notes. Memória por cofre.
 let abas = KiroAbas.vazio(), abasDoCofre = undefined; // vaultPath a que `abas` pertence (undefined = ainda nenhum)
-function gravarAbas() { try { localStorage.setItem('kiro.abas:' + (state.vaultPath || ''), JSON.stringify(abas)); } catch { /* janela privada: vale só nesta sessão */ } }
+// `abas` é por cofre: troca de cofre (inclusive a primeira vez) recarrega do localStorage daquele
+// vaultPath. Chamada no início de qualquer caminho que leia ou grave `abas` antes do próximo
+// `renderCofre` (ex.: abrir a primeira nota da sessão a partir de Hoje), senão esse caminho
+// mutaria/gravaria o modelo vazio de sempre por cima do que está salvo do cofre atual.
+function garantirAbasDoCofre() {
+  if (abasDoCofre === state.vaultPath) return;
+  abasDoCofre = state.vaultPath;
+  abas = KiroAbas.vazio();
+  try { const salvo = JSON.parse(localStorage.getItem('kiro.abas:' + (state.vaultPath || ''))); if (salvo) abas = salvo; } catch { /* janela privada: vale só nesta sessão */ }
+}
+function gravarAbas() { garantirAbasDoCofre(); try { localStorage.setItem('kiro.abas:' + (state.vaultPath || ''), JSON.stringify(abas)); } catch { /* janela privada: vale só nesta sessão */ } }
 const idDaAba = nota => nota.id || KiroAbas.RASCUNHO;
 const $ = selector => document.querySelector(selector);
 const templates={
@@ -855,16 +882,24 @@ function capturaRapida(){
 }
 // ---- Editor de documento: a nota ocupa a página inteira, como um processador de texto. ----
 async function abrirNota(nota,{novaAba=false,painel}={}){
+  garantirAbasDoCofre(); // 1ª nota da sessão pode vir de fora de Pastas (Hoje etc.), antes do 1º renderCofre.
   if(editing&&editorDirty&&!await salvarNota())return;
   // O salvamento acima pode ter trocado o objeto da nota em state.notes (ela ganhou id, ou o
   // conteúdo mudou); relê pelo id para nunca reabrir a versão antiga por cima da recém-salva.
   if(nota.id)nota=getNote(nota.id)||nota;
-  // Rascunho vazio (sem título, sem digitar nada) abandonado ao trocar de nota: some, não fica para sempre.
+  const novoId=idDaAba(nota);
+  // Rascunho vazio (sem título, sem digitar nada) abandonado ao trocar de nota: some, não fica para
+  // sempre. Quando é a troca "no lugar" (sem Ctrl/aba nova) e a nota alvo ainda não está aberta em
+  // outro lugar, a nova nota assume o lugar do rascunho na aba (trocarId), em vez de fechar+abrir —
+  // fechar+abrir reaproveitaria a aba vizinha que virou ativa e faria essa vizinha sumir da barra.
   if(editing&&!editing.id){
     const onde=abas.paineis.findIndex(p=>p.abas.includes(KiroAbas.RASCUNHO));
-    if(onde!==-1)abas=KiroAbas.fechar(abas,onde,KiroAbas.RASCUNHO);
+    if(onde!==-1){
+      if(!novaAba&&!abas.paineis.some(p=>p.abas.includes(novoId)))abas=KiroAbas.trocarId(abas,KiroAbas.RASCUNHO,novoId);
+      else abas=KiroAbas.fechar(abas,onde,KiroAbas.RASCUNHO);
+    }
   }
-  abas=KiroAbas.abrir(abas,idDaAba(nota),{novaAba,painel});
+  abas=KiroAbas.abrir(abas,novoId,{novaAba,painel});
   gravarAbas();
   editing={...nota,tags:[...(nota.tags||[])],links:[...(nota.links||[])]};
   if(editing.id)ultimaNota=editing.id; // centro do grafo local
@@ -878,6 +913,21 @@ function abrirPorId(id,opcoes){ const nota=getNote(id); if(nota) abrirNota(nota,
 // metade ativa (KiroAbas também faz isso) e `atualizarEditingConformeAtiva` sobrescreveria uma
 // edição não salva do lado que era o ativo com a versão salva no cofre.
 async function salvarAntesDeTrocar(){ return !(editing&&editorDirty)||await salvarNota(); }
+// Move uma aba de `painel` para `destino` (arrastar ou "Abrir à direita/esquerda" do menu de
+// contexto). Salva antes; se a aba movida era o próprio rascunho em edição, o salvamento pode ter
+// trocado o id (virou nota real) — resolve o id atual em `editing` antes de mexer no modelo, senão
+// o rascunho "sumiria" (o id antigo não existe mais em lugar nenhum). Só o rascunho *em edição* é
+// resolvido assim: um rascunho inativo (existe na aba mas não é quem está sendo editado agora) não
+// tem relação com `editing`, então mover ele não deve tocar no id de uma nota diferente e suja.
+async function moverAba(painel,id,destino){
+  const draftEmEdicao=id===KiroAbas.RASCUNHO&&editing&&!editing.id;
+  if(!await salvarAntesDeTrocar())return;
+  if(draftEmEdicao&&editing?.id)id=editing.id;
+  abas=KiroAbas.mover(abas,painel,id,destino);
+  gravarAbas();
+  if(id===KiroAbas.RASCUNHO){render();return;} // ainda é o rascunho (sem salvar nada); `editing` já é ele.
+  abrirPorId(id,{painel:destino});
+}
 // Fecha uma aba: salva a nota em edição se houver alterações; a nova aba ativa vira o editor.
 async function fecharAba(painel,id){
   if(!await salvarAntesDeTrocar())return;
@@ -2862,6 +2912,10 @@ async function executarMetodo(id, metodo, args) {
     }
     case 'notes.update': {
       const nota = notaDoPlugin(a), campos = b || {};
+      // A nota está aberta com alterações não salvas: escrever por cima descartaria esse texto em
+      // silêncio (a mesma nota "voltaria" ao que estava salvo). Recusa; quem chamou tenta de novo
+      // depois que a pessoa salvar.
+      if (editing?.id === nota.id && editorDirty) throw new Error('A nota está aberta com alterações não salvas; tente de novo depois de salvar.');
       const nova = { ...nota, updatedAt: Date.now() };
       if (campos.title !== undefined) nova.title = String(campos.title).trim().slice(0, 200);
       if (campos.body !== undefined) nova.body = String(campos.body);
@@ -2876,6 +2930,7 @@ async function executarMetodo(id, metodo, args) {
     }
     case 'notes.trash': {
       const nota = notaDoPlugin(a);
+      if (editing?.id === nota.id && editorDirty) throw new Error('A nota está aberta com alterações não salvas; tente de novo depois de salvar.');
       state.notes = state.notes.filter(n => n.id !== nota.id);
       if (editing?.id === nota.id) { editing = null; editorDirty = false; currentView = 'today'; }
       await gravar(id);

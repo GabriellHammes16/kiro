@@ -338,23 +338,20 @@ select:focus-visible, textarea:focus-visible, .tree-row:focus-visible {
   .metades-divisor { display:none; }
   .cofre-metade { height:auto; }
 }
-@media (max-width:780px) {
-  .cofre-metade:not(.ativa) { display:none; }
-}
 
 /* ---- Barra de abas da tela de Pastas ---- */
 .abas-barra { display:flex; align-items:stretch; height:38px; flex:0 0 auto; background:var(--sidebar-bg,#11161D);
   border-bottom:1px solid var(--line); overflow-x:auto; scrollbar-width:none; }
 .abas-barra::-webkit-scrollbar { display:none; }
-.aba { display:flex; align-items:center; gap:6px; max-width:200px; min-width:0; padding:0 8px 0 12px; border:0; border-right:1px solid var(--line);
-  background:transparent; color:var(--muted); font:inherit; font-size:13px; cursor:pointer; }
-.aba:hover { color:var(--ink); }
-.aba:focus-visible { outline:2px solid var(--acento); outline-offset:-2px; }
+.aba { display:flex; align-items:stretch; max-width:200px; min-width:0; border-right:1px solid var(--line);
+  background:transparent; color:var(--muted); font-size:13px; }
+.aba-abrir { display:flex; align-items:center; min-width:0; flex:1; padding:0 4px 0 12px; border:0; background:transparent; color:inherit; font:inherit; cursor:pointer; }
+.aba:hover, .aba-abrir:hover { color:var(--ink); }
 .aba.ativa { background:var(--content-bg,#0B0F14); color:var(--ink); }
 .aba-titulo { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.aba-fechar { flex:0 0 auto; width:18px; height:18px; display:none; align-items:center; justify-content:center; border-radius:4px; line-height:1; }
+.aba-fechar { flex:0 0 auto; align-self:center; width:18px; height:18px; margin-right:8px; display:none; align-items:center; justify-content:center; border:0; border-radius:4px; background:transparent; color:inherit; line-height:1; cursor:pointer; }
 .aba-fechar:hover { background:color-mix(in srgb, var(--ink) 12%, transparent); }
-.aba.ativa .aba-fechar, .aba:hover .aba-fechar, .aba:focus-visible .aba-fechar { display:flex; }
+.aba.ativa .aba-fechar, .aba:hover .aba-fechar, .aba:focus-within .aba-fechar { display:flex; }
 .aba-nova { flex:0 0 auto; align-self:center; margin:0 6px; width:26px; height:26px; }
 
 /* Markdown desenhado, com os blocos no lugar em que foram escritos. */
