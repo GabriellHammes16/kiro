@@ -25,15 +25,32 @@ test('vincular a menção troca só a primeira ocorrência solta', () => {
   assert.equal(K.vincularMencao('Nada aqui', 'Fotossíntese'), 'Nada aqui');
 });
 
-test('sumário: títulos fora de código, com nível e ordem', () => {
+test('sumário: títulos fora de código (só ```), com nível, ordem e pos', () => {
+  // ~~~ não é cerca para o renderizador (só ``` é), então o "## também não" abaixo é
+  // título de verdade — sumario tem que concordar com o que renderizarMarkdown desenha.
   const corpo = '# A\ntexto\n## B\n```\n# não\n```\n### C ##\n#tag\n# C#\n~~~\n## também não\n~~~';
   assert.deepEqual(K.sumario(corpo), [
-    { nivel: 1, texto: 'A', indice: 0 },
-    { nivel: 2, texto: 'B', indice: 1 },
-    { nivel: 3, texto: 'C', indice: 2 },
-    { nivel: 1, texto: 'C#', indice: 3 },
+    { nivel: 1, texto: 'A', indice: 0, pos: corpo.indexOf('# A') },
+    { nivel: 2, texto: 'B', indice: 1, pos: corpo.indexOf('## B') },
+    { nivel: 3, texto: 'C', indice: 2, pos: corpo.indexOf('### C ##') },
+    { nivel: 1, texto: 'C#', indice: 3, pos: corpo.indexOf('# C#') },
+    { nivel: 2, texto: 'também não', indice: 4, pos: corpo.indexOf('## também não') },
   ]);
   assert.deepEqual(K.sumario(''), []);
+});
+
+test('sumário: título ou cerca indentados não contam (só coluna 0, como o renderizador)', () => {
+  const corpo = '  ## indentado\n# real\n   ```\n# ainda conta (cerca indentada não é cerca)\n   ```';
+  assert.deepEqual(K.sumario(corpo), [
+    { nivel: 1, texto: 'real', indice: 0, pos: corpo.indexOf('# real') },
+    { nivel: 1, texto: 'ainda conta (cerca indentada não é cerca)', indice: 1, pos: corpo.indexOf('# ainda conta') },
+  ]);
+});
+
+test('podeVincular: só com a nota salva (tem id) e sem alterações pendentes', () => {
+  assert.equal(K.podeVincular({ title: 'Rascunho' }, false), false); // sem id
+  assert.equal(K.podeVincular({ id: 'a', title: 'A' }, true), false); // com id, mas suja
+  assert.equal(K.podeVincular({ id: 'a', title: 'A' }, false), true); // com id e limpa
 });
 
 test('árvore de etiquetas: aninhadas por barra, cada nota conta uma vez', () => {

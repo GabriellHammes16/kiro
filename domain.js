@@ -261,6 +261,10 @@
     if (alvo.length < 3) return [];
     // Título com |, [ ou ] não pode virar [[link]] seguro: wikiLinks não vai parsear.
     if (/[|[\]]/.test(String(titulo || '').trim())) return [];
+    // ponytail: descarte rápido antes da varredura char a char abaixo (O(n) por nota, a cada
+    // render); normalize().includes() é superconjunto estrito das ocorrências soltas, então o
+    // resultado não muda. Indexar alvos se o cofre crescer muito.
+    if (!normalize(String(corpo || '')).includes(normalize(String(titulo || '').trim()))) return [];
     const texto = semAcento(String(corpo || '').replace(/\[\[[^\]\n]*\]\]/g, m => ' '.repeat(m.length)));
     const achadas = [];
     for (let i = texto.indexOf(alvo); i !== -1; i = texto.indexOf(alvo, i + 1)) {
@@ -286,19 +290,28 @@
     const original = corpo.slice(i, i + t.length);
     return corpo.slice(0, i) + (original === t ? `[[${t}]]` : `[[${t}|${original}]]`) + corpo.slice(i + t.length);
   }
-  // Títulos Markdown (# a ######) fora de blocos de código cercados.
+  // Títulos Markdown (# a ######) fora de blocos de código cercados. Alinhado com
+  // renderizarMarkdown (app.js): título e cerca só valem na coluna 0 (sem recuo), e a única
+  // cerca reconhecida é ``` (o renderizador não trata ~~~ como bloco de código). `pos` é o
+  // índice, no corpo original, do início da linha do título — a mesma âncora que
+  // renderizarMarkdown grava em `data-pos`, para rolar até o título certo sem contar posições.
   function sumario(corpo) {
     const itens = [];
-    let cerca = null;
+    let cerca = false;
+    let pos = 0;
     for (const linha of String(corpo || '').split('\n')) {
-      const c = /^\s{0,3}(`{3,}|~{3,})/.exec(linha);
-      if (c) { if (!cerca) cerca = c[1][0]; else if (c[1][0] === cerca) cerca = null; continue; }
-      if (cerca) continue;
-      const h = /^\s{0,3}(#{1,6})\s+(.*?)(?:\s+#+)?\s*$/.exec(linha);
-      if (h && h[2].trim()) itens.push({ nivel: h[1].length, texto: h[2].trim(), indice: itens.length });
+      if (/^`{3,}/.test(linha)) { cerca = !cerca; pos += linha.length + 1; continue; }
+      if (!cerca) {
+        const h = /^(#{1,6})\s+(.*?)(?:\s+#+)?\s*$/.exec(linha);
+        if (h && h[2].trim()) itens.push({ nivel: h[1].length, texto: h[2].trim(), indice: itens.length, pos });
+      }
+      pos += linha.length + 1;
     }
     return itens;
   }
+  // Só vincular quando a nota em edição está salva (tem id) e sem alterações pendentes: sem
+  // isso, a outra nota ficaria com um [[link]] para um título que o cofre ainda não tem.
+  function podeVincular(editing, editorDirty) { return Boolean(editing && editing.id) && !editorDirty; }
   // Etiquetas aninhadas por "/": cada nó conta as notas dele e das filhas, sem repetir nota.
   function arvoreDeEtiquetas(notas) {
     const raiz = new Map();
@@ -359,7 +372,7 @@
     return atalhos;
   }
 
-  const api = { ATALHOS_EDITAVEIS, combinacaoDoEvento, rotuloDaCombinacao, problemaDoAtalho, atalhosValidos, TEMAS, SKINS, APARENCIA_PADRAO, luminancia, contraste, corValida, aparenciaValida, classesDaAparencia, FOLDER_COLORS, folderColor, habitStats, habitDays, withHabits, validFrequency, localDate, safeUrl, validateState, normalize, isImagePath, wikiLinks, tags, findLinkedNote, mentions, inInbox, withoutInbox, toReview, linkQuery, linkSuggestions, validFolderName, folderPaths, descendants, upgradeBackup, pathKey, mencoesNaoVinculadas, vincularMencao, sumario, arvoreDeEtiquetas };
+  const api = { ATALHOS_EDITAVEIS, combinacaoDoEvento, rotuloDaCombinacao, problemaDoAtalho, atalhosValidos, TEMAS, SKINS, APARENCIA_PADRAO, luminancia, contraste, corValida, aparenciaValida, classesDaAparencia, FOLDER_COLORS, folderColor, habitStats, habitDays, withHabits, validFrequency, localDate, safeUrl, validateState, normalize, isImagePath, wikiLinks, tags, findLinkedNote, mentions, inInbox, withoutInbox, toReview, linkQuery, linkSuggestions, validFolderName, folderPaths, descendants, upgradeBackup, pathKey, mencoesNaoVinculadas, vincularMencao, sumario, arvoreDeEtiquetas, podeVincular };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Kiro = api;
 })(globalThis);

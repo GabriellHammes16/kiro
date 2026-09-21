@@ -435,6 +435,9 @@ function painelDireitoValido(salvo) {
   return { aberto: s.aberto === true, aba: PAINEL_DIREITO_ABAS.includes(s.aba) ? s.aba : 'volta', largura: larguraPainelValida(s.largura) };
 }
 let painelDireito = painelDireitoValido((() => { try { return JSON.parse(lerPreferencia('painelDireito') || 'null'); } catch { return null; } })());
+// Texto do filtro da aba "Links de volta": só em memória (não precisa persistir entre sessões),
+// mas sobrevive a um render() (ex.: depois de Vincular), que senão o limparia.
+let painelFiltro = '';
 function gravarPainelDireito() { try { localStorage.setItem('kiro.painelDireito', JSON.stringify(painelDireito)); } catch { /* janela privada: vale só nesta sessão */ } }
 function aplicarLarguraPainelDireito(largura, gravar = false) {
   painelDireito.largura = larguraPainelValida(largura);
@@ -544,7 +547,7 @@ function barraDeAbas(painel) {
   const itens = p.abas.map(id => { const titulo = escapeHtml(tituloDaAba(id)); return `<div class="aba${p.ativa === id ? ' ativa' : ''}" data-painel="${painel}" data-aba="${escapeHtml(id)}" draggable="true"><button type="button" class="aba-abrir" aria-current="${p.ativa === id}"><span class="aba-titulo">${titulo}</span></button><button type="button" class="aba-fechar" data-fechar-aba aria-label="Fechar aba ${titulo}">×</button></div>`; }).join('');
   // O botão do painel da direita só aparece na última coluna, depois do menu ⌄ dela.
   const botaoPainel = painel === abas.paineis.length - 1
-    ? `<button type="button" class="icon-button painel-direito-alternar" data-painel-direito aria-pressed="${painelDireito.aberto}" title="Painel da direita (${teclaDe('painelDireito')})" aria-label="Painel da direita">${icone('painel-direito')}</button>`
+    ? `<button type="button" class="icon-button painel-direito-alternar" data-painel-direito aria-pressed="${painelDireito.aberto}" title="Painel da direita (${escapeHtml(teclaDe('painelDireito'))})" aria-label="Painel da direita">${icone('painel-direito')}</button>`
     : '';
   return `<div class="abas-barra" data-painel="${painel}" role="group" aria-label="Abas">${itens}<button type="button" class="icon-button aba-nova" data-nova-aba="${painel}" aria-label="Nova aba">${icone('mais')}</button><button type="button" class="icon-button abas-menu" data-menu-abas="${painel}" aria-label="Opções das abas desta coluna" aria-haspopup="menu" title="Opções das abas">${icone('abaixo')}</button>${botaoPainel}</div>`;
 }
@@ -589,6 +592,9 @@ function painelItemMarkup(nota, trecho, vincular) {
   </div>`;
 }
 function painelVoltaMarkup() {
+  // Rascunho sem id (nota nova ainda não salva): ninguém no cofre pode apontar pra ela de
+  // verdade, então nada de menções — mesmo critério de renderMencoes ("!nota.id" → vazio).
+  if (!editing.id) return '<p class="small-muted painel-direito-vazio">Salve a nota para ver as menções.</p>';
   const resolveParaEditing = l => Kiro.findLinkedNote(state.notes, l.target)?.id === editing.id;
   const vinculadas = Kiro.mentions(state.notes, editing);
   const naoVinculadas = Kiro.mencoesNaoVinculadas(state.notes, editing);
@@ -597,28 +603,36 @@ function painelVoltaMarkup() {
     return painelItemMarkup(n, textoPlano(linha), false);
   }).join('') || '<p class="small-muted">Nenhuma.</p>';
   const naoVinculadasHtml = naoVinculadas.map(({ nota, trecho }) => painelItemMarkup(nota, textoPlano(trecho), true)).join('') || '<p class="small-muted">Nenhuma.</p>';
-  return `<input type="search" class="painel-filtro" placeholder="Filtrar" aria-label="Filtrar links de volta" />
+  return `<input type="search" class="painel-filtro" placeholder="Filtrar" aria-label="Filtrar links de volta" value="${escapeHtml(painelFiltro)}" />
   <section class="painel-secao"><h3>Menções vinculadas (${vinculadas.length})</h3>${vinculadasHtml}</section>
   <section class="painel-secao"><h3>Menções não vinculadas (${naoVinculadas.length})</h3>${naoVinculadasHtml}</section>`;
 }
 function painelSaidaMarkup() {
   const vistos = new Set();
-  const links = Kiro.wikiLinks(editing.body).filter(l => { const chave = Kiro.pathKey(l.target); if (vistos.has(chave)) return false; vistos.add(chave); return true; });
+  // Dedup pela nota resolvida (id), não pelo texto do alvo: [[Fotossíntese]] e
+  // [[Fotossintese]] resolvem pra mesma nota mas têm pathKey diferente (acento).
+  const links = Kiro.wikiLinks(editing.body)
+    .map(l => ({ ...l, nota: Kiro.findLinkedNote(state.notes, l.target) }))
+    .filter(l => { const chave = l.nota ? l.nota.id : Kiro.pathKey(l.target); if (vistos.has(chave)) return false; vistos.add(chave); return true; });
   if (!links.length) return '<p class="small-muted">Esta nota não tem links de saída.</p>';
-  return `<ul class="painel-lista">${links.map(l => {
-    const nota = Kiro.findLinkedNote(state.notes, l.target);
-    return `<li><button type="button" class="painel-link${nota ? '' : ' ausente'}" data-link-saida-id="${nota ? escapeHtml(nota.id) : ''}" data-link-saida-alvo="${escapeHtml(l.target)}">${escapeHtml(l.label)}${nota ? '' : ' <span class="small-muted">não existe ainda</span>'}</button></li>`;
-  }).join('')}</ul>`;
+  return `<ul class="painel-lista">${links.map(l =>
+    `<li><button type="button" class="painel-link${l.nota ? '' : ' ausente'}" data-link-saida-id="${l.nota ? escapeHtml(l.nota.id) : ''}" data-link-saida-alvo="${escapeHtml(l.target)}">${escapeHtml(l.label)}${l.nota ? '' : ' <span class="small-muted">não existe ainda</span>'}</button></li>`
+  ).join('')}</ul>`;
 }
 function painelSumarioMarkup() {
   const itens = Kiro.sumario(editing.body);
   if (!itens.length) return '<p class="small-muted">Nenhum título nesta nota.</p>';
-  return `<ul class="painel-sumario">${itens.map(it => `<li style="--nivel:${it.nivel}"><button type="button" class="painel-sumario-item" data-sumario-indice="${it.indice}">${escapeHtml(it.texto)}</button></li>`).join('')}</ul>`;
+  // data-sumario-pos é o mesmo offset que renderizarMarkdown grava em data-pos: rolarParaTitulo
+  // ancora na fonte, não numa contagem de <h*> que pode discordar do que foi de fato desenhado.
+  return `<ul class="painel-sumario">${itens.map(it => `<li style="--nivel:${it.nivel}"><button type="button" class="painel-sumario-item" data-sumario-pos="${it.pos}">${escapeHtml(it.texto)}</button></li>`).join('')}</ul>`;
 }
 function etiquetaItemMarkup(no) {
-  const linha = `<button type="button" class="painel-etiqueta" data-etiqueta="${escapeHtml(no.caminho)}">${escapeHtml(no.nome)}</button><span class="painel-etiqueta-total">${no.total}</span>`;
-  if (!no.filhos.length) return `<li class="painel-etiqueta-item">${linha}</li>`;
-  return `<li><details open><summary>${linha}</summary><ul class="painel-etiquetas-lista">${no.filhos.map(etiquetaItemMarkup).join('')}</ul></details></li>`;
+  const total = `<span class="painel-etiqueta-total">${no.total}</span>`;
+  if (!no.filhos.length) return `<li class="painel-etiqueta-item"><button type="button" class="painel-etiqueta" data-etiqueta="${escapeHtml(no.caminho)}">${escapeHtml(no.nome)}</button>${total}</li>`;
+  // O <summary> inteiro é o alvo do clique (abre a busca pela etiqueta); nada de <button> dentro
+  // dele, senão vira uma segunda parada de teclado na mesma linha. Expandir/recolher continua
+  // sendo o comportamento nativo do <summary> (marcador/clique), sem preventDefault brigando.
+  return `<li><details open><summary class="painel-etiqueta" data-etiqueta="${escapeHtml(no.caminho)}">${escapeHtml(no.nome)}${total}</summary><ul class="painel-etiquetas-lista">${no.filhos.map(etiquetaItemMarkup).join('')}</ul></details></li>`;
 }
 function painelEtiquetasMarkup() {
   const arvore = Kiro.arvoreDeEtiquetas(state.notes);
@@ -649,35 +663,47 @@ function bindPainelDireito() {
   if (!painel) return;
   ligarDivisorDoPainelDireito();
   painel.querySelectorAll('[data-painel-aba]').forEach(b => b.addEventListener('click', () => { painelDireito.aba = b.dataset.painelAba; gravarPainelDireito(); render(); }));
-  painel.querySelector('.painel-filtro')?.addEventListener('input', e => {
-    const q = Kiro.normalize(e.target.value);
+  // O filtro fica em `painelFiltro` (fora do DOM) pra sobreviver a um render() no meio (ex.:
+  // clicar Vincular chama save() → render()); reaplica no que acabou de ser desenhado.
+  const filtro = painel.querySelector('.painel-filtro');
+  const aplicarFiltro = () => {
+    const q = Kiro.normalize(painelFiltro);
     painel.querySelectorAll('.painel-item').forEach(it => { it.hidden = Boolean(q) && !Kiro.normalize(it.dataset.painelTitulo || '').includes(q); });
-  });
+  };
+  if (filtro) { aplicarFiltro(); filtro.addEventListener('input', e => { painelFiltro = e.target.value; aplicarFiltro(); }); }
   painel.querySelector('.painel-direito-corpo')?.addEventListener('click', async e => {
     const abrir = e.target.closest('[data-abrir-nota]');
     if (abrir) return void abrirPorId(abrir.dataset.abrirNota);
     const vincular = e.target.closest('[data-vincular]');
     if (vincular) return void await vincularMencaoNaOutraNota(vincular.dataset.vincular);
-    const doSumario = e.target.closest('[data-sumario-indice]');
-    if (doSumario) return void rolarParaTitulo(Number(doSumario.dataset.sumarioIndice));
+    const doSumario = e.target.closest('[data-sumario-pos]');
+    if (doSumario) return void rolarParaTitulo(Number(doSumario.dataset.sumarioPos));
     const link = e.target.closest('[data-link-saida-id], [data-link-saida-alvo]');
     if (link) { const id = link.dataset.linkSaidaId; return void (id ? abrirPorId(id) : abrirNota(notaVazia({ title: link.dataset.linkSaidaAlvo }))); }
     const etiqueta = e.target.closest('[data-etiqueta]');
-    if (etiqueta) { e.preventDefault(); buscarEtiqueta('#' + etiqueta.dataset.etiqueta); }
+    if (etiqueta) buscarEtiqueta('#' + etiqueta.dataset.etiqueta);
   });
 }
 // Troca a 1ª ocorrência solta do título da nota em edição por [[link]] na outra nota, e salva.
 async function vincularMencaoNaOutraNota(id) {
   if (!editing) return;
-  if (editing.id === id && editorDirty) return void status('Salve a nota aberta antes de vincular.', true);
+  if (!Kiro.podeVincular(editing, editorDirty)) return void status('Salve a nota antes de vincular.', true);
+  if (busy || failed || !loaded) return void status('O cofre está ocupado.', true);
   const outra = getNote(id);
   if (!outra) return;
-  state.notes = state.notes.map(n => n.id === id ? { ...n, body: Kiro.vincularMencao(n.body, editing.title), updatedAt: Date.now() } : n);
-  await save();
+  const corpoAntigo = outra.body, atualizadoAntigo = outra.updatedAt;
+  const corpoNovo = Kiro.vincularMencao(corpoAntigo, editing.title);
+  if (corpoNovo === corpoAntigo) return void status('Nada para vincular.', true);
+  state.notes = state.notes.map(n => n.id === id ? { ...n, body: corpoNovo, updatedAt: Date.now() } : n);
+  if (await save()) return void status('Menção vinculada.');
+  // save() falhou (cofre ocupado/erro/não carregado): desfaz em memória pra não divergir do disco.
+  state.notes = state.notes.map(n => n.id === id ? { ...n, body: corpoAntigo, updatedAt: atualizadoAntigo } : n);
 }
-// Rola a nota em edição até o indice-ésimo título (mesma ordem de Kiro.sumario).
-function rolarParaTitulo(indice) {
-  document.querySelectorAll('#doc-corpo h1, #doc-corpo h2, #doc-corpo h3, #doc-corpo h4, #doc-corpo h5, #doc-corpo h6')[indice]?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+// Rola a nota em edição até o título cujo início na fonte é `pos` — a mesma âncora
+// (data-pos) que renderizarMarkdown grava. Sem elemento (ex.: bloco em edição, virou
+// <textarea>), não faz nada: nunca rola para o título errado.
+function rolarParaTitulo(pos) {
+  document.querySelector(`#doc-corpo [data-pos="${pos}"]`)?.scrollIntoView({ block: 'start', behavior: 'smooth' });
 }
 function renderCofre() {
   if (expanded === null) expanded = new Set(state.folders.map(f => f.id));
