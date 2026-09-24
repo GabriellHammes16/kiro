@@ -55,9 +55,9 @@ function renderToday() {
   const lista = KiroHoje.faixas(l, idsVisiveisDaHoje(l, catalogo));
   // Editando sem nenhum cartão normal: uma faixa de colunas vazia, para ter onde soltar.
   if (personalizandoHoje && !lista.some(f => f.tipo === 'colunas')) lista.push({ tipo: 'colunas', colunas: Array.from({ length: l.colunas }, () => []) });
-  const faixas = lista.map(f => f.tipo === 'inteira'
+  const faixas = lista.map((f, idx) => f.tipo === 'inteira'
     ? `<div class="hoje-faixa-inteira">${desenhar(f.id)}</div>`
-    : `<div class="today-grid hoje-colunas" style="--hoje-colunas:${l.colunas}">${f.colunas.map((ids, i) => `<div class="stack" data-hoje-coluna="${i}">${ids.map(desenhar).join('')}</div>`).join('')}</div>`).join('');
+    : `<div class="today-grid hoje-colunas" style="--hoje-colunas:${l.colunas}" data-hoje-fim="${escapeHtml(lista.slice(idx + 1).find(x => x.tipo === 'inteira')?.id || '')}">${f.colunas.map((ids, i) => `<div class="stack" data-hoje-coluna="${i}">${ids.map(desenhar).join('')}</div>`).join('')}</div>`).join('');
   const botao = `<button type="button" class="secondary" data-hoje-acao="personalizar" aria-pressed="${personalizandoHoje}">${personalizandoHoje ? 'Concluir' : `${icone('realce')} Personalizar`}</button>`;
   return `${head(formatDate(today()), saudacao(), '', botao)}<div class="hoje-faixas${personalizandoHoje ? ' personalizando' : ''}">${faixas}</div>${personalizandoHoje ? rodapeDaPersonalizacao(catalogo, l) : ''}`;
 }
@@ -2828,8 +2828,8 @@ function acaoDaHoje(acao, id, valor, botao) {
   const fns = {
     subir: () => KiroHoje.subir(l, id, idsVisiveisDaHoje(l, catalogo)),
     descer: () => KiroHoje.descer(l, id, idsVisiveisDaHoje(l, catalogo)),
-    esquerda: () => KiroHoje.mover(l, id, { coluna: cartao.coluna - 1 }),
-    direita: () => KiroHoje.mover(l, id, { coluna: cartao.coluna + 1 }),
+    esquerda: () => { const fim = KiroHoje.fimDaFaixa(l, id); return KiroHoje.mover(l, id, { coluna: cartao.coluna - 1, antes: fim, noFim: !fim }); },
+    direita: () => { const fim = KiroHoje.fimDaFaixa(l, id); return KiroHoje.mover(l, id, { coluna: cartao.coluna + 1, antes: fim, noFim: !fim }); },
     largura: () => KiroHoje.definirLargura(l, id, cartao.largura === 'inteira' ? 'normal' : 'inteira'),
     esconder: () => KiroHoje.esconder(l, id),
     mostrar: () => KiroHoje.mostrar(l, id),
@@ -4048,7 +4048,9 @@ function alvoDoCartao(e) {
     return { el: inteiro, antes: depoisDe(inteiro) ? ordem[i + 1] ?? null : inteiro.dataset.hojeId };
   }
   const acima = [...coluna.querySelectorAll(':scope > .hoje-cartao')].find(c => !depoisDe(c));
-  return { el: coluna, coluna: Number(coluna.dataset.hojeColuna), antes: acima?.dataset.hojeId ?? null };
+  if (acima) return { el: coluna, coluna: Number(coluna.dataset.hojeColuna), antes: acima.dataset.hojeId };
+  const band = coluna.closest('.hoje-colunas');
+  return { el: coluna, coluna: Number(coluna.dataset.hojeColuna), antes: band.dataset.hojeFim || null, noFim: !band.dataset.hojeFim };
 }
 const limparAlvosDaHoje = () => document.querySelectorAll('.hoje-alvo').forEach(x => x.classList.remove('hoje-alvo'));
 document.addEventListener('dragstart', e => {
@@ -4072,7 +4074,7 @@ document.addEventListener('drop', e => {
   limparAlvosDaHoje();
   if (!alvo || !id) return;
   e.preventDefault();
-  mudarHoje(l => KiroHoje.mover(l, id, alvo.coluna === undefined ? { antes: alvo.antes } : { coluna: alvo.coluna, antes: alvo.antes }));
+  mudarHoje(l => KiroHoje.mover(l, id, alvo.coluna === undefined ? { antes: alvo.antes } : { coluna: alvo.coluna, antes: alvo.antes, noFim: alvo.noFim }));
 });
 document.addEventListener('dragend', limparAlvosDaHoje);
 document.addEventListener('click',e=>{

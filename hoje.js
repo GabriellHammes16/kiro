@@ -39,16 +39,25 @@
   }
   const padrao = catalogo => reconciliar(vazio(), catalogo);
 
-  // Leva o cartão para antes de `antes` (ou para o fim da coluna). Serve ao arraste e às setas.
-  function mover(l, id, { coluna, antes = null } = {}) {
+  // Leva o cartão para antes de `antes` (ou para o fim da coluna, ou para o fim da faixa quando
+  // `noFim`: sem isso, "fim da coluna" busca o último cartão normal dela em qualquer faixa).
+  function mover(l, id, { coluna, antes = null, noFim = false } = {}) {
     const i = l.cartoes.findIndex(c => c.id === id);
     if (i === -1 || id === antes) return l;
     const r = copia(l);
     const [cartao] = r.cartoes.splice(i, 1);
     if (Number.isInteger(coluna)) cartao.coluna = Math.max(0, Math.min(r.colunas - 1, coluna));
     const j = antes === null ? -1 : r.cartoes.findIndex(c => c.id === antes);
-    r.cartoes.splice(j !== -1 ? j : cartao.largura === 'inteira' ? r.cartoes.length : posicaoNoFim(r.cartoes, cartao.coluna), 0, cartao);
+    r.cartoes.splice(j !== -1 ? j : noFim || cartao.largura === 'inteira' ? r.cartoes.length : posicaoNoFim(r.cartoes, cartao.coluna), 0, cartao);
     return r;
+  }
+
+  // O id do primeiro cartão 'inteira' depois de `id` em `l.cartoes` (fim da faixa dele), ou null.
+  function fimDaFaixa(l, id) {
+    const i = l.cartoes.findIndex(c => c.id === id);
+    if (i === -1) return null;
+    for (let j = i + 1; j < l.cartoes.length; j++) if (l.cartoes[j].largura === 'inteira') return l.cartoes[j].id;
+    return null;
   }
 
   // Vizinho na leitura: um cartão normal troca com o anterior/próximo visível da mesma coluna
@@ -145,7 +154,7 @@
     return r;
   }
 
-  const api = { MIN_COLUNAS, MAX_COLUNAS, padrao, reconciliar, mover, subir, descer, esconder, mostrar, definirLargura, definirColunas, valorValido, definirOpcao, opcoesEfetivas, limpar, faixas };
+  const api = { MIN_COLUNAS, MAX_COLUNAS, padrao, reconciliar, mover, fimDaFaixa, subir, descer, esconder, mostrar, definirLargura, definirColunas, valorValido, definirOpcao, opcoesEfetivas, limpar, faixas };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.KiroHoje = api;
 })(globalThis);

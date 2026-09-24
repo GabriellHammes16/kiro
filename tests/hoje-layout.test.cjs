@@ -56,6 +56,28 @@ test('mover: para outra coluna, antes de um cartão ou para o fim', () => {
   assert.equal(H.mover(l, 'caixa', { coluna: 9 }).cartoes.find(c => c.id === 'caixa').coluna, 1);   // coluna fora: a última
 });
 
+test('mover para coluna vazia de uma faixa depois de um cartão inteiro fica nessa faixa', () => {
+  const l = H.definirLargura(H.padrao(NATIVOS), 'agora', 'inteira');
+  // Soltar 'revisar' na coluna 0 vazia da faixa de baixo: fica lá, não sobe para a faixa de cima.
+  const a = H.mover(l, 'revisar', { coluna: 0, antes: null, noFim: true });
+  assert.deepEqual(H.faixas(a, todos(a)), [
+    { tipo: 'inteira', id: 'frase' },
+    { tipo: 'colunas', colunas: [['habitos'], []] },
+    { tipo: 'inteira', id: 'agora' },
+    { tipo: 'colunas', colunas: [['revisar'], ['continuar', 'caixa']] },
+  ]);
+  // Soltar 'habitos' na coluna 1 vazia da faixa de cima: fica lá, não desce para a faixa de baixo.
+  const b = H.mover(l, 'habitos', { coluna: 1, antes: 'agora' });
+  assert.deepEqual(H.faixas(b, todos(b)), [
+    { tipo: 'inteira', id: 'frase' },
+    { tipo: 'colunas', colunas: [[], ['habitos']] },
+    { tipo: 'inteira', id: 'agora' },
+    { tipo: 'colunas', colunas: [[], ['continuar', 'caixa', 'revisar']] },
+  ]);
+  assert.equal(H.fimDaFaixa(l, 'habitos'), 'agora');
+  assert.equal(H.fimDaFaixa(l, 'continuar'), null);
+});
+
 test('subir e descer trocam com o vizinho visível da mesma coluna, pulando escondidos', () => {
   const l = H.padrao(NATIVOS);
   const d = H.descer(l, 'continuar', todos(l));
