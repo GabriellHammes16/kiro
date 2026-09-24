@@ -1,7 +1,7 @@
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const { createHash, randomUUID } = require('node:crypto');
-const { validateState, upgradeBackup, folderPaths, descendants, pathKey, folderColor, withHabits } = require('./domain.js');
+const { validateState, upgradeBackup, folderPaths, descendants, pathKey, folderColor, withHabits, validFolderName } = require('./domain.js');
 const yaml = require('js-yaml');
 const KiroFluxo = require('./fluxo.js');
 
@@ -214,8 +214,13 @@ class Vault {
     for(const dir of before.directories){const target=remap(dir);if(target)desiredDirs.add(target);}
     for(const destination of paths.values())desiredDirs.add(destination);
     const noteFiles=new Set(before.state.notes.map(n=>n.file).filter(Boolean));
+    // Fluxos que este salvamento grava: os que vieram no input e não estão com erro. Os
+    // demais (com erro, ou ausentes do input) seguem como arquivos comuns, preservados.
+    const fluxosAntes=before.state.fluxos||[];
+    const gravaveis=(input.fluxos||[]).filter(f=>f.canvas&&!fluxosAntes.find(x=>x.id===f.id)?.erro);
+    const fluxoFiles=new Set(gravaveis.map(f=>fluxosAntes.find(x=>x.id===f.id)?.file).filter(Boolean));
     for(const [file,value]of before.files){
-      if(noteFiles.has(file)||FOLDER_MARKERS.includes(path.posix.basename(file)))continue;
+      if(noteFiles.has(file)||fluxoFiles.has(file)||FOLDER_MARKERS.includes(path.posix.basename(file)))continue;
       const target=remap(file);if(target){put(target,value.data);changes.set(pathKey(file),target);}
     }
     const nextNotes=input.notes.map(note=>{
@@ -234,6 +239,21 @@ class Vault {
         const target=restoring.map(file,paths);if(target){put(target,data);changes.set(pathKey(file),target);}
       }
     }
+    const registroDeFluxos=[];
+    for(const fluxo of gravaveis){
+      const old=fluxosAntes.find(f=>f.id===fluxo.id);
+      const nome=`${fluxo.title}.canvas`;
+      const file=fluxo.folderId?`${paths.get(fluxo.folderId)}/${nome}`:nome;
+      if((!old||old.file!==file)&&!validFolderName(fluxo.title))throw new Error(`Nome de fluxo inválido: ${fluxo.title}`);
+      const lido=KiroFluxo.ler(KiroFluxo.serializar(fluxo.canvas));
+      if(lido.erro)throw new Error(`Fluxo "${fluxo.title}": ${lido.erro}`);
+      const anterior=old&&before.files.get(old.file)?.data;
+      const igual=anterior&&JSON.stringify(old.canvas)===JSON.stringify(fluxo.canvas);
+      put(file,igual?anterior:KiroFluxo.serializar(fluxo.canvas));
+      if(old)changes.set(pathKey(old.file),file);
+      registroDeFluxos.push({id:fluxo.id,path:file});
+    }
+    for(const old of fluxosAntes)if(!gravaveis.some(f=>f.id===old.id)){const destino=remap(old.file);if(destino)registroDeFluxos.push({id:old.id,path:destino});}
     for(const note of nextNotes){
       const old=before.state.notes.find(n=>n.id===note.id);
       const previous=before.files.get(old?.file)?.data.toString('utf8')||restoring?.files.get(note.source)?.toString('utf8')||'';
@@ -244,7 +264,7 @@ class Vault {
       put(note.file,equal&&identified?previous:markdown(note,previous));
     }
     for(const folder of input.folders)put(`${paths.get(folder.id)}/${FOLDER_MARKER}`,JSON.stringify({id:folder.id}));
-    const metadata=JSON.stringify({formatVersion:3,tasks:input.tasks,habits:input.habits||[],habitLog:input.habitLog||{},folders:input.folders.map(f=>({id:f.id,title:f.title,parentId:f.parentId||'',path:paths.get(f.id),description:f.description||'',color:folderColor(f.color)}))},null,2);
+    const metadata=JSON.stringify({formatVersion:3,tasks:input.tasks,habits:input.habits||[],habitLog:input.habitLog||{},fluxos:registroDeFluxos,folders:input.folders.map(f=>({id:f.id,title:f.title,parentId:f.parentId||'',path:paths.get(f.id),description:f.description||'',color:folderColor(f.color)}))},null,2);
     put('caderno.json',metadata);
     for(const file of desired.keys()){
       await this.safePath(file);let parent=parentPath(file);while(parent){desiredDirs.add(parent);parent=parentPath(parent);}
