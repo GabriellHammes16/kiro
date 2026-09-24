@@ -17,3 +17,9 @@ work/ui-test-vault/
 
 # Cópias de segurança avulsas
 *.bak
+
+# Grafo de conhecimento do graphify (regenerável)
+graphify-out/
+
+# Exportações avulsas do cofre
+kuroi-*.json
