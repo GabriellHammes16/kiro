@@ -11,7 +11,7 @@
 //   { tipo: 'resposta', chamada, valor | erro }   resposta a uma 'chamada' do worker
 //   { tipo: 'acao', chamada, registro: { tipo, id }, dados }
 // (worker → página):
-//   { tipo: 'pronto', registros: { command: [{ id, label }], panel: [{ id, label }], event: ['save'|'create'|'day'], block: ['render'] } }
+//   { tipo: 'pronto', registros: { command: [{ id, label }], panel: [{ id, label, options?, width? }], event: ['save'|'create'|'day'], block: ['render'] } }
 // Eventos chegam como 'acao' com registro { tipo: 'event', id: 'save'|'create'|'day' }
 // e dados { note } (save/create) ou { date } (day).
 // Blocos ```kiro:<id> chegam como 'acao' com registro { tipo: 'block', id: 'render' }
@@ -43,10 +43,10 @@ function chamar(metodo, args) {
   });
 }
 
-function guardar(tipo, id, label, handler) {
+function guardar(tipo, id, label, handler, extra) {
   if (typeof id !== 'string' || !id) throw new Error('O id do registro é obrigatório.');
   if (typeof handler !== 'function') throw new Error('O handler precisa ser uma função.');
-  registros[tipo].set(id, { label: String(label || id), handler });
+  registros[tipo].set(id, { label: String(label || id), handler, extra });
 }
 
 // Só os métodos liberados pelas permissões entram no objeto: primeira barreira.
@@ -54,7 +54,13 @@ function guardar(tipo, id, label, handler) {
 function montarApi(permissoes) {
   const kiro = {
     command: (id, label, handler) => guardar('command', id, label, handler),
-    panel: (id, label, render) => guardar('panel', id, label, render),
+    // O 4º argumento ({ options, width }) é só dado: quem valida e desenha é a página.
+    panel: (id, label, render, extra) => {
+      let dados;
+      try { dados = extra === undefined ? undefined : JSON.parse(JSON.stringify({ options: extra.options, width: extra.width })); }
+      catch { throw new Error('As opções do painel precisam ser dados simples (sem funções).'); }
+      guardar('panel', id, label, render, dados);
+    },
     // Um handler por evento; registrar de novo troca o anterior.
     onSave: handler => guardar('event', 'save', 'save', handler),
     onCreate: handler => guardar('event', 'create', 'create', handler),
@@ -71,7 +77,7 @@ function montarApi(permissoes) {
   return kiro;
 }
 
-const listar = tipo => [...registros[tipo]].map(([id, { label }]) => ({ id, label }));
+const listar = tipo => [...registros[tipo]].map(([id, { label, extra }]) => ({ id, label, ...extra }));
 
 async function ativar({ url, permissoes }) {
   if (ativado) throw new Error('O plug-in já foi ativado.');

@@ -470,3 +470,48 @@ test('documentação da etapa 2 está em dia', () => {
   assert.doesNotMatch(doc, /Stage 4/);
 });
 
+test('validarOpcoesDoPainel: sem declaração vale painel sem opções e largura normal', () => {
+  assert.deepEqual(P.validarOpcoesDoPainel(undefined, undefined), { ok: true, opcoes: [], largura: 'normal' });
+  assert.deepEqual(P.validarOpcoesDoPainel(undefined, 'full'), { ok: true, opcoes: [], largura: 'inteira' });
+});
+
+test('validarOpcoesDoPainel aceita os quatro tipos e devolve só os campos conhecidos', () => {
+  const r = P.validarOpcoesDoPainel([
+    { key: 'limit', type: 'number', label: 'How many', default: 5, min: 1, max: 20, extra: 'x' },
+    { key: 'folder', type: 'select', label: 'Folder', default: 'all', choices: ['all', 'work'] },
+    { key: 'showDates', type: 'boolean', label: 'Show dates', default: true },
+    { key: 'title', type: 'text', label: 'Heading', default: '' },
+  ], 'normal');
+  assert.equal(r.ok, true, r.erro);
+  assert.equal(r.largura, 'normal');
+  assert.deepEqual(r.opcoes, [
+    { key: 'limit', type: 'number', label: 'How many', default: 5, min: 1, max: 20 },
+    { key: 'folder', type: 'select', label: 'Folder', default: 'all', choices: ['all', 'work'] },
+    { key: 'showDates', type: 'boolean', label: 'Show dates', default: true },
+    { key: 'title', type: 'text', label: 'Heading', default: '' },
+  ]);
+});
+
+test('validarOpcoesDoPainel recusa declarações erradas', () => {
+  const ok = { key: 'a', type: 'boolean', label: 'A', default: true };
+  const recusa = (options, width) => assert.equal(P.validarOpcoesDoPainel(options, width).ok, false, JSON.stringify(options));
+  recusa('x');
+  recusa(Array.from({ length: 13 }, (_, i) => ({ ...ok, key: `k${i}` })));
+  recusa([ok, ok]);                                            // chave repetida
+  recusa([{ ...ok, key: 'Maiuscula' }]);
+  recusa([{ ...ok, key: 'a'.repeat(33) }]);
+  recusa([{ ...ok, type: 'color' }]);
+  recusa([{ ...ok, label: '' }]);
+  recusa([{ ...ok, label: 'x'.repeat(41) }]);
+  recusa([{ ...ok, label: 'quebra\nlinha' }]);
+  recusa([{ ...ok, default: 'true' }]);
+  recusa([{ key: 'n', type: 'number', label: 'N', default: 30, min: 1, max: 20 }]);
+  recusa([{ key: 'n', type: 'number', label: 'N', default: 1, max: Infinity }]);
+  recusa([{ key: 's', type: 'select', label: 'S', default: 'z', choices: ['a'] }]);
+  recusa([{ key: 's', type: 'select', label: 'S', default: 'a', choices: [] }]);
+  recusa([{ key: 's', type: 'select', label: 'S', default: 'a', choices: Array.from({ length: 21 }, (_, i) => i ? `c${i}` : 'a') }]);
+  recusa([{ key: 't', type: 'text', label: 'T', default: 'x'.repeat(81) }]);
+  recusa(undefined, 'wide');
+  recusa([null]);
+});
+

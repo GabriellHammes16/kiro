@@ -37,6 +37,44 @@
   // Tamanho em bytes sem Buffer (roda também no navegador).
   const bytes = s => new TextEncoder().encode(s).length;
 
+  // ---- Opções de painéis (tarefa 2) ----
+  // Opções de um painel (4º argumento de kiro.panel). O Kiro desenha o formulário; aqui só se
+  // confere a declaração. Sem declaração: painel sem opções. `width: 'full'` é só a sugestão
+  // inicial de largura — quem decide depois é a pessoa, na Hoje.
+  const TIPOS_DE_OPCAO = ['boolean', 'number', 'select', 'text'];
+  function validarOpcoesDoPainel(options, width) {
+    const recusa = erro => ({ ok: false, erro });
+    if (width !== undefined && width !== 'normal' && width !== 'full') return recusa('width precisa ser "normal" ou "full".');
+    const largura = width === 'full' ? 'inteira' : 'normal';
+    if (options === undefined) return { ok: true, opcoes: [], largura };
+    if (!Array.isArray(options) || options.length > 12) return recusa('options precisa ser uma lista de até 12 opções.');
+    const chaves = new Set(), opcoes = [];
+    const finito = v => v === undefined || (typeof v === 'number' && Number.isFinite(v));
+    for (const o of options) {
+      if (!o || typeof o !== 'object') return recusa('Cada opção precisa ser um objeto.');
+      if (typeof o.key !== 'string' || !/^[a-z][a-zA-Z0-9]{0,31}$/.test(o.key) || chaves.has(o.key)) return recusa(`Chave de opção inválida ou repetida: ${String(o.key).slice(0, 40)}.`);
+      chaves.add(o.key);
+      if (!TIPOS_DE_OPCAO.includes(o.type)) return recusa(`Tipo de opção desconhecido em ${o.key}.`);
+      if (!texto(o.label, 40) || temControle(o.label)) return recusa(`O rótulo de ${o.key} é obrigatório e vai até 40 caracteres.`);
+      const saida = { key: o.key, type: o.type, label: o.label, default: o.default };
+      if (o.type === 'boolean' && typeof o.default !== 'boolean') return recusa(`O padrão de ${o.key} precisa ser true ou false.`);
+      if (o.type === 'text' && (typeof o.default !== 'string' || o.default.length > 80)) return recusa(`O padrão de ${o.key} precisa ser um texto de até 80 caracteres.`);
+      if (o.type === 'number') {
+        if (typeof o.default !== 'number' || !Number.isFinite(o.default) || !finito(o.min) || !finito(o.max)
+          || (o.min !== undefined && o.default < o.min) || (o.max !== undefined && o.default > o.max)) return recusa(`${o.key} precisa de um padrão numérico entre min e max.`);
+        if (o.min !== undefined) saida.min = o.min;
+        if (o.max !== undefined) saida.max = o.max;
+      }
+      if (o.type === 'select') {
+        if (!Array.isArray(o.choices) || !o.choices.length || o.choices.length > 20
+          || !o.choices.every(c => texto(c, 40) && !temControle(c)) || !o.choices.includes(o.default)) return recusa(`${o.key} precisa de 1 a 20 escolhas de texto, e o padrão entre elas.`);
+        saida.choices = [...o.choices];
+      }
+      opcoes.push(saida);
+    }
+    return { ok: true, opcoes, largura };
+  }
+
   // ---- Molduras isoladas (etapa 4) ----
   const ALTURA_DA_MOLDURA = { min: 40, max: 2000, padrao: 240 };
   const arquivoDeTela = nome => typeof nome === 'string' && /^[a-z0-9][a-z0-9._-]{0,60}\.html$/i.test(nome) && !nome.includes('..');
@@ -345,7 +383,7 @@
   const deveEntregar = (evento, permissoes) =>
     evento === 'day' ? true : (evento === 'save' || evento === 'create') && (permissoes || []).includes('notes:read');
 
-  const api = { PERMISSOES, METODOS, CABECALHOS_PROIBIDOS, validarPedidoDeRede, eventosDaGravacao, deveEntregar, painelParaHtml, higienizarHtml, planoDeCarga, validarManifesto, compararVersoes, comparar, precisaConsentir, rotuloDaPermissao, metodosPermitidos, podeChamar, ALTURA_DA_MOLDURA, VARIAVEIS_DO_TEMA, validarMoldura, arquivoDeTela, tipoDoArquivoDoPlugin, cspDaMoldura, injetarScriptsDaMoldura };
+  const api = { PERMISSOES, METODOS, CABECALHOS_PROIBIDOS, validarPedidoDeRede, eventosDaGravacao, deveEntregar, painelParaHtml, higienizarHtml, planoDeCarga, validarManifesto, compararVersoes, comparar, precisaConsentir, rotuloDaPermissao, metodosPermitidos, podeChamar, ALTURA_DA_MOLDURA, VARIAVEIS_DO_TEMA, validarMoldura, validarOpcoesDoPainel, arquivoDeTela, tipoDoArquivoDoPlugin, cspDaMoldura, injetarScriptsDaMoldura };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.KiroPlugins = api;
 })(globalThis);
