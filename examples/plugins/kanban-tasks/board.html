@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Quadro de Tarefas</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--bg, #0B0F14);
+    color: var(--ink, #E5E7EB);
+    font: 14px var(--fonte-interface, system-ui);
+  }
+
+  .barra {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 10px;
+    padding: 12px 16px;
+    background: var(--panel, #1A1F26);
+    border-bottom: 1px solid var(--line, #2A3340);
+  }
+  .barra h1 { margin: 0; font-size: 15px; font-weight: 700; }
+  .nova { display: flex; gap: 6px; align-items: center; flex: 1; min-width: 0; }
+  .nova input[type="text"] { flex: 1; min-width: 120px; }
+  .campo {
+    background: var(--campo, #12171E);
+    color: var(--ink, #E5E7EB);
+    border: 1px solid var(--line, #2A3340);
+    border-radius: 8px;
+    padding: 6px 8px;
+    font: inherit;
+  }
+  .campo:focus { outline: 2px solid var(--acento); outline-offset: 1px; }
+  .campo::placeholder { color: var(--muted, #94A3B8); }
+  select.campo { background-color: var(--campo, #12171E); color: var(--ink, #E5E7EB); }
+  .primario {
+    background: var(--acento, #9273FF);
+    color: var(--primario-texto, #fff);
+    border: 0; border-radius: 8px; padding: 6px 12px;
+    font-weight: 600; cursor: pointer;
+  }
+  .primario:hover { background: var(--acento-forte, #6B4AE8); }
+  .segundo {
+    background: transparent; color: var(--ink, #E5E7EB);
+    border: 1px solid var(--line, #2A3340); border-radius: 8px; padding: 6px 12px;
+    cursor: pointer;
+  }
+  .segundo:hover { border-color: var(--acento); }
+  .icono {
+    background: transparent; color: var(--ink, #E5E7EB);
+    border: 1px solid var(--line, #2A3340); border-radius: 8px;
+    width: 30px; height: 30px; cursor: pointer;
+  }
+  .icono:hover { border-color: var(--acento); color: var(--acento); }
+
+  .tauler {
+    display: grid; grid-template-columns: repeat(4, minmax(220px, 1fr));
+    gap: 12px; padding: 16px; align-items: start;
+  }
+  .col {
+    display: flex; flex-direction: column;
+    background: var(--panel, #1A1F26);
+    border: 1px solid var(--line, #2A3340);
+    border-radius: 12px;
+    min-height: 120px;
+  }
+  .col[data-sobre="true"] { border-color: var(--acento); box-shadow: 0 0 0 1px var(--acento); }
+  .col header {
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 12px;
+    background: var(--panel-raised, #232A33);
+    border-bottom: 1px solid var(--line, #2A3340);
+  }
+  .ponto { width: 9px; height: 9px; border-radius: 50%; background: var(--acento, #9273FF); }
+  .col[data-col="em-preparacao"] .ponto { background: color-mix(in srgb, var(--acento) 30%, transparent); }
+  .col[data-col="a-fazer"] .ponto       { background: color-mix(in srgb, var(--acento) 55%, transparent); }
+  .col[data-col="em-progresso"] .ponto  { background: var(--acento); }
+  .col[data-col="finalizado"] .ponto    { background: var(--acento-2, #8FD3FF); }
+  .col header h2 { margin: 0; font-size: 13px; font-weight: 700; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .col header b.livro {
+    font-size: 11px; font-weight: 700; color: var(--muted, #94A3B8);
+    background: var(--campo, #12171E); border-radius: 8px; padding: 0 7px;
+  }
+  .lista { display: flex; flex-direction: column; gap: 8px; padding: 8px 10px; min-height: 60px; }
+  .vazio { color: var(--muted, #94A3B8); font-size: 12px; padding: 6px; }
+
+  .card {
+    display: flex; gap: 8px; align-items: flex-start;
+    background: var(--panel-raised, #232A33);
+    border: 1px solid var(--line, #2A3340);
+    border-radius: 10px; padding: 8px 10px;
+    cursor: grab;
+  }
+  .card:active { cursor: grabbing; }
+  .card[dragging="true"] { opacity: 0.45; }
+  .check { display: inline-flex; cursor: pointer; margin: 0; }
+  .check input { width: 15px; height: 15px; accent-color: var(--acento); }
+  .corpo { flex: 1; min-width: 0; }
+  .corpo .titulo { margin: 0; font-size: 13px; line-height: 1.35; word-break: break-word; cursor: pointer; }
+  .corpo .titulo:hover { color: var(--acento); }
+  .corpo .titulo[grizo="true"] { color: var(--muted, #94A3B8); text-decoration: line-through; }
+  .meta { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; align-items: center; }
+  .chip {
+    font-size: 11px; line-height: 1;
+    border-radius: 6px; padding: 2px 6px;
+    border: 1px solid var(--line, #2A3340); color: var(--muted, #94A3B8);
+  }
+  .chip[prio="Alta"]    { color: var(--acento-texto); background: var(--acento-forte); border-color: var(--acento-forte); }
+  .chip[prio="Média"]   { color: var(--acento-texto); background: var(--acento); border-color: var(--acento); }
+  .data { font-size: 11px; color: var(--muted, #94A3B8); }
+  .data[vencida="true"] { color: var(--acento-forte); font-weight: 700; }
+
+  .modal-fondo {
+    position: fixed; inset: 0; z-index: 10;
+    background: color-mix(in srgb, var(--bg) 80%, transparent);
+    display: none; align-items: center; justify-content: center;
+  }
+  .modal-fondo[visible="true"] { display: flex; }
+  .modal {
+    background: var(--panel, #1A1F26);
+    border: 1px solid var(--line, #2A3340); border-radius: 12px;
+    padding: 16px; width: min(420px, 90vw); display: grid; gap: 10px;
+  }
+  .modal h3 { margin: 0; font-size: 14px; font-weight: 700; }
+  .modal .fila { display: flex; gap: 10px; align-items: center; }
+  .modal .fila label { font-size: 12px; color: var(--muted, #94A3B8); min-width: 90px; }
+  .botones { display: flex; justify-content: flex-end; gap: 8px; }
+  .aviso { margin: 8px 16px 0; font-size: 12px; color: var(--muted, #94A3B8); min-height: 0; }
+</style>
+</head>
+<body>
+  <div class="barra">
+    <h1>Quadro de Tarefas</h1>
+    <div class="nova">
+      <input class="campo" id="nova-titulo" type="text" placeholder="Nova tarefa…" aria-label="Título da nova tarefa">
+      <input class="campo" id="nova-data" type="date" aria-label="Data limite">
+      <select class="campo" id="nova-prioridade" aria-label="Prioridade">
+        <option value="Baixa">Baixa</option>
+        <option value="Média" selected>Média</option>
+        <option value="Alta">Alta</option>
+      </select>
+      <select class="campo" id="nova-columna" aria-label="Columna inicial">
+        <option value="em-preparacao">Em preparação</option>
+        <option value="a-fazer">A fazer</option>
+        <option value="em-progresso">Em progresso</option>
+      </select>
+      <button class="primario" id="nova-boton" type="button">Adicionar</button>
+    </div>
+    <button class="icono" id="recargar" type="button" title="Recargar" aria-label="Recargar">⟳</button>
+    <button class="icono" id="opciones" type="button" title="Configuração" aria-label="Configuração">⚙</button>
+  </div>
+
+  <div class="tauler" id="tauler"></div>
+  <p class="aviso" id="status" role="status"></p>
+
+  <div class="modal-fondo" id="modal-editar">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="titulo-editar">
+      <h3 id="titulo-editar">Editar tarefa</h3>
+      <div class="fila"><label for="editar-titulo">Título</label><input class="campo" id="editar-titulo" type="text"></div>
+      <div class="fila"><label for="editar-data">Prazo</label><input class="campo" id="editar-data" type="date"></div>
+      <div class="fila"><label for="editar-prioridade">Prioridade</label>
+        <select class="campo" id="editar-prioridade">
+          <option value="Baixa">Baixa</option>
+          <option value="Média">Média</option>
+          <option value="Alta">Alta</option>
+        </select>
+      </div>
+      <div class="botones">
+        <button class="segundo" id="editar-cancelar" type="button">Cancelar</button>
+        <button class="primario" id="editar-guardar" type="button">Guardar</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-fondo" id="modal-cfg">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="titulo-cfg">
+      <h3 id="titulo-cfg">Nomes das colunas</h3>
+      <div class="fila"><label for="cfg-em-preparacao">Preparação</label><input class="campo" id="cfg-em-preparacao" type="text" maxlength="40"></div>
+      <div class="fila"><label for="cfg-a-fazer">A fazer</label><input class="campo" id="cfg-a-fazer" type="text" maxlength="40"></div>
+      <div class="fila"><label for="cfg-em-progresso">Progresso</label><input class="campo" id="cfg-em-progresso" type="text" maxlength="40"></div>
+      <div class="fila"><label for="cfg-finalizado">Finalizado</label><input class="campo" id="cfg-finalizado" type="text" maxlength="40"></div>
+      <div class="botones">
+        <button class="segundo" id="cfg-cancelar" type="button">Cancelar</button>
+        <button class="primario" id="cfg-guardar" type="button">Guardar</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="board.js"></script>
+</body>
+</html>

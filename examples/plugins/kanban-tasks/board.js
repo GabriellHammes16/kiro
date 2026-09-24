@@ -1,0 +1,214 @@
+// Quadro Kanban de tarefas (roda dentro de uma moldura isolada do Kiro).
+// Le o cofre com kiro.tasks.list(), guarda a columna de cada tarefa no
+// kiro.storage do plug-in e sincroniza "Finalizado" com done=true.
+// Ver docs/plugins.md, sección "Frames (custom UI)".
+
+(function () {
+  'use strict';
+
+  const COLUMNAS = ['em-preparacao', 'a-fazer', 'em-progresso', 'finalizado'];
+  const PADRAO = {
+    'em-preparacao': 'Em preparação',
+    'a-fazer': 'A fazer',
+    'em-progresso': 'Em progresso',
+    'finalizado': 'Finalizado',
+  };
+
+  const $ = sel => document.querySelector(sel);
+  const escapar = v => String(v === undefined || v === null ? '' : v)
+    .replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+  const hoje = () => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  };
+  const vencida = due => due && due < hoje();
+
+  let kiro, tarefas = [], columns = {}, vuelta = {}, config = {};
+  let editando = null, arrastrando = null;
+
+  // Columna de uma tarefa: done=true é "finalizado"; senão a que guardamos (padrão "a fazer").
+  const columnaDe = t => t.done ? 'finalizado' : (COLUMNAS.includes(columns[t.id]) ? columns[t.id] : 'a-fazer');
+  const rotulo = id => (config[id] && config[id].trim()) || PADRAO[id];
+
+  function ordenar(lista) {
+    return [...lista].sort((a, b) => {
+      if (a.due !== b.due) return a.due < b.due ? -1 : 1;   // sem data vai ao fim
+      return a.title.localeCompare(b.title, 'pt-BR');
+    });
+  }
+
+  async function cargar() {
+    tarefas = await kiro.tasks.list();
+    columns = (await kiro.storage.get('columns')) || {};
+    vuelta = (await kiro.storage.get('vuelta')) || {};
+    config = (await kiro.storage.get('config')) || {};
+    render();
+  }
+
+  function avisar(texto, erro) {
+    const s = $('#status');
+    s.textContent = texto;
+    s.style.color = erro ? 'var(--acento-forte)' : 'var(--muted)';
+  }
+
+  // ---- Guardar a columna nova + sincronizar done ----
+  async function mover(id, columna) {
+    const t = tarefas.find(x => x.id === id);
+    if (!t) return;
+    const origen = columnaDe(t);
+    if (origen === columna) return;
+    const aFinalizado = columna === 'finalizado' && !t.done;
+    if (aFinalizado) vuelta[id] = origen;
+    else if (origen === 'finalizado' && t.done) delete vuelta[id];
+    columns[id] = columna;
+    await kiro.storage.set('columns', columns);
+    await kiro.storage.set('vuelta', vuelta);
+    if (aFinalizado) await kiro.tasks.update(id, { done: true });
+    else if (columna !== 'finalizado' && t.done) await kiro.tasks.update(id, { done: false });
+    await cargar();
+  }
+
+  function render() {
+    const porCol = Object.fromEntries(COLUMNAS.map(c => [c, []]));
+    for (const t of tarefas) porCol[columnaDe(t)].push(t);
+
+    $('#tauler').innerHTML = COLUMNAS.map(col => {
+      const items = ordenar(porCol[col]);
+      const vazio = items.length ? '' : '<p class="vazio">Nada por aqui.</p>';
+      return `<section class="col" data-col="${col}"><header>
+          <i class="ponto" aria-hidden="true"></i><h2>${escapar(rotulo(col))}</h2>
+          <b class="livro" aria-label="Tarefas">${items.length}</b>
+        </header><div class="lista">${vazio}${items.map(tarjeta).join('')}</div></section>`;
+    }).join('');
+
+    // Re-ligar os handlers depois de reconstruir o DOM.
+    for (const c of $('#tauler').querySelectorAll('.card')) {
+      c.addEventListener('dragstart', aoArrastrar);
+      c.addEventListener('dragend', () => c.setAttribute('dragging', 'false'));
+    }
+    for (const c of $('#tauler').querySelectorAll('.col')) {
+      c.addEventListener('dragover', e => { if (arrastrando) { e.preventDefault(); c.setAttribute('data-sobre', 'true'); } });
+      c.addEventListener('dragleave', () => c.setAttribute('data-sobre', 'false'));
+      c.addEventListener('drop', e => {
+        e.preventDefault();
+        c.setAttribute('data-sobre', 'false');
+        if (arrastrando) mover(arrastrando, c.dataset.col);
+      });
+    }
+    for (const i of $('#tauler').querySelectorAll('.check input')) i.addEventListener('change', alternar);
+    for (const b of $('#tauler').querySelectorAll('.titulo')) b.addEventListener('click', () => abrirEdicion(b.closest('.card').dataset.id));
+  }
+
+  function tarjeta(t) {
+    const fecha = t.due
+      ? `<span class="data"${vencida(t.due) && !t.done ? ' vencida="true"' : ''}>${escapar(t.due)}</span>`
+      : '';
+    const prio = `<span class="chip" prio="${escapar(t.priority)}">${escapar(t.priority)}</span>`;
+    return `<article class="card" draggable="true" data-id="${escapar(t.id)}">
+      <label class="check"><input type="checkbox"${t.done ? ' checked' : ''} aria-label="${t.done ? 'Marcar como pendiente' : 'Marcar como finalizada'}"></label>
+      <div class="corpo"><p class="titulo"${t.done ? ' grizo="true"' : ''} title="Editar tarefa">${escapar(t.title)}</p>
+        <div class="meta">${prio}${fecha}</div></div>
+    </article>`;
+  }
+
+  function aoArrastrar(e) {
+    arrastrando = e.currentTarget.dataset.id;
+    e.currentTarget.setAttribute('dragging', 'true');
+    if (e.dataTransfer) e.dataTransfer.setData('text/plain', arrastrando);
+  }
+
+  async function alternar(e) {
+    const t = tarefas.find(x => x.id === e.currentTarget.closest('.card').dataset.id);
+    if (!t) return;
+    if (e.currentTarget.checked) await mover(t.id, 'finalizado');
+    else await mover(t.id, vuelta[t.id] || 'a-fazer');
+  }
+
+  function abrirEdicion(id) {
+    const t = tarefas.find(x => x.id === String(id));
+    if (!t) return;
+    editando = t;
+    $('#editar-titulo').value = t.title;
+    $('#editar-data').value = t.due || '';
+    $('#editar-prioridade').value = t.priority;
+    $('#modal-editar').setAttribute('visible', 'true');
+    $('#editar-titulo').focus();
+  }
+  function cerrarEdicion() {
+    editando = null;
+    $('#modal-editar').setAttribute('visible', 'false');
+  }
+
+  async function guardarEdicion() {
+    if (!editando) return;
+    const titulo = $('#editar-titulo').value.trim();
+    if (!titulo) return avisar('O título não fica vazio.', true);
+    try {
+      await kiro.tasks.update(editando.id, {
+        title: titulo,
+        due: $('#editar-data').value || undefined,
+        priority: $('#editar-prioridade').value,
+      });
+      const id = editando.id;
+      cerrarEdicion();
+      await cargar();
+      avisar('Tarefa atualizada.');
+    } catch (erro) {
+      avisar(String((erro && erro.message) || erro), true);
+    }
+  }
+
+  async function novaTarefa() {
+    const titulo = $('#nova-titulo').value.trim();
+    if (!titulo) return avisar('Escreve o título da tarefa.', true);
+    try {
+      const t = await kiro.tasks.create({
+        title: titulo,
+        due: $('#nova-data').value || undefined,
+        priority: $('#nova-prioridade').value,
+      });
+      columns[t.id] = $('#nova-columna').value;
+      await kiro.storage.set('columns', columns);
+      $('#nova-titulo').value = '';
+      $('#nova-data').value = '';
+      $('#nova-prioridade').value = 'Média';
+      await cargar();
+      avisar('Tarefa adicionada.');
+    } catch (erro) {
+      avisar(String((erro && erro.message) || erro), true);
+    }
+  }
+
+  // ---- Ajustes: renombrar as colunas (fica no storage do plug-in) ----
+  function abrirAjustes() {
+    for (const id of COLUMNAS) $(`#cfg-${id}`).value = rotulo(id);
+    $('#modal-cfg').setAttribute('visible', 'true');
+  }
+  function cerrarAjustes() {
+    $('#modal-cfg').setAttribute('visible', 'false');
+  }
+  async function guardarAjustes() {
+    const novo = {};
+    for (const id of COLUMNAS) novo[id] = $(`#cfg-${id}`).value.trim() || PADRAO[id];
+    config = novo;
+    cerrarAjustes();
+    await kiro.storage.set('config', config);
+    await cargar();
+    avisar('Colunas atualizadas.');
+  }
+
+  (async function iniciar() {
+    kiro = await window.kiro.ready;
+    $('#nova-boton').addEventListener('click', novaTarefa);
+    $('#nova-titulo').addEventListener('keydown', e => { if (e.key === 'Enter') novaTarefa(); });
+    $('#recargar').addEventListener('click', () => cargar());
+    $('#opciones').addEventListener('click', abrirAjustes);
+    $('#editar-guardar').addEventListener('click', guardarEdicion);
+    $('#editar-cancelar').addEventListener('click', cerrarEdicion);
+    $('#modal-editar').addEventListener('click', e => { if (e.target.id === 'modal-editar') cerrarEdicion(); });
+    $('#cfg-guardar').addEventListener('click', guardarAjustes);
+    $('#cfg-cancelar').addEventListener('click', cerrarAjustes);
+    $('#modal-cfg').addEventListener('click', e => { if (e.target.id === 'modal-cfg') cerrarAjustes(); });
+    await cargar();
+  })();
+})();

@@ -136,3 +136,19 @@ test('exemplo habit-heatmap: manifesto válido, tela e docs', async () => {
   for (const trecho of ['kiro.ready', 'kiro.resize', 'kiro.openLink', 'kiro.onData', '"page"', 'frame']) assert.ok(docs.includes(trecho), trecho);
   assert.doesNotMatch(docs, /Stage 4 — isolated frames/);
 });
+
+test('exemplo kanban-tasks: manifesto válido, tela sem script inline e página declarada', async () => {
+  const raiz = path.join(__dirname, '..');
+  const versao = require('../package.json').version;
+  const m = JSON.parse(await fs.readFile(path.join(raiz, 'examples/plugins/kanban-tasks/manifest.json'), 'utf8'));
+  const r = P.validarManifesto(m, { versaoDoKiro: versao });
+  assert.equal(r.ok, true, r.erro);
+  assert.deepEqual(r.manifesto.permissions, ['tasks:read', 'tasks:write']);
+  assert.deepEqual(r.manifesto.page, { title: 'Quadro de Tarefas', file: 'board.html' });
+  const html = await fs.readFile(path.join(raiz, 'examples/plugins/kanban-tasks/board.html'), 'utf8');
+  assert.match(html, /board\.js/);
+  assert.doesNotMatch(html, /<script>(?!\s*<\/script>)/);   // sem script inline: a CSP não deixa
+  assert.doesNotMatch(html, /\son\w+\s*=\s*["']/);          // sem handlers inline onclick=...
+  const js = await fs.readFile(path.join(raiz, 'examples/plugins/kanban-tasks/board.js'), 'utf8');
+  for (const trecho of ['kiro.ready', 'kiro.tasks.list', 'kiro.tasks.update', "storage.get('columns')"]) assert.ok(js.includes(trecho), trecho);
+});

@@ -28,9 +28,11 @@ must be `data:` URLs. `data.json` appears there once you use `kiro.storage`.
 
 Three complete working examples live in this repository: `examples/plugins/word-count/`
 (commands, panels, blocks), `examples/plugins/wikipedia-summary/` (a block
-that calls a web API with `kiro.fetch`), and `examples/plugins/habit-heatmap/`
-(a frame — see [Frames (custom UI)](#frames-custom-ui) below). `npm run dev`
-copies all three into the example vault. Copying one of these folders is the
+that calls a web API with `kiro.fetch`), `examples/plugins/habit-heatmap/`
+(a frame — see [Frames (custom UI)](#frames-custom-ui) below) and
+`examples/plugins/kanban-tasks/` (a Kanban board of your tasks as a frame page,
+with drag & drop between columns). `npm run dev`
+copies all of them into the example vault. Copying one of these folders is the
 fastest way to start.
 
 ## manifest.json
