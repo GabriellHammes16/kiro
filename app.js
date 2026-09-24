@@ -2838,7 +2838,8 @@ function acaoDaHoje(acao, id, valor, botao) {
   if (!fns[acao] || (acao !== 'colunas' && !cartao)) return;
   mudarHoje(fns[acao]);
   const seletor = acao === 'colunas' ? `[data-hoje-acao="colunas"][data-valor="${valor}"]` : `[data-hoje-id="${CSS.escape(id)}"] [data-hoje-acao="${acao}"]`;
-  document.querySelector(seletor)?.focus();
+  const raiz = botao?.closest('#cfg-hoje') || document;
+  raiz.querySelector(seletor)?.focus();
 }
 function mudarOpcaoDaHoje(id, chave, valor) {
   const c = catalogoDaHoje().find(x => x.id === id);
@@ -2856,14 +2857,45 @@ document.addEventListener('click', e => {
   acaoDaHoje(b.dataset.hojeAcao, b.dataset.hojeId ?? b.closest('[data-hoje-id]')?.dataset.hojeId, b.dataset.valor, b);
 });
 document.addEventListener('change', e => {
+  const linha = e.target.closest?.('.hoje-cfg-linha');
+  if (linha && e.target.matches('[data-hoje-visivel], [data-hoje-coluna-cfg], [data-hoje-largura-cfg]')) {
+    e.stopPropagation();
+    const id = linha.dataset.hojeId, alvo = e.target;
+    if (alvo.matches('[data-hoje-visivel]')) mudarHoje(l => alvo.checked ? KiroHoje.mostrar(l, id) : KiroHoje.esconder(l, id));
+    else if (alvo.matches('[data-hoje-coluna-cfg]')) mudarHoje(l => KiroHoje.mover(l, id, { coluna: Number(alvo.value) }));
+    else mudarHoje(l => KiroHoje.definirLargura(l, id, alvo.value));
+    document.querySelector(`#cfg-hoje [data-hoje-id="${CSS.escape(id)}"] ${alvo.matches('[data-hoje-visivel]') ? '[data-hoje-visivel]' : alvo.matches('[data-hoje-coluna-cfg]') ? '[data-hoje-coluna-cfg]' : '[data-hoje-largura-cfg]'}`)?.focus();
+    return;
+  }
   const campo = e.target.closest?.('[data-hoje-opcao]');
   if (!campo) return;
   e.stopPropagation();   // não marca a janela de Configurações como alterada: grava na hora
   if (campo.type === 'number' && campo.value === '') return;
   mudarOpcaoDaHoje(campo.dataset.hojeId, campo.dataset.hojeOpcao, campo.type === 'checkbox' ? campo.checked : campo.type === 'number' ? Number(campo.value) : campo.value);
-});
-// Versão mínima: a Task 6 (aba Configurações) substitui.
-function conteudoDaAbaHoje() { return ''; }
+}, { capture: true });
+// Mesma lista da Hoje, em linhas: cada controle chama KiroHoje por mudarHoje, que redesenha as duas telas.
+function conteudoDaAbaHoje() {
+  const catalogo = catalogoDaHoje(), l = layoutDaHoje(catalogo), porId = new Map(catalogo.map(c => [c.id, c]));
+  const linhas = l.cartoes.filter(c => porId.has(c.id)).map(cartao => {
+    const c = porId.get(cartao.id), visivel = !l.ocultos.includes(c.id), id = escapeHtml(c.id);
+    const colunas = Array.from({ length: l.colunas }, (_, i) => `<option value="${i}" ${i === Math.min(cartao.coluna, l.colunas - 1) ? 'selected' : ''}>Coluna ${i + 1}</option>`).join('');
+    return `<div class="cfg-linha hoje-cfg-linha" data-hoje-id="${id}">
+      <label class="hoje-cfg-visivel"><input type="checkbox" data-hoje-visivel ${visivel ? 'checked' : ''} /><span class="cfg-texto"><span class="cfg-titulo">${escapeHtml(c.titulo)}</span><span class="small-muted">${escapeHtml(c.origem)}</span></span></label>
+      <span class="hoje-cfg-controles">
+        ${botaoDaHoje('subir', '↑', `Subir ${escapeHtml(c.titulo)}`)}${botaoDaHoje('descer', '↓', `Descer ${escapeHtml(c.titulo)}`)}
+        <select data-hoje-coluna-cfg aria-label="Coluna de ${escapeHtml(c.titulo)}" ${cartao.largura === 'inteira' ? 'disabled' : ''}>${colunas}</select>
+        <select data-hoje-largura-cfg aria-label="Largura de ${escapeHtml(c.titulo)}"><option value="normal" ${cartao.largura === 'normal' ? 'selected' : ''}>Normal</option><option value="inteira" ${cartao.largura === 'inteira' ? 'selected' : ''}>Inteira</option></select>
+        ${popoverDeOpcoes(c, l, 'cfg', catalogo.indexOf(c))}
+      </span>
+    </div>`;
+  }).join('');
+  return `<section class="cfg-grupo">
+    <header class="cfg-grupo-topo"><span class="cfg-texto"><span class="cfg-titulo">Tela Hoje</span><span class="small-muted">Quais cartões aparecem, em que ordem e onde. Também dá para arrumar direto na Hoje, em Personalizar.</span></span><button type="button" class="secondary cfg-pequeno" data-hoje-acao="restaurar">${icone('recarregar')} Restaurar padrão</button></header>
+    <div class="cfg-linha">${'<span class="cfg-texto"><span class="cfg-titulo">Colunas</span></span>'}<span class="hoje-colunas-escolha">${[1, 2, 3].map(n => `<button type="button" class="chip" data-hoje-acao="colunas" data-valor="${n}" aria-pressed="${n === l.colunas}">${n}</button>`).join('')}</span></div>
+    ${linhas}
+    <p class="small-muted cfg-rodape">Guardado em <code>.kiro/hoje.json</code>, dentro do cofre.</p>
+  </section>`;
+}
 
 const pluginApi = {
   versao: () => window.cadernoDesktop ? window.cadernoDesktop.version() : api('version').then(r => r.version),
@@ -3742,7 +3774,7 @@ function ligarAbaPlugins(painel) {
 // ---- Fim da aba Plug-ins ----
 
 // Aparência aplica na hora; as permissões de agente só no botão Salvar.
-const ABAS_CFG = [['personalizacao', 'Personalização', 'realce'], ['sistema', 'Sistema', 'pasta-aberta'], ['integracoes', 'Integrações', 'link'], ['plugins', 'Plug-ins', 'plugin'], ['atalhos', 'Atalhos', 'codigo']];
+const ABAS_CFG = [['personalizacao', 'Personalização', 'realce'], ['hoje', 'Hoje', 'hoje'], ['sistema', 'Sistema', 'pasta-aberta'], ['integracoes', 'Integrações', 'link'], ['plugins', 'Plug-ins', 'plugin'], ['atalhos', 'Atalhos', 'codigo']];
 let abaDasConfiguracoes = 'personalizacao';
 // Fixos: fazem parte do editor e dos menus, não dá para trocar.
 const ATALHOS_FIXOS = [
@@ -3847,6 +3879,7 @@ async function showSettings(aba = abaDasConfiguracoes) {
       <header class="cfg-grupo-topo">${texto('Notas', 'O que aparece junto do texto da nota aberta.')}</header>
       <label class="cfg-linha cfg-chave">${texto('Mostrar “Mencionada em”', 'Lista, no fim da nota, as notas que apontam para ela com [[links]].')}<input type="checkbox" id="cfg-mencoes" ${mostrarMencoes ? 'checked' : ''} /><span class="interruptor" aria-hidden="true"></span></label>
     </section>`)}
+    ${painel('hoje', `<div id="cfg-hoje">${conteudoDaAbaHoje()}</div>`)}
     ${painel('sistema', `<section class="cfg-grupo">
       <header class="cfg-grupo-topo">${texto('Cofre', 'A pasta onde suas notas ficam, como arquivos Markdown.')}</header>
       <div class="cfg-linha cfg-linha-coluna">${texto('Local')}<code class="cfg-caminho">${escapeHtml(state.vaultPath || 'vault/')}</code>
