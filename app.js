@@ -2873,6 +2873,11 @@ document.addEventListener('change', e => {
   if (campo.type === 'number' && campo.value === '') return;
   mudarOpcaoDaHoje(campo.dataset.hojeId, campo.dataset.hojeOpcao, campo.type === 'checkbox' ? campo.checked : campo.type === 'number' ? Number(campo.value) : campo.value);
 }, { capture: true });
+// modal() marca a janela como alterada também no "input" (não só no "change"): barra aqui para os
+// controles da Hoje, que já gravam pelo ouvinte de "change" acima.
+document.addEventListener('input', e => {
+  if (e.target.matches?.('[data-hoje-opcao], [data-hoje-visivel], [data-hoje-coluna-cfg], [data-hoje-largura-cfg]')) e.stopPropagation();
+}, { capture: true });
 // Mesma lista da Hoje, em linhas: cada controle chama KiroHoje por mudarHoje, que redesenha as duas telas.
 function conteudoDaAbaHoje() {
   const catalogo = catalogoDaHoje(), l = layoutDaHoje(catalogo), porId = new Map(catalogo.map(c => [c.id, c]));
