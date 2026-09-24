@@ -4148,7 +4148,7 @@ const ACOES_DOS_ATALHOS={
   painelDireito:()=>alternarPainelDireito(),
 };
 document.addEventListener('keydown',e=>{
-  if(e.key==='Escape') closeModal();
+  if(e.key==='Escape') { if (document.querySelector(':popover-open')) return; /* Esc fecha primeiro o popover (ex.: Opções da Hoje); um segundo Esc fecha o modal */ closeModal(); }
   if(gravandoAtalho||aguardandoCofre)return;
   const combinacao=Kiro.combinacaoDoEvento(e);
   const acao=Object.keys(atalhos).find(id=>atalhos[id]===combinacao);
