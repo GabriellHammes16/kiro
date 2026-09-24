@@ -256,3 +256,41 @@ test('layout da Hoje: ida e volta em .kiro/hoje.json; sem arquivo ou quebrado, n
   await fs.writeFile(path.join(vault.directory, '.kiro', 'hoje.json'), '{quebrado');
   assert.equal(await vault.readHomeLayout(), null);
 });
+
+const escreverCanvas = async (vault, arquivo, conteudo) => {
+  await fs.mkdir(path.dirname(path.join(vault.directory, arquivo)), { recursive: true });
+  await fs.writeFile(path.join(vault.directory, arquivo), typeof conteudo === 'string' ? conteudo : JSON.stringify(conteudo));
+};
+const umCartao = { id: 'a', type: 'text', text: 'Oi', x: 0, y: 0, width: 200, height: 60 };
+
+test('fluxo: .canvas do disco entra em state.fluxos com título, pasta e canvas', async t => {
+  const vault = await setup(t); await seed(vault);
+  await escreverCanvas(vault, 'Ideias/Mapa.canvas', { nodes: [umCartao], edges: [] });
+  const s = await vault.load();
+  assert.equal(s.fluxos.length, 1);
+  const f = s.fluxos[0];
+  assert.equal(f.title, 'Mapa');
+  assert.equal(f.file, 'Ideias/Mapa.canvas');
+  assert.equal(f.folderId, s.folders.find(x => x.title === 'Ideias').id);
+  assert.equal(f.canvas.nodes[0].text, 'Oi');
+  assert.match(f.id, /^fluxo-[0-9a-f]{32}$/);
+  assert.equal((await vault.load()).fluxos[0].id, f.id, 'id estável entre leituras');
+});
+
+test('fluxo: JSON inválido ou tipo desconhecido entra com erro, sem derrubar o cofre', async t => {
+  const vault = await setup(t); await seed(vault);
+  await escreverCanvas(vault, 'Quebrado.canvas', '{nope');
+  await escreverCanvas(vault, 'Futuro.canvas', { nodes: [{ ...umCartao, type: 'video' }], edges: [] });
+  const s = await vault.load();
+  assert.equal(s.notes.length, 1);
+  assert.match(s.fluxos.find(f => f.title === 'Quebrado').erro, /JSON inválido/);
+  assert.match(s.fluxos.find(f => f.title === 'Futuro').erro, /tipo desconhecido/);
+  assert.equal(s.fluxos.find(f => f.title === 'Quebrado').canvas, undefined);
+});
+
+test('fluxo: arquivos ocultos e fora de .canvas não viram fluxo', async t => {
+  const vault = await setup(t); await seed(vault);
+  await escreverCanvas(vault, '.oculto/Mapa.canvas', { nodes: [], edges: [] });
+  await escreverCanvas(vault, 'Mapa.json', { nodes: [], edges: [] });
+  assert.deepEqual((await vault.load()).fluxos, []);
+});

@@ -3,6 +3,7 @@ const path = require('node:path');
 const { createHash, randomUUID } = require('node:crypto');
 const { validateState, upgradeBackup, folderPaths, descendants, pathKey, folderColor, withHabits } = require('./domain.js');
 const yaml = require('js-yaml');
+const KiroFluxo = require('./fluxo.js');
 
 const hash = value => createHash('sha256').update(value).digest('hex');
 const slug = value => value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 60) || 'nota';
@@ -173,9 +174,19 @@ class Vault {
       const legacyFolder=data.formatVersion!==3&&folders.find(f=>f.id===note.folderId);
       note.folderId=legacyFolder?.id||byDisk.get(note.file?parentPath(note.file):'')?.id||'';
     }
+    // Fluxos (.canvas): o id mora no caderno.json, porque o Obsidian descartaria um campo
+    // extra dentro do arquivo. Arquivo movido por fora ganha id novo; nada se perde.
+    const registrados=Array.isArray(data.fluxos)?data.fluxos:[], idsUsados=new Set(notes.map(n=>n.id));
+    const fluxos=[...files].filter(([file])=>visible(file)&&/\.canvas$/i.test(file)).sort(([a],[b])=>a.localeCompare(b)).map(([file,value])=>{
+      const salvo=registrados.find(r=>r&&r.path===file&&/^[a-zA-Z0-9_-]{1,100}$/.test(r.id||''))?.id;
+      const id=salvo&&!idsUsados.has(salvo)?salvo:`fluxo-${hash(file).slice(0,32)}`;
+      idsUsados.add(id);
+      const lido=KiroFluxo.ler(value.data.toString('utf8'));
+      return {id,file,title:path.posix.basename(file).replace(/\.canvas$/i,''),folderId:byDisk.get(parentPath(file))?.id||'',...(lido.erro?{erro:lido.erro}:{canvas:lido.canvas})};
+    });
     const paths=folderPaths(folders);
     for(const f of folders)f.path=paths.get(f.id);
-    const state=validateState(withHabits({formatVersion:3,notes,tasks:data.tasks,routine:data.routine,habits:data.habits,habitLog:data.habitLog,folders}));
+    const state=validateState(withHabits({formatVersion:3,notes,tasks:data.tasks,routine:data.routine,habits:data.habits,habitLog:data.habitLog,folders,fluxos}));
     const revision=hash(JSON.stringify([metadata,[...directories].sort(),[...files].sort(([a],[b])=>a.localeCompare(b)).map(([file,v])=>[file,hash(v.data)])]));
     return {state:{...state,revision,vaultPath:this.directory},files,directories,metadata};
   }
