@@ -262,7 +262,7 @@ test('os painéis e comandos do plug-in chegam à tela Hoje', () => {
   const app = require('node:fs').readFileSync(path.join(__dirname, '..', 'app.js'), 'utf8');
   const tem = (expressao, motivo) => assert.ok(expressao.test(app), motivo);
   tem(/painelParaHtml/, 'o app desenha o painel pela parte pura');
-  tem(/cardsDosPlugins\(\)/, 'a tela Hoje monta os cards dos plug-ins');
+  tem(/cartaoDoPainel/, 'a tela Hoje monta os cards dos plug-ins');
   // Ação reservada: abrir a nota é do Kiro, não do plug-in.
   tem(/open:/, 'a ação reservada open:<noteId> abre a nota');
 });

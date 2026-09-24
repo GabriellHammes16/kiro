@@ -1110,3 +1110,11 @@ body, button, input, textarea, select { font-family:var(--fonte-interface); }
 .painel-direito-alternar { flex:0 0 auto; margin-left:2px; position:sticky; right:0; z-index:2; background:var(--sidebar-bg,#11161D); }
 .abas-barra:has(.painel-direito-alternar) .abas-menu { right:28px; }
 @media (max-width:900px) { .painel-direito, .painel-direito-alternar { display:none; } }
+
+/* ---- Hoje configurável: faixas de colunas e cartões de largura inteira ---- */
+.hoje-faixas { display:grid; gap:var(--esp-5); }
+/* No máximo N colunas; abaixo de ~280 px por coluna elas descem, na ordem de leitura. */
+.content .today-grid.hoje-colunas { grid-template-columns:repeat(auto-fit, minmax(min(100%, max(280px, calc((100% - (var(--hoje-colunas) - 1) * var(--esp-5)) / var(--hoje-colunas)))), 1fr)); }
+.hoje-colunas > .stack { align-content:start; }
+.cartao-frase .frase-do-dia { margin:0; }
+@media (max-width:780px) { .content .today-grid.hoje-colunas { grid-template-columns:1fr; } }

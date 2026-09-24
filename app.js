@@ -45,10 +45,55 @@ function head(eyebrow, title, description, action="") { return `<header class="p
 function check(done, action, id) { return `<button class="check ${done ? "done" : ""}" aria-label="Marcar como ${done ? "não concluído" : "concluído"}" data-action="${action}" data-id="${id}"></button>`; }
 function taskRow(task) { return `<div class="task-item">${check(task.done,"toggle-task",task.id)}<div class="task-title">${escapeHtml(task.title)}<div class="task-info">${dateLabel(task.due)}${task.noteId && getNote(task.noteId) ? ` · ${linkDaNota(getNote(task.noteId))}` : ""}</div></div>${task.priority === "Alta" ? '<span class="priority">Alta</span>' : ""}<div class="task-actions"><button class="icon-button" data-action="edit-task" data-id="${task.id}" title="Editar">${icone('renomear')}</button><button class="icon-button" data-action="delete-task" data-id="${task.id}" title="Excluir">${icone('lixeira')}</button></div></div>`; }
 function renderToday() {
+  const catalogo = catalogoDaHoje(), l = layoutDaHoje(catalogo);
+  const porId = new Map(catalogo.map(c => [c.id, c]));
+  const desenhar = id => {
+    const c = porId.get(id);
+    const html = c.render(KiroHoje.opcoesEfetivas(l, id, c.opcoes));
+    return personalizandoHoje ? cartaoEmEdicao(c, l, html) : html;
+  };
+  const lista = KiroHoje.faixas(l, idsVisiveisDaHoje(l, catalogo));
+  // Editando sem nenhum cartão normal: uma faixa de colunas vazia, para ter onde soltar.
+  if (personalizandoHoje && !lista.some(f => f.tipo === 'colunas')) lista.push({ tipo: 'colunas', colunas: Array.from({ length: l.colunas }, () => []) });
+  const faixas = lista.map(f => f.tipo === 'inteira'
+    ? `<div class="hoje-faixa-inteira">${desenhar(f.id)}</div>`
+    : `<div class="today-grid hoje-colunas" style="--hoje-colunas:${l.colunas}">${f.colunas.map((ids, i) => `<div class="stack" data-hoje-coluna="${i}">${ids.map(desenhar).join('')}</div>`).join('')}</div>`).join('');
+  const botao = `<button type="button" class="secondary" data-hoje-acao="personalizar" aria-pressed="${personalizandoHoje}">${personalizandoHoje ? 'Concluir' : `${icone('realce')} Personalizar`}</button>`;
+  return `${head(formatDate(today()), saudacao(), '', botao)}<div class="hoje-faixas${personalizandoHoje ? ' personalizando' : ''}">${faixas}</div>${personalizandoHoje ? rodapeDaPersonalizacao(catalogo, l) : ''}`;
+}
+// Cartões do Kiro e dos plug-ins num catálogo só: o layout decide onde e se aparecem.
+const LIMITE_DA_LISTA = { key: 'limite', type: 'number', label: 'Quantos mostrar (0 = todos)', default: 0, min: 0, max: 50 };
+const cortar = (lista, limite) => limite > 0 ? lista.slice(0, limite) : lista;
+function catalogoDaHoje() {
+  const nativos = [
+    { id: 'nativo:frase', titulo: 'Frase do dia', coluna: 0, largura: 'inteira', opcoes: [],
+      render: () => `<section class="card cartao-frase"><p class="frase-do-dia">${escapeHtml(fraseDoDia())}</p></section>` },
+    { id: 'nativo:habitos', titulo: 'Hábitos', coluna: 0, opcoes: [{ key: 'mostrarSemana', type: 'boolean', label: 'Mostrar a semana', default: true }],
+      render: o => cardHabitos(o) },
+    { id: 'nativo:agora', titulo: 'Para fazer agora', coluna: 0, opcoes: [LIMITE_DA_LISTA], render: o => cardAgora(o) },
+    { id: 'nativo:continuar', titulo: 'Continuar de onde parei', coluna: 1, opcoes: [],
+      render: () => cardContinuar([...state.notes].sort((a, b) => b.updatedAt - a.updatedAt)[0]) },
+    { id: 'nativo:caixa', titulo: 'Caixa de entrada', coluna: 1, opcoes: [LIMITE_DA_LISTA], render: o => cardCaixaDeEntrada(o) },
+    { id: 'nativo:revisar', titulo: 'Para revisar', coluna: 1, opcoes: [LIMITE_DA_LISTA], render: o => cardParaRevisar(o) },
+  ].map(c => ({ largura: 'normal', origem: 'Kiro', ...c }));
+  const dosPlugins = [];
+  for (const [id, estado] of pluginsAtivos) for (const painel of estado.paineis || []) dosPlugins.push({
+    id: `plugin:${id}:${painel.id}`, titulo: painel.label, origem: estado.manifesto?.name || id,
+    largura: painel.largura, opcoes: painel.opcoes, render: () => cartaoDoPainel(id, painel),
+  });
+  return [...nativos, ...dosPlugins];
+}
+// Reconciliar na hora de desenhar: um plug-in recém-ativado ganha lugar e isso é gravado.
+function layoutDaHoje(catalogo = catalogoDaHoje()) {
+  const semArquivo = !hojeLayout;
+  const novo = KiroHoje.reconciliar(hojeLayout || KiroHoje.padrao(catalogo), catalogo);
+  if (semArquivo || novo !== hojeLayout) { hojeLayout = novo; gravarHojeDepois(); }
+  return hojeLayout;
+}
+const idsVisiveisDaHoje = (l, catalogo) => new Set(catalogo.map(c => c.id).filter(id => !l.ocultos.includes(id)));
+function cardAgora({ limite }) {
   const urgent = state.tasks.filter(t => !t.done && t.due <= today());
-  const ultima = [...state.notes].sort((a,b)=>b.updatedAt-a.updatedAt)[0];
-  // Duas colunas por intenção: "Agora" é o que se marca todo dia; "Organizar" é o trabalho com as notas.
-  return `${head(saudacao(), `<span class="frase-do-dia">${escapeHtml(fraseDoDia())}</span>`, `${formatDate(today())}.`)}<div class="today-grid"><div class="stack">${cardHabitos()}<section class="card"><div class="card-head"><h2>Para fazer agora</h2><a data-go="tasks">Ver tarefas</a></div>${urgent.map(taskRow).join("") || '<div class="empty">Nada urgente para hoje.</div>'}</section></div><div class="stack">${cardContinuar(ultima)}${cardCaixaDeEntrada()}${cardParaRevisar()}${cardsDosPlugins()}</div></div>`;
+  return `<section class="card"><div class="card-head"><h2>Para fazer agora</h2><a data-go="tasks">Ver tarefas</a></div>${cortar(urgent, limite).map(taskRow).join("") || '<div class="empty">Nada urgente para hoje.</div>'}</section>`;
 }
 // Frase do dia no lugar do "Bom dia". Muda à meia-noite e não repete a de ontem:
 // o passo 7 percorre as 20 frases antes de voltar à primeira.
@@ -97,7 +142,7 @@ function rotuloFrequencia(f) {
   if (ordem.length === 7) return 'Todo dia';
   return ordem.join() === '1,2,3,4,5' ? 'Dias úteis' : ordem.join() === '6,0' ? 'Fim de semana' : ordem.map(d => DIAS_CURTO[d]).join(', ');
 }
-function cardHabitos() {
+function cardHabitos({ mostrarSemana = true } = {}) {
   const hoje = today();
   const [a, m, d] = hoje.split('-').map(Number), domingo = Kiro.localDate(new Date(a, m - 1, d + (7 - new Date(a, m - 1, d).getDay()) % 7));
   const doDia = state.habits.map(h => ({ h, s: Kiro.habitStats(h, state.habitLog[h.id] || [], hoje) })).filter(x => x.s.dueToday);
@@ -112,7 +157,7 @@ function cardHabitos() {
     const dias = Kiro.habitDays(h, state.habitLog[h.id] || [], domingo, 7).map(d => d.date > hoje
       ? `<span class="habito-dia futuro" title="${rotuloDoDia(d.date)}">${DIAS_LETRA[new Date(`${d.date}T12:00`).getDay()]}</span>`
       : `<button type="button" class="habito-dia${d.done ? ' feito' : ''}${d.due ? '' : ' livre'}${d.date === hoje ? ' hoje' : ''}" data-action="toggle-habit-day" data-id="${h.id}|${d.date}" title="${rotuloDoDia(d.date)}${d.done ? ' · feito' : ''}" aria-label="${rotuloDoDia(d.date)}: ${d.done ? 'feito' : 'não feito'}" aria-pressed="${d.done}">${DIAS_LETRA[new Date(`${d.date}T12:00`).getDay()]}</button>`).join('');
-    return `<div class="routine-item habito" data-habito="${h.id}">${check(s.doneToday, 'toggle-habit', h.id)}<div class="habito-texto"><span class="routine-title">${escapeHtml(h.title)}</span><span class="habito-meta">${meta}</span></div><div class="habito-semana">${dias}</div></div>`;
+    return `<div class="routine-item habito" data-habito="${h.id}">${check(s.doneToday, 'toggle-habit', h.id)}<div class="habito-texto"><span class="routine-title">${escapeHtml(h.title)}</span><span class="habito-meta">${meta}</span></div>${mostrarSemana ? `<div class="habito-semana">${dias}</div>` : ''}</div>`;
   };
   const vazio = state.habits.length
     ? '<div class="empty">Nenhum hábito para hoje.</div>'
@@ -1088,6 +1133,7 @@ async function reload(manual=false){
   setBusy(true);
   try{
     const saved=await loadFromVault();Kiro.validateState(saved);
+    if(!loaded||manual)await carregarHoje();
     const changed=state.revision!==saved.revision||!loaded;
     state=saved;loaded=true;failed=false;eventosDoCofre(null);
     // Recarregar de propósito descarta a edição: a nota aberta volta ao que está no cofre.
@@ -1097,15 +1143,15 @@ async function reload(manual=false){
   finally{setBusy(false);fecharAbertura();}
 }
 const itemQueAbre=n=>`<div class="routine-item"><span class="brand-mark">${icone('nota')}</span><a class="routine-title" data-action="edit-note" data-id="${n.id}">${escapeHtml(n.title||'Sem título')}</a></div>`;
-function cardCaixaDeEntrada(){
+function cardCaixaDeEntrada({limite=0}={}){
   const notas=state.notes.filter(Kiro.inInbox).sort((a,b)=>(b.createdAt??b.updatedAt)-(a.createdAt??a.updatedAt));
-  return `<section class="card caixa-entrada"><div class="card-head"><h2>Caixa de entrada</h2><span class="small-muted">${notas.length}</span></div>${notas.map(n=>`<div class="routine-item"><span class="brand-mark">${icone('nota')}</span><a class="routine-title" data-action="edit-note" data-id="${n.id}">${escapeHtml(n.title||'Sem título')}</a><span class="caixa-acoes">${extraButton('inbox-mover',icone('pastas'),n.id,'icon-button','Mover para pasta')}${extraButton('inbox-arquivar',icone('arquivar'),n.id,'icon-button','Arquivar (tirar da caixa)')}</span></div>`).join('')||'<div class="empty">Nada pendente. Tudo organizado.</div>'}</section>`;
+  return `<section class="card caixa-entrada"><div class="card-head"><h2>Caixa de entrada</h2><span class="small-muted">${notas.length}</span></div>${cortar(notas,limite).map(n=>`<div class="routine-item"><span class="brand-mark">${icone('nota')}</span><a class="routine-title" data-action="edit-note" data-id="${n.id}">${escapeHtml(n.title||'Sem título')}</a><span class="caixa-acoes">${extraButton('inbox-mover',icone('pastas'),n.id,'icon-button','Mover para pasta')}${extraButton('inbox-arquivar',icone('arquivar'),n.id,'icon-button','Arquivar (tirar da caixa)')}</span></div>`).join('')||'<div class="empty">Nada pendente. Tudo organizado.</div>'}</section>`;
 }
-function cardParaRevisar(){
+function cardParaRevisar({limite=0}={}){
   const {loose,forgotten}=Kiro.toReview(state.notes);
   if(!loose.length&&!forgotten.length)return '';
   const lista=(titulo,notas)=>notas.length?`<h3 class="revisar-titulo">${titulo}</h3>${notas.map(itemQueAbre).join('')}`:'';
-  return `<section class="card para-revisar"><div class="card-head"><h2>Para revisar</h2></div>${lista('Soltas',loose)}${lista('Esquecidas',forgotten)}</section>`;
+  return `<section class="card para-revisar"><div class="card-head"><h2>Para revisar</h2></div>${lista('Soltas',cortar(loose,limite))}${lista('Esquecidas',cortar(forgotten,limite))}</section>`;
 }
 // Tirar da caixa de entrada (e, se vier uma pasta, mover para ela) numa gravação só.
 async function tirarDaCaixa(id,folderId){
@@ -2693,6 +2739,41 @@ const pluginsAtivos = new Map();          // id → { manifesto, permissoes, wor
 const problemasDosPlugins = new Map();    // id → motivo pelo qual parou de funcionar nesta sessão
 let planoDosPlugins = { carregar: [], pendentes: [], problemas: [] };
 let VERSAO = '0.0.0';                     // versão do Kiro, comparada com o minKiro do manifesto
+// ---- Layout da Hoje (.kiro/hoje.json). As regras ficam em hoje.js; aqui só ler, gravar e desenhar. ----
+const hojeApi = {
+  ler: () => window.cadernoDesktop ? window.cadernoDesktop.homeLayout() : api('home-layout'),
+  gravar: l => window.cadernoDesktop ? window.cadernoDesktop.saveHomeLayout(l) : api('home-layout', l),
+};
+let hojeLayout = null;          // null até a primeira leitura
+let hojeGravavel = false;       // leitura falhou: usa o padrão sem sobrescrever o arquivo da pessoa
+let hojeTimer = null;
+let personalizandoHoje = false;
+async function carregarHoje() {
+  try { hojeLayout = KiroHoje.limpar(await hojeApi.ler()); hojeGravavel = true; }
+  catch (erro) { hojeLayout = null; hojeGravavel = false; status(`Não foi possível ler o layout da Hoje: ${erro.message}`, true); }
+}
+function gravarHojeDepois() {
+  if (!hojeGravavel) return;
+  clearTimeout(hojeTimer);
+  const alvo = hojeLayout;
+  hojeTimer = setTimeout(() => hojeApi.gravar(alvo).catch(erro => status(`Não foi possível gravar o layout da Hoje: ${erro.message}`, true)), 400);
+}
+// Toda mudança de layout passa por aqui, venha da Hoje ou das Configurações.
+function mudarHoje(fn) {
+  const antes = layoutDaHoje();
+  const depois = fn(antes);
+  if (depois === antes) return;
+  hojeLayout = depois;
+  gravarHojeDepois();
+  if (currentView === 'today') render();
+  const aba = $('#cfg-hoje');
+  if (aba) aba.innerHTML = conteudoDaAbaHoje();
+}
+// Versões mínimas: a Task 5 (arraste/opções) e a Task 6 (aba Configurações) substituem.
+function cartaoEmEdicao(c, l, html) { return html; }
+function rodapeDaPersonalizacao() { return ''; }
+function conteudoDaAbaHoje() { return ''; }
+
 const pluginApi = {
   versao: () => window.cadernoDesktop ? window.cadernoDesktop.version() : api('version').then(r => r.version),
   lista: () => window.cadernoDesktop ? window.cadernoDesktop.plugins() : api('plugins'),
@@ -2778,7 +2859,10 @@ async function atenderPlugin(id, data) {
   if (data.tipo === 'pronto') {
     clearTimeout(estado.prazo);
     estado.comandos = (data.registros?.command || []).map(r => ({ id: String(r.id), label: String(r.label || r.id) }));
-    estado.paineis = (data.registros?.panel || []).map(r => ({ id: String(r.id), label: String(r.label || r.id) }));
+    estado.paineis = (data.registros?.panel || []).map(r => {
+      const v = KiroPlugins.validarOpcoesDoPainel(r.options, r.width);
+      return { id: String(r.id), label: String(r.label || r.id), opcoes: v.ok ? v.opcoes : [], largura: v.ok ? v.largura : 'normal', erro: v.ok ? '' : `Opções do painel inválidas: ${v.erro}` };
+    });
     estado.eventos = (data.registros?.event || []).map(String);
     estado.desenhaBlocos = (data.registros?.block || []).includes('render');
     agendarBlocosDosPlugins();
@@ -2964,21 +3048,21 @@ const chaveDaMolduraDoPainel = (id, painel) => `${id}\npainel:${painel}`;
 const seletorDoPainel = (id, painel) => `.plugin-painel[data-plugin="${CSS.escape(id)}"][data-painel="${CSS.escape(painel)}"]`;
 
 // Um card por painel registrado; o cabeçalho traz o rótulo do painel e o nome do plug-in.
-function cardsDosPlugins() {
-  const cartoes = [];
-  for (const [id, estado] of pluginsAtivos) {
-    const nome = escapeHtml(estado.manifesto?.name || id);
-    // Comandos não ficam aqui: rodam em Configurações → Plug-ins.
-    for (const painel of estado.paineis) cartoes.push(`<section class="card plugin-painel" data-plugin="${escapeHtml(id)}" data-painel="${escapeHtml(painel.id)}"><div class="card-head"><h2>${escapeHtml(painel.label)}</h2><span class="plugin-fonte">${nome}</span></div><div class="plugin-conteudo">${conteudoDosPaineis.get(chaveDoPainel(id, painel.id)) || '<div class="empty">Carregando…</div>'}</div></section>`);
-  }
-  return cartoes.join('');
+function cartaoDoPainel(id, painel) {
+  const nome = escapeHtml(pluginsAtivos.get(id)?.manifesto?.name || id);
+  return `<section class="card plugin-painel" data-plugin="${escapeHtml(id)}" data-painel="${escapeHtml(painel.id)}"><div class="card-head"><h2>${escapeHtml(painel.label)}</h2><span class="plugin-fonte">${nome}</span></div><div class="plugin-conteudo">${conteudoDosPaineis.get(chaveDoPainel(id, painel.id)) || '<div class="empty">Carregando…</div>'}</div></section>`;
 }
+const painelDoPlugin = (id, painelId) => pluginsAtivos.get(id)?.paineis?.find(p => p.id === painelId);
+const opcoesDoPainel = (id, painel) => KiroHoje.opcoesEfetivas(hojeLayout || { cartoes: [] }, `plugin:${id}:${painel.id}`, painel.opcoes);
 
 // Pede a cada painel visível o desenho atual. Erro do plug-in fica no card dele.
 function desenharPaineisDosPlugins() {
   for (const card of document.querySelectorAll('.plugin-painel[data-painel]:not([data-painel=""])')) {
     const { plugin, painel } = card.dataset;
-    chamarPlugin(plugin, { tipo: 'panel', id: painel }, { action: '', values: {} })
+    const registro = painelDoPlugin(plugin, painel);
+    if (!registro) continue;
+    if (registro.erro) { guardarPainel(plugin, painel, { type: 'text', text: registro.erro }); continue; }
+    chamarPlugin(plugin, { tipo: 'panel', id: painel }, { action: '', values: {}, options: opcoesDoPainel(plugin, registro) })
       .then(dados => guardarPainel(plugin, painel, dados))
       .catch(erro => guardarPainel(plugin, painel, { type: 'text', text: erro.message }));
   }
@@ -3010,7 +3094,9 @@ function acaoDoPainel(id, painel, acao, values) {
     const nota = getNote(acao.slice(5));
     return nota ? abrirNota(nota) : status('A nota indicada pelo plug-in não existe mais.', true);
   }
-  chamarPlugin(id, { tipo: 'panel', id: painel }, { action: acao, values: values || {} })
+  const registro = painelDoPlugin(id, painel);
+  if (!registro || registro.erro) return;
+  chamarPlugin(id, { tipo: 'panel', id: painel }, { action: acao, values: values || {}, options: opcoesDoPainel(id, registro) })
     .then(dados => { if (dados) guardarPainel(id, painel, dados); })
     .catch(erro => status(`Plug-in ${pluginsAtivos.get(id)?.manifesto?.name || id}: ${erro.message}`, true));
 }
@@ -3842,7 +3928,7 @@ async function escolherOutroCofre(){
   if(busy||!window.cadernoDesktop)return;closeModal(true);
   if(failed){status('Exporte suas alterações e recarregue antes de trocar de cofre.',true);return;}
   setBusy(true);
-  try{const saved=await window.cadernoDesktop.chooseVault();if(saved){Kiro.validateState(saved);state=saved;loaded=true;failed=false;expanded=null;editing=null;render();}}
+  try{const saved=await window.cadernoDesktop.chooseVault();if(saved){Kiro.validateState(saved);state=saved;loaded=true;failed=false;expanded=null;editing=null;await carregarHoje();personalizandoHoje=false;render();}}
   catch(error){status(error.message,true);}finally{setBusy(false);}
 }
 function exportarDados(){
