@@ -129,6 +129,65 @@ test('histórico: desfazer e refazer; mudança nova limpa o refazer; limite de 1
   assert.equal(h.antes.length, 100);
 });
 
+test('paraCanvas desfaz translação e zoom', () => {
+  assert.deepEqual(F.paraCanvas({ x: 100, y: 50, zoom: 2 }, 300, 250), { x: 100, y: 100 });
+});
+
+test('zoomEm mantém o ponto sob o cursor e respeita os limites', () => {
+  const v = { x: 10, y: 20, zoom: 1 };
+  const z = F.zoomEm(v, 2, 110, 120);
+  assert.deepEqual(F.paraCanvas(z, 110, 120), F.paraCanvas(v, 110, 120));
+  assert.equal(z.zoom, 2);
+  assert.equal(F.zoomEm(v, 100, 0, 0).zoom, F.ZOOM.max);
+  assert.equal(F.zoomEm(v, 0.0001, 0, 0).zoom, F.ZOOM.min);
+});
+
+test('vistaValida recusa lixo do localStorage', () => {
+  assert.equal(F.vistaValida({ x: 0, y: 0, zoom: 1 }), true);
+  for (const v of [null, 'x', { x: 0, y: 0 }, { x: 0, y: 0, zoom: 9 }, { x: NaN, y: 0, zoom: 1 }]) assert.equal(F.vistaValida(v), false);
+});
+
+test('enquadrar centraliza tudo, sem ampliar além de 100%', () => {
+  const nodes = [cartao('a', { x: 0, y: 0, width: 100, height: 100 }), cartao('b', { x: 300, y: 100, width: 100, height: 100 })];
+  const v = F.enquadrar(nodes, 1000, 800);
+  assert.equal(v.zoom, 1);
+  const centro = F.paraCanvas(v, 500, 400);
+  assert.deepEqual(centro, { x: 200, y: 100 });
+  assert.ok(F.enquadrar(nodes, 200, 200).zoom < 1);
+  assert.deepEqual(F.enquadrar([], 1000, 800), { x: 500, y: 400, zoom: 1 });
+});
+
+test('pontoDoLado, ladoMaisProximo e ladosDaSeta', () => {
+  const n = cartao('a', { x: 0, y: 0, width: 200, height: 100 });
+  assert.deepEqual(F.pontoDoLado(n, 'right'), { x: 200, y: 50 });
+  assert.deepEqual(F.pontoDoLado(n, 'top'), { x: 100, y: 0 });
+  assert.equal(F.ladoMaisProximo(n, { x: 500, y: 60 }), 'right');
+  assert.equal(F.ladoMaisProximo(n, { x: 90, y: 400 }), 'bottom');
+  const b = cartao('b', { x: 400, y: 0, width: 200, height: 100 });
+  assert.deepEqual(F.ladosDaSeta(n, b), ['right', 'left']);
+  assert.deepEqual(F.ladosDaSeta(b, n), ['left', 'right']);
+  assert.deepEqual(F.ladosDaSeta(n, { ...b, x: 0, y: 400 }), ['bottom', 'top']);
+});
+
+test('caminhoDaSeta sai e chega pelos lados, com o meio entre as pontas', () => {
+  const { d, meio } = F.caminhoDaSeta({ x: 0, y: 0 }, 'right', { x: 300, y: 0 }, 'left');
+  assert.match(d, /^M0 0 C100 0 200 0 300 0$/);
+  assert.deepEqual(meio, { x: 150, y: 0 });
+});
+
+test('geometriaDaSeta usa os lados gravados ou calcula; seta órfã dá null', () => {
+  const nodes = [cartao('a', { x: 0, y: 0, width: 100, height: 100 }), cartao('b', { x: 400, y: 0, width: 100, height: 100 })];
+  assert.match(F.geometriaDaSeta(nodes, { id: 's', fromNode: 'a', toNode: 'b' }).d, /^M100 50 /);
+  assert.match(F.geometriaDaSeta(nodes, { id: 's', fromNode: 'a', toNode: 'b', fromSide: 'top' }).d, /^M50 0 /);
+  assert.equal(F.geometriaDaSeta(nodes, { id: 's', fromNode: 'a', toNode: 'x' }), null);
+});
+
+test('dentro acha cartões que tocam o retângulo, em qualquer sentido de arraste', () => {
+  const nodes = [cartao('a', { x: 0, y: 0 }), cartao('b', { x: 500, y: 500 })];
+  assert.deepEqual(F.dentro(nodes, { x: 250, y: 100, width: -300, height: -200 }), ['a']);
+  assert.deepEqual(F.dentro(nodes, { x: -10, y: -10, width: 1000, height: 1000 }), ['a', 'b']);
+});
+
 const domain = require('../domain.js');
 const estado = (fluxos, extra = {}) => ({ notes: [{ id: 'n1', title: 'Nota', body: '', links: [], updatedAt: 1 }], tasks: [], folders: [{ id: 'p1', title: 'Pasta', parentId: '' }], fluxos, ...extra });
 

@@ -122,7 +122,62 @@
     return { historico: { antes: [...h.antes, atual], depois: h.depois.slice(0, -1) }, canvas: h.depois.at(-1) };
   }
 
-  const api = { TIPOS, LADOS, CORES, GRADE, corValida, ler, serializar, adicionarCartao, moverCartoes, redimensionar, editarCartao, removerCartoes, duplicarCartoes, ligar, editarSeta, removerSetas, encaixar, historicoVazio, empilhar, desfazer, refazer };
+  // ---- Geometria da tela ----
+  // Vista: translação (x, y) em pixels da tela e zoom. Ponto do canvas = (tela - x) / zoom.
+  const ZOOM = { min: 0.1, max: 4 };
+  const OPOSTO = { top: 'bottom', bottom: 'top', left: 'right', right: 'left' };
+  const limitarZoom = z => Math.min(ZOOM.max, Math.max(ZOOM.min, z));
+  const vistaValida = v => obj(v) && num(v.x) && num(v.y) && num(v.zoom) && v.zoom >= ZOOM.min && v.zoom <= ZOOM.max;
+  const paraCanvas = (v, px, py) => ({ x: (px - v.x) / v.zoom, y: (py - v.y) / v.zoom });
+  function zoomEm(v, fator, px, py) {
+    const zoom = limitarZoom(v.zoom * fator), k = zoom / v.zoom;
+    return { x: px - (px - v.x) * k, y: py - (py - v.y) * k, zoom };
+  }
+  function enquadrar(nodes, largura, altura, margem = 40) {
+    if (!nodes.length) return { x: largura / 2, y: altura / 2, zoom: 1 };
+    const x0 = Math.min(...nodes.map(n => n.x)), y0 = Math.min(...nodes.map(n => n.y));
+    const x1 = Math.max(...nodes.map(n => n.x + n.width)), y1 = Math.max(...nodes.map(n => n.y + n.height));
+    const zoom = limitarZoom(Math.min(1, (largura - 2 * margem) / (x1 - x0), (altura - 2 * margem) / (y1 - y0)));
+    return { x: largura / 2 - ((x0 + x1) / 2) * zoom, y: altura / 2 - ((y0 + y1) / 2) * zoom, zoom };
+  }
+  function pontoDoLado(n, lado) {
+    const cx = n.x + n.width / 2, cy = n.y + n.height / 2;
+    return { top: { x: cx, y: n.y }, bottom: { x: cx, y: n.y + n.height }, left: { x: n.x, y: cy }, right: { x: n.x + n.width, y: cy } }[lado];
+  }
+  function ladoMaisProximo(n, p) {
+    let melhor = 'right', menor = Infinity;
+    for (const lado of LADOS) { const q = pontoDoLado(n, lado), d = Math.hypot(q.x - p.x, q.y - p.y); if (d < menor) { menor = d; melhor = lado; } }
+    return melhor;
+  }
+  function ladosDaSeta(a, b) {
+    const dx = (b.x + b.width / 2) - (a.x + a.width / 2), dy = (b.y + b.height / 2) - (a.y + a.height / 2);
+    if (Math.abs(dx) >= Math.abs(dy)) return dx >= 0 ? ['right', 'left'] : ['left', 'right'];
+    return dy >= 0 ? ['bottom', 'top'] : ['top', 'bottom'];
+  }
+  const NORMAL = { top: [0, -1], bottom: [0, 1], left: [-1, 0], right: [1, 0] };
+  // Curva cúbica que sai perpendicular ao lado de origem e chega perpendicular ao de destino.
+  function caminhoDaSeta(p1, l1, p2, l2) {
+    const f = Math.max(30, Math.hypot(p2.x - p1.x, p2.y - p1.y) / 3);
+    const c1 = { x: p1.x + NORMAL[l1][0] * f, y: p1.y + NORMAL[l1][1] * f };
+    const c2 = { x: p2.x + NORMAL[l2][0] * f, y: p2.y + NORMAL[l2][1] * f };
+    const r = v => Math.round(v * 10) / 10 + 0;   // + 0 troca -0 por 0 no texto
+    const meio = { x: r((p1.x + 3 * c1.x + 3 * c2.x + p2.x) / 8), y: r((p1.y + 3 * c1.y + 3 * c2.y + p2.y) / 8) };
+    return { d: `M${r(p1.x)} ${r(p1.y)} C${r(c1.x)} ${r(c1.y)} ${r(c2.x)} ${r(c2.y)} ${r(p2.x)} ${r(p2.y)}`, meio };
+  }
+  function geometriaDaSeta(nodes, e) {
+    const a = nodes.find(n => n.id === e.fromNode), b = nodes.find(n => n.id === e.toNode);
+    if (!a || !b) return null;
+    const [la, lb] = ladosDaSeta(a, b);
+    const l1 = e.fromSide || la, l2 = e.toSide || lb;
+    return caminhoDaSeta(pontoDoLado(a, l1), l1, pontoDoLado(b, l2), l2);
+  }
+  function dentro(nodes, r) {
+    const x0 = Math.min(r.x, r.x + r.width), x1 = Math.max(r.x, r.x + r.width);
+    const y0 = Math.min(r.y, r.y + r.height), y1 = Math.max(r.y, r.y + r.height);
+    return nodes.filter(n => n.x < x1 && n.x + n.width > x0 && n.y < y1 && n.y + n.height > y0).map(n => n.id);
+  }
+
+  const api = { TIPOS, LADOS, CORES, GRADE, ZOOM, OPOSTO, corValida, ler, serializar, adicionarCartao, moverCartoes, redimensionar, editarCartao, removerCartoes, duplicarCartoes, ligar, editarSeta, removerSetas, encaixar, historicoVazio, empilhar, desfazer, refazer, vistaValida, paraCanvas, zoomEm, enquadrar, pontoDoLado, ladoMaisProximo, ladosDaSeta, caminhoDaSeta, geometriaDaSeta, dentro };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.KiroFluxo = api;
 })(globalThis);
