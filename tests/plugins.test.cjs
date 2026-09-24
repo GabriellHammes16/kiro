@@ -515,3 +515,22 @@ test('validarOpcoesDoPainel recusa declarações erradas', () => {
   recusa([null]);
 });
 
+test('exemplo word-count: o painel declara a opção limit e a respeita', async () => {
+  const { pathToFileURL } = require('node:url');
+  const arquivo = require('node:path').join(__dirname, '..', 'examples', 'plugins', 'word-count', 'index.js');
+  const plugin = (await import(pathToFileURL(arquivo))).default;
+  const paineis = [];
+  const notas = Array.from({ length: 8 }, (_, i) => ({ id: `n${i}`, title: `Nota ${i}`, body: 'palavra '.repeat(i + 1) }));
+  await plugin.activate({
+    command() {}, block() {}, notify() {},
+    notes: { list: async () => notas, current: async () => null },
+    panel: (id, label, render, extra) => paineis.push({ id, render, extra }),
+  });
+  const painel = paineis.find(p => p.id === 'longest');
+  const v = P.validarOpcoesDoPainel(painel.extra?.options, painel.extra?.width);
+  assert.equal(v.ok, true, v.erro);
+  assert.deepEqual(v.opcoes.map(o => o.key), ['limit']);
+  assert.equal((await painel.render({ action: '', values: {}, options: { limit: 3 } })).items.length, 3);
+  assert.equal((await painel.render({ action: '', values: {}, options: { limit: 5 } })).items[0].title, 'Nota 7');
+});
+

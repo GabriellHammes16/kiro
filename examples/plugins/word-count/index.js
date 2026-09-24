@@ -17,13 +17,15 @@ export default {
     });
 
     // A panel returns data, never HTML: Kiro draws it with the current theme.
-    // render() runs again every time the panel is refreshed or an action fires.
-    kiro.panel('longest', 'Longest notes', async () => {
+    // render() runs again every time the panel is refreshed, an action fires or
+    // the user changes one of the panel's options. Options are declared below and
+    // Kiro draws their form; render gets the current values in `options`.
+    kiro.panel('longest', 'Longest notes', async ({ options } = {}) => {
       const notes = await kiro.notes.list({ limit: 50 });
       const ranked = notes
         .map(note => ({ note, count: words(note.body) }))
         .sort((a, b) => b.count - a.count)
-        .slice(0, 5);
+        .slice(0, options?.limit ?? 5);
       return {
         type: 'list',
         items: ranked.map(({ note, count }) => ({
@@ -33,6 +35,8 @@ export default {
           action: `open:${note.id}`,
         })),
       };
+    }, {
+      options: [{ key: 'limit', type: 'number', label: 'How many notes', default: 5, min: 1, max: 20 }],
     });
 
     // A block draws a ```kiro:word-count fenced block inside a note. It gets the

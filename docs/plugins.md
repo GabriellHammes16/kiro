@@ -132,18 +132,16 @@ function that may be async. The return value is ignored; use `kiro.notify` to sa
 something. After the handler finishes, Kiro redraws your panels, since the
 command may have changed what they show.
 
-### kiro.panel(id, label, render)
+### kiro.panel(id, label, render, { options, width })
 
 Adds a card to the Today screen. `render` returns a panel description (see
-below) — data, never HTML. It runs on load, on refresh, and again after every
-action the user triggers inside the panel, receiving `{ action, values }`:
+below) — data, never HTML. It runs on load, on refresh, after every action the
+user triggers inside the panel, and after the user changes one of the panel's
+options, receiving `{ action, values, options }`.
 
-```js
-kiro.panel('longest', 'Longest notes', async (event) => {
-  if (event && event.action) { /* a click or a form submit */ }
-  return { type: 'text', text: 'hello' };
-});
-```
+The user decides where the card goes: they can hide it, move it between
+columns and make it full width, from Today → Customize or Settings → Today.
+`width: 'full'` is only the starting suggestion. See [Panel options](#panel-options).
 
 ### kiro.notify(text, { error })
 
@@ -403,6 +401,41 @@ asks for them again.
 
 Turning a plugin off does not erase its keys; the user removes them with
 *Remover*.
+
+## Panel options
+
+Declare the settings your panel needs and Kiro draws the form for them — in the
+card's options popover on Today and in Settings → Today. You never build a
+settings screen. `render` receives the current values in `options`, always
+complete (defaults filled in).
+
+```js
+kiro.panel('longest', 'Longest notes', async ({ options }) => {
+  /* use options.limit, options.folder, … */
+}, {
+  options: [
+    { key: 'limit', type: 'number', label: 'How many', default: 5, min: 1, max: 20 },
+    { key: 'folder', type: 'select', label: 'Folder', default: 'all', choices: ['all', 'work'] },
+    { key: 'showDates', type: 'boolean', label: 'Show dates', default: true },
+    { key: 'heading', type: 'text', label: 'Heading', default: '' },
+  ],
+  width: 'full',   // optional: 'normal' (default) or 'full'
+});
+```
+
+| Field | Rule |
+|---|---|
+| `key` | `a-z` first, then letters and digits, up to 32 characters, unique |
+| `type` | `boolean`, `number`, `select` or `text` |
+| `label` | 1–40 characters |
+| `default` | Required, of the option's type; `number` between `min` and `max` (both optional); `select` one of `choices`; `text` up to 80 characters |
+| `choices` | `select` only: 1–20 strings of up to 40 characters |
+
+Up to 12 options per panel. If the declaration is invalid, the card shows the
+error instead of your panel and has no options; the rest of the plugin keeps
+working. Values are stored in the vault (`.kiro/hoje.json`); a stored value that
+no longer fits your declaration (you changed it in a new version) falls back to
+the default.
 
 ## Panels
 
