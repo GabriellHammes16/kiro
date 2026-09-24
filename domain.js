@@ -38,6 +38,18 @@
       folderPaths(value.folders);
       for (const n of value.notes) if (n.folderId && !value.folders.some(f => f.id === n.folderId)) fail();
     }
+    if (value.fluxos !== undefined) {
+      if (!Array.isArray(value.fluxos)) fail();
+      // Abas guardam ids de nota e de fluxo misturados: um id não pode servir aos dois.
+      const usados = new Set(value.notes.map(n => n.id));
+      for (const f of value.fluxos) {
+        if (!f || !id(f.id) || usados.has(f.id) || !text(f.title) || !f.title) fail();
+        usados.add(f.id);
+        if (f.erro !== undefined ? !text(f.erro) : !(f.canvas && typeof f.canvas === 'object' && Array.isArray(f.canvas.nodes) && Array.isArray(f.canvas.edges))) fail();
+        if (f.file !== undefined && (!text(f.file) || /(^[\\/]|:|(^|[\\/])\.\.([\\/]|$))/.test(f.file) || !/\.canvas$/i.test(f.file))) fail();
+        if (f.folderId && (!id(f.folderId) || (value.folders && !value.folders.some(x => x.id === f.folderId)))) fail();
+      }
+    }
     return value;
   }
   function validFolderName(name) {
