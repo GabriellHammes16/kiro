@@ -1,0 +1,154 @@
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const F = require('../fluxo.js');
+
+const cartao = (id, extra = {}) => ({ id, type: 'text', text: id, x: 0, y: 0, width: 200, height: 60, ...extra });
+const canvas = (nodes = [], edges = []) => ({ nodes, edges });
+
+test('ler aceita JSON Canvas válido e preserva campos desconhecidos', () => {
+  const bruto = { nodes: [cartao('a', { extra: 1 })], edges: [], 'x-obsidian': { v: 2 } };
+  const { canvas: c, avisos } = F.ler(JSON.stringify(bruto));
+  assert.deepEqual(c, bruto);
+  assert.deepEqual(avisos, []);
+});
+
+test('ler trata arquivo vazio e {} como canvas vazio', () => {
+  assert.deepEqual(F.ler('').canvas, { nodes: [], edges: [] });
+  assert.deepEqual(F.ler('{}').canvas, { nodes: [], edges: [] });
+  assert.deepEqual(F.ler('﻿{}').canvas, { nodes: [], edges: [] });
+});
+
+test('ler recusa JSON quebrado, formato errado, tipo desconhecido e id repetido', () => {
+  assert.match(F.ler('{nope').erro, /JSON inválido/);
+  assert.match(F.ler('[]').erro, /JSON Canvas/);
+  assert.match(F.ler('{"nodes":{}}').erro, /listas/);
+  assert.match(F.ler(JSON.stringify(canvas([cartao('a', { type: 'video' })]))).erro, /tipo desconhecido/);
+  assert.match(F.ler(JSON.stringify(canvas([cartao('a'), cartao('a')]))).erro, /repetido/);
+  assert.match(F.ler(JSON.stringify(canvas([cartao('a', { width: -1 })]))).erro, /tamanho/);
+  assert.match(F.ler(JSON.stringify(canvas([{ ...cartao('a'), text: undefined }]))).erro, /texto/);
+});
+
+test('ler recusa cor que não é "1"–"6" nem #rrggbb (nada de CSS injetado)', () => {
+  assert.match(F.ler(JSON.stringify(canvas([cartao('a', { color: 'red;background:url(x)' })]))).erro, /cor/);
+  assert.equal(F.ler(JSON.stringify(canvas([cartao('a', { color: '#A1b2C3' })]))).erro, undefined);
+  assert.equal(F.ler(JSON.stringify(canvas([cartao('a', { color: '4' })]))).erro, undefined);
+});
+
+test('ler ignora, com aviso, seta para cartão inexistente', () => {
+  const r = F.ler(JSON.stringify(canvas([cartao('a')], [{ id: 's', fromNode: 'a', toNode: 'zzz' }])));
+  assert.deepEqual(r.canvas.edges, []);
+  assert.equal(r.avisos.length, 1);
+});
+
+test('ler recusa seta com lado ou ponta inválidos', () => {
+  const dois = [cartao('a'), cartao('b')];
+  assert.match(F.ler(JSON.stringify(canvas(dois, [{ id: 's', fromNode: 'a', toNode: 'b', fromSide: 'meio' }]))).erro, /lado/);
+  assert.match(F.ler(JSON.stringify(canvas(dois, [{ id: 's', fromNode: 'a', toNode: 'b', toEnd: 'seta' }]))).erro, /ponta/);
+});
+
+test('serializar usa tabulação e volta igual pelo ler', () => {
+  const c = canvas([cartao('a')], []);
+  const texto = F.serializar(c);
+  assert.match(texto, /\n\t"nodes"/);
+  assert.deepEqual(F.ler(texto).canvas, c);
+});
+
+test('adicionarCartao cria id novo de 16 hex; não muta o original', () => {
+  const c = canvas([cartao('a')]);
+  const { canvas: c2, id } = F.adicionarCartao(c, { type: 'text', text: '', x: 0, y: 0, width: 260, height: 60 });
+  assert.match(id, /^[0-9a-f]{16}$/);
+  assert.equal(c.nodes.length, 1);
+  assert.equal(c2.nodes.at(-1).id, id);
+});
+
+test('mover, redimensionar (com mínimo) e editar cartão', () => {
+  let c = canvas([cartao('a'), cartao('b')]);
+  c = F.moverCartoes(c, ['a'], 20, -40);
+  assert.deepEqual([c.nodes[0].x, c.nodes[0].y, c.nodes[1].x], [20, -40, 0]);
+  c = F.redimensionar(c, 'a', 10, 10);
+  assert.deepEqual([c.nodes[0].width, c.nodes[0].height], [80, 40]);
+  c = F.editarCartao(c, 'a', { color: '2', text: 'novo' });
+  assert.equal(c.nodes[0].color, '2');
+  c = F.editarCartao(c, 'a', { color: undefined });
+  assert.equal('color' in c.nodes[0], false);
+});
+
+test('removerCartoes leva junto as setas ligadas', () => {
+  let c = canvas([cartao('a'), cartao('b'), cartao('c')], [{ id: 's1', fromNode: 'a', toNode: 'b' }, { id: 's2', fromNode: 'b', toNode: 'c' }]);
+  c = F.removerCartoes(c, ['a']);
+  assert.deepEqual(c.nodes.map(n => n.id), ['b', 'c']);
+  assert.deepEqual(c.edges.map(e => e.id), ['s2']);
+});
+
+test('duplicarCartoes copia cartões e as setas entre eles, com ids novos', () => {
+  const c = canvas([cartao('a'), cartao('b'), cartao('c')], [{ id: 's1', fromNode: 'a', toNode: 'b' }, { id: 's2', fromNode: 'b', toNode: 'c' }]);
+  const r = F.duplicarCartoes(c, ['a', 'b']);
+  assert.equal(r.canvas.nodes.length, 5);
+  assert.equal(r.canvas.edges.length, 3);
+  const nova = r.canvas.edges.at(-1);
+  assert.deepEqual([nova.fromNode, nova.toNode], r.ids);
+  assert.equal(r.canvas.nodes.at(-1).x, 40);
+});
+
+test('ligar recusa ligar um cartão a ele mesmo ou a cartão inexistente', () => {
+  const c = canvas([cartao('a'), cartao('b')]);
+  assert.equal(F.ligar(c, { fromNode: 'a', toNode: 'a' }).id, null);
+  assert.equal(F.ligar(c, { fromNode: 'a', toNode: 'x' }).id, null);
+  const r = F.ligar(c, { fromNode: 'a', toNode: 'b', fromSide: 'right', toSide: 'left' });
+  assert.match(r.id, /^[0-9a-f]{16}$/);
+  assert.deepEqual(r.canvas.edges[0], { fromNode: 'a', toNode: 'b', fromSide: 'right', toSide: 'left', id: r.id });
+});
+
+test('editarSeta e removerSetas', () => {
+  let c = canvas([cartao('a'), cartao('b')], [{ id: 's', fromNode: 'a', toNode: 'b' }]);
+  c = F.editarSeta(c, 's', { label: 'causa', toEnd: 'none' });
+  assert.equal(c.edges[0].label, 'causa');
+  c = F.editarSeta(c, 's', { label: undefined });
+  assert.equal('label' in c.edges[0], false);
+  assert.deepEqual(F.removerSetas(c, ['s']).edges, []);
+});
+
+test('encaixar arredonda para a grade de 20', () => {
+  assert.equal(F.encaixar(29), 20);
+  assert.equal(F.encaixar(31), 40);
+  assert.equal(F.encaixar(-31), -40);
+});
+
+test('histórico: desfazer e refazer; mudança nova limpa o refazer; limite de 100', () => {
+  const c0 = canvas(), c1 = canvas([cartao('a')]), c2 = canvas([cartao('a'), cartao('b')]);
+  let h = F.empilhar(F.empilhar(F.historicoVazio(), c0), c1);   // atual = c2
+  let r = F.desfazer(h, c2);
+  assert.equal(r.canvas, c1);
+  r = F.desfazer(r.historico, r.canvas);
+  assert.equal(r.canvas, c0);
+  assert.equal(F.desfazer(r.historico, r.canvas), null);
+  const volta = F.refazer(r.historico, r.canvas);
+  assert.equal(volta.canvas, c1);
+  assert.deepEqual(F.empilhar(volta.historico, c1).depois, []);
+  for (let i = 0; i < 150; i++) h = F.empilhar(h, c0);
+  assert.equal(h.antes.length, 100);
+});
+
+const domain = require('../domain.js');
+const estado = (fluxos, extra = {}) => ({ notes: [{ id: 'n1', title: 'Nota', body: '', links: [], updatedAt: 1 }], tasks: [], folders: [{ id: 'p1', title: 'Pasta', parentId: '' }], fluxos, ...extra });
+
+test('validateState aceita fluxos ausentes, com canvas ou com erro', () => {
+  assert.doesNotThrow(() => domain.validateState(estado(undefined)));
+  assert.doesNotThrow(() => domain.validateState(estado([{ id: 'f1', title: 'Mapa', folderId: 'p1', canvas: { nodes: [], edges: [] } }])));
+  assert.doesNotThrow(() => domain.validateState(estado([{ id: 'f1', title: 'Quebrado', erro: 'JSON inválido' }])));
+});
+
+test('validateState recusa fluxo malformado', () => {
+  const ruins = [
+    'x',
+    [{ id: 'n1', title: 'Mesmo id da nota', canvas: { nodes: [], edges: [] } }],
+    [{ id: 'f1', title: '', canvas: { nodes: [], edges: [] } }],
+    [{ id: 'f1', title: 'Sem canvas' }],
+    [{ id: 'f1', title: 'Canvas torto', canvas: { nodes: {} , edges: [] } }],
+    [{ id: 'f1', title: 'Pasta que não existe', folderId: 'p9', canvas: { nodes: [], edges: [] } }],
+    [{ id: 'f1', title: 'Arquivo fora', file: '../x.canvas', canvas: { nodes: [], edges: [] } }],
+    [{ id: 'f1', title: 'Extensão errada', file: 'x.md', canvas: { nodes: [], edges: [] } }],
+    [{ id: 'f1', title: 'A', canvas: { nodes: [], edges: [] } }, { id: 'f1', title: 'B', canvas: { nodes: [], edges: [] } }],
+  ];
+  for (const fluxos of ruins) assert.throws(() => domain.validateState(estado(fluxos)), /inválidos/, JSON.stringify(fluxos));
+});

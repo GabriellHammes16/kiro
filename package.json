@@ -47,6 +47,7 @@
       "agent/**",
       "vault.cjs",
       "domain.js",
+      "fluxo.js",
       "node_modules/**"
     ]
   },
