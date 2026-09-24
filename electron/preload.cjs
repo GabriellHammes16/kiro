@@ -17,6 +17,8 @@ contextBridge.exposeInMainWorld('cadernoDesktop', {
   plugins: () => ipcRenderer.invoke('plugins:list'),
   pluginChoices: () => ipcRenderer.invoke('plugins:choices:get'),
   savePluginChoices: escolhas => ipcRenderer.invoke('plugins:choices:set', escolhas),
+  homeLayout: () => ipcRenderer.invoke('home:get'),
+  saveHomeLayout: layout => ipcRenderer.invoke('home:set', layout),
   pluginData: id => ipcRenderer.invoke('plugins:data:get', id),
   savePluginData: (id, dados) => ipcRenderer.invoke('plugins:data:set', id, dados),
   pluginFetch: (id, pedido) => ipcRenderer.invoke('plugins:fetch', id, pedido),

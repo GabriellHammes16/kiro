@@ -245,3 +245,14 @@ test('datas lidas do sistema de arquivos viram inteiros', async t => {
   assert.ok(Number.isInteger(solta.createdAt),`createdAt: ${solta.createdAt}`);
   assert.ok(Number.isInteger(solta.updatedAt),`updatedAt: ${solta.updatedAt}`);
 });
+
+test('layout da Hoje: ida e volta em .kiro/hoje.json; sem arquivo ou quebrado, null', async t => {
+  const vault = await setup(t);
+  assert.equal(await vault.readHomeLayout(), null);
+  const layout = { colunas: 3, cartoes: [{ id: 'nativo:habitos', coluna: 2, largura: 'normal', opcoes: { mostrarSemana: false } }], ocultos: [] };
+  await vault.writeHomeLayout(layout);
+  assert.deepEqual(await vault.readHomeLayout(), layout);
+  assert.ok((await fs.readFile(path.join(vault.directory, '.kiro', 'hoje.json'), 'utf8')).endsWith('\n'));
+  await fs.writeFile(path.join(vault.directory, '.kiro', 'hoje.json'), '{quebrado');
+  assert.equal(await vault.readHomeLayout(), null);
+});

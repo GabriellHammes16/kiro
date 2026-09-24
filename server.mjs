@@ -126,6 +126,10 @@ createServer(async (request, response) => {
       if (request.method === 'GET') return send(response, 200, await vault.readPluginChoices());
       if (request.method === 'POST') return send(response, 200, await vault.writePluginChoices(await lerJson(request, 64 * 1024)));
     }
+    if (rota === '/api/home-layout') {
+      if (request.method === 'GET') return send(response, 200, await vault.readHomeLayout());
+      if (request.method === 'POST') return send(response, 200, await vault.writeHomeLayout(await lerJson(request, 256 * 1024)));
+    }
     if (rota.startsWith('/api/plugin-data/')) {
       const id = decodeURIComponent(rota.slice('/api/plugin-data/'.length));
       if (request.method === 'GET') return send(response, 200, await vault.readPluginData(id));

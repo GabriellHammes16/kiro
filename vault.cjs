@@ -352,6 +352,16 @@ class Vault {
     await atomicWrite(path.join(this.directory,'.kiro','plugins.json'),`${JSON.stringify(escolhas,null,2)}\n`);
     return escolhas;
   }
+  /** Layout da tela Hoje em .kiro/hoje.json. Quem valida é a página (hoje.js): aqui só se lê e grava. */
+  async readHomeLayout(){
+    const bruto=await optionalRead(path.join(this.directory,'.kiro','hoje.json'));
+    if(!bruto)return null;
+    try{return JSON.parse(bruto);}catch{return null;}
+  }
+  async writeHomeLayout(layout){
+    await atomicWrite(path.join(this.directory,'.kiro','hoje.json'),`${JSON.stringify(layout,null,2)}\n`);
+    return layout;
+  }
   /** Espaço do próprio plug-in (kiro.storage), com teto de 1 MB. */
   async readPluginData(id){
     const bruto=await optionalRead(await this.pluginPath(id,'data.json'));
