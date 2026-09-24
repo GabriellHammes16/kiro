@@ -4113,7 +4113,10 @@ async function escolherOutroCofre(){
   if(busy||!window.cadernoDesktop)return;closeModal(true);
   if(failed){status('Exporte suas alterações e recarregue antes de trocar de cofre.',true);return;}
   setBusy(true);
-  try{const saved=await window.cadernoDesktop.chooseVault();if(saved){Kiro.validateState(saved);state=saved;loaded=true;failed=false;expanded=null;editing=null;await carregarHoje();personalizandoHoje=false;render();}}
+  try{const saved=await window.cadernoDesktop.chooseVault();if(saved){Kiro.validateState(saved);state=saved;loaded=true;failed=false;expanded=null;editing=null;
+    // Plug-ins são do cofre: desliga os do anterior já (antes de ler o layout, para não entrarem no
+    // hoje.json do novo) e carrega os que este cofre permite.
+    carregarPlugins();await carregarHoje();personalizandoHoje=false;render();}}
   catch(error){status(error.message,true);}finally{setBusy(false);}
 }
 function exportarDados(){
