@@ -2785,10 +2785,13 @@ function camposDeOpcoes(id, declaracoes, valores) {
   }).join('');
 }
 // Popover nativo: abre por cima sem modal e fecha com Esc ou clique fora.
-function popoverDeOpcoes(c, l, prefixo, indice) {
+function popoverDeOpcoes(c, l, prefixo, indice, comTexto = false) {
   if (!c.opcoes.length) return '';
   const alvo = `hoje-op-${prefixo}-${indice}`;
-  return `<button type="button" class="icon-button" popovertarget="${alvo}" aria-label="Opções de ${escapeHtml(c.titulo)}" title="Opções">${icone('detalhes')}</button><div popover id="${alvo}" class="hoje-opcoes" data-hoje-id="${escapeHtml(c.id)}"><h3>${escapeHtml(c.titulo)}</h3>${camposDeOpcoes(c.id, c.opcoes, KiroHoje.opcoesEfetivas(l, c.id, c.opcoes))}</div>`;
+  const botao = comTexto
+    ? `<button type="button" class="secondary cfg-pequeno" popovertarget="${alvo}" aria-label="Opções de ${escapeHtml(c.titulo)}">${icone('detalhes')} Opções</button>`
+    : `<button type="button" class="icon-button" popovertarget="${alvo}" aria-label="Opções de ${escapeHtml(c.titulo)}" title="Opções">${icone('detalhes')}</button>`;
+  return `${botao}<div popover id="${alvo}" class="hoje-opcoes" data-hoje-id="${escapeHtml(c.id)}"><h3>${escapeHtml(c.titulo)}</h3>${camposDeOpcoes(c.id, c.opcoes, KiroHoje.opcoesEfetivas(l, c.id, c.opcoes))}</div>`;
 }
 // No modo Personalizar o corpo do cartão fica inerte: dá para arrumar sem marcar hábito sem querer.
 function cartaoEmEdicao(c, l, html) {
@@ -2837,10 +2840,17 @@ function acaoDaHoje(acao, id, valor, botao) {
     esconder: () => KiroHoje.esconder(l, id),
     mostrar: () => KiroHoje.mostrar(l, id),
     colunas: () => KiroHoje.definirColunas(l, Number(valor)),
+    // Configurações: coluna e largura são uma escolha só ("Posição").
+    posicao: () => {
+      if (valor === 'inteira') return KiroHoje.definirLargura(l, id, 'inteira');
+      const normal = KiroHoje.definirLargura(l, id, 'normal'), coluna = Number(valor);
+      return cartao.coluna === coluna ? normal : KiroHoje.mover(normal, id, { coluna });
+    },
   };
   if (!fns[acao] || (acao !== 'colunas' && !cartao)) return;
   mudarHoje(fns[acao]);
-  const seletor = acao === 'colunas' ? `[data-hoje-acao="colunas"][data-valor="${valor}"]` : `[data-hoje-id="${CSS.escape(id)}"] [data-hoje-acao="${acao}"]`;
+  const seletor = acao === 'colunas' ? `[data-hoje-acao="colunas"][data-valor="${valor}"]`
+    : `[data-hoje-id="${CSS.escape(id)}"] [data-hoje-acao="${acao}"]${acao === 'posicao' ? `[data-valor="${valor}"]` : ''}`;
   const raiz = botao?.closest('#cfg-hoje') || document;
   raiz.querySelector(seletor)?.focus();
 }
@@ -2863,13 +2873,11 @@ document.addEventListener('click', e => {
 });
 document.addEventListener('change', e => {
   const linha = e.target.closest?.('.hoje-cfg-linha');
-  if (linha && e.target.matches('[data-hoje-visivel], [data-hoje-coluna-cfg], [data-hoje-largura-cfg]')) {
+  if (linha && e.target.matches('[data-hoje-visivel]')) {
     e.stopPropagation();
-    const id = linha.dataset.hojeId, alvo = e.target;
-    if (alvo.matches('[data-hoje-visivel]')) mudarHoje(l => alvo.checked ? KiroHoje.mostrar(l, id) : KiroHoje.esconder(l, id));
-    else if (alvo.matches('[data-hoje-coluna-cfg]')) mudarHoje(l => KiroHoje.mover(l, id, { coluna: Number(alvo.value) }));
-    else mudarHoje(l => KiroHoje.definirLargura(l, id, alvo.value));
-    document.querySelector(`#cfg-hoje [data-hoje-id="${CSS.escape(id)}"] ${alvo.matches('[data-hoje-visivel]') ? '[data-hoje-visivel]' : alvo.matches('[data-hoje-coluna-cfg]') ? '[data-hoje-coluna-cfg]' : '[data-hoje-largura-cfg]'}`)?.focus();
+    const id = linha.dataset.hojeId, visivel = e.target.checked;
+    mudarHoje(l => visivel ? KiroHoje.mostrar(l, id) : KiroHoje.esconder(l, id));
+    document.querySelector(`#cfg-hoje [data-hoje-id="${CSS.escape(id)}"] [data-hoje-visivel]`)?.focus();
     return;
   }
   const campo = e.target.closest?.('[data-hoje-opcao]');
@@ -2881,27 +2889,29 @@ document.addEventListener('change', e => {
 // modal() marca a janela como alterada também no "input" (não só no "change"): barra aqui para os
 // controles da Hoje, que já gravam pelo ouvinte de "change" acima.
 document.addEventListener('input', e => {
-  if (e.target.matches?.('[data-hoje-opcao], [data-hoje-visivel], [data-hoje-coluna-cfg], [data-hoje-largura-cfg]')) e.stopPropagation();
+  if (e.target.matches?.('[data-hoje-opcao], [data-hoje-visivel]')) e.stopPropagation();
 }, { capture: true });
 // Mesma lista da Hoje, em linhas: cada controle chama KiroHoje por mudarHoje, que redesenha as duas telas.
 function conteudoDaAbaHoje() {
   const catalogo = catalogoDaHoje(), l = layoutDaHoje(catalogo), porId = new Map(catalogo.map(c => [c.id, c]));
-  const linhas = l.cartoes.filter(c => porId.has(c.id)).map(cartao => {
-    const c = porId.get(cartao.id), visivel = !l.ocultos.includes(c.id), id = escapeHtml(c.id);
-    const colunas = Array.from({ length: l.colunas }, (_, i) => `<option value="${i}" ${i === Math.min(cartao.coluna, l.colunas - 1) ? 'selected' : ''}>Coluna ${i + 1}</option>`).join('');
-    return `<div class="cfg-linha hoje-cfg-linha" data-hoje-id="${id}">
-      <label class="hoje-cfg-visivel"><input type="checkbox" data-hoje-visivel ${visivel ? 'checked' : ''} /><span class="cfg-texto"><span class="cfg-titulo">${escapeHtml(c.titulo)}</span><span class="small-muted">${escapeHtml(c.origem)}</span></span></label>
-      <span class="hoje-cfg-controles">
-        ${botaoDaHoje('subir', '↑', `Subir ${escapeHtml(c.titulo)}`)}${botaoDaHoje('descer', '↓', `Descer ${escapeHtml(c.titulo)}`)}
-        <select data-hoje-coluna-cfg aria-label="Coluna de ${escapeHtml(c.titulo)}" ${cartao.largura === 'inteira' ? 'disabled' : ''}>${colunas}</select>
-        <select data-hoje-largura-cfg aria-label="Largura de ${escapeHtml(c.titulo)}"><option value="normal" ${cartao.largura === 'normal' ? 'selected' : ''}>Normal</option><option value="inteira" ${cartao.largura === 'inteira' ? 'selected' : ''}>Inteira</option></select>
-        ${popoverDeOpcoes(c, l, 'cfg', catalogo.indexOf(c))}
-      </span>
+  const lista = l.cartoes.filter(c => porId.has(c.id));
+  const linhas = lista.map((cartao, i) => {
+    const c = porId.get(cartao.id), visivel = !l.ocultos.includes(c.id), id = escapeHtml(c.id), titulo = escapeHtml(c.titulo);
+    // Coluna e largura numa escolha só: onde o cartão fica na Hoje.
+    const atual = cartao.largura === 'inteira' ? 'inteira' : String(Math.min(cartao.coluna, l.colunas - 1));
+    const segmento = (valor, rotulo, dica) => `<button type="button" class="hoje-seg" data-hoje-acao="posicao" data-valor="${valor}" aria-pressed="${atual === valor}" title="${dica}">${rotulo}</button>`;
+    const posicao = [...Array.from({ length: l.colunas }, (_, n) => segmento(String(n), `Coluna ${n + 1}`, `Na coluna ${n + 1}`)), segmento('inteira', 'Largura toda', 'Ocupa a largura inteira, acima e abaixo das colunas')].join('');
+    return `<div class="cfg-linha hoje-cfg-linha${visivel ? '' : ' escondido'}" data-hoje-id="${id}">
+      <label class="cfg-chave hoje-cfg-mostrar" title="${visivel ? 'Esconder da Hoje' : 'Mostrar na Hoje'}"><input type="checkbox" data-hoje-visivel ${visivel ? 'checked' : ''} aria-label="Mostrar ${titulo} na Hoje" /><span class="interruptor" aria-hidden="true"></span></label>
+      <span class="cfg-texto hoje-cfg-nome"><span class="cfg-titulo">${titulo}</span><span class="small-muted">${visivel ? escapeHtml(c.origem) : 'Escondido — não aparece na Hoje'}</span></span>
+      <span class="hoje-segmentos" role="group" aria-label="Posição de ${titulo}">${posicao}</span>
+      <span class="hoje-cfg-ordem" role="group" aria-label="Ordem de ${titulo}">${botaoDaHoje('subir', '↑', `Mover ${titulo} para cima`, i === 0 ? ' disabled' : '')}${botaoDaHoje('descer', '↓', `Mover ${titulo} para baixo`, i === lista.length - 1 ? ' disabled' : '')}</span>
+      <span class="hoje-cfg-opcoes">${popoverDeOpcoes(c, l, 'cfg', catalogo.indexOf(c), true)}</span>
     </div>`;
   }).join('');
   return `<section class="cfg-grupo">
-    <header class="cfg-grupo-topo"><span class="cfg-texto"><span class="cfg-titulo">Tela Hoje</span><span class="small-muted">Quais cartões aparecem, em que ordem e onde. Também dá para arrumar direto na Hoje, em Personalizar.</span></span><button type="button" class="secondary cfg-pequeno" data-hoje-acao="restaurar">${icone('recarregar')} Restaurar padrão</button></header>
-    <div class="cfg-linha">${'<span class="cfg-texto"><span class="cfg-titulo">Colunas</span></span>'}<span class="hoje-colunas-escolha" role="group" aria-label="Colunas">${[1, 2, 3].map(n => `<button type="button" class="chip" data-hoje-acao="colunas" data-valor="${n}" aria-pressed="${n === l.colunas}" aria-label="${n} coluna${n > 1 ? 's' : ''}">${n}</button>`).join('')}</span></div>
+    <header class="cfg-grupo-topo"><span class="cfg-texto"><span class="cfg-titulo">Tela Hoje</span><span class="small-muted">Escolha quais cartões aparecem, onde ficam e em que ordem. Também dá para arrumar direto na Hoje, em Personalizar.</span></span><button type="button" class="secondary cfg-pequeno" data-hoje-acao="restaurar">${icone('recarregar')} Restaurar padrão</button></header>
+    <div class="cfg-linha"><span class="cfg-texto"><span class="cfg-titulo">Colunas na Hoje</span><span class="small-muted">Quantas colunas os cartões dividem.</span></span><span class="hoje-segmentos" role="group" aria-label="Colunas">${[1, 2, 3].map(n => `<button type="button" class="hoje-seg" data-hoje-acao="colunas" data-valor="${n}" aria-pressed="${n === l.colunas}" aria-label="${n} coluna${n > 1 ? 's' : ''}">${n}</button>`).join('')}</span></div>
     ${linhas}
     <p class="small-muted cfg-rodape">Guardado em <code>.kiro/hoje.json</code>, dentro do cofre.</p>
   </section>`;

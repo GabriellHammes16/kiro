@@ -1136,6 +1136,24 @@ body, button, input, textarea, select { font-family:var(--fonte-interface); }
 .chip { border:1px solid var(--line); border-radius:999px; padding:4px 10px; background:transparent; color:var(--ink); font-size:13px; cursor:pointer; }
 
 /* ---- Hoje configurável: aba Configurações ---- */
-.hoje-cfg-linha { gap:var(--esp-3); flex-wrap:wrap; }
-.hoje-cfg-visivel { display:flex; align-items:center; gap:var(--esp-3); flex:1 1 220px; min-width:0; }
-.hoje-cfg-controles { display:flex; align-items:center; gap:var(--esp-2); flex-wrap:wrap; }
+/* Grade fixa: interruptor · nome · posição · ordem · opções — as linhas ficam alinhadas mesmo sem opções. */
+.hoje-cfg-linha { display:grid; grid-template-columns:auto minmax(120px, 1fr) auto auto 92px; gap:var(--esp-3); }
+.hoje-cfg-mostrar { position:relative; display:flex; }
+.hoje-cfg-nome { min-width:0; }
+.hoje-cfg-linha.escondido :is(.hoje-cfg-nome .cfg-titulo, .hoje-segmentos, .hoje-cfg-ordem) { opacity:.45; }
+.hoje-cfg-ordem { display:flex; gap:2px; }
+.hoje-cfg-ordem .icon-button:disabled { opacity:.3; cursor:default; }
+.hoje-cfg-opcoes { display:flex; justify-content:flex-end; }
+/* Controle segmentado: uma escolha visível de uma vez, no tema (em vez do <select> nativo). */
+.hoje-segmentos { display:inline-flex; border:1px solid var(--line); border-radius:8px; overflow:hidden; }
+.hoje-seg { border:0; border-left:1px solid var(--line); background:transparent; color:var(--muted); font-size:12px; padding:5px 10px; cursor:pointer; white-space:nowrap; }
+.hoje-seg:first-child { border-left:0; }
+.hoje-seg:hover { color:var(--ink); background:color-mix(in srgb, var(--line) 45%, transparent); }
+.hoje-seg[aria-pressed="true"] { background:var(--acento); color:var(--acento-texto); }
+.hoje-seg:focus-visible { outline:2px solid var(--acento); outline-offset:-2px; }
+@media (max-width:900px) {
+  .hoje-cfg-linha { grid-template-columns:auto 1fr auto; }
+  .hoje-cfg-linha .hoje-segmentos { grid-column:2; grid-row:2; justify-self:start; }
+  .hoje-cfg-ordem { grid-column:3; grid-row:2; justify-self:end; }
+  .hoje-cfg-opcoes { grid-column:3; grid-row:1; }
+}
