@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Tarefas pendentes</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  /* Mesmo fundo do cartão do Hoje: com color-scheme diferente do da página, a moldura não fica transparente. */
+  html, body { margin: 0; padding: 0; background: var(--panel, #1A1F26); }
+  body { color: var(--ink, #E5E7EB); font: 13px var(--fonte-interface, system-ui); }
+
+  .mini { display: grid; grid-template-columns: repeat(var(--colunas, 3), minmax(0, 1fr)); gap: 8px; }
+  .col { border: 1px solid var(--line, #2A3340); border-radius: 10px; background: var(--panel-raised, #232A33); min-width: 0; }
+  .col header { display: flex; align-items: center; gap: 6px; padding: 6px 8px; border-bottom: 1px solid var(--line, #2A3340); }
+  .col h2 { margin: 0; font-size: 12px; font-weight: 700; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .conta { font-size: 11px; color: var(--muted, #94A3B8); }
+  .ponto { width: 8px; height: 8px; border-radius: 50%; flex: 0 0 auto; }
+  .col[data-col="em-preparacao"] .ponto { background: color-mix(in srgb, var(--acento) 30%, transparent); }
+  .col[data-col="a-fazer"] .ponto       { background: color-mix(in srgb, var(--acento) 55%, transparent); }
+  .col[data-col="em-progresso"] .ponto  { background: var(--acento, #9273FF); }
+
+  ul { list-style: none; margin: 0; padding: 4px; display: grid; gap: 2px; }
+  li { display: flex; align-items: center; gap: 6px; padding: 4px 4px 4px 6px; border-radius: 6px; }
+  li:hover { background: color-mix(in srgb, var(--line, #2A3340) 50%, transparent); }
+  .texto { flex: 1; min-width: 0; }
+  .titulo { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .prazo { display: block; font-size: 11px; color: var(--muted, #94A3B8); }
+  li.vencida .prazo { color: var(--acento-forte, #6B4AE8); font-weight: 600; }
+  .avancar {
+    flex: 0 0 auto; width: 24px; height: 24px; border-radius: 6px; cursor: pointer;
+    background: transparent; color: var(--muted, #94A3B8); border: 1px solid transparent; font: inherit;
+  }
+  .avancar:hover, .avancar:focus-visible { color: var(--acento, #9273FF); border-color: var(--line, #2A3340); outline: none; }
+  .mais, .vazio { padding: 4px 8px 6px; font-size: 11px; color: var(--muted, #94A3B8); }
+  .tudo-feito { margin: 0; padding: 10px 2px; color: var(--muted, #94A3B8); }
+  @media (max-width: 360px) { .mini { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<div id="mini" class="mini" aria-live="polite"></div>
+<script src="mini.js"></script>
+</body>
+</html>

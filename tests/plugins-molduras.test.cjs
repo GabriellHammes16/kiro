@@ -152,3 +152,22 @@ test('exemplo kanban-tasks: manifesto válido, tela sem script inline e página 
   const js = await fs.readFile(path.join(raiz, 'examples/plugins/kanban-tasks/board.js'), 'utf8');
   for (const trecho of ['kiro.ready', 'kiro.tasks.list', 'kiro.tasks.update', "storage.get('columns')"]) assert.ok(js.includes(trecho), trecho);
 });
+
+test('exemplo kanban-tasks: miniatura no Hoje com opções válidas e moldura sem script inline', async () => {
+  const raiz = path.join(__dirname, '..');
+  const { pathToFileURL } = require('node:url');
+  const plugin = (await import(pathToFileURL(path.join(raiz, 'examples/plugins/kanban-tasks/index.js')))).default;
+  const paineis = [];
+  await plugin.activate({ block() {}, panel: (id, label, render, extra) => paineis.push({ id, label, render, extra }) });
+  const painel = paineis.find(p => p.id === 'pendentes');
+  const v = P.validarOpcoesDoPainel(painel.extra?.options, painel.extra?.width);
+  assert.equal(v.ok, true, v.erro);
+  assert.deepEqual(v.opcoes.map(o => o.key), ['limite', 'preparacao']);
+  assert.deepEqual(await painel.render({ action: '', values: {}, options: { limite: 5, preparacao: false } }),
+    { frame: 'mini.html', height: 160, data: { limite: 5, preparacao: false } });
+  assert.equal(P.validarMoldura(await painel.render()).ok, true);
+  const html = await fs.readFile(path.join(raiz, 'examples/plugins/kanban-tasks/mini.html'), 'utf8');
+  assert.match(html, /<script src="mini\.js"><\/script>/);
+  assert.doesNotMatch(html, /<script>(?!\s*<\/script>)/);
+  assert.doesNotMatch(html, /\son\w+\s*=\s*["']/);
+});

@@ -30,7 +30,7 @@ Three complete working examples live in this repository: `examples/plugins/word-
 (commands, panels, blocks), `examples/plugins/wikipedia-summary/` (a block
 that calls a web API with `kiro.fetch`), `examples/plugins/habit-heatmap/`
 (a frame — see [Frames (custom UI)](#frames-custom-ui) below) and
-`examples/plugins/kanban-tasks/` (a Kanban board of your tasks as a frame page,
+`examples/plugins/kanban-tasks/` (a Kanban board of your tasks as a frame page, plus a frame panel with a miniature of the pending columns on Today,
 with drag & drop between columns). `npm run dev`
 copies all of them into the example vault. Copying one of these folders is the
 fastest way to start.
