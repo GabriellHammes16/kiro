@@ -23,6 +23,7 @@ function dateLabel(date) { return date === today() ? "Hoje" : new Intl.DateTimeF
 function updateCount() { const open = state.tasks.filter(t => !t.done).length; document.querySelector("#task-count").textContent = open || ""; }
 function getNote(id) { return state.notes.find(n => n.id === id); }
 function render() {
+  if (currentView !== 'today') personalizandoHoje = false;
   if (currentView.startsWith('plugin:') && !pluginsAtivos.get(currentView.slice(7))?.manifesto?.page) currentView = 'today';
   // Recalculado depois da queda para 'today': senão a página "não está ativo" ainda desenharia.
   const paginaDoPlugin = currentView.startsWith('plugin:') ? currentView.slice(7) : null;
@@ -1272,7 +1273,7 @@ function atualizarEditingConformeAtiva(){
   editing=nota?{...nota,tags:[...(nota.tags||[])],links:[...(nota.links||[])]}:null;
   editorDirty=false;
 }
-async function irPara(destino){ if(destino!=='today')personalizandoHoje=false; if(editing) return void await sairDoEditor(destino); currentView=destino; render(); }
+async function irPara(destino){ if(editing) return void await sairDoEditor(destino); currentView=destino; render(); }
 async function sairDoEditor(destino){
   if(editorDirty&&!await salvarNota())return false;
   editing=null;currentView=destino;render();return true;
@@ -2745,10 +2746,12 @@ const hojeApi = {
   gravar: l => window.cadernoDesktop ? window.cadernoDesktop.saveHomeLayout(l) : api('home-layout', l),
 };
 let hojeLayout = null;          // null até a primeira leitura
-let hojeGravavel = false;       // leitura falhou: usa o padrão sem sobrescrever o arquivo da pessoa
+let hojeGravavel = false;       // leitura deu erro: usa o padrão sem sobrescrever o arquivo da pessoa
+                                 // (arquivo ausente ou inválido não é erro: entra vazio e É sobrescrito pelo padrão)
 let hojeTimer = null;
 let personalizandoHoje = false;
 async function carregarHoje() {
+  clearTimeout(hojeTimer); hojeGravavel = false;
   try { hojeLayout = KiroHoje.limpar(await hojeApi.ler()); hojeGravavel = true; }
   catch (erro) { hojeLayout = null; hojeGravavel = false; status(`Não foi possível ler o layout da Hoje: ${erro.message}`, true); }
 }
@@ -2810,7 +2813,7 @@ function rodapeDaPersonalizacao(catalogo, l) {
   const escondidos = catalogo.filter(c => l.ocultos.includes(c.id));
   return `<div class="hoje-rodape">
     <div class="hoje-escondidos"><span class="small-muted">Cartões escondidos:</span>${escondidos.map(c => `<button type="button" class="chip" data-hoje-acao="mostrar" data-hoje-id="${escapeHtml(c.id)}">${icone('mais')} ${escapeHtml(c.titulo)}</button>`).join('') || '<span class="small-muted">nenhum</span>'}</div>
-    <div class="hoje-colunas-escolha" role="group" aria-label="Colunas"><span class="small-muted">Colunas:</span>${[1, 2, 3].map(n => `<button type="button" class="chip" data-hoje-acao="colunas" data-valor="${n}" aria-pressed="${n === l.colunas}">${n}</button>`).join('')}</div>
+    <div class="hoje-colunas-escolha" role="group" aria-label="Colunas"><span class="small-muted">Colunas:</span>${[1, 2, 3].map(n => `<button type="button" class="chip" data-hoje-acao="colunas" data-valor="${n}" aria-pressed="${n === l.colunas}" aria-label="${n} coluna${n > 1 ? 's' : ''}">${n}</button>`).join('')}</div>
     <button type="button" class="secondary cfg-pequeno" data-hoje-acao="restaurar">${icone('recarregar')} Restaurar padrão</button>
   </div>`;
 }
@@ -2841,14 +2844,16 @@ function acaoDaHoje(acao, id, valor, botao) {
   const raiz = botao?.closest('#cfg-hoje') || document;
   raiz.querySelector(seletor)?.focus();
 }
-function mudarOpcaoDaHoje(id, chave, valor) {
+function mudarOpcaoDaHoje(id, chave, valor, campo) {
   const c = catalogoDaHoje().find(x => x.id === id);
   if (!c) return;
   hojePopoverAberto = document.querySelector(`[popover][data-hoje-id="${CSS.escape(id)}"]:popover-open`)?.id || null;
+  const antes = hojeLayout;
   mudarHoje(l => KiroHoje.definirOpcao(l, id, chave, valor, c.opcoes));
   // Redesenhar troca o popover por um novo: reabre o mesmo, se estava aberto.
   if (hojePopoverAberto) document.getElementById(hojePopoverAberto)?.showPopover?.();
-  if (id.startsWith('plugin:')) desenharPaineisDosPlugins();
+  // Valor recusado (layout não mudou): o campo volta a mostrar o valor em vigor.
+  if (campo && hojeLayout === antes) campo.value = KiroHoje.opcoesEfetivas(hojeLayout, id, c.opcoes)[chave];
 }
 document.addEventListener('click', e => {
   const b = e.target.closest?.('[data-hoje-acao]');
@@ -2871,7 +2876,7 @@ document.addEventListener('change', e => {
   if (!campo) return;
   e.stopPropagation();   // não marca a janela de Configurações como alterada: grava na hora
   if (campo.type === 'number' && campo.value === '') return;
-  mudarOpcaoDaHoje(campo.dataset.hojeId, campo.dataset.hojeOpcao, campo.type === 'checkbox' ? campo.checked : campo.type === 'number' ? Number(campo.value) : campo.value);
+  mudarOpcaoDaHoje(campo.dataset.hojeId, campo.dataset.hojeOpcao, campo.type === 'checkbox' ? campo.checked : campo.type === 'number' ? Number(campo.value) : campo.value, campo);
 }, { capture: true });
 // modal() marca a janela como alterada também no "input" (não só no "change"): barra aqui para os
 // controles da Hoje, que já gravam pelo ouvinte de "change" acima.
@@ -2896,7 +2901,7 @@ function conteudoDaAbaHoje() {
   }).join('');
   return `<section class="cfg-grupo">
     <header class="cfg-grupo-topo"><span class="cfg-texto"><span class="cfg-titulo">Tela Hoje</span><span class="small-muted">Quais cartões aparecem, em que ordem e onde. Também dá para arrumar direto na Hoje, em Personalizar.</span></span><button type="button" class="secondary cfg-pequeno" data-hoje-acao="restaurar">${icone('recarregar')} Restaurar padrão</button></header>
-    <div class="cfg-linha">${'<span class="cfg-texto"><span class="cfg-titulo">Colunas</span></span>'}<span class="hoje-colunas-escolha">${[1, 2, 3].map(n => `<button type="button" class="chip" data-hoje-acao="colunas" data-valor="${n}" aria-pressed="${n === l.colunas}">${n}</button>`).join('')}</span></div>
+    <div class="cfg-linha">${'<span class="cfg-texto"><span class="cfg-titulo">Colunas</span></span>'}<span class="hoje-colunas-escolha" role="group" aria-label="Colunas">${[1, 2, 3].map(n => `<button type="button" class="chip" data-hoje-acao="colunas" data-valor="${n}" aria-pressed="${n === l.colunas}" aria-label="${n} coluna${n > 1 ? 's' : ''}">${n}</button>`).join('')}</span></div>
     ${linhas}
     <p class="small-muted cfg-rodape">Guardado em <code>.kiro/hoje.json</code>, dentro do cofre.</p>
   </section>`;

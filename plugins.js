@@ -37,7 +37,7 @@
   // Tamanho em bytes sem Buffer (roda também no navegador).
   const bytes = s => new TextEncoder().encode(s).length;
 
-  // ---- Opções de painéis (tarefa 2) ----
+  // ---- Opções de painéis (Hoje configurável) ----
   // Opções de um painel (4º argumento de kiro.panel). O Kiro desenha o formulário; aqui só se
   // confere a declaração. Sem declaração: painel sem opções. `width: 'full'` é só a sugestão
   // inicial de largura — quem decide depois é a pessoa, na Hoje.

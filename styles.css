@@ -1129,7 +1129,7 @@ body, button, input, textarea, select { font-family:var(--fonte-interface); }
 .hoje-alvo { outline:2px solid var(--acento); outline-offset:2px; }
 .hoje-rodape { display:flex; flex-wrap:wrap; gap:var(--esp-4); align-items:center; margin-top:var(--esp-5); }
 .hoje-escondidos, .hoje-colunas-escolha { display:flex; flex-wrap:wrap; gap:var(--esp-2); align-items:center; }
-.hoje-colunas-escolha [aria-pressed="true"] { background:var(--acento); color:var(--bg); }
+.hoje-colunas-escolha [aria-pressed="true"] { background:var(--acento); color:var(--acento-texto); }
 .hoje-opcoes { border:1px solid var(--line); border-radius:12px; background:var(--panel-raised, var(--panel)); color:var(--ink); padding:var(--esp-4); min-width:240px; box-shadow:var(--shadow); }
 .hoje-opcoes h3 { margin:0 0 var(--esp-3); font-size:14px; }
 .hoje-opcao { display:flex; justify-content:space-between; align-items:center; gap:var(--esp-3); padding:var(--esp-1) 0; }
