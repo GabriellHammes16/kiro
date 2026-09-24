@@ -2,7 +2,8 @@
 // devolve um estado novo. Roda no navegador (KiroAbas) e no Node (testes).
 //
 // { paineis: [{ abas: [id…], ativa: id|null }, …], ativo: índice, larguras: [fração…] }
-// Cada painel é uma coluna; `larguras` soma 1. Um id aparece no máximo uma vez.
+// Cada painel é uma coluna; `larguras` soma 1. Um id aparece no máximo uma vez *por coluna*:
+// a mesma nota pode ocupar duas colunas (uma em edição, a outra em leitura).
 (function (root) {
   const RASCUNHO = 'kiro:rascunho';   // nota nova ainda sem id
   const MAX_COLUNAS = 12;             // teto contra estado estranho; a tela limita pela largura
@@ -47,11 +48,23 @@
     return r;
   }
 
-  function abrir(e, id, { novaAba = false, painel } = {}) {
-    const ja = ondeEsta(e, id);
+  // `duplicar` olha só a coluna alvo: a nota abre lá mesmo já estando noutra coluna (arrastar
+  // da árvore). Sem ele, uma nota já aberta em qualquer coluna só é ativada (clique na árvore).
+  // `colunaNova` cria a coluna na posição `painel` e abre a nota nela.
+  function abrir(e, id, { novaAba = false, painel, duplicar = false, colunaNova = false } = {}) {
+    if (colunaNova) {
+      if (!Number.isInteger(painel) || painel < 0 || painel > e.paineis.length || e.paineis.length >= MAX_COLUNAS) return e;
+      const r = copia(e);
+      r.paineis.splice(painel, 0, { abas: [id], ativa: id });
+      r.larguras = iguais(r.paineis.length);
+      r.ativo = painel;
+      return r;
+    }
+    const alvo = painel === undefined || !e.paineis[painel] ? e.ativo : painel;
+    const ja = duplicar ? (e.paineis[alvo].abas.includes(id) ? alvo : -1) : ondeEsta(e, id);
     if (ja !== -1) return ativar(e, ja, id);
     const r = copia(e);
-    const i = painel === undefined || !r.paineis[painel] ? r.ativo : painel;
+    const i = alvo;
     const p = r.paineis[i];
     const pos = p.abas.indexOf(p.ativa);
     if (novaAba || pos === -1) p.abas.splice(pos + 1, 0, id);
@@ -93,34 +106,32 @@
       r.paineis.splice(para, 0, { abas: [], ativa: null });
       r.larguras = iguais(r.paineis.length);
     }
-    r.paineis[destino].abas.push(id);
+    if (!r.paineis[destino].abas.includes(id)) r.paineis[destino].abas.push(id);
     r.paineis[destino].ativa = id;
     r.ativo = destino;
     return arrumar(r);
   }
 
+  // O rascunho virou nota real. Se a coluna já tinha essa nota, as duas abas viram uma só;
+  // a mesma nota noutra coluna é legítima e continua lá.
   function trocarId(e, antigo, novo) {
     if (antigo === novo) return e;
-    if (ondeEsta(e, novo) !== -1) {
-      const onde = ondeEsta(e, antigo);
-      if (onde === -1) return e;
-      const fechado = fechar(e, onde, antigo);
-      return ativar(fechado, ondeEsta(fechado, novo), novo);
-    }
     const r = copia(e);
     for (const p of r.paineis) {
-      p.abas = p.abas.map(x => (x === antigo ? novo : x));
+      const vistos = new Set();
+      p.abas = p.abas.map(x => (x === antigo ? novo : x)).filter(x => !vistos.has(x) && vistos.add(x));
       if (p.ativa === antigo) p.ativa = novo;
+      if (!p.abas.includes(p.ativa)) p.ativa = p.abas.at(-1) ?? null;
     }
-    return r;
+    return arrumar(r);
   }
 
   // O que vem do localStorage é tratado como não confiável.
   function limpar(e, idsExistentes) {
     const existe = new Set(idsExistentes || []);
     if (!e || typeof e !== 'object' || !Array.isArray(e.paineis) || !e.paineis.length || e.paineis.length > MAX_COLUNAS) return vazio();
-    const vistos = new Set();
     const paineis = e.paineis.map(p => {
+      const vistos = new Set();
       const abas = (Array.isArray(p?.abas) ? p.abas : []).filter(id => typeof id === 'string' && (existe.has(id) || id === RASCUNHO) && !vistos.has(id) && vistos.add(id));
       return { abas, ativa: abas.includes(p?.ativa) ? p.ativa : abas.at(-1) ?? null };
     });

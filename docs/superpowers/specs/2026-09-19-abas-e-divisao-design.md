@@ -36,9 +36,12 @@ Arquivo novo `abas.js` (mesmo formato do `plugins.js`: `module.exports` no Node,
 - `paineis` tem 1 ou 2 itens; `ativo` é o índice da metade ativa.
 - Uma aba é o id de uma nota. Nota nova ainda não salva usa o id reservado
   `RASCUNHO` (`'kiro:rascunho'`); ao salvar, `trocarId(estado, RASCUNHO, idNovo)`.
-- Um id aparece no máximo uma vez no estado inteiro.
+- Um id aparece no máximo uma vez *por coluna*. A mesma nota pode ocupar duas colunas
+  (uma em edição, a outra em leitura): é o que arrastar da árvore para a borda produz.
+  Clicar na árvore continua saltando para a coluna onde a nota já está — arrastar diz
+  *onde*, clicar diz *qual*, e só o arraste pede `duplicar`.
 
-Funções: `vazio()`, `abrir(e, id, { novaAba, painel })`, `ativar(e, painel, id)`,
+Funções: `vazio()`, `abrir(e, id, { novaAba, painel, duplicar, colunaNova })`, `ativar(e, painel, id)`,
 `fechar(e, painel, id)`, `fecharOutras(e, painel, id)`, `mover(e, de, id, para)`
 (`para` pode ser 0 ou 1; mover para 1 com uma metade só cria a segunda),
 `trocarId(e, antigo, novo)`, `limpar(e, idsExistentes)` (valida o que veio do
@@ -62,8 +65,13 @@ Regras que os testes cobrem:
   `[[…]]` clicáveis (abrem na própria metade), fórmulas e blocos de plug-in. Clicar em
   qualquer ponto dela (fora de link) a torna ativa e abre a nota em edição.
 - **Arrastar aba:** `draggable` nas abas; ao arrastar sobre a área de notas, a metade
-  de destino fica destacada (direita da área → nova metade/lado direito; barra de
-  abas do outro lado → mover para lá). Soltar aplica `mover`.
+  de destino fica destacada (terço direito da área → nova metade/lado direito; terço
+  esquerdo → lado esquerdo; o terço do meio abre na própria coluna; barra de abas do
+  outro lado → mover para lá). Soltar aplica `mover`.
+- **Arrastar nota da árvore:** mesmos destaques, mas soltar aplica `abrir` com
+  `duplicar` (coluna existente) ou `colunaNova` (borda). Não passa por `mover`: mover
+  a única aba de uma coluna para uma coluna nova vizinha é um no-op legítimo do modelo,
+  e rotear o arraste da árvore por ali fazia a nota já aberta não abrir em lugar nenhum.
 - **Botão direito na aba:** "Abrir à direita"/"Abrir à esquerda", "Fechar",
   "Fechar as outras" — pelo menu de contexto que o app já tem (`abrirMenuContexto`).
 - **Divisória** entre as metades: mesma mecânica da divisória da árvore (arrastar,

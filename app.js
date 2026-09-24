@@ -820,8 +820,10 @@ function alvoDoArraste(evento) {
   const coluna = evento.target.closest('.cofre-metade');
   if (!coluna) return null;
   const painel = Number(coluna.dataset.painel), r = coluna.getBoundingClientRect(), x = (evento.clientX - r.left) / r.width;
-  if (x > 0.75) return { painel: painel + 1, nova: true, lado: 'direita', coluna: painel };
-  if (x < 0.25) return { painel, nova: true, lado: 'esquerda', coluna: painel };
+  // Terço, não quarto: com um quarto a faixa que divide é pequena demais para acertar, e soltar
+  // logo ao lado dela abre em aba nova sem aviso nenhum de que faltou pouco para dividir.
+  if (x > 2 / 3) return { painel: painel + 1, nova: true, lado: 'direita', coluna: painel };
+  if (x < 1 / 3) return { painel, nova: true, lado: 'esquerda', coluna: painel };
   return { painel, nova: false };
 }
 // Arrastar uma aba ou uma nota da árvore sobre as colunas.
@@ -868,16 +870,15 @@ function bindDragDeAbas() {
     await moverAba(dados.painel, dados.id, alvo.painel, { nova: alvo.nova });
   });
 }
-// Nota arrastada da árvore: abre (ou ativa, se já estiver aberta) e leva para o destino —
-// uma coluna existente ou uma coluna nova na posição pedida.
+// Nota arrastada da árvore: abre no destino pedido — uma coluna existente ou uma coluna nova na
+// posição pedida. `duplicar` porque arrastar diz *onde*: a nota abre ali mesmo já estando noutra
+// coluna (é o split da mesma nota), ao contrário do clique na árvore, que salta para onde ela está.
 async function abrirNotaArrastada(id, alvo) {
   if (!getNote(id)) return;
-  const perto = Math.min(alvo.nova ? alvo.coluna : alvo.painel, abas.paineis.length - 1);
-  await abrirPorId(id, { novaAba: true, painel: perto });
-  const onde = abas.paineis.findIndex(p => p.abas.includes(id));
-  if (onde === -1) return;
-  if (alvo.nova) await moverAba(onde, id, alvo.painel, { nova: true });
-  else if (onde !== alvo.painel) await moverAba(onde, id, alvo.painel);
+  if (alvo.nova && !cabeOutraColuna()) return status('Não cabe outra coluna nesta largura. Feche uma coluna ou aumente a janela.', true);
+  await abrirPorId(id, alvo.nova
+    ? { colunaNova: true, painel: alvo.painel, duplicar: true }
+    : { novaAba: true, painel: alvo.painel, duplicar: true });
 }
 // Clicar na metade em leitura (fora de link, imagem, etiqueta ou bloco de plug-in) ativa a nota nela.
 function bindLeitura(painel) {
@@ -1139,7 +1140,7 @@ function capturaRapida(){
   campo.focus();
 }
 // ---- Editor de documento: a nota ocupa a página inteira, como um processador de texto. ----
-async function abrirNota(nota,{novaAba=false,painel}={}){
+async function abrirNota(nota,{novaAba=false,painel,duplicar=false,colunaNova=false}={}){
   garantirAbasDoCofre(); // 1ª nota da sessão pode vir de fora de Pastas (Hoje etc.), antes do 1º renderCofre.
   if(editing&&editorDirty&&!await salvarNota())return;
   // O salvamento acima pode ter trocado o objeto da nota em state.notes (ela ganhou id, ou o
@@ -1153,11 +1154,11 @@ async function abrirNota(nota,{novaAba=false,painel}={}){
   if(editing&&!editing.id){
     const onde=abas.paineis.findIndex(p=>p.abas.includes(KiroAbas.RASCUNHO));
     if(onde!==-1){
-      if(!novaAba&&!abas.paineis.some(p=>p.abas.includes(novoId)))abas=KiroAbas.trocarId(abas,KiroAbas.RASCUNHO,novoId);
+      if(!novaAba&&!colunaNova&&!abas.paineis.some(p=>p.abas.includes(novoId)))abas=KiroAbas.trocarId(abas,KiroAbas.RASCUNHO,novoId);
       else abas=KiroAbas.fechar(abas,onde,KiroAbas.RASCUNHO);
     }
   }
-  abas=KiroAbas.abrir(abas,novoId,{novaAba,painel});
+  abas=KiroAbas.abrir(abas,novoId,{novaAba,painel,duplicar,colunaNova});
   gravarAbas();
   editing={...nota,tags:[...(nota.tags||[])],links:[...(nota.links||[])]};
   if(editing.id)ultimaNota=editing.id; // centro do grafo local
@@ -3803,7 +3804,11 @@ document.addEventListener('contextmenu',e=>{
 // Soltar sobre uma nota vale como soltar na pasta dela; fora das pastas, é a raiz.
 const alvoDaSoltura=e=>{const no=e.target.closest?.('.tree-node');return no?no.querySelector(':scope > .tree-folder'):e.target.closest?.('.tree');};
 const limparSoltura=(exceto)=>document.querySelectorAll('.soltar-aqui').forEach(x=>x!==exceto&&x.classList.remove('soltar-aqui'));
-document.addEventListener('dragstart',e=>{const nota=e.target.closest?.('.tree-note');if(!nota)return;e.dataTransfer.setData('text/kiro-nota',nota.dataset.id);e.dataTransfer.effectAllowed='move';});
+// `copyMove`, não `move`: a nota da árvore tem dois destinos com efeitos diferentes — uma pasta
+// (mover, `move`) e a área das notas (abrir numa coluna, `copy`). Com `effectAllowed='move'` o
+// navegador força a `none` o `dropEffect='copy'` da área, e o arraste vira cursor de bloqueio:
+// o `dragover` roda e destaca o alvo, mas o `drop` nunca chega.
+document.addEventListener('dragstart',e=>{const nota=e.target.closest?.('.tree-note');if(!nota)return;e.dataTransfer.setData('text/kiro-nota',nota.dataset.id);e.dataTransfer.effectAllowed='copyMove';});
 document.addEventListener('dragover',e=>{
   if(!e.dataTransfer.types.includes('text/kiro-nota'))return;
   const alvo=alvoDaSoltura(e);limparSoltura(alvo);if(!alvo)return;
