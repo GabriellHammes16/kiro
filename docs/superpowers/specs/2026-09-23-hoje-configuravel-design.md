@@ -220,3 +220,15 @@ gravam e redesenham; nenhuma lógica de layout fica na tela.
 `docs/plugins.md`: seção **Panel options** (declaração, tipos, limites, o que o
 `render` recebe) e nota de que a pessoa decide posição, largura e visibilidade do
 cartão; `width` é só a sugestão inicial.
+
+## Ajustes feitos ao planejar
+
+- `padrao(catalogo)` = `reconciliar(vazio, catalogo)`; cartões de plug-in entram na coluna com menos cartões visíveis.
+- Métodos do `Vault` em inglês, como o resto do arquivo: `readHomeLayout` / `writeHomeLayout`.
+- `KiroPlugins.validarOpcoesDoPainel(options, width)`.
+- Nas Configurações, as opções abrem no mesmo popover da Hoje.
+- "Restaurar padrão" confirma com um segundo clique no próprio botão.
+- Cabeçalho da Hoje: data como sobretítulo e saudação como título; a frase é o cartão `nativo:frase`.
+- O servidor web serve `hoje.js` (entrada nova em `publicFiles` de `server.mjs`).
+- Esc com o popover de opções aberto fecha só o popover.
+- Controles da Hoje dentro das Configurações não marcam a janela como alterada (ouvintes em captura para `change` e `input`).
