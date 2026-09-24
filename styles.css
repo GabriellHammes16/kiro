@@ -1118,3 +1118,19 @@ body, button, input, textarea, select { font-family:var(--fonte-interface); }
 .hoje-colunas > .stack { align-content:start; }
 .cartao-frase .frase-do-dia { margin:0; }
 @media (max-width:780px) { .content .today-grid.hoje-colunas { grid-template-columns:1fr; } }
+
+/* ---- Hoje configurável: modo Personalizar ---- */
+.hoje-faixas.personalizando .hoje-colunas > .stack { min-height:96px; border:1px dashed var(--line); border-radius:12px; padding:var(--esp-3); }
+.hoje-cartao { display:grid; gap:var(--esp-2); }
+.hoje-ferramentas { display:flex; align-items:center; gap:var(--esp-1); flex-wrap:wrap; font-size:13px; }
+.hoje-alca { cursor:grab; color:var(--muted); padding:0 var(--esp-1); }
+.hoje-nome { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--muted); }
+.hoje-cartao-corpo { opacity:.85; }
+.hoje-alvo { outline:2px solid var(--acento); outline-offset:2px; }
+.hoje-rodape { display:flex; flex-wrap:wrap; gap:var(--esp-4); align-items:center; margin-top:var(--esp-5); }
+.hoje-escondidos, .hoje-colunas-escolha { display:flex; flex-wrap:wrap; gap:var(--esp-2); align-items:center; }
+.hoje-colunas-escolha [aria-pressed="true"] { background:var(--acento); color:var(--bg); }
+.hoje-opcoes { border:1px solid var(--line); border-radius:12px; background:var(--panel-raised, var(--panel)); color:var(--ink); padding:var(--esp-4); min-width:240px; box-shadow:var(--shadow); }
+.hoje-opcoes h3 { margin:0 0 var(--esp-3); font-size:14px; }
+.hoje-opcao { display:flex; justify-content:space-between; align-items:center; gap:var(--esp-3); padding:var(--esp-1) 0; }
+.chip { border:1px solid var(--line); border-radius:999px; padding:4px 10px; background:transparent; color:var(--ink); font-size:13px; cursor:pointer; }

@@ -1272,7 +1272,7 @@ function atualizarEditingConformeAtiva(){
   editing=nota?{...nota,tags:[...(nota.tags||[])],links:[...(nota.links||[])]}:null;
   editorDirty=false;
 }
-async function irPara(destino){ if(editing) return void await sairDoEditor(destino); currentView=destino; render(); }
+async function irPara(destino){ if(destino!=='today')personalizandoHoje=false; if(editing) return void await sairDoEditor(destino); currentView=destino; render(); }
 async function sairDoEditor(destino){
   if(editorDirty&&!await salvarNota())return false;
   editing=null;currentView=destino;render();return true;
@@ -2765,13 +2765,104 @@ function mudarHoje(fn) {
   if (depois === antes) return;
   hojeLayout = depois;
   gravarHojeDepois();
-  if (currentView === 'today') render();
+  if (loaded && currentView === 'today') render();
   const aba = $('#cfg-hoje');
   if (aba) aba.innerHTML = conteudoDaAbaHoje();
 }
-// Versões mínimas: a Task 5 (arraste/opções) e a Task 6 (aba Configurações) substituem.
-function cartaoEmEdicao(c, l, html) { return html; }
-function rodapeDaPersonalizacao() { return ''; }
+const botaoDaHoje = (acao, conteudo, rotulo, extra = '') => `<button type="button" class="icon-button" data-hoje-acao="${acao}" aria-label="${rotulo}" title="${rotulo}"${extra}>${conteudo}</button>`;
+// Formulário das opções: o Kiro desenha a partir da declaração; nenhum HTML vem do plug-in.
+function camposDeOpcoes(id, declaracoes, valores) {
+  return declaracoes.map(o => {
+    const alvo = `data-hoje-id="${escapeHtml(id)}" data-hoje-opcao="${escapeHtml(o.key)}"`, v = valores[o.key];
+    const campo = o.type === 'boolean' ? `<input type="checkbox" ${alvo} ${v ? 'checked' : ''} />`
+      : o.type === 'number' ? `<input type="number" ${alvo} value="${v}" step="any"${o.min !== undefined ? ` min="${o.min}"` : ''}${o.max !== undefined ? ` max="${o.max}"` : ''} />`
+      : o.type === 'select' ? `<select ${alvo}>${o.choices.map(c => `<option value="${escapeHtml(c)}" ${c === v ? 'selected' : ''}>${escapeHtml(c)}</option>`).join('')}</select>`
+      : `<input type="text" ${alvo} value="${escapeHtml(v)}" maxlength="80" />`;
+    return `<label class="hoje-opcao"><span>${escapeHtml(o.label)}</span>${campo}</label>`;
+  }).join('');
+}
+// Popover nativo: abre por cima sem modal e fecha com Esc ou clique fora.
+function popoverDeOpcoes(c, l, prefixo, indice) {
+  if (!c.opcoes.length) return '';
+  const alvo = `hoje-op-${prefixo}-${indice}`;
+  return `<button type="button" class="icon-button" popovertarget="${alvo}" aria-label="Opções de ${escapeHtml(c.titulo)}" title="Opções">${icone('detalhes')}</button><div popover id="${alvo}" class="hoje-opcoes" data-hoje-id="${escapeHtml(c.id)}"><h3>${escapeHtml(c.titulo)}</h3>${camposDeOpcoes(c.id, c.opcoes, KiroHoje.opcoesEfetivas(l, c.id, c.opcoes))}</div>`;
+}
+// No modo Personalizar o corpo do cartão fica inerte: dá para arrumar sem marcar hábito sem querer.
+function cartaoEmEdicao(c, l, html) {
+  const cartao = l.cartoes.find(x => x.id === c.id);
+  const indice = catalogoDaHoje().findIndex(x => x.id === c.id);
+  const corpo = html || `<section class="card"><div class="card-head"><h2>${escapeHtml(c.titulo)}</h2></div><div class="empty">Nada agora.</div></section>`;
+  const lateral = cartao.largura === 'normal'
+    ? `${botaoDaHoje('esquerda', '←', 'Coluna à esquerda', cartao.coluna === 0 ? ' disabled' : '')}${botaoDaHoje('direita', '→', 'Coluna à direita', cartao.coluna >= l.colunas - 1 ? ' disabled' : '')}`
+    : '';
+  return `<div class="hoje-cartao" data-hoje-id="${escapeHtml(c.id)}" draggable="true">
+    <div class="hoje-ferramentas" role="toolbar" aria-label="${escapeHtml(c.titulo)}">
+      <span class="hoje-alca" aria-hidden="true">⠿</span><span class="hoje-nome">${escapeHtml(c.titulo)}</span>
+      ${botaoDaHoje('subir', '↑', 'Subir')}${botaoDaHoje('descer', '↓', 'Descer')}${lateral}
+      ${botaoDaHoje('largura', cartao.largura === 'inteira' ? '⇥⇤' : '⇤⇥', cartao.largura === 'inteira' ? 'Largura normal' : 'Largura inteira')}
+      ${popoverDeOpcoes(c, l, 'tela', indice)}
+      ${botaoDaHoje('esconder', '×', `Esconder ${escapeHtml(c.titulo)}`)}
+    </div>
+    <div class="hoje-cartao-corpo" inert>${corpo}</div>
+  </div>`;
+}
+function rodapeDaPersonalizacao(catalogo, l) {
+  const escondidos = catalogo.filter(c => l.ocultos.includes(c.id));
+  return `<div class="hoje-rodape">
+    <div class="hoje-escondidos"><span class="small-muted">Cartões escondidos:</span>${escondidos.map(c => `<button type="button" class="chip" data-hoje-acao="mostrar" data-hoje-id="${escapeHtml(c.id)}">${icone('mais')} ${escapeHtml(c.titulo)}</button>`).join('') || '<span class="small-muted">nenhum</span>'}</div>
+    <div class="hoje-colunas-escolha" role="group" aria-label="Colunas"><span class="small-muted">Colunas:</span>${[1, 2, 3].map(n => `<button type="button" class="chip" data-hoje-acao="colunas" data-valor="${n}" aria-pressed="${n === l.colunas}">${n}</button>`).join('')}</div>
+    <button type="button" class="secondary cfg-pequeno" data-hoje-acao="restaurar">${icone('recarregar')} Restaurar padrão</button>
+  </div>`;
+}
+// Um tratador para a Hoje e para as Configurações. Depois de redesenhar, o foco volta ao mesmo
+// botão do mesmo cartão: dá para mover várias vezes só com o teclado.
+let hojePopoverAberto = null;
+function acaoDaHoje(acao, id, valor, botao) {
+  if (acao === 'personalizar') { personalizandoHoje = !personalizandoHoje; render(); $('[data-hoje-acao="personalizar"]')?.focus(); return; }
+  if (acao === 'restaurar') {
+    // Dois cliques no mesmo botão: o primeiro só pede confirmação (funciona até dentro das Configurações).
+    if (botao && !botao.dataset.confirmando) { botao.dataset.confirmando = '1'; botao.textContent = 'Confirmar restauração'; return; }
+    return mudarHoje(() => KiroHoje.padrao(catalogoDaHoje()));
+  }
+  const l = layoutDaHoje(), catalogo = catalogoDaHoje(), cartao = l.cartoes.find(c => c.id === id);
+  const fns = {
+    subir: () => KiroHoje.subir(l, id, idsVisiveisDaHoje(l, catalogo)),
+    descer: () => KiroHoje.descer(l, id, idsVisiveisDaHoje(l, catalogo)),
+    esquerda: () => KiroHoje.mover(l, id, { coluna: cartao.coluna - 1 }),
+    direita: () => KiroHoje.mover(l, id, { coluna: cartao.coluna + 1 }),
+    largura: () => KiroHoje.definirLargura(l, id, cartao.largura === 'inteira' ? 'normal' : 'inteira'),
+    esconder: () => KiroHoje.esconder(l, id),
+    mostrar: () => KiroHoje.mostrar(l, id),
+    colunas: () => KiroHoje.definirColunas(l, Number(valor)),
+  };
+  if (!fns[acao] || (acao !== 'colunas' && !cartao)) return;
+  mudarHoje(fns[acao]);
+  const seletor = acao === 'colunas' ? `[data-hoje-acao="colunas"][data-valor="${valor}"]` : `[data-hoje-id="${CSS.escape(id)}"] [data-hoje-acao="${acao}"]`;
+  document.querySelector(seletor)?.focus();
+}
+function mudarOpcaoDaHoje(id, chave, valor) {
+  const c = catalogoDaHoje().find(x => x.id === id);
+  if (!c) return;
+  hojePopoverAberto = document.querySelector(`[popover][data-hoje-id="${CSS.escape(id)}"]:popover-open`)?.id || null;
+  mudarHoje(l => KiroHoje.definirOpcao(l, id, chave, valor, c.opcoes));
+  // Redesenhar troca o popover por um novo: reabre o mesmo, se estava aberto.
+  if (hojePopoverAberto) document.getElementById(hojePopoverAberto)?.showPopover?.();
+  if (id.startsWith('plugin:')) desenharPaineisDosPlugins();
+}
+document.addEventListener('click', e => {
+  const b = e.target.closest?.('[data-hoje-acao]');
+  if (!b || b.disabled) return;
+  e.preventDefault();
+  acaoDaHoje(b.dataset.hojeAcao, b.dataset.hojeId ?? b.closest('[data-hoje-id]')?.dataset.hojeId, b.dataset.valor, b);
+});
+document.addEventListener('change', e => {
+  const campo = e.target.closest?.('[data-hoje-opcao]');
+  if (!campo) return;
+  e.stopPropagation();   // não marca a janela de Configurações como alterada: grava na hora
+  if (campo.type === 'number' && campo.value === '') return;
+  mudarOpcaoDaHoje(campo.dataset.hojeId, campo.dataset.hojeOpcao, campo.type === 'checkbox' ? campo.checked : campo.type === 'number' ? Number(campo.value) : campo.value);
+});
+// Versão mínima: a Task 6 (aba Configurações) substitui.
 function conteudoDaAbaHoje() { return ''; }
 
 const pluginApi = {
@@ -3907,6 +3998,45 @@ document.addEventListener('drop',e=>{
   if(!alvo)return;
   e.preventDefault();moverNota(id,alvo.classList.contains('tree-folder')?alvo.dataset.id:'');
 });
+// Arrastar cartões no modo Personalizar: solta antes do cartão sob o ponteiro (metade de cima)
+// ou depois dele; numa coluna vazia, no fim dela.
+function alvoDoCartao(e) {
+  const coluna = e.target.closest?.('.hoje-faixas.personalizando [data-hoje-coluna]');
+  const inteiro = e.target.closest?.('.hoje-faixas.personalizando .hoje-faixa-inteira .hoje-cartao');
+  if (!coluna && !inteiro) return null;
+  const depoisDe = (el) => { const r = el.getBoundingClientRect(); return e.clientY > r.top + r.height / 2; };
+  if (inteiro) {
+    const ordem = layoutDaHoje().cartoes.map(c => c.id), i = ordem.indexOf(inteiro.dataset.hojeId);
+    return { el: inteiro, antes: depoisDe(inteiro) ? ordem[i + 1] ?? null : inteiro.dataset.hojeId };
+  }
+  const acima = [...coluna.querySelectorAll(':scope > .hoje-cartao')].find(c => !depoisDe(c));
+  return { el: coluna, coluna: Number(coluna.dataset.hojeColuna), antes: acima?.dataset.hojeId ?? null };
+}
+const limparAlvosDaHoje = () => document.querySelectorAll('.hoje-alvo').forEach(x => x.classList.remove('hoje-alvo'));
+document.addEventListener('dragstart', e => {
+  const c = e.target.closest?.('.hoje-cartao');
+  if (!c) return;
+  e.dataTransfer.setData('text/kiro-cartao', c.dataset.hojeId);
+  e.dataTransfer.effectAllowed = 'move';
+});
+document.addEventListener('dragover', e => {
+  if (!e.dataTransfer.types.includes('text/kiro-cartao')) return;
+  const alvo = alvoDoCartao(e);
+  limparAlvosDaHoje();
+  if (!alvo) return;
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+  alvo.el.classList.add('hoje-alvo');
+});
+document.addEventListener('drop', e => {
+  if (!e.dataTransfer.types.includes('text/kiro-cartao')) return;
+  const alvo = alvoDoCartao(e), id = e.dataTransfer.getData('text/kiro-cartao');
+  limparAlvosDaHoje();
+  if (!alvo || !id) return;
+  e.preventDefault();
+  mudarHoje(l => KiroHoje.mover(l, id, alvo.coluna === undefined ? { antes: alvo.antes } : { coluna: alvo.coluna, antes: alvo.antes }));
+});
+document.addEventListener('dragend', limparAlvosDaHoje);
 document.addEventListener('click',e=>{
   const extra=e.target.closest('[data-extra]');if(extra){e.preventDefault();extraAction(extra.dataset.extra,extra.dataset.id);return;}
   const el=e.target.closest('[data-action]');if(el){e.preventDefault();action(el.dataset.action,el.dataset.id,e);return;}
