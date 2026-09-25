@@ -1168,6 +1168,16 @@ function agendarFluxo(){
     if(!await save())fluxoPendente=true;
   },800);
 }
+// Usado antes de substituir `state` por inteiro (troca de cofre, restauração): grava a
+// mudança pendente e já limpa a flag e o timer assim que a gravação em si der certo, sem
+// esperar o passo seguinte (que pode falhar ou ser cancelado) para isso.
+async function gravarFluxoPendente(){
+  if(!fluxoPendente)return true;
+  clearTimeout(timerDoFluxo);
+  if(!await save())return false;
+  fluxoPendente=false;
+  return true;
+}
 const notaVazia = (extra={}) => ({title:"",body:"",links:[],tags:[],folderId:"",...extra});
 // Abas da tela de Pastas: modelo puro (abas.js), sempre limpo contra state.notes. Memória por cofre.
 let abas = KiroAbas.vazio(), abasDoCofre = undefined; // vaultPath a que `abas` pertence (undefined = ainda nenhum)
@@ -2840,7 +2850,7 @@ async function showTrash(){
     document.querySelectorAll('[data-restore]').forEach(b=>b.onclick=async()=>{
       if(busy||failed)return;
       // Uma mudança de fluxo ainda não salva não pode ser descartada pela restauração.
-      if(fluxoPendente){clearTimeout(timerDoFluxo);if(!await save())return;}
+      if(!await gravarFluxoPendente())return;
       setBusy(true);status('Restaurando…');
       try{
         state=await restaurarDoCofre({entryId:b.dataset.restore,revision:state.revision});
@@ -4234,7 +4244,7 @@ async function escolherOutroCofre(){
   if(busy||!window.cadernoDesktop)return;closeModal(true);
   if(failed){status('Exporte suas alterações e recarregue antes de trocar de cofre.',true);return;}
   // Uma mudança de fluxo ainda não salva não pode ser descartada pela troca de cofre.
-  if(fluxoPendente){clearTimeout(timerDoFluxo);if(!await save())return;}
+  if(!await gravarFluxoPendente())return;
   setBusy(true);
   try{const saved=await window.cadernoDesktop.chooseVault();if(saved){Kiro.validateState(saved);state=saved;fluxoPendente=false;clearTimeout(timerDoFluxo);loaded=true;failed=false;expanded=null;editing=null;
     // Plug-ins são do cofre: desliga os do anterior já (antes de ler o layout, para não entrarem no
