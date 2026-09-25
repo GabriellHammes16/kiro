@@ -394,19 +394,29 @@
       if (acao === 'cartao') criarCartaoNoCentro();
     });
 
+    // Foco: acompanhado ao vivo, não amostrado no desmontar. O salvamento automático torna
+    // `.app-shell` inert ANTES de redesenhar (ver `setBusy` em app.js), o que já tira o foco do
+    // fluxo por conta própria — nesse momento `focusout` chega sem `relatedTarget` (como num
+    // blur de janela ou na remoção do nó do DOM), e o sinal não conta como "foco saiu de verdade".
+    // Um pointerdown fora do fluxo é o sinal de que o usuário saiu por vontade própria.
+    raiz.addEventListener('focusin', () => { s.foco = true; });
+    raiz.addEventListener('focusout', e => { if (e.relatedTarget && !raiz.contains(e.relatedTarget)) s.foco = false; });
+    const foraDoFluxo = e => { if (!raiz.contains(e.target)) s.foco = false; };
+    document.addEventListener('pointerdown', foraDoFluxo);
+
     function desmontar() {
       if (!montados.has(inst)) return;
-      // Cada salvamento reconstrói o DOM: sem isto, o foco cairia no body e Delete, Enter,
-      // Ctrl+Z, Espaço e Shift+1 parariam de funcionar até um clique de volta no fluxo.
-      s.foco = raiz.contains(document.activeElement);
       terminarEdicao();
       montados.delete(inst);
+      document.removeEventListener('pointerdown', foraDoFluxo);
       if (timerVista) { clearTimeout(timerVista); gravarVista(opcoes.chaveDaVista, id, s.vista); }
     }
     const inst = { desmontar, ocupado: () => !!gesto || !!editor };
     montados.add(inst);
     desenhar(); aplicarVista();
-    if (s.foco) { s.foco = false; raiz.focus({ preventScroll: true }); }
+    // `.app-shell` ainda pode estar inert aqui (setBusy só volta depois do render): focar de
+    // verdade só depois do quadro atual, quando o `finally` do `save()` já tirou o inert.
+    if (s.foco) { s.foco = false; requestAnimationFrame(() => { if (document.contains(raiz)) raiz.focus({ preventScroll: true }); }); }
     return inst;
   }
   function desmontarTodos() { for (const m of [...montados]) m.desmontar(); }
