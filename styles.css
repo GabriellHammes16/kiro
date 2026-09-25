@@ -1200,4 +1200,6 @@ body, button, input, textarea, select { font-family:var(--fonte-interface); }
 .fluxo-cartao.editando > .fluxo-alca { display:none; }
 .fluxo-medida { position:absolute; left:0; top:0; height:auto; visibility:hidden; pointer-events:none; }
 .fluxo-erro { max-width:var(--leitura); margin:40px auto; padding:0 24px; color:var(--muted); }
+.fluxo:focus-visible { outline:none; box-shadow:inset 0 0 0 2px var(--acento); }
+.fluxo-zoom:focus-visible, .fluxo-barra .icon-button:focus-visible { outline:2px solid var(--acento); outline-offset:2px; }
 .tree-tipo { flex:0 0 auto; margin-left:auto; padding-left:8px; font-size:10px; letter-spacing:.06em; color:var(--muted); }

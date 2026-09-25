@@ -1162,7 +1162,10 @@ function agendarFluxo(){
     // Não salvar no meio de um arraste ou de uma digitação: o salvamento redesenha a tela.
     if(KiroFluxoTela.ocupado()||busy)return agendarFluxo();
     if(failed)return;
-    if(await save())fluxoPendente=false;
+    // Limpa antes de salvar: um mudarFluxo que aconteça durante o `await` (ex.: outro
+    // redesenho) marca de novo e agenda seu próprio timer, sem ser apagado por este.
+    fluxoPendente=false;
+    if(!await save())fluxoPendente=true;
   },800);
 }
 const notaVazia = (extra={}) => ({title:"",body:"",links:[],tags:[],folderId:"",...extra});
@@ -2836,9 +2839,12 @@ async function showTrash(){
     modal('Lixeira', itens.length ? itens.map(i=>`<div class="routine-item"><span class="brand-mark">${icone(i.kind==='folder'?'pastas':'nota')}</span><span class="routine-title">${escapeHtml(i.title)}<div class="task-info">${detalhe(i)} · removido em ${quando(i.deletedAt)}</div></span><button class="secondary" data-restore="${escapeHtml(i.entryId)}">Restaurar</button></div>`).join('') : '<p>A lixeira está vazia.</p>');
     document.querySelectorAll('[data-restore]').forEach(b=>b.onclick=async()=>{
       if(busy||failed)return;
+      // Uma mudança de fluxo ainda não salva não pode ser descartada pela restauração.
+      if(fluxoPendente){clearTimeout(timerDoFluxo);if(!await save())return;}
       setBusy(true);status('Restaurando…');
       try{
         state=await restaurarDoCofre({entryId:b.dataset.restore,revision:state.revision});
+        fluxoPendente=false;clearTimeout(timerDoFluxo);
         expanded=null;closeModal(true);render();status('Restaurado do cofre');
       }catch(erro){
         // Falha ao restaurar não põe em risco o que está na janela: não trava a interface.
@@ -4227,8 +4233,10 @@ $('#settings').onclick=()=>showSettings();
 async function escolherOutroCofre(){
   if(busy||!window.cadernoDesktop)return;closeModal(true);
   if(failed){status('Exporte suas alterações e recarregue antes de trocar de cofre.',true);return;}
+  // Uma mudança de fluxo ainda não salva não pode ser descartada pela troca de cofre.
+  if(fluxoPendente){clearTimeout(timerDoFluxo);if(!await save())return;}
   setBusy(true);
-  try{const saved=await window.cadernoDesktop.chooseVault();if(saved){Kiro.validateState(saved);state=saved;loaded=true;failed=false;expanded=null;editing=null;
+  try{const saved=await window.cadernoDesktop.chooseVault();if(saved){Kiro.validateState(saved);state=saved;fluxoPendente=false;clearTimeout(timerDoFluxo);loaded=true;failed=false;expanded=null;editing=null;
     // Plug-ins são do cofre: desliga os do anterior já (antes de ler o layout, para não entrarem no
     // hoje.json do novo) e carrega os que este cofre permite.
     carregarPlugins();await carregarHoje();personalizandoHoje=false;render();}}
