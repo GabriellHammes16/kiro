@@ -295,6 +295,20 @@ test('fluxo: arquivos ocultos e fora de .canvas não viram fluxo', async t => {
   assert.deepEqual((await vault.load()).fluxos, []);
 });
 
+test('fluxo: arquivo recriado no caminho de um fluxo renomeado não colide de id com ele', async t => {
+  const vault = await setup(t); await seed(vault);
+  await escreverCanvas(vault, 'Z.canvas', { nodes: [], edges: [] });
+  let s = await vault.load();
+  const H = s.fluxos[0].id;
+  assert.match(H, /^fluxo-[0-9a-f]{32}$/);
+  await vault.save({ ...s, fluxos: [{ ...s.fluxos[0], title: 'A' }] });
+  await escreverCanvas(vault, 'Z.canvas', { nodes: [], edges: [] });
+  const s2 = await vault.load();
+  assert.equal(s2.fluxos.length, 2);
+  assert.equal(new Set(s2.fluxos.map(f => f.id)).size, 2);
+  assert.equal(s2.fluxos.find(f => f.file === 'A.canvas').id, H);
+});
+
 const pasta = { id: 'pasta-1', title: 'Ideias', parentId: '', description: '', color: '' };
 async function comPasta(vault) { const s = await seed(vault); return vault.save({ ...s, folders: [pasta] }); }
 const vazio = () => ({ nodes: [], edges: [] });
@@ -326,6 +340,17 @@ test('renomear a pasta leva o fluxo junto, com o mesmo id', async t => {
   assert.equal(s.fluxos[0].id, 'fluxo-1');
 });
 
+test('mover um fluxo pra fora de uma pasta apagada na mesma gravação não duplica o arquivo na lixeira', async t => {
+  const vault = await setup(t); let s = await comPasta(vault);
+  s = await vault.save({ ...s, fluxos: [{ id: 'fluxo-1', title: 'Plano', folderId: 'pasta-1', canvas: vazio() }] });
+  s = await vault.save({ ...s, folders: [], fluxos: [{ ...s.fluxos[0], folderId: '' }] });
+  await fs.access(path.join(vault.directory, 'Plano.canvas'));
+  const trash = await vault.trash();
+  assert.equal(trash.length, 1);
+  const entry = await vault.readTrash(trash[0].entryId);
+  assert.ok(!entry.files.includes('Ideias/Plano.canvas'));
+});
+
 test('canvas sem mudança não é regravado; campos desconhecidos sobrevivem a uma edição', async t => {
   const vault = await setup(t); await seed(vault);
   const original = '{\n  "nodes": [{"id":"a","type":"text","text":"Oi","x":0,"y":0,"width":200,"height":60,"styleAttributes":{"shape":"pill"}}],\n  "edges": [],\n  "x-extra": 1\n}';
@@ -350,16 +375,23 @@ test('fluxo com erro nunca é regravado, nem se a interface mandar um canvas par
   assert.equal(await fs.readFile(path.join(vault.directory, 'Quebrado.canvas'), 'utf8'), '{nope');
 });
 
+test('fluxo com tipo de cartão desconhecido fica byte a byte intacto depois de um salvamento não relacionado', async t => {
+  const vault = await setup(t); await seed(vault);
+  await escreverCanvas(vault, 'Futuro.canvas', { nodes: [{ ...umCartao, type: 'video' }], edges: [] });
+  const original = await fs.readFile(path.join(vault.directory, 'Futuro.canvas'), 'utf8');
+  const s = await vault.load();
+  await vault.save({ ...s, notes: s.notes.map(n => ({ ...n, body: 'mudou outra vez' })) });
+  assert.equal(await fs.readFile(path.join(vault.directory, 'Futuro.canvas'), 'utf8'), original);
+});
+
 test('fluxo fora de state.fluxos continua no disco (etapa 1 não apaga)', async t => {
   const vault = await setup(t); await seed(vault);
   await escreverCanvas(vault, 'Mapa.canvas', { nodes: [], edges: [] });
   const s = await vault.load();
   await vault.save({ ...s, fluxos: [] });
-  const { fluxos, ...semFluxos } = s;
   await vault.save({ ...(await vault.load()), fluxos: undefined, notes: s.notes.map(n => ({ ...n, body: 'y' })) });
   await fs.access(path.join(vault.directory, 'Mapa.canvas'));
   assert.equal((await vault.load()).fluxos.length, 1);
-  assert.ok(semFluxos);
 });
 
 test('nome inválido, canvas inválido e nome repetido recusam o salvamento inteiro', async t => {

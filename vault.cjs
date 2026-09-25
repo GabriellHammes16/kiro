@@ -176,13 +176,25 @@ class Vault {
     }
     // Fluxos (.canvas): o id mora no caderno.json, porque o Obsidian descartaria um campo
     // extra dentro do arquivo. Arquivo movido por fora ganha id novo; nada se perde.
+    // Duas passadas: primeiro quem tem registro válido garante o id (em qualquer ordem de
+    // arquivo), só depois o resto ganha um id por hash — testado contra os já usados, senão
+    // um arquivo recriado no caminho de um fluxo renomeado colidiria com o id que ele levou.
     const registrados=Array.isArray(data.fluxos)?data.fluxos:[], idsUsados=new Set(notes.map(n=>n.id));
-    const fluxos=[...files].filter(([file])=>visible(file)&&/\.canvas$/i.test(file)).sort(([a],[b])=>a.localeCompare(b)).map(([file,value])=>{
+    const canvasFiles=[...files].filter(([file])=>visible(file)&&/\.canvas$/i.test(file)).sort(([a],[b])=>a.localeCompare(b));
+    const idPorArquivo=new Map();
+    for(const [file] of canvasFiles){
       const salvo=registrados.find(r=>r&&r.path===file&&/^[a-zA-Z0-9_-]{1,100}$/.test(r.id||''))?.id;
-      const id=salvo&&!idsUsados.has(salvo)?salvo:`fluxo-${hash(file).slice(0,32)}`;
-      idsUsados.add(id);
+      if(salvo&&!idsUsados.has(salvo)){idPorArquivo.set(file,salvo);idsUsados.add(salvo);}
+    }
+    for(const [file] of canvasFiles){
+      if(idPorArquivo.has(file))continue;
+      let id=`fluxo-${hash(file).slice(0,32)}`,n=1;
+      while(idsUsados.has(id))id=`fluxo-${hash(`${file}\n${n++}`).slice(0,32)}`;
+      idPorArquivo.set(file,id);idsUsados.add(id);
+    }
+    const fluxos=canvasFiles.map(([file,value])=>{
       const lido=KiroFluxo.ler(value.data.toString('utf8'));
-      return {id,file,title:path.posix.basename(file).replace(/\.canvas$/i,''),folderId:byDisk.get(parentPath(file))?.id||'',...(lido.erro?{erro:lido.erro}:{canvas:lido.canvas})};
+      return {id:idPorArquivo.get(file),file,title:path.posix.basename(file).replace(/\.canvas$/i,''),folderId:byDisk.get(parentPath(file))?.id||'',...(lido.erro?{erro:lido.erro}:{canvas:lido.canvas})};
     });
     const paths=folderPaths(folders);
     for(const f of folders)f.path=paths.get(f.id);
@@ -244,7 +256,7 @@ class Vault {
       const old=fluxosAntes.find(f=>f.id===fluxo.id);
       const nome=`${fluxo.title}.canvas`;
       const file=fluxo.folderId?`${paths.get(fluxo.folderId)}/${nome}`:nome;
-      if((!old||old.file!==file)&&!validFolderName(fluxo.title))throw new Error(`Nome de fluxo inválido: ${fluxo.title}`);
+      if((!old||fluxo.title!==old.title)&&!validFolderName(fluxo.title))throw new Error(`Nome de fluxo inválido: ${fluxo.title}`);
       const lido=KiroFluxo.ler(KiroFluxo.serializar(fluxo.canvas));
       if(lido.erro)throw new Error(`Fluxo "${fluxo.title}": ${lido.erro}`);
       const anterior=old&&before.files.get(old.file)?.data;
@@ -287,7 +299,7 @@ class Vault {
     const ancestors=folder=>{const chain=[];let id=folder.parentId;while(id){const p=beforeFolders.find(f=>f.id===id);if(!p)break;chain.unshift(p);id=p.parentId;}return chain;};
     for(const root of roots){
       const ids=descendants(beforeFolders,root.id);
-      await this.archive(transaction,{kind:'folder',id:root.id,title:root.title,originalPath:root.diskPath||root.path,folders:deletedFolders.filter(f=>ids.has(f.id)),notes:deletedNotes.filter(n=>ids.has(n.folderId)),ancestors:ancestors(root)},before);
+      await this.archive(transaction,{kind:'folder',id:root.id,title:root.title,originalPath:root.diskPath||root.path,folders:deletedFolders.filter(f=>ids.has(f.id)),notes:deletedNotes.filter(n=>ids.has(n.folderId)),ancestors:ancestors(root)},before,fluxoFiles);
     }
     for(const note of deletedNotes)if(!roots.some(root=>descendants(beforeFolders,root.id).has(note.folderId))){
       const folder=beforeFolders.find(f=>f.id===note.folderId);
@@ -422,16 +434,18 @@ class Vault {
       await fs.rm(await this.safePath(`.history/${antiga}`),{recursive:true,force:true});
     }
   }
-  async archive(transaction,entry,before){
+  async archive(transaction,entry,before,fluxosGravados=new Set()){
     const base=`.trash/${transaction}/${entry.id}`;
     const covers=file=>entry.kind==='folder'?entry.folders.some(f=>f.diskPath&&inside(file,f.diskPath)):file===entry.originalPath;
     // Guardar só anexos e as notas realmente excluídas. Uma nota que apenas saiu
     // da pasta continua viva em outro caminho; arquivá-la faria a restauração
     // recriar o arquivo e duplicar o caderno-id, quebrando a leitura do cofre.
+    // O mesmo vale para um fluxo que saiu da pasta apagada nesta mesma gravação:
+    // fluxosGravados traz o caminho antigo de quem já foi regravado noutro lugar.
     const arquivosDeNotas=new Set(before.state.notes.map(n=>n.file).filter(Boolean));
     const notasExcluidas=new Set(entry.notes.map(n=>n.file).filter(Boolean));
     entry.directories=before.directories.filter(covers);
-    entry.files=[...before.files.keys()].filter(file=>covers(file)&&(!arquivosDeNotas.has(file)||notasExcluidas.has(file)));
+    entry.files=[...before.files.keys()].filter(file=>covers(file)&&(!arquivosDeNotas.has(file)||notasExcluidas.has(file))&&!fluxosGravados.has(file));
     entry.deletedAt=Number(transaction.split('-')[0]);
     for(const file of entry.files)await atomicWrite(await this.safePath(`${base}/files/${file}`),before.files.get(file).data);
     await atomicWrite(await this.safePath(`${base}/entry.json`),JSON.stringify(entry));
