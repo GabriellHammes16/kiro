@@ -94,6 +94,17 @@ Quem desenha é o [KaTeX](https://katex.org), embarcado em `vendor/katex/` (cerc
 
 Texto colado aos cifrões é o que vira fórmula, então `R$ 5 e R$ 10` continua sendo dinheiro.
 
+## Fluxo
+
+Canvas de ideias para mapas mentais: cartões de texto em Markdown (com código e fórmulas),
+setas com rótulo e cor, pan, zoom e desfazer. Cada fluxo é um arquivo `.canvas` no formato
+aberto [JSON Canvas](https://jsoncanvas.org), compatível com o Obsidian. Crie um pelo botão
+direito numa pasta ("Novo fluxo aqui") ou pelo botão de fluxo no topo da árvore.
+
+Atalhos dentro do fluxo: dois cliques no fundo criam um cartão; arraste de uma alça para ligar
+(soltar no vazio cria um cartão já ligado); Ctrl+roda dá zoom; espaço+arrastar move a vista;
+Shift+1 enquadra tudo; Delete apaga; Ctrl+Z/Ctrl+Y desfazem e refazem.
+
 ## Fontes
 
 O aplicativo embarca as próprias fontes, em `fonts/`, e nunca busca fonte na internet: a aparência é a mesma em qualquer máquina, com ou sem rede.
