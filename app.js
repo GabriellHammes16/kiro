@@ -1070,8 +1070,13 @@ function action(type,id,evento) {
 function deleteFolder(id) {
   const ids=Kiro.descendants(state.folders,id);
   const notes=state.notes.filter(n=>ids.has(n.folderId));
-  const fluxosMovendo=(state.fluxos||[]).filter(f=>ids.has(f.folderId));
-  if((ids.size>1||notes.length||fluxosMovendo.length)&&!confirm(`Esta pasta contém ${ids.size-1} subpasta${ids.size===2?"":"s"}, ${notes.length} nota${notes.length===1?"":"s"} e ${fluxosMovendo.length} fluxo${fluxosMovendo.length===1?"":"s"}. As subpastas serão excluídas, e as notas e os fluxos irão para a raiz do cofre. Continuar?`))return;
+  const fluxosDaPasta=(state.fluxos||[]).filter(f=>ids.has(f.folderId));
+  // Um fluxo com erro não é regravado pelo cofre (nunca teve canvas lido): a exclusão da pasta
+  // não o move para a raiz, ele vai para a lixeira junto com o arquivo da pasta.
+  const fluxosMovendo=fluxosDaPasta.filter(f=>!f.erro);
+  const fluxosComErro=fluxosDaPasta.filter(f=>f.erro);
+  const avisoErro=fluxosComErro.length?` ${fluxosComErro.length} fluxo${fluxosComErro.length===1?"":"s"} não p${fluxosComErro.length===1?"ôde":"uderam"} ser lido${fluxosComErro.length===1?"":"s"} e ${fluxosComErro.length===1?"vai":"vão"} para a lixeira com a pasta.`:"";
+  if((ids.size>1||notes.length||fluxosMovendo.length||fluxosComErro.length)&&!confirm(`Esta pasta contém ${ids.size-1} subpasta${ids.size===2?"":"s"}, ${notes.length} nota${notes.length===1?"":"s"} e ${fluxosMovendo.length} fluxo${fluxosMovendo.length===1?"":"s"}. As subpastas serão excluídas, e as notas e os fluxos irão para a raiz do cofre.${avisoErro} Continuar?`))return;
   // Um fluxo movido para a raiz pode colidir de nome (sem diferenciar maiúsculas) com um fluxo já
   // existente lá, ou com outro fluxo desta mesma leva: recusa tudo antes de mexer no estado.
   const nomesNaRaiz=new Set((state.fluxos||[]).filter(f=>!ids.has(f.folderId)&&(f.folderId||"")==="").map(f=>Kiro.pathKey(f.title)));
@@ -4313,7 +4318,7 @@ document.addEventListener('keydown',e=>{
   if(acao==='salvar'&&!editing)return;
   if(acao){e.preventDefault();ACOES_DOS_ATALHOS[acao]();}
 });
-window.addEventListener('beforeunload',e=>{if(busy||failed||modalDirty||editorDirty||fluxoPendente){e.preventDefault();e.returnValue='';}});
+window.addEventListener('beforeunload',e=>{if(busy||failed||modalDirty||editorDirty||fluxoPendente||KiroFluxoTela.ocupado()){e.preventDefault();e.returnValue='';}});
 window.addEventListener('focus',()=>reload());
 setInterval(()=>{if(document.hidden)return;if(lastDay!==today()){lastDay=today();if(loaded&&!busy)render();}reload();if(loaded)for(const id of pluginsAtivos.keys())entregarDia(id);},5000);
 desenharIconesFixos();

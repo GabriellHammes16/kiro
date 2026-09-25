@@ -32,7 +32,7 @@
     <div class="fluxo-cartoes"></div>
     <div class="fluxo-marca" hidden></div>
   </div>
-  <div class="fluxo-barra"><button type="button" class="icon-button" data-fluxo-acao="cartao" title="Adicionar cartão (ou dois cliques no fundo)" aria-label="Adicionar cartão">${opcoes.icone('mais')}</button><button type="button" class="fluxo-zoom" data-fluxo-acao="enquadrar" title="Enquadrar tudo (Shift+1)">100%</button></div>
+  <div class="fluxo-barra"><button type="button" class="icon-button" data-fluxo-acao="cartao" title="Adicionar cartão (ou dois cliques no fundo)" aria-label="Adicionar cartão">${opcoes.icone('mais')}</button><button type="button" class="fluxo-zoom" data-fluxo-acao="enquadrar" title="Enquadrar tudo (Shift+1)" aria-label="Enquadrar tudo">100%</button></div>
 </div>`;
     const raiz = host.firstElementChild;
     const mundo = raiz.querySelector('.fluxo-mundo'), caminhos = raiz.querySelector('.fluxo-caminhos'), cartoes = raiz.querySelector('.fluxo-cartoes');
@@ -54,7 +54,9 @@
     function cartaoHtml(c) {
       const alcas = F.LADOS.map(l => `<span class="fluxo-alca" data-lado="${l}"></span>`).join('') + '<span class="fluxo-canto" title="Arraste para redimensionar"></span>';
       const rotulo = c.type === 'group' ? `<span class="fluxo-grupo-rotulo">${esc(c.label)}</span>` : '';
-      return `<div class="fluxo-cartao${s.selecao.has(c.id) ? ' selecionado' : ''}" data-no="${esc(c.id)}" data-tipo="${esc(c.type)}"${corData(c.color)} style="${corCss(c.color)}left:${c.x}px;top:${c.y}px;width:${c.width}px;height:${c.height}px">${rotulo}<div class="fluxo-conteudo">${conteudo(c)}</div>${alcas}</div>`;
+      // Backup importado só passa por validateState (nodes/edges são listas), não por KiroFluxo.ler:
+      // x/y/width/height viram número aqui antes de entrar no atributo style.
+      return `<div class="fluxo-cartao${s.selecao.has(c.id) ? ' selecionado' : ''}" data-no="${esc(c.id)}" data-tipo="${esc(c.type)}"${corData(c.color)} style="${corCss(c.color)}left:${Number(c.x)}px;top:${Number(c.y)}px;width:${Number(c.width)}px;height:${Number(c.height)}px">${rotulo}<div class="fluxo-conteudo">${conteudo(c)}</div>${alcas}</div>`;
     }
     function setaHtml(e, nodes) {
       const g = F.geometriaDaSeta(nodes, e);
@@ -358,6 +360,9 @@
       else if (e.shiftKey && e.code === 'Digit1') { e.preventDefault(); enquadrarTudo(); }
     });
     raiz.addEventListener('keyup', e => { if (e.key === ' ') { espaco = false; raiz.classList.remove('pan'); } });
+    // Espaço solto depois que o foco já saiu do fluxo não dispara o keyup acima: sem isto, o
+    // pan ficaria travado ligado na próxima vez que o cartão recebesse um gesto do mouse.
+    raiz.addEventListener('blur', () => { espaco = false; raiz.classList.remove('pan'); });
     raiz.addEventListener('dblclick', e => {
       if (e.target.closest('.fluxo-barra, .fluxo-editor, .fluxo-seta')) return;
       const cartao = e.target.closest('.fluxo-cartao');

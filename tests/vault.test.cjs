@@ -353,7 +353,7 @@ test('mover um fluxo pra fora de uma pasta apagada na mesma gravação não dupl
 
 test('canvas sem mudança não é regravado; campos desconhecidos sobrevivem a uma edição', async t => {
   const vault = await setup(t); await seed(vault);
-  const original = '{\n  "nodes": [{"id":"a","type":"text","text":"Oi","x":0,"y":0,"width":200,"height":60,"styleAttributes":{"shape":"pill"}}],\n  "edges": [],\n  "x-extra": 1\n}';
+  const original = '{\n  "nodes": [{"id":"a","type":"text","text":"Oi","x":0,"y":0,"width":200,"height":60,"styleAttributes":{"shape":"pill"}},{"id":"c","type":"text","text":"Lá","x":300,"y":0,"width":200,"height":60}],\n  "edges": [{"id":"e1","fromNode":"a","toNode":"c","styleAttributes":{"pathfindingMethod":"square"}}],\n  "x-extra": 1\n}';
   await escreverCanvas(vault, 'Mapa.canvas', original);
   let s = await vault.load();
   s = await vault.save({ ...s, notes: s.notes.map(n => ({ ...n, body: 'mudou' })) });
@@ -363,7 +363,8 @@ test('canvas sem mudança não é regravado; campos desconhecidos sobrevivem a u
   const gravado = JSON.parse(await fs.readFile(path.join(vault.directory, 'Mapa.canvas'), 'utf8'));
   assert.equal(gravado['x-extra'], 1);
   assert.deepEqual(gravado.nodes[0].styleAttributes, { shape: 'pill' });
-  assert.equal(gravado.nodes.length, 2);
+  assert.equal(gravado.nodes.length, 3);
+  assert.deepEqual(gravado.edges[0].styleAttributes, { pathfindingMethod: 'square' });
 });
 
 test('fluxo com erro nunca é regravado, nem se a interface mandar um canvas para ele', async t => {
@@ -392,6 +393,15 @@ test('fluxo fora de state.fluxos continua no disco (etapa 1 não apaga)', async 
   await vault.save({ ...(await vault.load()), fluxos: undefined, notes: s.notes.map(n => ({ ...n, body: 'y' })) });
   await fs.access(path.join(vault.directory, 'Mapa.canvas'));
   assert.equal((await vault.load()).fluxos.length, 1);
+});
+
+test('renomear um fluxo reescreve [[X.canvas]] nas notas que apontam pra ele', async t => {
+  const vault = await setup(t);
+  await seed(vault, [note({ body: 'Veja o mapa em [[Plano.canvas]].' })]);
+  await escreverCanvas(vault, 'Plano.canvas', vazio());
+  let s = await vault.load();
+  s = await vault.save({ ...s, fluxos: [{ ...s.fluxos[0], title: 'Plano B' }] });
+  assert.match(s.notes[0].body, /\[\[Plano B\.canvas\]\]/);
 });
 
 test('nome inválido, canvas inválido e nome repetido recusam o salvamento inteiro', async t => {
