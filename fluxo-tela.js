@@ -97,6 +97,14 @@
       desenhar();
       opcoes.aoMudar(canvas);
     }
+    function voltar(fn) {
+      const r = fn(s.historico, canvas);
+      if (!r) return;
+      terminarEdicao();
+      s.historico = r.historico; canvas = r.canvas;
+      desenhar(); opcoes.aoMudar(canvas);
+    }
+    const desfazer = () => voltar(F.desfazer), refazer = () => voltar(F.refazer);
     const encaixar = v => (s.grade ? F.encaixar(v) : Math.round(v));
     const encaixarPraCima = v => (s.grade ? Math.ceil(v / F.GRADE) * F.GRADE : Math.ceil(v));
     function marcarSelecao() {
@@ -175,6 +183,54 @@
       campo.addEventListener('blur', () => concluir(true));
       campo.focus(); campo.select();
     }
+    // ---- Menus do botão direito ----
+    const NOMES_DAS_CORES = { '': 'Sem cor', 1: 'Vermelho', 2: 'Laranja', 3: 'Amarelo', 4: 'Verde', 5: 'Ciano', 6: 'Roxo' };
+    const bolinha = cor => `<svg class="icone" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="7" class="fluxo-bolinha"${corData(cor)} style="${corCss(cor)}"/></svg>`;
+    const itensDaCor = aplicar => ['', ...F.CORES].map(cor => ({ rotulo: NOMES_DAS_CORES[cor], icone: bolinha(cor), acao: () => aplicar(cor || undefined) }));
+    function menuDoFundo(p) {
+      return [
+        { rotulo: 'Adicionar cartão', icone: opcoes.icone('mais'), acao: () => criarCartao(p) },
+        { separador: true },
+        { rotulo: 'Desfazer', icone: opcoes.icone('desfazer'), ativo: () => s.historico.antes.length > 0, acao: desfazer },
+        { rotulo: 'Refazer', icone: opcoes.icone('refazer'), ativo: () => s.historico.depois.length > 0, acao: refazer },
+        { separador: true },
+        { rotulo: 'Encaixar na grade', icone: s.grade ? opcoes.icone('marcado') : '', acao: () => { s.grade = !s.grade; } },
+        { rotulo: 'Enquadrar tudo', icone: opcoes.icone('expandir'), acao: enquadrarTudo },
+      ];
+    }
+    function menuDoCartao(idNo) {
+      if (!s.selecao.has(idNo)) selecionar([idNo]);
+      const ids = [...s.selecao];
+      return [
+        { rotulo: 'Cor', icone: bolinha(no(idNo)?.color), filhos: itensDaCor(cor => mudar(ids.reduce((c, x) => F.editarCartao(c, x, { color: cor }), canvas))) },
+        { rotulo: 'Duplicar', icone: opcoes.icone('copiar'), acao: () => { const r = F.duplicarCartoes(canvas, ids); s.selecao = new Set(r.ids); mudar(r.canvas); } },
+        ...(ids.length === 1 && no(idNo)?.type === 'text' ? [{ rotulo: 'Editar texto', icone: opcoes.icone('renomear'), acao: () => editar(idNo) }] : []),
+        { separador: true },
+        { rotulo: ids.length > 1 ? `Excluir ${ids.length} cartões` : 'Excluir', icone: opcoes.icone('lixeira'), acao: () => mudar(F.removerCartoes(canvas, ids)) },
+      ];
+    }
+    function menuDaSeta(idSeta) {
+      selecionarSeta(idSeta);
+      const muda = campos => mudar(F.editarSeta(canvas, idSeta, campos));
+      return [
+        { rotulo: 'Cor', icone: bolinha(canvas.edges.find(x => x.id === idSeta)?.color), filhos: itensDaCor(cor => muda({ color: cor })) },
+        { rotulo: 'Direção', icone: opcoes.icone('direita'), filhos: [
+          { rotulo: 'Ponta no fim (→)', icone: '→', acao: () => muda({ fromEnd: undefined, toEnd: undefined }) },
+          { rotulo: 'Pontas nos dois lados (↔)', icone: '↔', acao: () => muda({ fromEnd: 'arrow', toEnd: undefined }) },
+          { rotulo: 'Sem pontas (—)', icone: '—', acao: () => muda({ fromEnd: undefined, toEnd: 'none' }) },
+        ] },
+        { rotulo: 'Editar rótulo', icone: opcoes.icone('renomear'), acao: () => editarRotulo(idSeta) },
+        { separador: true },
+        { rotulo: 'Excluir', icone: opcoes.icone('lixeira'), acao: () => mudar(F.removerSetas(canvas, [idSeta])) },
+      ];
+    }
+    raiz.addEventListener('contextmenu', e => {
+      if (e.target.closest('.fluxo-editor, .fluxo-barra')) return;
+      e.stopPropagation();
+      terminarEdicao();
+      const cartao = e.target.closest('.fluxo-cartao'), seta = e.target.closest('.fluxo-seta');
+      opcoes.menu(e, cartao ? menuDoCartao(cartao.dataset.no) : seta ? menuDaSeta(seta.dataset.seta) : menuDoFundo(pontoDoCanvas(e)));
+    });
     function criarCartaoNoCentro() { const [w, h] = tamanho(); criarCartao(F.paraCanvas(s.vista, w / 2, h / 2)); }
 
     // ---- Gestos (ponteiro) ----
@@ -317,6 +373,12 @@
       if ((e.key === 'Delete' || e.key === 'Backspace') && s.selecao.size) { e.preventDefault(); e.stopPropagation(); mudar(F.removerCartoes(canvas, [...s.selecao])); }
       else if (e.key === 'Enter' && s.selecao.size === 1) { e.preventDefault(); editar([...s.selecao][0]); }
       else if (e.key === 'Escape') selecionar([]);
+    });
+    raiz.addEventListener('keydown', e => {
+      if (e.target !== raiz || !(e.ctrlKey || e.metaKey)) return;
+      const tecla = e.key.toLowerCase();
+      if (tecla === 'z' && !e.shiftKey) { e.preventDefault(); e.stopPropagation(); desfazer(); }
+      else if (tecla === 'y' || (tecla === 'z' && e.shiftKey)) { e.preventDefault(); e.stopPropagation(); refazer(); }
     });
     raiz.addEventListener('click', e => { if (e.target.closest('.fluxo-conteudo a')) e.preventDefault(); });
     raiz.querySelector('.fluxo-barra').addEventListener('click', e => {

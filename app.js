@@ -386,6 +386,8 @@ const TRACOS = {
   sumario: '<path d="M5 6.5h14M5 12h10M5 17.5h6"/>',
   etiqueta: '<path d="M4 4.8v6.2c0 .5.2 1 .6 1.4l7 7c.8.8 2 .8 2.8 0l6-6c.8-.8.8-2 0-2.8l-7-7a2 2 0 0 0-1.4-.6H5.8A1.8 1.8 0 0 0 4 4.8Z"/><circle cx="8.5" cy="8.5" r="1.2"/>',
   'painel-direito': '<rect x="3.5" y="4.5" width="17" height="15" rx="2"/><path d="M15.5 4.5v15"/>',
+  desfazer: '<path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/>',
+  refazer: '<path d="m15 14 5-5-5-5"/><path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13"/>',
 };
 const icone = (nome, classe = '') => `<svg class="icone${classe ? ' ' + classe : ''}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">${TRACOS[nome] || ''}</svg>`;
 // Ícones do HTML fixo: o marcador data-icone vira desenho quando o app abre.
