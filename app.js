@@ -1222,7 +1222,17 @@ function fecharAbertura(){
 // Cofre lento ou com erro: a abertura sai de qualquer jeito, nunca prende a tela.
 setTimeout(fecharAbertura,4000);
 function status(message,error=false){$('#save-status').textContent=message;$('#save-status').classList.toggle('error',error);}
-function setBusy(value){busy=value;document.body.classList.toggle('saving',value);$('.app-shell').inert=value;$('#modal-root').inert=value;}
+let focoAntesDoBusy=null;   // inert tira o foco de qualquer coisa focada; ao sair do "ocupado" ele volta pra onde estava
+function setBusy(value){
+  if(value&&!busy)focoAntesDoBusy=document.activeElement;
+  busy=value;document.body.classList.toggle('saving',value);$('.app-shell').inert=value;$('#modal-root').inert=value;
+  if(!value){
+    const f=focoAntesDoBusy;focoAntesDoBusy=null;
+    // Se o elemento saiu do documento nesse meio-tempo (ex.: um redesenho o substituiu, ou o
+    // modal que o continha fechou), não há pra onde voltar: quem substituiu cuida do próprio foco.
+    if(f&&f!==document.body&&document.contains(f)&&document.activeElement!==f)f.focus({preventScroll:true});
+  }
+}
 async function reload(manual=false){
   if(aguardandoCofre||busy||(!manual&&(failed||editorDirty||fluxoPendente||KiroFluxoTela.ocupado()||$('#modal-root').firstChild)))return;
   if(manual&&(failed||modalDirty||editorDirty||fluxoPendente)&&!confirm('Recarregar descarta alterações ainda não salvas nesta janela. Exporte seus dados ou copie o texto antes de continuar. Recarregar?'))return;
