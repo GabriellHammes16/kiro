@@ -149,6 +149,32 @@
       area.focus();
     }
     function terminarEdicao() { editor?.concluir(true); }
+    // Rótulo: um <input> sobre o meio da curva. Enter ou sair gravam; Esc desiste. Vazio tira o rótulo.
+    function editarRotulo(idSeta) {
+      const seta = canvas.edges.find(x => x.id === idSeta), g = seta && F.geometriaDaSeta(canvas.nodes, seta);
+      if (!g) return;
+      terminarEdicao();
+      const campo = document.createElement('input');
+      campo.className = 'fluxo-editor fluxo-rotulo-editor';
+      campo.value = seta.label || '';
+      campo.setAttribute('aria-label', 'Rótulo da seta');
+      Object.assign(campo.style, { left: `${g.meio.x}px`, top: `${g.meio.y}px` });
+      mundo.appendChild(campo);
+      let feito = false;
+      const concluir = gravar => {
+        if (feito) return;
+        feito = true; editor = null; campo.remove();
+        const label = campo.value.trim() || undefined;
+        if (gravar && label !== seta.label) mudar(F.editarSeta(canvas, idSeta, { label }));
+      };
+      editor = { concluir };
+      campo.addEventListener('keydown', e => {
+        e.stopPropagation();
+        if (e.key === 'Enter' || e.key === 'Escape') { e.preventDefault(); concluir(e.key === 'Enter'); raiz.focus({ preventScroll: true }); }
+      });
+      campo.addEventListener('blur', () => concluir(true));
+      campo.focus(); campo.select();
+    }
     function criarCartaoNoCentro() { const [w, h] = tamanho(); criarCartao(F.paraCanvas(s.vista, w / 2, h / 2)); }
 
     // ---- Gestos (ponteiro) ----
@@ -201,11 +227,42 @@
       },
       soltar(g) { marca.hidden = true; if (g.ret) selecionar([...new Set([...g.base, ...F.dentro(canvas.nodes, g.ret)])]); },
     };
+    function selecionarSeta(idSeta) { s.selecao = new Set(); s.seta = idSeta; marcarSelecao(); }
+    GESTOS.ligar = {
+      mover(g, e) {
+        if (!andou(g, e)) return;
+        const inicio = F.pontoDoLado(no(g.de), g.lado);
+        previa.setAttribute('d', F.caminhoDaSeta(inicio, g.lado, pontoDoCanvas(e), F.OPOSTO[g.lado]).d);
+        previa.classList.add('ativa');
+      },
+      soltar(g, e) {
+        previa.classList.remove('ativa');
+        if (!g.andou) return;
+        const origem = no(g.de), saida = F.pontoDoLado(origem, g.lado);
+        const alvo = document.elementFromPoint(e.clientX, e.clientY)?.closest('.fluxo-cartao');
+        if (alvo && raiz.contains(alvo)) {
+          const destino = no(alvo.dataset.no);
+          if (!destino || destino.id === origem.id) return;
+          return void mudar(F.ligar(canvas, { fromNode: origem.id, fromSide: g.lado, toNode: destino.id, toSide: F.ladoMaisProximo(destino, saida) }).canvas);
+        }
+        // Soltar no vazio: cartão novo já ligado e em edição (o gesto mais rápido do mapa mental).
+        const p = pontoDoCanvas(e), lado = F.OPOSTO[g.lado], largura = 260, altura = 60;
+        const x = lado === 'left' ? p.x : lado === 'right' ? p.x - largura : p.x - largura / 2;
+        const y = lado === 'top' ? p.y : lado === 'bottom' ? p.y - altura : p.y - altura / 2;
+        const passo = F.adicionarCartao(canvas, { type: 'text', text: '', x: encaixar(x), y: encaixar(y), width: largura, height: altura });
+        const ligado = F.ligar(passo.canvas, { fromNode: origem.id, fromSide: g.lado, toNode: passo.id, toSide: lado });
+        s.selecao = new Set([passo.id]);
+        mudar(ligado.canvas);   // um passo só de desfazer para cartão + seta
+        editar(passo.id);
+      },
+    };
     function iniciar(e, g) { gesto = { ...g, tela0: pontoDaTela(e), vista0: { ...s.vista } }; raiz.setPointerCapture(e.pointerId); e.preventDefault(); }
     function escolherGesto(e) {
       if (e.button === 1 || (e.button === 0 && espaco)) return { tipo: 'pan' };
       if (e.button !== 0) return null;
-      const p = pontoDoCanvas(e), cartao = e.target.closest('.fluxo-cartao');
+      const p = pontoDoCanvas(e), cartao = e.target.closest('.fluxo-cartao'), alca = e.target.closest('.fluxo-alca'), seta = e.target.closest('.fluxo-seta');
+      if (cartao && alca) return { tipo: 'ligar', de: cartao.dataset.no, lado: alca.dataset.lado };
+      if (seta) { selecionarSeta(seta.dataset.seta); return null; }
       if (cartao && e.target.closest('.fluxo-canto')) { selecionar([cartao.dataset.no]); return { tipo: 'redimensionar', id: cartao.dataset.no, p0: p }; }
       if (cartao) {
         const idNo = cartao.dataset.no;
@@ -248,6 +305,12 @@
       const cartao = e.target.closest('.fluxo-cartao');
       if (cartao) editar(cartao.dataset.no);
       else criarCartao(pontoDoCanvas(e));
+    });
+    raiz.addEventListener('dblclick', e => { const seta = e.target.closest('.fluxo-seta'); if (seta) editarRotulo(seta.dataset.seta); });
+    raiz.addEventListener('keydown', e => {
+      if (e.target !== raiz || !s.seta || (e.key !== 'Delete' && e.key !== 'Backspace')) return;
+      e.preventDefault(); e.stopPropagation();
+      mudar(F.removerSetas(canvas, [s.seta]));
     });
     raiz.addEventListener('keydown', e => {
       if (e.target !== raiz) return;
