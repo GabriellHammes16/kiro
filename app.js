@@ -1,6 +1,6 @@
 const today = () => Kiro.localDate();
 const uid = () => crypto.randomUUID();
-let state = { notes: [], tasks: [], habits: [], habitLog: {}, folders: [] };
+let state = { notes: [], tasks: [], habits: [], habitLog: {}, folders: [], fluxos: [] };
 let currentView = "today";
 
 async function loadFromVault() { return window.cadernoDesktop ? window.cadernoDesktop.loadState() : api('state'); }
@@ -22,7 +22,9 @@ function formatDate(date) { return new Intl.DateTimeFormat("pt-BR", { weekday:"l
 function dateLabel(date) { return date === today() ? "Hoje" : new Intl.DateTimeFormat("pt-BR", { day:"2-digit", month:"short" }).format(new Date(`${date}T12:00:00`)); }
 function updateCount() { const open = state.tasks.filter(t => !t.done).length; document.querySelector("#task-count").textContent = open || ""; }
 function getNote(id) { return state.notes.find(n => n.id === id); }
+function getFluxo(id) { return (state.fluxos || []).find(f => f.id === id); }
 function render() {
+  KiroFluxoTela.desmontarTodos(); // grava o texto em edição no estado antes de a tela ser refeita
   if (currentView !== 'today') personalizandoHoje = false;
   if (currentView.startsWith('plugin:') && !pluginsAtivos.get(currentView.slice(7))?.manifesto?.page) currentView = 'today';
   // Recalculado depois da queda para 'today': senão a página "não está ativo" ainda desenharia.
@@ -299,12 +301,14 @@ function renderTasks() { const open = state.tasks.filter(t=>!t.done).sort((a,b)=
 const byTitle = (a,b) => a.title.localeCompare(b.title,'pt-BR',{numeric:true});
 const childFolders = id => state.folders.filter(f=>(f.parentId||"")===id).sort(byTitle);
 const folderNotes = id => state.notes.filter(n=>(n.folderId||"")===id).sort(byTitle);
+const folderFluxos = id => (state.fluxos || []).filter(f => (f.folderId || "") === id).sort(byTitle);
 // Árvore no estilo de um explorador de arquivos: pastas aninhadas, notas como folhas.
 // ---- Ícones ----
 // Desenho vetorial no lugar de emoji e símbolos de texto: mesma grade de 24, mesma
 // espessura de traço, e a cor vem do texto em volta (currentColor), então o ícone
 // acompanha hover, foco e tema sem regra extra.
 const TRACOS = {
+  fluxo: '<rect x="3" y="4" width="7" height="6" rx="1.5"/><rect x="14" y="14" width="7" height="6" rx="1.5"/><path d="M10 7h2.5a2 2 0 0 1 2 2v5"/>',
   hoje: '<circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M4.6 4.6l1.4 1.4M18 18l1.4 1.4M2.5 12h2M19.5 12h2M4.6 19.4 6 18M18 6l1.4-1.4"/>',
   notas: '<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9 13h6M9 17h4"/>',
   tarefas: '<path d="M4 7.2 5.4 8.6 8 6M4 16.2 5.4 17.6 8 15"/><path d="M11 7h9M11 17h9"/>',
@@ -395,7 +399,7 @@ function treeMarkup(parentId, depth) {
   if (depth > 20) return ""; // guarda contra ciclo, mesmo que validateState já recuse
   const folders = childFolders(parentId).map(folder => {
     const open = expanded.has(folder.id);
-    const temFilhos = childFolders(folder.id).length || folderNotes(folder.id).length;
+    const temFilhos = childFolders(folder.id).length || folderNotes(folder.id).length || folderFluxos(folder.id).length;
     const tools = `<span class="tree-tools"><button class="icon-button" data-action="new-note-folder" data-id="${folder.id}" title="Nova nota nesta pasta">${icone('mais')}</button><button class="icon-button" data-action="new-subfolder" data-id="${folder.id}" title="Nova subpasta">${icone('pasta-nova')}</button><button class="icon-button" data-action="edit-folder" data-id="${folder.id}" title="Renomear ou mover">${icone('renomear')}</button><button class="icon-button" data-action="delete-folder" data-id="${folder.id}" title="Excluir">${icone('lixeira')}</button></span>`;
     // Filhos ficam sempre no DOM: abrir e fechar vira transição de CSS, sem redesenhar.
     return `<div class="tree-node${open?" open":""}" data-id="${folder.id}"${folder.color?` data-cor-pasta="${folder.color}"`:""}><div class="tree-row tree-folder" data-action="toggle-folder" data-id="${folder.id}" style="--depth:${depth}"${folder.description?` title="${escapeHtml(folder.description)}"`:""}><span class="twisty">${temFilhos?icone('direita'):""}</span><span class="tree-icone">${icone('pastas')}</span><span class="tree-name" title="${escapeHtml(folder.title)}">${escapeHtml(folder.title)}</span>${tools}</div><div class="tree-children"><div class="tree-children-inner">${treeMarkup(folder.id,depth+1)}</div></div></div>`;
@@ -404,7 +408,9 @@ function treeMarkup(parentId, depth) {
     const tags = Kiro.tags(note).slice(0,2).map(t=>`#${escapeHtml(t)}`).join(" ");
     return `<div class="tree-row tree-note${editing?.id === note.id ? " ativa" : ""}" draggable="true" data-action="edit-note" data-id="${note.id}" style="--depth:${depth}"><span class="twisty"></span><span class="tree-icone">${icone('nota')}</span><span class="tree-name" title="${escapeHtml(note.title||"Sem título")}">${escapeHtml(note.title||"Sem título")}</span><span class="tree-meta">${tags}</span></div>`;
   }).join("");
-  return folders + notes;
+  const ativo = KiroAbas.notaAtiva(abas);
+  const fluxos = folderFluxos(parentId).map(f => `<div class="tree-row tree-fluxo${ativo === f.id ? " ativa" : ""}" data-action="abrir-fluxo" data-id="${f.id}" style="--depth:${depth}"><span class="twisty"></span><span class="tree-icone">${icone('fluxo')}</span><span class="tree-name" title="${escapeHtml(f.title)}">${escapeHtml(f.title)}</span><span class="tree-tipo">FLUXO</span></div>`).join("");
+  return folders + notes + fluxos;
 }
 // Anima a altura em pixels: height:auto não é interpolável, e o interpolate-size
 // que resolveria isso é desligado pelo navegador sob "reduzir movimento".
@@ -581,7 +587,8 @@ function alternarLateral() {
 function tituloDaAba(id) {
   if (id === KiroAbas.RASCUNHO) return 'Nova nota';
   const nota = getNote(id);
-  return nota ? (nota.title || 'Sem título') : 'Sem título';
+  if (nota) return nota.title || 'Sem título';
+  return getFluxo(id)?.title || 'Sem título';
 }
 function barraDeAbas(painel) {
   const p = abas.paineis[painel];
@@ -612,12 +619,33 @@ function renderLeitura(id, painel) {
 }
 // O que vai dentro do corpo de uma metade: a metade ativa mostra o editor (ou o vazio); a outra, leitura.
 function conteudoMetade(painel) {
+  const doFluxo = abas.paineis[painel]?.ativa;
+  if (doFluxo && getFluxo(doFluxo)) return fluxoHostMarkup(getFluxo(doFluxo), painel);
   if (abas.ativo === painel) return editing ? renderEditor() : cofreVazioMarkup(painel);
   const ativa = abas.paineis[painel]?.ativa;
   return ativa ? renderLeitura(ativa, painel) : cofreVazioMarkup(painel);
 }
 function metadeMarkup(painel) {
-  return `<section class="cofre-metade${abas.ativo === painel ? ' ativa' : ''}" data-painel="${painel}" style="flex-grow:${abas.larguras[painel]}">${barraDeAbas(painel)}<div class="cofre-nota-corpo">${conteudoMetade(painel)}</div></section>`;
+  const comFluxo = getFluxo(abas.paineis[painel]?.ativa) ? ' com-fluxo' : '';
+  return `<section class="cofre-metade${abas.ativo === painel ? ' ativa' : ''}" data-painel="${painel}" style="flex-grow:${abas.larguras[painel]}">${barraDeAbas(painel)}<div class="cofre-nota-corpo${comFluxo}">${conteudoMetade(painel)}</div></section>`;
+}
+// Coluna com um fluxo: o editor é montado depois do innerHTML (bindView → montarFluxos).
+function fluxoHostMarkup(fluxo, painel) {
+  if (fluxo.erro) return `<div class="fluxo-erro"><h2>${escapeHtml(fluxo.title)}</h2><p>Este fluxo não pôde ser lido e não será alterado pelo Kiro.</p><p><code>${escapeHtml(fluxo.erro)}</code></p></div>`;
+  return `<div class="fluxo-host" data-fluxo="${escapeHtml(fluxo.id)}" data-painel="${painel}"></div>`;
+}
+function montarFluxos() {
+  for (const host of document.querySelectorAll('.fluxo-host')) {
+    const fluxo = getFluxo(host.dataset.fluxo);
+    if (!fluxo?.canvas) continue;
+    KiroFluxoTela.montar(host, {
+      id: fluxo.id, titulo: fluxo.title, canvas: fluxo.canvas,
+      markdown: renderizarMarkdown, icone,
+      menu: (evento, itens) => abrirMenuContexto(evento, document.body, itens),
+      chaveDaVista: 'kiro.fluxoVista:' + (state.vaultPath || ''),
+      aoMudar: canvas => mudarFluxo(fluxo.id, canvas),
+    });
+  }
 }
 // Colunas lado a lado; entre duas vizinhas, uma divisória que ajusta a largura das duas.
 const LARGURA_MIN_COLUNA = 260;
@@ -754,7 +782,7 @@ function rolarParaTitulo(pos) {
 function renderCofre() {
   if (expanded === null) expanded = new Set(state.folders.map(f => f.id));
   garantirAbasDoCofre();
-  abas = KiroAbas.limpar(abas, state.notes.map(n => n.id));
+  abas = KiroAbas.limpar(abas, [...state.notes.map(n => n.id), ...(state.fluxos || []).map(f => f.id)]);
   // Sem editor aberto (voltando de outra tela ou de uma recarga), ou a nota em edição ficou
   // desatualizada em relação à aba ativa (ex.: uma recarga em segundo plano apagou a nota que
   // estava aberta): reabre a nota da aba ativa. Nunca troca `editing` enquanto houver algo não salvo.
@@ -777,6 +805,7 @@ function renderCofre() {
       <button class="icon-button" data-cofre="casa" title="Voltar ao início" aria-label="Voltar ao início">${icone('casa')}</button>
       <span class="cofre-nome">Cofre</span>
       <span class="cofre-acoes">
+        <button class="icon-button" id="add-fluxo" title="Novo fluxo">${icone('fluxo')}</button>
         <button class="icon-button" id="add-folder" title="Nova pasta">${icone('pasta-nova')}</button>
         <button class="icon-button" id="expand-all" title="Expandir tudo">${icone('expandir')}</button>
         <button class="icon-button" id="collapse-all" title="Recolher tudo">${icone('recolher')}</button>
@@ -998,6 +1027,7 @@ function bindView() {
   document.querySelector('#add-note')?.addEventListener('click',()=>abrirNota(notaVazia()));
   document.querySelector('#add-task')?.addEventListener('click',()=>taskModal());
   document.querySelector('#add-folder')?.addEventListener('click',()=>folderModal());
+  document.querySelector('#add-fluxo')?.addEventListener('click',()=>novoFluxo(''));
   // Limpar a altura embutida devolve o controle ao CSS (0 ou auto), sem animar em massa.
   const abrirTodas=abrir=>{expanded=abrir?new Set(state.folders.map(f=>f.id)):new Set();document.querySelectorAll('.tree-node').forEach(n=>{n.classList.toggle('open',abrir);const c=n.querySelector(':scope > .tree-children');if(c){clearTimeout(c._t);c.style.height='';}});};
   document.querySelector('#expand-all')?.addEventListener('click',()=>abrirTodas(true));
@@ -1019,6 +1049,7 @@ function bindView() {
     abas.paineis.forEach((_,painel)=>{if(abas.ativo!==painel)bindLeitura(painel);});
     if(editing)bindEditor();
     bindPainelDireito();
+    montarFluxos();
     return;
   }
   enhanceView();
@@ -1032,13 +1063,24 @@ function action(type,id,evento) {
     return;
   }
   if (busy || failed || !loaded) return;
-  if(type==="new-subfolder") folderModal({title:"",description:"",parentId:id}); if(type==="toggle-habit") marcarHabito(id); if(type==="toggle-habit-day"){const [habito,dia]=id.split("|");marcarHabito(habito,dia);} if(type==="toggle-task"){const t=state.tasks.find(x=>x.id===id);t.done=!t.done;save();render();} if(type==="toggle-note-task") marcarTarefaDaNota(id); if(type==="edit-note") abrirPorId(id,{novaAba:Boolean(evento?.ctrlKey||evento?.metaKey)}); if(type==="new-note-folder") abrirNota(notaVazia({folderId:id})); if(type==="edit-task") taskModal(state.tasks.find(x=>x.id===id)); if(type==="edit-folder") folderModal(state.folders.find(x=>x.id===id)); if(type==="delete-task"){state.tasks=state.tasks.filter(x=>x.id!==id);save();render();} if(type==="delete-folder") deleteFolder(id); }
+  if(type==="new-subfolder") folderModal({title:"",description:"",parentId:id}); if(type==="toggle-habit") marcarHabito(id); if(type==="toggle-habit-day"){const [habito,dia]=id.split("|");marcarHabito(habito,dia);} if(type==="toggle-task"){const t=state.tasks.find(x=>x.id===id);t.done=!t.done;save();render();} if(type==="toggle-note-task") marcarTarefaDaNota(id); if(type==="edit-note") abrirPorId(id,{novaAba:Boolean(evento?.ctrlKey||evento?.metaKey)}); if(type==="abrir-fluxo") abrirPorId(id,{novaAba:Boolean(evento?.ctrlKey||evento?.metaKey)}); if(type==="new-note-folder") abrirNota(notaVazia({folderId:id})); if(type==="edit-task") taskModal(state.tasks.find(x=>x.id===id)); if(type==="edit-folder") folderModal(state.folders.find(x=>x.id===id)); if(type==="delete-task"){state.tasks=state.tasks.filter(x=>x.id!==id);save();render();} if(type==="delete-folder") deleteFolder(id); }
 // Excluir uma pasta leva junto suas subpastas; as notas continuam no cofre, na raiz.
 function deleteFolder(id) {
   const ids=Kiro.descendants(state.folders,id);
   const notes=state.notes.filter(n=>ids.has(n.folderId));
-  if((ids.size>1||notes.length)&&!confirm(`Esta pasta contém ${ids.size-1} subpasta${ids.size===2?"":"s"} e ${notes.length} nota${notes.length===1?"":"s"}. As subpastas serão excluídas e as notas irão para a raiz do cofre. Continuar?`))return;
+  const fluxosMovendo=(state.fluxos||[]).filter(f=>ids.has(f.folderId));
+  if((ids.size>1||notes.length||fluxosMovendo.length)&&!confirm(`Esta pasta contém ${ids.size-1} subpasta${ids.size===2?"":"s"}, ${notes.length} nota${notes.length===1?"":"s"} e ${fluxosMovendo.length} fluxo${fluxosMovendo.length===1?"":"s"}. As subpastas serão excluídas, e as notas e os fluxos irão para a raiz do cofre. Continuar?`))return;
+  // Um fluxo movido para a raiz pode colidir de nome (sem diferenciar maiúsculas) com um fluxo já
+  // existente lá, ou com outro fluxo desta mesma leva: recusa tudo antes de mexer no estado.
+  const nomesNaRaiz=new Set((state.fluxos||[]).filter(f=>!ids.has(f.folderId)&&(f.folderId||"")==="").map(f=>Kiro.pathKey(f.title)));
+  const vistos=new Set();
+  for(const f of fluxosMovendo){
+    const chave=Kiro.pathKey(f.title);
+    if(nomesNaRaiz.has(chave)||vistos.has(chave))return status('Um fluxo desta pasta tem o mesmo nome de um fluxo que já existe na raiz do cofre.',true);
+    vistos.add(chave);
+  }
   state.notes=state.notes.map(n=>ids.has(n.folderId)?{...n,folderId:""}:n);
+  state.fluxos=(state.fluxos||[]).map(f=>ids.has(f.folderId)?{...f,folderId:''}:f);
   state.folders=state.folders.filter(f=>!ids.has(f.id));
   save();render();
 }
@@ -1058,6 +1100,18 @@ const bolinha = cor => `<svg class="icone" viewBox="0 0 24 24"><circle cx="12" c
 // os objetos de state, e alterar a cópia de quando o menu abriu não seria gravado.
 function menuDaArvore(linha) {
   const id = linha.dataset.id, pastaAtual = () => state.folders.find(f => f.id === id);
+  if (linha.classList.contains('tree-fluxo')) {
+    const fluxo = getFluxo(id);
+    const destinos = [{ id: '', rotulo: 'Raiz do cofre' }, ...state.folders.slice().sort((a, b) => (a.path || a.title).localeCompare(b.path || b.title, 'pt-BR')).map(f => ({ id: f.id, rotulo: f.path || f.title }))];
+    return [
+      { rotulo: 'Abrir', icone: icone('fluxo'), acao: () => getFluxo(id) && abrirFluxo(getFluxo(id)) },
+      // Fluxo com erro não é regravado pelo cofre: renomear ou mover não teriam efeito.
+      ...(fluxo && !fluxo.erro ? [
+        { rotulo: 'Renomear', icone: icone('renomear'), acao: () => getFluxo(id) && fluxoModal(getFluxo(id)) },
+        { rotulo: 'Mover para', icone: icone('pastas'), filhos: destinos.map(d => ({ rotulo: d.rotulo, icone: icone(d.id ? 'pastas' : 'casa'), ativo: () => (getFluxo(id)?.folderId || '') !== d.id, acao: () => moverFluxo(id, d.id) })) },
+      ] : []),
+    ];
+  }
   if (linha.classList.contains('tree-note')) {
     const destinos = [{ id: '', rotulo: 'Raiz do cofre' }, ...state.folders.slice().sort((a, b) => (a.path || a.title).localeCompare(b.path || b.title, 'pt-BR')).map(f => ({ id: f.id, rotulo: f.path || f.title }))];
     return [
@@ -1067,6 +1121,7 @@ function menuDaArvore(linha) {
   }
   return [
     { rotulo: 'Nova nota aqui', icone: icone('mais'), acao: () => abrirNota(notaVazia({ folderId: id })) },
+    { rotulo: 'Novo fluxo aqui', icone: icone('fluxo'), acao: () => novoFluxo(id) },
     { rotulo: 'Nova subpasta', icone: icone('pasta-nova'), acao: () => folderModal({ title: '', description: '', parentId: id }) },
     { separador: true },
     { rotulo: 'Renomear ou mover', icone: icone('renomear'), acao: () => pastaAtual() && folderModal(pastaAtual()) },
@@ -1093,6 +1148,23 @@ let busy=false, failed=false, loaded=false, modalDirty=false, lastDay=today();
 let aguardandoCofre=false;   // primeira abertura no aplicativo: nada é lido até escolher o cofre
 // null = ainda não semeado; na primeira exibição a árvore abre inteira.
 let expanded=null, renderedView=null, editing=null, editorDirty=false, grafoRaf=null, blocoAberto=null;
+// Mudança num fluxo vai direto para `state` e é gravada depois de uma pausa. Enquanto houver
+// uma pendente, a releitura automática não roda (ela trocaria `state` e perderia a mudança).
+let fluxoPendente=false, timerDoFluxo=null;
+function mudarFluxo(id,canvas){
+  state.fluxos=(state.fluxos||[]).map(f=>f.id===id?{...f,canvas}:f);
+  fluxoPendente=true;status('Alterações não salvas');
+  agendarFluxo();
+}
+function agendarFluxo(){
+  clearTimeout(timerDoFluxo);
+  timerDoFluxo=setTimeout(async()=>{
+    // Não salvar no meio de um arraste ou de uma digitação: o salvamento redesenha a tela.
+    if(KiroFluxoTela.ocupado()||busy)return agendarFluxo();
+    if(failed)return;
+    if(await save())fluxoPendente=false;
+  },800);
+}
 const notaVazia = (extra={}) => ({title:"",body:"",links:[],tags:[],folderId:"",...extra});
 // Abas da tela de Pastas: modelo puro (abas.js), sempre limpo contra state.notes. Memória por cofre.
 let abas = KiroAbas.vazio(), abasDoCofre = undefined; // vaultPath a que `abas` pertence (undefined = ainda nenhum)
@@ -1129,14 +1201,15 @@ setTimeout(fecharAbertura,4000);
 function status(message,error=false){$('#save-status').textContent=message;$('#save-status').classList.toggle('error',error);}
 function setBusy(value){busy=value;document.body.classList.toggle('saving',value);$('.app-shell').inert=value;$('#modal-root').inert=value;}
 async function reload(manual=false){
-  if(aguardandoCofre||busy||(!manual&&(failed||editorDirty||$('#modal-root').firstChild)))return;
-  if(manual&&(failed||modalDirty||editorDirty)&&!confirm('Recarregar descarta alterações ainda não salvas nesta janela. Exporte seus dados ou copie o texto antes de continuar. Recarregar?'))return;
+  if(aguardandoCofre||busy||(!manual&&(failed||editorDirty||fluxoPendente||KiroFluxoTela.ocupado()||$('#modal-root').firstChild)))return;
+  if(manual&&(failed||modalDirty||editorDirty||fluxoPendente)&&!confirm('Recarregar descarta alterações ainda não salvas nesta janela. Exporte seus dados ou copie o texto antes de continuar. Recarregar?'))return;
   setBusy(true);
   try{
     const saved=await loadFromVault();Kiro.validateState(saved);
     if(!loaded||manual)await carregarHoje();
     const changed=state.revision!==saved.revision||!loaded;
     state=saved;loaded=true;failed=false;eventosDoCofre(null);
+    if(manual){fluxoPendente=false;clearTimeout(timerDoFluxo);}
     // Recarregar de propósito descarta a edição: a nota aberta volta ao que está no cofre.
     if(manual&&editing){const n=editing.id&&getNote(editing.id);editing=n?{...n,tags:[...(n.tags||[])],links:[...(n.links||[])]}:null;editorDirty=false;if(!editing)currentView='today';}
     if(manual)closeModal(true);if(changed||manual)render();status('Cofre atualizado');
@@ -1212,7 +1285,49 @@ async function abrirNota(nota,{novaAba=false,painel,duplicar=false,colunaNova=fa
   editorDirty=false;currentView='studies';render();
 }
 // Acha a nota pelo id (usado pela árvore e pela barra de abas) e abre.
-function abrirPorId(id,opcoes){ const nota=getNote(id); return nota?abrirNota(nota,opcoes):Promise.resolve(); }
+function abrirPorId(id,opcoes){ const nota=getNote(id); if(nota)return abrirNota(nota,opcoes); const fluxo=getFluxo(id); return fluxo?abrirFluxo(fluxo,opcoes):Promise.resolve(); }
+// Abre um fluxo numa aba. A nota em edição é salva antes; um rascunho vazio some, como em abrirNota.
+async function abrirFluxo(fluxo,{novaAba=false,painel,duplicar=false,colunaNova=false}={}){
+  garantirAbasDoCofre();
+  if(editing&&editorDirty&&!await salvarNota())return;
+  if(editing&&!editing.id){const onde=abas.paineis.findIndex(p=>p.abas.includes(KiroAbas.RASCUNHO));if(onde!==-1)abas=KiroAbas.fechar(abas,onde,KiroAbas.RASCUNHO);}
+  abas=KiroAbas.abrir(abas,fluxo.id,{novaAba,painel,duplicar,colunaNova});
+  gravarAbas();
+  editing=null;editorDirty=false;currentView='studies';render();
+}
+// Fluxo novo: "Sem título", "Sem título 1", … sem repetir nome (sem diferenciar maiúsculas) na pasta.
+async function novoFluxo(folderId=''){
+  if(busy||failed||!loaded)return;
+  const usados=new Set((state.fluxos||[]).filter(f=>(f.folderId||'')===folderId).map(f=>Kiro.pathKey(f.title)));
+  let title='Sem título',i=1;
+  while(usados.has(Kiro.pathKey(title)))title=`Sem título ${i++}`;
+  const fluxo={id:uid(),title,folderId,canvas:{nodes:[],edges:[]}};
+  state.fluxos=[...(state.fluxos||[]),fluxo];
+  if(folderId&&expanded)expanded.add(folderId);
+  if(await save())await abrirFluxo(getFluxo(fluxo.id)||fluxo);
+}
+function fluxoModal(fluxo){
+  modal('Renomear fluxo',`<form class="form" id="fluxo-form"><div class="field"><label for="fluxo-nome">Nome</label><input id="fluxo-nome" name="title" required value="${escapeHtml(fluxo.title)}" /><small class="small-muted">Vira o nome do arquivo .canvas: sem &lt; &gt; : " / \\ | ? * e sem ponto ou espaço no início ou no final.</small></div><div class="form-actions"><button type="button" class="secondary" id="cancel">Cancelar</button><button class="primary">Salvar</button></div></form>`);
+  $('#cancel').onclick=()=>closeModal();
+  $('#fluxo-form').onsubmit=e=>{
+    e.preventDefault();
+    const title=new FormData(e.currentTarget).get('title').trim();
+    if(!Kiro.validFolderName(title)){alert('Nome inválido. Evite < > : " / \\ | ? * , nomes reservados do Windows e ponto ou espaço no início ou no final.');return;}
+    const atual=getFluxo(fluxo.id);if(!atual)return void closeModal(true);
+    if((state.fluxos||[]).some(f=>f.id!==atual.id&&(f.folderId||'')===(atual.folderId||'')&&Kiro.pathKey(f.title)===Kiro.pathKey(title))){alert('Já existe um fluxo com esse nome nesta pasta.');return;}
+    state.fluxos=state.fluxos.map(f=>f.id===atual.id?{...f,title}:f);
+    save();closeModal(true);
+  };
+}
+async function moverFluxo(id,folderId){
+  if(busy||failed||!loaded)return;
+  const fluxo=getFluxo(id);
+  if(!fluxo||(fluxo.folderId||'')===folderId)return;
+  if((state.fluxos||[]).some(f=>f.id!==id&&(f.folderId||'')===folderId&&Kiro.pathKey(f.title)===Kiro.pathKey(fluxo.title)))return status('Já existe um fluxo com esse nome na pasta de destino.',true);
+  if(folderId&&expanded)expanded.add(folderId);
+  state.fluxos=state.fluxos.map(f=>f.id===id?{...f,folderId}:f);
+  await save();
+}
 // Salva a nota em edição (se houver e estiver suja) antes de qualquer ação que possa trocar qual
 // nota fica em `editing` — fechar aba, "fechar as outras", mover/arrastar para o outro lado ou
 // ativar a metade em leitura. Sem isto, fechar ou mover algo do lado inativo poderia trocar a
@@ -4175,7 +4290,7 @@ document.addEventListener('keydown',e=>{
   if(acao==='salvar'&&!editing)return;
   if(acao){e.preventDefault();ACOES_DOS_ATALHOS[acao]();}
 });
-window.addEventListener('beforeunload',e=>{if(busy||failed||modalDirty||editorDirty){e.preventDefault();e.returnValue='';}});
+window.addEventListener('beforeunload',e=>{if(busy||failed||modalDirty||editorDirty||fluxoPendente){e.preventDefault();e.returnValue='';}});
 window.addEventListener('focus',()=>reload());
 setInterval(()=>{if(document.hidden)return;if(lastDay!==today()){lastDay=today();if(loaded&&!busy)render();}reload();if(loaded)for(const id of pluginsAtivos.keys())entregarDia(id);},5000);
 desenharIconesFixos();
