@@ -22,7 +22,9 @@
   }
 
   function montar(host, opcoes) {
-    const { id } = opcoes, s = sessao(id), n = ++contador;
+    // A sessão é por cofre: um `.canvas` sem id do Kiro ganha `fluxo-${hash(caminho)}`, igual em
+    // qualquer cofre, então sem a chave do cofre o Ctrl+Z (e a vista) de um vazariam para o outro.
+    const { id } = opcoes, s = sessao(opcoes.chaveDaVista + '\n' + id), n = ++contador;
     let canvas = opcoes.canvas, gesto = null, editor = null, espaco = false, timerVista = null;
     host.innerHTML = `<div class="fluxo" tabindex="0" role="application" aria-label="Fluxo ${esc(opcoes.titulo)}">
   <div class="fluxo-mundo">
@@ -389,6 +391,9 @@
 
     function desmontar() {
       if (!montados.has(inst)) return;
+      // Cada salvamento reconstrói o DOM: sem isto, o foco cairia no body e Delete, Enter,
+      // Ctrl+Z, Espaço e Shift+1 parariam de funcionar até um clique de volta no fluxo.
+      s.foco = raiz.contains(document.activeElement);
       terminarEdicao();
       montados.delete(inst);
       if (timerVista) { clearTimeout(timerVista); gravarVista(opcoes.chaveDaVista, id, s.vista); }
@@ -396,6 +401,7 @@
     const inst = { desmontar, ocupado: () => !!gesto || !!editor };
     montados.add(inst);
     desenhar(); aplicarVista();
+    if (s.foco) { s.foco = false; raiz.focus({ preventScroll: true }); }
     return inst;
   }
   function desmontarTodos() { for (const m of [...montados]) m.desmontar(); }

@@ -1158,6 +1158,9 @@ function mudarFluxo(id,canvas){
   fluxoPendente=true;status('Alterações não salvas');
   agendarFluxo();
 }
+// Cada salvamento de fluxo copia o cofre inteiro para .history (limite 30): uma espera maior
+// que a do editor de notas evita que digitar ou arrastar sem parar encha o histórico à toa.
+const ESPERA_AUTOSAVE_FLUXO=2000;
 function agendarFluxo(){
   clearTimeout(timerDoFluxo);
   timerDoFluxo=setTimeout(async()=>{
@@ -1168,7 +1171,7 @@ function agendarFluxo(){
     // redesenho) marca de novo e agenda seu próprio timer, sem ser apagado por este.
     fluxoPendente=false;
     if(!await save())fluxoPendente=true;
-  },800);
+  },ESPERA_AUTOSAVE_FLUXO);
 }
 // Usado antes de substituir `state` por inteiro (troca de cofre, restauração): grava a
 // mudança pendente e já limpa a flag e o timer assim que a gravação em si der certo, sem
