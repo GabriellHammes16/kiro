@@ -32,7 +32,7 @@
     <div class="fluxo-cartoes"></div>
     <div class="fluxo-marca" hidden></div>
   </div>
-  <div class="fluxo-barra"><button type="button" class="icon-button" data-fluxo-acao="cartao" title="Adicionar cartão (ou dois cliques no fundo)" aria-label="Adicionar cartão">${opcoes.icone('mais')}</button><button type="button" class="fluxo-zoom" data-fluxo-acao="enquadrar" title="Enquadrar tudo (Shift+1)" aria-label="Enquadrar tudo">100%</button></div>
+  <div class="fluxo-barra"><button type="button" class="icon-button" data-fluxo-acao="cartao" title="Adicionar cartão (ou dois cliques no fundo)" aria-label="Adicionar cartão">${opcoes.icone('mais')}</button><button type="button" class="icon-button" data-fluxo-acao="nota" title="Adicionar nota do cofre" aria-label="Adicionar nota do cofre">${opcoes.icone('nota')}</button><button type="button" class="icon-button" data-fluxo-acao="imagem" title="Adicionar imagem" aria-label="Adicionar imagem">${opcoes.icone('imagem')}</button><button type="button" class="fluxo-zoom" data-fluxo-acao="enquadrar" title="Enquadrar tudo (Shift+1)" aria-label="Enquadrar tudo">100%</button></div>
 </div>`;
     const raiz = host.firstElementChild;
     const mundo = raiz.querySelector('.fluxo-mundo'), caminhos = raiz.querySelector('.fluxo-caminhos'), cartoes = raiz.querySelector('.fluxo-cartoes');
@@ -141,6 +141,34 @@
       editar(r.id);
       return r.id;
     }
+    const centroDaVista = () => { const [w, h] = tamanho(); return F.paraCanvas(s.vista, w / 2, h / 2); };
+    // Novo cartão centrado em p. Depois de um await (modal, gravação de imagem) o app pode ter
+    // redesenhado a tela e este editor já não ser o montado: aí vale o canvas que está no estado.
+    function adicionarNo(base, p) {
+      if (!montados.has(inst)) canvas = opcoes.canvasAtual() || canvas;
+      const r = F.adicionarCartao(canvas, { ...base, x: encaixar(p.x - base.width / 2), y: encaixar(p.y - base.height / 2) });
+      s.selecao = new Set([r.id]);
+      mudar(r.canvas);
+      return r.id;
+    }
+    async function adicionarNota(p) { const nota = await opcoes.escolherNota(); if (nota) adicionarNo({ type: 'file', file: nota.arquivo, width: 400, height: 280 }, p); }
+    async function adicionarImagem(p) { const caminho = await opcoes.escolherImagem(); if (caminho) adicionarNo({ type: 'file', file: caminho, width: 320, height: 240 }, p); }
+    async function adicionarLink(p) { const url = await opcoes.pedirLink(); if (url) adicionarNo({ type: 'link', url, width: 320, height: 100 }, p); }
+    function criarGrupo(p) {
+      const sel = canvas.nodes.filter(n => s.selecao.has(n.id));
+      const caixa = sel.length ? F.caixaDe(sel) : { x: p.x - 200, y: p.y - 150, width: 400, height: 300 };
+      const r = F.adicionarCartao(canvas, { type: 'group', label: 'Grupo', x: encaixar(caixa.x), y: encaixar(caixa.y), width: encaixarPraCima(caixa.width), height: encaixarPraCima(caixa.height) });
+      s.selecao = new Set([r.id]);
+      mudar(r.canvas);
+      editarGrupo(r.id);
+    }
+    // Texto colado: URL sozinha vira link; o resto, cartão de texto com altura estimada.
+    function colarTexto(texto, p) {
+      const limpo = String(texto).trim();
+      if (!limpo) return;
+      if (/^https?:\/\/\S+$/i.test(limpo)) return void adicionarNo({ type: 'link', url: limpo, width: 320, height: 100 }, p);
+      adicionarNo({ type: 'text', text: limpo, width: 320, height: F.alturaEstimada(limpo) }, p);
+    }
     // Editar texto: um <textarea> no lugar do conteúdo. Ao terminar, o cartão cresce se o
     // texto renderizado não couber (nunca encolhe sozinho).
     function editar(idNo) {
@@ -238,9 +266,14 @@
     function menuDoFundo(p) {
       return [
         { rotulo: 'Adicionar cartão', icone: opcoes.icone('mais'), acao: () => criarCartao(p) },
+        { rotulo: 'Adicionar nota do cofre', icone: opcoes.icone('nota'), acao: () => adicionarNota(p) },
+        { rotulo: 'Adicionar imagem', icone: opcoes.icone('imagem'), acao: () => adicionarImagem(p) },
+        { rotulo: 'Adicionar link', icone: opcoes.icone('link'), acao: () => adicionarLink(p) },
+        { rotulo: s.selecao.size ? 'Agrupar seleção' : 'Criar grupo', icone: opcoes.icone('pastas'), acao: () => criarGrupo(p) },
         { separador: true },
         { rotulo: 'Desfazer', icone: opcoes.icone('desfazer'), ativo: () => s.historico.antes.length > 0, acao: desfazer },
         { rotulo: 'Refazer', icone: opcoes.icone('refazer'), ativo: () => s.historico.depois.length > 0, acao: refazer },
+        { rotulo: 'Colar', icone: opcoes.icone('colar'), acao: () => navigator.clipboard.readText().then(t => colarTexto(t, p), () => opcoes.aviso('Não foi possível ler a área de transferência.', true)) },
         { separador: true },
         { rotulo: 'Encaixar na grade', icone: s.grade ? opcoes.icone('marcado') : '', acao: () => { s.grade = !s.grade; } },
         { rotulo: 'Enquadrar tudo', icone: opcoes.icone('expandir'), acao: enquadrarTudo },
@@ -282,7 +315,7 @@
       const cartao = e.target.closest('.fluxo-cartao'), seta = e.target.closest('.fluxo-seta');
       opcoes.menu(e, cartao ? menuDoCartao(cartao.dataset.no) : seta ? menuDaSeta(seta.dataset.seta) : menuDoFundo(pontoDoCanvas(e)));
     });
-    function criarCartaoNoCentro() { const [w, h] = tamanho(); criarCartao(F.paraCanvas(s.vista, w / 2, h / 2)); }
+    function criarCartaoNoCentro() { criarCartao(centroDaVista()); }
 
     // ---- Gestos (ponteiro) ----
     // Cada gesto: { mover(g, e), soltar(g, e) }. As próximas partes do editor acrescentam os seus.
@@ -451,6 +484,8 @@
       const acao = e.target.closest('[data-fluxo-acao]')?.dataset.fluxoAcao;
       if (acao === 'enquadrar') enquadrarTudo();
       if (acao === 'cartao') criarCartaoNoCentro();
+      if (acao === 'nota') adicionarNota(centroDaVista());
+      if (acao === 'imagem') adicionarImagem(centroDaVista());
     });
 
     // Foco: acompanhado ao vivo, não amostrado no desmontar. O salvamento automático torna

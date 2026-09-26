@@ -336,6 +336,7 @@ const TRACOS = {
   lixeira: '<path d="M4 7h16M9.5 7V5.2A1.2 1.2 0 0 1 10.7 4h2.6a1.2 1.2 0 0 1 1.2 1.2V7"/><path d="M6.8 7 7.6 19a1.5 1.5 0 0 0 1.5 1.4h5.8A1.5 1.5 0 0 0 16.4 19L17.2 7"/>',
   renomear: '<path d="M4 20h4l10.3-10.3a2.4 2.4 0 1 0-3.4-3.4L4.6 16.6z"/><path d="M13.6 7.2 16.8 10.4"/>',
   link: '<path d="M10.2 13.8a3.6 3.6 0 0 0 5.1 0l2.6-2.6a3.6 3.6 0 1 0-5.1-5.1l-1.2 1.2"/><path d="M13.8 10.2a3.6 3.6 0 0 0-5.1 0l-2.6 2.6a3.6 3.6 0 1 0 5.1 5.1l1.2-1.2"/>',
+  imagem: '<rect x="3.5" y="4.5" width="17" height="15" rx="2"/><circle cx="9" cy="10" r="1.6"/><path d="m20.5 16-4.5-4.5L6 19.5"/>',
   'link-externo': '<path d="M14 4.5h5.5V10"/><path d="M19.5 4.5 11.5 12.5"/><path d="M18 14v4.5a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-10a2 2 0 0 1 2-2h4.5"/>',
   'ir-para': '<path d="M4.5 12h13M12.5 7l5 5-5 5"/>',
   texto: '<path d="m5 19 6-14 6 14M7.6 14h6.8"/>',
@@ -666,6 +667,11 @@ function montarFluxos() {
       nota: arquivo => { const n = notaPorArquivo(arquivo); return n ? { titulo: n.title || 'Sem título', html: renderizarMarkdown(n.body.slice(0, 2000)) } : null; },
       abrirNota: arquivo => abrirNotaDoFluxo(arquivo, Number(host.dataset.painel)),
       abrirLink: abrirLinkDoFluxo,
+      escolherNota: () => irParaNota({ escolher: true }),
+      escolherImagem: escolherImagemDoSistema,
+      pedirLink: pedirLinkDoFluxo,
+      canvasAtual: () => getFluxo(fluxo.id)?.canvas,
+      aviso: (texto, erro) => status(texto, erro),
     });
   }
 }
@@ -2448,6 +2454,45 @@ async function guardarImagem(arquivo) {
   const resultado = await resposta.json();
   if (!resposta.ok) throw new Error(resultado.error || 'Não foi possível guardar a imagem.');
   return resultado;
+}
+// Seletor de arquivos do sistema → anexo do cofre (mesmo caminho da imagem colada). Devolve o caminho.
+function escolherImagemDoSistema() {
+  return new Promise(resolve => {
+    const campo = document.createElement('input');
+    campo.type = 'file'; campo.accept = TIPOS_DE_IMAGEM.join(',');
+    campo.addEventListener('cancel', () => resolve(null));
+    campo.addEventListener('change', async () => {
+      const arquivo = campo.files?.[0];
+      if (!arquivo) return resolve(null);
+      resolve(await guardarImagemDoFluxo(arquivo));
+    });
+    campo.click();
+  });
+}
+// Mesmo limite e mesmo aviso da imagem colada numa nota; devolve o caminho ou null.
+async function guardarImagemDoFluxo(arquivo) {
+  if (arquivo.size > LIMITE_DE_IMAGEM) { status(`${arquivo.name || 'A imagem'} passa de 20 MB.`, true); return null; }
+  try { return (await guardarImagem(arquivo)).path; }
+  catch (erro) { status('Não foi possível guardar a imagem: ' + erro.message, true); return null; }
+}
+function pedirLinkDoFluxo() {
+  if ($('#modal-root').firstChild) return Promise.resolve(null);
+  return new Promise(resolve => {
+    let respondeu = false;
+    const responder = v => { if (!respondeu) { respondeu = true; resolve(v); } };
+    modal('Adicionar link', `<form class="form" id="fluxo-link-form"><div class="field"><label for="fluxo-link-url">Endereço</label><input id="fluxo-link-url" required placeholder="https://…" autocomplete="off" /></div><div class="form-actions"><button type="button" class="secondary" id="cancel">Cancelar</button><button class="primary">Adicionar</button></div></form>`);
+    const campo = $('#fluxo-link-url');
+    campo.addEventListener('input', e => e.stopPropagation());
+    new MutationObserver((_, obs) => { if (!$('#modal-root').firstChild) { obs.disconnect(); responder(null); } }).observe($('#modal-root'), { childList: true });
+    $('#cancel').onclick = () => closeModal(true);
+    $('#fluxo-link-form').onsubmit = e => {
+      e.preventDefault();
+      const url = Kiro.safeUrl(campo.value.trim());
+      if (!url) return status('Use um endereço que comece com http:// ou https://.', true);
+      responder(url); closeModal(true);
+    };
+    campo.focus();
+  });
 }
 // A imagem vai para o cofre primeiro; só depois o ![[...]] entra no texto, onde está o cursor.
 async function colarImagens(campo, arquivos) {
@@ -4325,9 +4370,12 @@ async function importarDados(arquivo){
   };
 }
 // Ctrl+O: achar uma nota pelo título sem tirar a mão do teclado.
-function irParaNota(){
-  if(!loaded||failed||busy||$('#modal-root').firstChild)return;
-  modal('Ir para nota','<div class="form"><input class="search ir-busca" id="ir-busca" placeholder="Digite o título da nota…" autocomplete="off" aria-label="Buscar nota" /><div class="ir-lista" id="ir-lista" role="listbox"></div></div>');
+// Com { escolher: true } não abre a nota: devolve { arquivo, titulo } (ou null se fechar), para
+// o Fluxo criar um cartão dela. Sem opções, continua abrindo a nota como sempre.
+function irParaNota({ escolher = false } = {}){
+  if(!loaded||failed||busy||$('#modal-root').firstChild)return Promise.resolve(null);
+  return new Promise(resolve=>{
+  modal(escolher?'Adicionar nota ao fluxo':'Ir para nota','<div class="form"><input class="search ir-busca" id="ir-busca" placeholder="Digite o título da nota…" autocomplete="off" aria-label="Buscar nota" /><div class="ir-lista" id="ir-lista" role="listbox"></div></div>');
   const campo=$('#ir-busca'), lista=$('#ir-lista'); let achadas=[], marcada=0;
   const desenhar=()=>{
     const q=Kiro.normalize(campo.value.trim());
@@ -4336,7 +4384,11 @@ function irParaNota(){
     marcada=Math.min(marcada,Math.max(achadas.length-1,0));
     lista.innerHTML=achadas.map((n,i)=>{const p=state.folders.find(f=>f.id===n.folderId);return `<button type="button" class="ir-item${i===marcada?' marcada':''}" data-i="${i}" role="option" aria-selected="${i===marcada}"><span>${escapeHtml(n.title||'Sem título')}</span><small>${p?escapeHtml(p.path||p.title):''}</small></button>`;}).join('')||'<div class="empty">Nenhuma nota encontrada.</div>';
   };
-  const abrir=n=>{if(n&&closeModal(true))abrirNota(n);};
+  let respondeu=false;
+  const responder=valor=>{if(!respondeu){respondeu=true;resolve(valor);}};
+  const abrir=n=>{if(!n||!closeModal(true))return;if(escolher)responder(n.file?{arquivo:n.file,titulo:n.title||'Sem título'}:null);else{responder(null);abrirNota(n);}};
+  // Fechar sem escolher (Esc, ×, fora) também responde: o modal some do #modal-root.
+  new MutationObserver((_,obs)=>{if(!$('#modal-root').firstChild){obs.disconnect();responder(null);}}).observe($('#modal-root'),{childList:true});
   // Digitar a busca não é alteração de formulário: não pedir confirmação ao fechar.
   campo.addEventListener('input',e=>{e.stopPropagation();marcada=0;desenhar();});
   campo.addEventListener('keydown',e=>{
@@ -4345,6 +4397,7 @@ function irParaNota(){
   });
   lista.addEventListener('click',e=>{const b=e.target.closest('[data-i]');if(b)abrir(achadas[+b.dataset.i]);});
   desenhar();campo.focus();
+  });
 }
 const ACOES_DOS_ATALHOS={
   captura:()=>capturaRapida(),
