@@ -1169,6 +1169,7 @@ body, button, input, textarea, select { font-family:var(--fonte-interface); }
 .fluxo-host { flex:1 1 auto; min-width:0; min-height:0; display:flex; }
 .fluxo { position:relative; flex:1 1 auto; min-height:60vh; overflow:hidden; outline:none; touch-action:none; user-select:none; background-color:var(--content-bg); background-image:radial-gradient(circle, var(--line) 1px, transparent 1.2px); }
 .fluxo.pan, .fluxo.pan * { cursor:grab; }
+.fluxo.soltando { box-shadow:inset 0 0 0 2px var(--acento); }
 .fluxo-mundo { position:absolute; left:0; top:0; width:0; height:0; transform-origin:0 0; }
 .fluxo-setas { position:absolute; left:0; top:0; width:1px; height:1px; overflow:visible; }
 .fluxo-seta-linha { fill:none; stroke:var(--fluxo-cor, var(--muted)); stroke-width:2; }

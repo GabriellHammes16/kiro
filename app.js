@@ -672,6 +672,8 @@ function montarFluxos() {
       pedirLink: pedirLinkDoFluxo,
       canvasAtual: () => getFluxo(fluxo.id)?.canvas,
       aviso: (texto, erro) => status(texto, erro),
+      arquivoDaNota: id => getNote(id)?.file || null,
+      guardarImagem: guardarImagemDoFluxo,
     });
   }
 }

@@ -487,6 +487,38 @@
       if (acao === 'nota') adicionarNota(centroDaVista());
       if (acao === 'imagem') adicionarImagem(centroDaVista());
     });
+    // Nota arrastada da árvore vira cartão no ponto onde foi solta. stopPropagation: senão a
+    // área das colunas (bindDragDeAbas) trataria o mesmo arraste e abriria a nota numa coluna.
+    const eNota = e => e.dataTransfer?.types.includes('text/kiro-nota');
+    raiz.addEventListener('dragover', e => {
+      if (!eNota(e)) return;
+      e.preventDefault(); e.stopPropagation();
+      e.dataTransfer.dropEffect = 'copy';
+      raiz.classList.add('soltando');
+    });
+    raiz.addEventListener('dragleave', e => { if (!raiz.contains(e.relatedTarget)) raiz.classList.remove('soltando'); });
+    raiz.addEventListener('drop', e => {
+      if (!eNota(e)) return;
+      e.preventDefault(); e.stopPropagation();
+      raiz.classList.remove('soltando');
+      const arquivo = opcoes.arquivoDaNota(e.dataTransfer.getData('text/kiro-nota'));
+      if (arquivo) adicionarNo({ type: 'file', file: arquivo, width: 400, height: 280 }, pontoDoCanvas(e));
+    });
+    // Colar com o fluxo em foco (fora da edição de um cartão): imagem → anexo → cartão de imagem;
+    // URL sozinha → link; texto → cartão de texto. Tudo no centro da vista.
+    async function colarImagens(arquivos, p) {
+      for (const [i, arquivo] of arquivos.entries()) {
+        const caminho = await opcoes.guardarImagem(arquivo);
+        if (caminho) adicionarNo({ type: 'file', file: caminho, width: 320, height: 240 }, { x: p.x + i * F.GRADE * 2, y: p.y + i * F.GRADE * 2 });
+      }
+    }
+    raiz.addEventListener('paste', e => {
+      if (editor || e.target !== raiz || !e.clipboardData) return;
+      const imagens = [...e.clipboardData.files].filter(f => f.type.startsWith('image/'));
+      if (imagens.length) { e.preventDefault(); return void colarImagens(imagens, centroDaVista()); }
+      const texto = e.clipboardData.getData('text/plain');
+      if (texto.trim()) { e.preventDefault(); colarTexto(texto, centroDaVista()); }
+    });
 
     // Foco: acompanhado ao vivo, não amostrado no desmontar. O salvamento automático torna
     // `.app-shell` inert ANTES de redesenhar (ver `setBusy` em app.js), o que já tira o foco do
