@@ -271,6 +271,15 @@
       campo.addEventListener('blur', () => concluir(true));
       campo.focus(); campo.select();
     }
+    // O app cria a nota e troca o cartão numa gravação própria (que redesenha a tela); o passo
+    // de desfazer guardado aqui volta ao cartão de texto (a nota criada continua no cofre).
+    function transformarEmNota(idNo) {
+      const c = no(idNo);
+      if (!c || c.type !== 'text' || !c.text.trim()) return;
+      terminarEdicao();
+      s.historico = F.empilhar(s.historico, canvas);
+      opcoes.transformarEmNota(idNo, no(idNo).text);
+    }
     // ---- Menus do botão direito ----
     const NOMES_DAS_CORES = { '': 'Sem cor', 1: 'Vermelho', 2: 'Laranja', 3: 'Amarelo', 4: 'Verde', 5: 'Ciano', 6: 'Roxo' };
     const bolinha = cor => `<svg class="icone" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="7" class="fluxo-bolinha"${corData(cor)} style="${corCss(cor)}"/></svg>`;
@@ -298,6 +307,7 @@
         { rotulo: 'Cor', icone: bolinha(no(idNo)?.color), filhos: itensDaCor(cor => mudar(ids.reduce((c, x) => F.editarCartao(c, x, { color: cor }), canvas))) },
         { rotulo: 'Duplicar', icone: opcoes.icone('copiar'), acao: () => { const r = F.duplicarCartoes(canvas, ids); s.selecao = new Set(r.ids); mudar(r.canvas); } },
         ...(ids.length === 1 && no(idNo)?.type === 'text' ? [{ rotulo: 'Editar texto', icone: opcoes.icone('renomear'), acao: () => editar(idNo) }] : []),
+        ...(ids.length === 1 && no(idNo)?.type === 'text' && no(idNo).text.trim() ? [{ rotulo: 'Transformar em nota', icone: opcoes.icone('nota'), acao: () => transformarEmNota(idNo) }] : []),
         ...(ids.length === 1 && no(idNo)?.type === 'group' ? [{ rotulo: 'Renomear grupo', icone: opcoes.icone('renomear'), acao: () => editarGrupo(idNo) }] : []),
         ...(ids.length === 1 && no(idNo)?.type === 'file' && !F.ehImagem(no(idNo).file) ? [{ rotulo: 'Abrir nota', icone: opcoes.icone('nota'), acao: () => opcoes.abrirNota(no(idNo).file) }] : []),
         ...(ids.length === 1 && no(idNo)?.type === 'link' ? [{ rotulo: 'Abrir link', icone: opcoes.icone('link'), acao: () => opcoes.abrirLink(no(idNo).url) }] : []),

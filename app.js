@@ -674,6 +674,7 @@ function montarFluxos() {
       aviso: (texto, erro) => status(texto, erro),
       arquivoDaNota: id => getNote(id)?.file || null,
       guardarImagem: guardarImagemDoFluxo,
+      transformarEmNota: (idNo, texto) => transformarCartaoEmNota(fluxo.id, idNo, texto),
       // Instância morta (o modal ficou aberto tempo bastante para o salvamento automático redesenhar
       // a tela): render() remonta todo fluxo a partir do estado, e a instância viva nasce já com o
       // cartão que acabou de entrar.
@@ -1312,10 +1313,12 @@ function enhanceView(){
   $('#capture-form').onsubmit=async e=>{e.preventDefault();if(await capturar($('#capture-text').value))$('#capture-text')?.focus();};
   desenharPaineisDosPlugins();
 }
+// Título de uma nota nascida de um texto (captura, cartão do fluxo): a primeira linha sem sintaxe.
+const tituloDoTexto = texto => (textoPlano(texto.split('\n')[0]).replace(/(^|\s)#(?=[\p{L}\p{N}_/-])/gu, '$1') || texto).slice(0, 80);
 // Uma captura vira nota na caixa de entrada; o título é a primeira linha sem sintaxe.
 async function capturar(texto){
   const body=String(texto||'').trim();if(!body||busy||failed||!loaded)return false;
-  state.notes.unshift({id:uid(),title:(textoPlano(body.split('\n')[0]).replace(/(^|\s)#(?=[\p{L}\p{N}_/-])/gu,'$1')||body).slice(0,80),body,links:[],tags:['inbox'],createdAt:Date.now(),updatedAt:Date.now(),folderId:''});
+  state.notes.unshift({id:uid(),title:tituloDoTexto(body),body,links:[],tags:['inbox'],createdAt:Date.now(),updatedAt:Date.now(),folderId:''});
   return save();
 }
 // Ctrl+Espaço de qualquer tela: no Hoje vai para a faixa de captura; fora dele abre uma janela pequena.
@@ -1388,6 +1391,19 @@ function fluxoModal(fluxo){
     state.fluxos=state.fluxos.map(f=>f.id===atual.id?{...f,title}:f);
     save();closeModal(true);
   };
+}
+// Cartão de texto → nota na pasta do fluxo, e o cartão vira o cartão dessa nota, no mesmo lugar e
+// tamanho. Duas gravações: a nota precisa existir para ter caminho no cofre.
+async function transformarCartaoEmNota(fluxoId,idNo,texto){
+  if(busy||failed||!loaded||!getFluxo(fluxoId)?.canvas)return;
+  if(!await gravarFluxoPendente())return;
+  const id=uid(),agora=Date.now();
+  state.notes.unshift({id,title:tituloDoTexto(texto),body:texto,links:[],tags:[],createdAt:agora,updatedAt:agora,folderId:getFluxo(fluxoId).folderId||''});
+  if(!await save())return;
+  const nota=getNote(id),fluxo=getFluxo(fluxoId);
+  if(!nota?.file||!fluxo?.canvas||!fluxo.canvas.nodes.some(n=>n.id===idNo))return;
+  state.fluxos=state.fluxos.map(f=>f.id===fluxoId?{...f,canvas:KiroFluxo.editarCartao(f.canvas,idNo,{type:'file',text:undefined,file:nota.file})}:f);
+  if(await save())status('Cartão transformado em nota');
 }
 // Excluir: o arquivo vai para a lixeira (Configurações → Sistema → Lixeira) e pode voltar.
 async function excluirFluxo(id){
