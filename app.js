@@ -679,9 +679,12 @@ function painelVoltaMarkup() {
     return painelItemMarkup(n, textoPlano(linha), false);
   }).join('') || '<p class="small-muted">Nenhuma.</p>';
   const naoVinculadasHtml = naoVinculadas.map(({ nota, trecho }) => painelItemMarkup(nota, textoPlano(trecho), true)).join('') || '<p class="small-muted">Nenhuma.</p>';
+  const fluxos = Kiro.fluxosQueCitam(state, editing);
+  const fluxosHtml = fluxos.map(f => `<div class="painel-item" data-painel-titulo="${escapeHtml(f.title)}"><button type="button" class="painel-fluxo" data-abrir-nota="${escapeHtml(f.id)}">${icone('fluxo')} ${escapeHtml(f.title)}</button></div>`).join('') || '<p class="small-muted">Nenhum.</p>';
   return `<input type="search" class="painel-filtro" placeholder="Filtrar" aria-label="Filtrar links de volta" value="${escapeHtml(painelFiltro)}" />
   <section class="painel-secao"><h3>Menções vinculadas (${vinculadas.length})</h3>${vinculadasHtml}</section>
-  <section class="painel-secao"><h3>Menções não vinculadas (${naoVinculadas.length})</h3>${naoVinculadasHtml}</section>`;
+  <section class="painel-secao"><h3>Menções não vinculadas (${naoVinculadas.length})</h3>${naoVinculadasHtml}</section>
+  <section class="painel-secao"><h3>Aparece nos fluxos (${fluxos.length})</h3>${fluxosHtml}</section>`;
 }
 function painelSaidaMarkup() {
   const vistos = new Set();
@@ -1117,6 +1120,8 @@ function menuDaArvore(linha) {
         { rotulo: 'Renomear', icone: icone('renomear'), acao: () => getFluxo(id) && fluxoModal(getFluxo(id)) },
         { rotulo: 'Mover para', icone: icone('pastas'), filhos: destinos.map(d => ({ rotulo: d.rotulo, icone: icone(d.id ? 'pastas' : 'casa'), ativo: () => (getFluxo(id)?.folderId || '') !== d.id, acao: () => moverFluxo(id, d.id) })) },
       ] : []),
+      { separador: true },
+      { rotulo: 'Excluir', icone: icone('lixeira'), acao: () => excluirFluxo(id) },
     ];
   }
   if (linha.classList.contains('tree-note')) {
@@ -1351,6 +1356,15 @@ function fluxoModal(fluxo){
     state.fluxos=state.fluxos.map(f=>f.id===atual.id?{...f,title}:f);
     save();closeModal(true);
   };
+}
+// Excluir: o arquivo vai para a lixeira (Configurações → Sistema → Lixeira) e pode voltar.
+async function excluirFluxo(id){
+  if(busy||failed||!loaded)return;
+  const fluxo=getFluxo(id);
+  if(!fluxo||!confirm(`Excluir o fluxo "${fluxo.title}"? Ele vai para a lixeira e pode ser restaurado.`))return;
+  if(!await gravarFluxoPendente())return;
+  state.fluxos=(state.fluxos||[]).filter(f=>f.id!==id);
+  await save();
 }
 async function moverFluxo(id,folderId){
   if(busy||failed||!loaded)return;
@@ -2865,8 +2879,8 @@ async function showTrash(){
     const quando=ms=>new Intl.DateTimeFormat('pt-BR',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}).format(new Date(ms));
     const detalhe=i=>i.kind==='folder'
       ? `pasta · ${i.noteCount} nota${i.noteCount===1?'':'s'}${i.folderCount>1?` · ${i.folderCount-1} subpasta${i.folderCount===2?'':'s'}`:''}`
-      : 'nota';
-    modal('Lixeira', itens.length ? itens.map(i=>`<div class="routine-item"><span class="brand-mark">${icone(i.kind==='folder'?'pastas':'nota')}</span><span class="routine-title">${escapeHtml(i.title)}<div class="task-info">${detalhe(i)} · removido em ${quando(i.deletedAt)}</div></span><button class="secondary" data-restore="${escapeHtml(i.entryId)}">Restaurar</button></div>`).join('') : '<p>A lixeira está vazia.</p>');
+      : i.kind==='fluxo'?'fluxo':'nota';
+    modal('Lixeira', itens.length ? itens.map(i=>`<div class="routine-item"><span class="brand-mark">${icone(i.kind==='folder'?'pastas':i.kind==='fluxo'?'fluxo':'nota')}</span><span class="routine-title">${escapeHtml(i.title)}<div class="task-info">${detalhe(i)} · removido em ${quando(i.deletedAt)}</div></span><button class="secondary" data-restore="${escapeHtml(i.entryId)}">Restaurar</button></div>`).join('') : '<p>A lixeira está vazia.</p>');
     document.querySelectorAll('[data-restore]').forEach(b=>b.onclick=async()=>{
       if(busy||failed)return;
       // Uma mudança de fluxo ainda não salva não pode ser descartada pela restauração.
@@ -4282,7 +4296,7 @@ async function importarDados(arquivo){
   try{data=Kiro.validateState(JSON.parse(await arquivo.text()));}
   catch(error){status('Importação cancelada: '+error.message,true);return;}
   const partes=[`${data.notes.length} nota${data.notes.length===1?'':'s'}`,`${(data.folders||[]).length} pasta${(data.folders||[]).length===1?'':'s'}`,`${(data.habits||data.routine||[]).length} hábito${(data.habits||data.routine||[]).length===1?'':'s'}`];
-  modal('Importar backup',`<p class="confirmar-texto">Importar <strong>${partes.join(', ')}</strong> de <strong>${escapeHtml(arquivo.name)}</strong> e substituir os dados atuais? As notas que saírem vão para a lixeira e uma cópia do cofre atual é preservada.</p><div class="form-actions"><button type="button" class="secondary" id="cancel">Cancelar</button><button type="button" class="primary" id="confirmar-importacao">Importar e substituir</button></div>`);
+  modal('Importar backup',`<p class="confirmar-texto">Importar <strong>${partes.join(', ')}</strong> de <strong>${escapeHtml(arquivo.name)}</strong> e substituir os dados atuais? As notas e os fluxos que saírem vão para a lixeira e uma cópia do cofre atual é preservada.</p><div class="form-actions"><button type="button" class="secondary" id="cancel">Cancelar</button><button type="button" class="primary" id="confirmar-importacao">Importar e substituir</button></div>`);
   $('#cancel').onclick=()=>closeModal(true);
   $('#confirmar-importacao').onclick=async()=>{
     data.notes=data.notes.map(n=>{const copy={...n};delete copy.file;return copy;});
