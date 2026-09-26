@@ -257,11 +257,13 @@ class Vault {
       const nome=`${fluxo.title}.canvas`;
       const file=fluxo.folderId?`${paths.get(fluxo.folderId)}/${nome}`:nome;
       if((!old||fluxo.title!==old.title)&&!validFolderName(fluxo.title))throw new Error(`Nome de fluxo inválido: ${fluxo.title}`);
-      const lido=KiroFluxo.ler(KiroFluxo.serializar(fluxo.canvas));
+      // Cartões de nota acompanham a nota que mudou de pasta (o mesmo `changes` do rewritePaths).
+      const canvas=KiroFluxo.renomearArquivos(fluxo.canvas,f=>changes.get(pathKey(f)));
+      const lido=KiroFluxo.ler(KiroFluxo.serializar(canvas));
       if(lido.erro)throw new Error(`Fluxo "${fluxo.title}": ${lido.erro}`);
       const anterior=old&&before.files.get(old.file)?.data;
-      const igual=anterior&&JSON.stringify(old.canvas)===JSON.stringify(fluxo.canvas);
-      put(file,igual?anterior:KiroFluxo.serializar(fluxo.canvas));
+      const igual=anterior&&JSON.stringify(old.canvas)===JSON.stringify(canvas);
+      put(file,igual?anterior:KiroFluxo.serializar(canvas));
       if(old)changes.set(pathKey(old.file),file);
       registroDeFluxos.push({id:fluxo.id,path:file});
     }

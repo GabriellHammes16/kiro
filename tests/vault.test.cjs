@@ -411,3 +411,35 @@ test('nome inválido, canvas inválido e nome repetido recusam o salvamento inte
   await assert.rejects(vault.save({ ...s, fluxos: [{ id: 'f1', title: 'Mapa', canvas: vazio() }, { id: 'f2', title: 'mapa', canvas: vazio() }] }), /Já existe/);
   assert.deepEqual((await vault.load()).fluxos, []);
 });
+
+test('fluxo: cartão de nota acompanha a nota quando a pasta é renomeada e quando a nota muda de pasta', async t => {
+  const vault = await setup(t);
+  let s = await seed(vault, [note({ id: 'n1', title: 'Alvo' })]);   // a pasta ainda não existe: validateState recusaria folderId 'p1'
+  s = await vault.save({ ...s, folders: [{ id: 'p1', title: 'Ideias', parentId: '', description: '', color: '' }], notes: s.notes.map(n => ({ ...n, folderId: 'p1' })) });
+  const arquivo = s.notes[0].file;
+  const outro = { id: 'x', type: 'text', text: 'solto', x: 0, y: 0, width: 200, height: 60 };
+  s = await vault.save({ ...s, fluxos: [{ id: 'f1', title: 'Mapa', folderId: '', canvas: { nodes: [{ id: 'c', type: 'file', file: arquivo, x: 0, y: 0, width: 400, height: 280 }], edges: [] } }, { id: 'f2', title: 'Sem nota', folderId: '', canvas: { nodes: [outro], edges: [] } }] });
+  const bytesF2 = await fs.readFile(path.join(vault.directory, 'Sem nota.canvas'));
+  // Renomear a pasta
+  s = await vault.save({ ...s, folders: [{ ...s.folders[0], title: 'Projetos' }] });
+  const novo = s.notes[0].file;
+  assert.match(novo, /^Projetos\//);
+  const lido = JSON.parse(await fs.readFile(path.join(vault.directory, 'Mapa.canvas'), 'utf8'));
+  assert.equal(lido.nodes[0].file, novo);
+  assert.deepEqual(await fs.readFile(path.join(vault.directory, 'Sem nota.canvas')), bytesF2);
+  // Mover a nota para a raiz
+  s = await vault.save({ ...s, notes: s.notes.map(n => ({ ...n, folderId: '' })) });
+  assert.equal(JSON.parse(await fs.readFile(path.join(vault.directory, 'Mapa.canvas'), 'utf8')).nodes[0].file, s.notes[0].file);
+  assert.doesNotMatch(s.notes[0].file, /\//);
+});
+
+test('fluxo: nota apagada não apaga o cartão', async t => {
+  const vault = await setup(t);
+  let s = await seed(vault);
+  const arquivo = s.notes[0].file;
+  s = await vault.save({ ...s, fluxos: [{ id: 'f1', title: 'Mapa', folderId: '', canvas: { nodes: [{ id: 'c', type: 'file', file: arquivo, x: 0, y: 0, width: 400, height: 280 }], edges: [] } }] });
+  s = await vault.save({ ...s, notes: [] });
+  const lido = JSON.parse(await fs.readFile(path.join(vault.directory, 'Mapa.canvas'), 'utf8'));
+  assert.equal(lido.nodes.length, 1);
+  assert.equal(lido.nodes[0].file, arquivo);
+});
