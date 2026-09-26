@@ -231,8 +231,12 @@ class Vault {
     const fluxosAntes=before.state.fluxos||[];
     const gravaveis=(input.fluxos||[]).filter(f=>f.canvas&&!fluxosAntes.find(x=>x.id===f.id)?.erro);
     const fluxoFiles=new Set(gravaveis.map(f=>fluxosAntes.find(x=>x.id===f.id)?.file).filter(Boolean));
+    // Fluxos excluídos: só quando o input traz a lista. undefined = quem salvou não mexe em
+    // fluxos (ex.: backup antigo) e nada é excluído. O arquivo sai do lugar e vai para a lixeira.
+    const excluidos=input.fluxos===undefined?[]:fluxosAntes.filter(f=>!input.fluxos.some(x=>x.id===f.id));
+    const arquivosExcluidos=new Set(excluidos.map(f=>f.file));
     for(const [file,value]of before.files){
-      if(noteFiles.has(file)||fluxoFiles.has(file)||FOLDER_MARKERS.includes(path.posix.basename(file)))continue;
+      if(noteFiles.has(file)||fluxoFiles.has(file)||arquivosExcluidos.has(file)||FOLDER_MARKERS.includes(path.posix.basename(file)))continue;
       const target=remap(file);if(target){put(target,value.data);changes.set(pathKey(file),target);}
     }
     const nextNotes=input.notes.map(note=>{
@@ -267,7 +271,12 @@ class Vault {
       if(old)changes.set(pathKey(old.file),file);
       registroDeFluxos.push({id:fluxo.id,path:file});
     }
-    for(const old of fluxosAntes)if(!gravaveis.some(f=>f.id===old.id)){const destino=remap(old.file);if(destino)registroDeFluxos.push({id:old.id,path:destino});}
+    for(const old of fluxosAntes)if(!gravaveis.some(f=>f.id===old.id)&&!arquivosExcluidos.has(old.file)){const destino=remap(old.file);if(destino)registroDeFluxos.push({id:old.id,path:destino});}
+    // Fluxo restaurado da lixeira: volta com o id de antes, se ninguém o usa agora.
+    for(const f of restoring?.entry.fluxos||[]){
+      const destino=restoring.map(f.file,paths);
+      if(destino&&!registroDeFluxos.some(r=>r.id===f.id||pathKey(r.path)===pathKey(destino))&&!input.notes.some(n=>n.id===f.id))registroDeFluxos.push({id:f.id,path:destino});
+    }
     for(const note of nextNotes){
       const old=before.state.notes.find(n=>n.id===note.id);
       const previous=before.files.get(old?.file)?.data.toString('utf8')||restoring?.files.get(note.source)?.toString('utf8')||'';
@@ -306,6 +315,10 @@ class Vault {
     for(const note of deletedNotes)if(!roots.some(root=>descendants(beforeFolders,root.id).has(note.folderId))){
       const folder=beforeFolders.find(f=>f.id===note.folderId);
       await this.archive(transaction,{kind:'note',id:note.id,title:note.title,originalPath:note.file,folders:[],notes:[note],ancestors:folder?[...ancestors(folder),folder]:[]},before);
+    }
+    for(const fluxo of excluidos)if(!roots.some(root=>descendants(beforeFolders,root.id).has(fluxo.folderId))){
+      const folder=beforeFolders.find(f=>f.id===fluxo.folderId);
+      await this.archive(transaction,{kind:'fluxo',id:fluxo.id,title:fluxo.title,originalPath:fluxo.file,folders:[],notes:[],fluxos:[{id:fluxo.id,title:fluxo.title,file:fluxo.file}],ancestors:folder?[...ancestors(folder),folder]:[]},before);
     }
     await atomicWrite(await this.safePath('.transaction.json'),JSON.stringify({backup,stage,writes:writes.map(([f])=>f),removals,removedDirs},null,2));
     // Never recursively delete an active directory: unexpected external additions
@@ -468,7 +481,7 @@ class Vault {
     const result=[];
     for(const transaction of transactions)for(const id of await fs.readdir(await this.safePath(`.trash/${transaction}`))){
       const entryId=`${transaction}/${id}`, entry=await this.readTrash(entryId);
-      if(current.folders.some(f=>f.id===entry.id)||current.notes.some(n=>n.id===entry.id))continue;
+      if(current.folders.some(f=>f.id===entry.id)||current.notes.some(n=>n.id===entry.id)||(current.fluxos||[]).some(f=>f.id===entry.id))continue;
       if(await optionalRead(await this.safePath(`.trash/${entryId}/restored`)))continue;
       result.push({...entry.notes[0],kind:entry.kind,id:entry.id,title:entry.title,entryId,deletedAt:entry.deletedAt,folderCount:entry.folders.length,noteCount:entry.notes.length});
     }
@@ -478,6 +491,7 @@ class Vault {
     const before=await this.read();if(before.state.revision!==revision)throw new Error('O cofre mudou. Recarregue antes de restaurar.');
     const entry=await this.readTrash(entryId), input=structuredClone(before.state);
     if(input.folders.some(f=>f.id===entry.id)||input.notes.some(n=>n.id===entry.id))throw new Error('Este item já está no cofre.');
+    if((input.fluxos||[]).some(f=>f.id===entry.id))throw new Error('Este item já está no cofre.');
     for(const ancestor of entry.ancestors)if(!input.folders.some(f=>f.id===ancestor.id))input.folders.push(ancestor);
     for(const folder of entry.folders){if(input.folders.some(f=>f.id===folder.id))throw new Error('Uma subpasta já existe no cofre.');input.folders.push(folder);}
     for(const note of entry.notes){if(input.notes.some(n=>n.id===note.id))throw new Error('Uma nota já existe no cofre.');input.notes.push({...note,folderId:input.folders.some(f=>f.id===note.folderId)?note.folderId:''});}
