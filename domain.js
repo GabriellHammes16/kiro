@@ -199,8 +199,8 @@
   function fluxosQueCitam(state, nota) {
     if (!nota || !nota.id) return [];
     const arquivo = nota.file ? pathKey(nota.file) : '';
-    const cita = n => (n.type === 'file' && arquivo && typeof n.file === 'string' && pathKey(n.file) === arquivo)
-      || (n.type === 'text' && typeof n.text === 'string' && wikiLinks(n.text).some(l => findLinkedNote(state.notes, l.target)?.id === nota.id));
+    const cita = n => (n && n.type === 'file' && arquivo && typeof n.file === 'string' && pathKey(n.file) === arquivo)
+      || (n && n.type === 'text' && typeof n.text === 'string' && wikiLinks(n.text).some(l => findLinkedNote(state.notes, l.target)?.id === nota.id));
     return (state.fluxos || []).filter(f => f.canvas && f.canvas.nodes.some(cita));
   }
   const inInbox = note => tags(note).includes('inbox');

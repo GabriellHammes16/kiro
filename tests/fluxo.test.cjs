@@ -265,4 +265,9 @@ test('fluxosQueCitam: cartão com o caminho da nota (sem diferenciar maiúsculas
   assert.deepEqual(domain.fluxosQueCitam(state, notas[0]).map(x => x.id), ['f1', 'f2']);
   assert.deepEqual(domain.fluxosQueCitam({ notes: notas }, notas[0]), []);
   assert.deepEqual(domain.fluxosQueCitam(state, { title: 'Rascunho' }), []);
+  // Fluxo importado pode ter nós nulos: validateState só checa Array.isArray
+  const stateComNulo = { notes: notas, fluxos: [
+    f('f5', [null, undefined, { id: 'a', type: 'file', file: 'a/ALVO-N1.md', x: 0, y: 0, width: 1, height: 1 }]),
+  ] };
+  assert.deepEqual(domain.fluxosQueCitam(stateComNulo, notas[0]).map(x => x.id), ['f5']);
 });
