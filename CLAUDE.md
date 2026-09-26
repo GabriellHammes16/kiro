@@ -1,8 +1,8 @@
 # Kiro
 
 Antes de sair lendo arquivos para entender o projeto, consulte o grafo de
-conhecimento em `graphify-out/` — ele já mapeia os 87 arquivos do repositório
-(1485 nós, 3028 arestas, 82 comunidades).
+conhecimento em `graphify-out/` — ele já mapeia os 93 arquivos do repositório
+(1546 nós, 3204 arestas, 99 comunidades).
 
 - Pergunta sobre arquitetura, quem chama o quê, onde mora uma decisão:
   `graphify query "<pergunta>"`
