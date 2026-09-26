@@ -410,9 +410,13 @@
     // Espaço solto depois que o foco já saiu do fluxo não dispara o keyup acima: sem isto, o
     // pan ficaria travado ligado na próxima vez que o cartão recebesse um gesto do mouse.
     raiz.addEventListener('blur', () => { espaco = false; raiz.classList.remove('pan'); });
+    // O 'pointerdown' do primeiro clique chama setPointerCapture; com o ponteiro capturado,
+    // o 'dblclick' chega com e.target = raiz, não o elemento sob o cursor. Por isso relemos
+    // o elemento de verdade pela posição.
     raiz.addEventListener('dblclick', e => {
-      if (e.target.closest('.fluxo-barra, .fluxo-editor, .fluxo-seta')) return;
-      const cartao = e.target.closest('.fluxo-cartao');
+      const alvo = document.elementFromPoint(e.clientX, e.clientY) || e.target;
+      if (!raiz.contains(alvo) || alvo.closest('.fluxo-barra, .fluxo-editor, .fluxo-seta')) return;
+      const cartao = alvo.closest('.fluxo-cartao');
       if (!cartao) return void criarCartao(pontoDoCanvas(e));
       const c = no(cartao.dataset.no);
       if (c?.type === 'file' && !F.ehImagem(c.file)) return void opcoes.abrirNota(c.file);
@@ -420,7 +424,11 @@
       if (c?.type === 'group') return void editarGrupo(c.id);
       editar(cartao.dataset.no);
     });
-    raiz.addEventListener('dblclick', e => { const seta = e.target.closest('.fluxo-seta'); if (seta) editarRotulo(seta.dataset.seta); });
+    raiz.addEventListener('dblclick', e => {
+      const alvo = document.elementFromPoint(e.clientX, e.clientY) || e.target;
+      const seta = raiz.contains(alvo) && alvo.closest('.fluxo-seta');
+      if (seta) editarRotulo(seta.dataset.seta);
+    });
     raiz.addEventListener('keydown', e => {
       if (e.target !== raiz || !s.seta || (e.key !== 'Delete' && e.key !== 'Backspace')) return;
       e.preventDefault(); e.stopPropagation();
