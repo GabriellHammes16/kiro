@@ -177,7 +177,39 @@
     return nodes.filter(n => n.x < x1 && n.x + n.width > x0 && n.y < y1 && n.y + n.height > y0).map(n => n.id);
   }
 
-  const api = { TIPOS, LADOS, CORES, GRADE, ZOOM, OPOSTO, corValida, ler, serializar, adicionarCartao, moverCartoes, redimensionar, editarCartao, removerCartoes, duplicarCartoes, ligar, editarSeta, removerSetas, encaixar, historicoVazio, empilhar, desfazer, refazer, vistaValida, paraCanvas, zoomEm, enquadrar, pontoDoLado, ladoMaisProximo, ladosDaSeta, caminhoDaSeta, geometriaDaSeta, dentro };
+  // ---- Cofre ----
+  // Cartão de arquivo acompanha a nota quando ela muda de pasta: `destino(caminho)` devolve o
+  // caminho novo ou undefined (fica como está). Sem mudança, volta o mesmo objeto.
+  function renomearArquivos(c, destino) {
+    let mudou = false;
+    const nodes = c.nodes.map(n => {
+      if (n.type !== 'file') return n;
+      const novo = destino(n.file);
+      if (!novo || novo === n.file) return n;
+      mudou = true;
+      return { ...n, file: novo };
+    });
+    return mudou ? { ...c, nodes } : c;
+  }
+  // Só caminho relativo ao cofre vira <img>: nada de subir pastas nem começar na raiz do disco.
+  const caminhoSeguro = f => str(f) && f.length > 0 && !/^[\\/]|^[a-z]:|(^|[\\/])\.\.([\\/]|$)/i.test(f);
+  // As mesmas extensões que o domain.js trata como imagem nas notas.
+  const ehImagem = f => str(f) && /\.(png|jpe?g|gif|webp|avif|bmp)$/i.test(f.trim());
+  // Cartões inteiramente dentro de um grupo (menos o próprio): andam com ele.
+  const contidos = (nodes, g) => nodes.filter(n => n.id !== g.id && n.x >= g.x && n.y >= g.y && n.x + n.width <= g.x + g.width && n.y + n.height <= g.y + g.height).map(n => n.id);
+  function caixaDe(nodes, margem = GRADE * 2) {
+    const x0 = Math.min(...nodes.map(n => n.x)) - margem, y0 = Math.min(...nodes.map(n => n.y)) - margem;
+    const x1 = Math.max(...nodes.map(n => n.x + n.width)) + margem, y1 = Math.max(...nodes.map(n => n.y + n.height)) + margem;
+    return { x: x0, y: y0, width: x1 - x0, height: y1 - y0 };
+  }
+  // Altura inicial de um cartão de texto: ~40 caracteres por linha, 24 px por linha, mais uma
+  // linha de margem; o editor ajusta ao conteúdo real quando o texto é editado.
+  function alturaEstimada(texto) {
+    const linhas = String(texto).split('\n').reduce((soma, l) => soma + Math.max(1, Math.ceil(l.length / 40)), 0);
+    return Math.min(600, Math.max(60, (linhas + 1) * 24));
+  }
+
+  const api = { TIPOS, LADOS, CORES, GRADE, ZOOM, OPOSTO, corValida, ler, serializar, adicionarCartao, moverCartoes, redimensionar, editarCartao, removerCartoes, duplicarCartoes, ligar, editarSeta, removerSetas, encaixar, historicoVazio, empilhar, desfazer, refazer, vistaValida, paraCanvas, zoomEm, enquadrar, pontoDoLado, ladoMaisProximo, ladosDaSeta, caminhoDaSeta, geometriaDaSeta, dentro, renomearArquivos, caminhoSeguro, ehImagem, contidos, caixaDe, alturaEstimada };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.KiroFluxo = api;
 })(globalThis);

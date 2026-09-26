@@ -194,6 +194,15 @@
   const findLinkedNote = (notes, target) => notes.find(n => normalize(n.title) === normalize(target) || normalize((n.file || '').replace(/\.md$/i, '')) === normalize(target) || normalize((n.file || '').split('/').pop().replace(/\.md$/i, '')) === normalize(target));
   // Notas que citam `note` com [[...]]; a própria nota não conta.
   const mentions = (notes, note) => notes.filter(n => n.id !== note.id && wikiLinks(n.body).some(l => findLinkedNote(notes, l.target)?.id === note.id));
+  // Fluxos que citam a nota: um cartão de arquivo com o caminho dela ou um [[link]] para ela
+  // num cartão de texto. Fluxo com erro (sem canvas) não conta. Base do "Aparece nos fluxos".
+  function fluxosQueCitam(state, nota) {
+    if (!nota || !nota.id) return [];
+    const arquivo = nota.file ? pathKey(nota.file) : '';
+    const cita = n => (n.type === 'file' && arquivo && typeof n.file === 'string' && pathKey(n.file) === arquivo)
+      || (n.type === 'text' && typeof n.text === 'string' && wikiLinks(n.text).some(l => findLinkedNote(state.notes, l.target)?.id === nota.id));
+    return (state.fluxos || []).filter(f => f.canvas && f.canvas.nodes.some(cita));
+  }
   const inInbox = note => tags(note).includes('inbox');
   // Arquivar tira só a etiqueta: o token #inbox some com o espaço que o separava, o resto do texto fica igual.
   const withoutInbox = note => ({ ...note, tags: (note.tags || []).filter(t => t !== 'inbox'), body: note.body.replace(/^#inbox(?![\p{L}\p{N}_/-])[ \t]*|[ \t]+#inbox(?![\p{L}\p{N}_/-])/gmu, '') });
@@ -384,7 +393,7 @@
     return atalhos;
   }
 
-  const api = { ATALHOS_EDITAVEIS, combinacaoDoEvento, rotuloDaCombinacao, problemaDoAtalho, atalhosValidos, TEMAS, SKINS, APARENCIA_PADRAO, luminancia, contraste, corValida, aparenciaValida, classesDaAparencia, FOLDER_COLORS, folderColor, habitStats, habitDays, withHabits, validFrequency, localDate, safeUrl, validateState, normalize, isImagePath, wikiLinks, tags, findLinkedNote, mentions, inInbox, withoutInbox, toReview, linkQuery, linkSuggestions, validFolderName, folderPaths, descendants, upgradeBackup, pathKey, mencoesNaoVinculadas, vincularMencao, sumario, arvoreDeEtiquetas, podeVincular };
+  const api = { ATALHOS_EDITAVEIS, combinacaoDoEvento, rotuloDaCombinacao, problemaDoAtalho, atalhosValidos, TEMAS, SKINS, APARENCIA_PADRAO, luminancia, contraste, corValida, aparenciaValida, classesDaAparencia, FOLDER_COLORS, folderColor, habitStats, habitDays, withHabits, validFrequency, localDate, safeUrl, validateState, normalize, isImagePath, wikiLinks, tags, findLinkedNote, mentions, fluxosQueCitam, inInbox, withoutInbox, toReview, linkQuery, linkSuggestions, validFolderName, folderPaths, descendants, upgradeBackup, pathKey, mencoesNaoVinculadas, vincularMencao, sumario, arvoreDeEtiquetas, podeVincular };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Kiro = api;
 })(globalThis);

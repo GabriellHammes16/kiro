@@ -211,3 +211,58 @@ test('validateState recusa fluxo malformado', () => {
   ];
   for (const fluxos of ruins) assert.throws(() => domain.validateState(estado(fluxos)), /inválidos/, JSON.stringify(fluxos));
 });
+
+test('renomearArquivos troca o caminho dos cartões de arquivo; sem mudança devolve o mesmo objeto', () => {
+  const c = canvas([cartao('t'), { id: 'n', type: 'file', file: 'A/nota.md', x: 0, y: 0, width: 400, height: 280 }, { id: 'i', type: 'file', file: 'anexos/x.png', x: 0, y: 0, width: 10, height: 10 }]);
+  const mapa = { 'A/nota.md': 'B/nota.md' };
+  const r = F.renomearArquivos(c, f => mapa[f]);
+  assert.equal(r.nodes[1].file, 'B/nota.md');
+  assert.equal(r.nodes[2], c.nodes[2]);
+  assert.equal(F.renomearArquivos(c, () => undefined), c);
+  assert.equal(F.renomearArquivos(c, f => f), c);
+});
+
+test('caminhoSeguro recusa subir pastas, raiz do disco e vazio', () => {
+  for (const ok of ['anexos/x.png', 'A/B/nota.md', 'x.png']) assert.equal(F.caminhoSeguro(ok), true, ok);
+  for (const ruim of ['', '../x.png', 'a/../../x.png', '/etc/x.png', '\\x.png', 'C:/x.png', 'c:\\x.png', undefined, 3]) assert.equal(F.caminhoSeguro(ruim), false, String(ruim));
+});
+
+test('ehImagem usa as mesmas extensões das notas', () => {
+  for (const s of ['a.png', 'b.JPG', 'c.jpeg', 'd.gif', 'e.webp', 'f.avif', 'g.bmp']) assert.equal(F.ehImagem(s), true, s);
+  for (const n of ['a.md', 'a.svg', 'png', '', undefined]) assert.equal(F.ehImagem(n), false, String(n));
+});
+
+test('contidos acha só os cartões inteiramente dentro do grupo', () => {
+  const g = { id: 'g', type: 'group', x: 0, y: 0, width: 500, height: 400 };
+  const dentro = cartao('a', { x: 20, y: 20, width: 100, height: 60 });
+  const metade = cartao('b', { x: 450, y: 20, width: 100, height: 60 });
+  const fora = cartao('c', { x: 900, y: 900 });
+  assert.deepEqual(F.contidos([g, dentro, metade, fora], g), ['a']);
+});
+
+test('caixaDe envolve os cartões com margem', () => {
+  const nodes = [cartao('a', { x: 0, y: 0, width: 100, height: 50 }), cartao('b', { x: 200, y: 100, width: 100, height: 50 })];
+  assert.deepEqual(F.caixaDe(nodes), { x: -40, y: -40, width: 380, height: 230 });
+  assert.deepEqual(F.caixaDe(nodes, 0), { x: 0, y: 0, width: 300, height: 150 });
+});
+
+test('alturaEstimada: ~40 caracteres por linha, 24 px por linha, entre 60 e 600', () => {
+  assert.equal(F.alturaEstimada('curto'), 60);
+  assert.equal(F.alturaEstimada('a'.repeat(120)), 72 + 24);           // 3 linhas de texto + margem de uma linha
+  assert.equal(F.alturaEstimada('um\ndois\ntres\nquatro'), 4 * 24 + 24);
+  assert.equal(F.alturaEstimada('a'.repeat(10000)), 600);
+});
+
+test('fluxosQueCitam: cartão com o caminho da nota (sem diferenciar maiúsculas) ou [[link]] em cartão de texto', () => {
+  const notas = [{ id: 'n1', title: 'Alvo', body: '', file: 'A/alvo-n1.md', links: [], updatedAt: 1 }, { id: 'n2', title: 'Outra', body: '', file: 'outra-n2.md', links: [], updatedAt: 1 }];
+  const f = (id, nodes) => ({ id, title: id, canvas: { nodes, edges: [] } });
+  const state = { notes: notas, fluxos: [
+    f('f1', [{ id: 'a', type: 'file', file: 'a/ALVO-N1.md', x: 0, y: 0, width: 1, height: 1 }]),
+    f('f2', [cartao('b', { text: 'veja [[Alvo]] aqui' })]),
+    f('f3', [cartao('c', { text: '[[Outra]]' })]),
+    { id: 'f4', title: 'Quebrado', erro: 'JSON inválido' },
+  ] };
+  assert.deepEqual(domain.fluxosQueCitam(state, notas[0]).map(x => x.id), ['f1', 'f2']);
+  assert.deepEqual(domain.fluxosQueCitam({ notes: notas }, notas[0]), []);
+  assert.deepEqual(domain.fluxosQueCitam(state, { title: 'Rascunho' }), []);
+});
