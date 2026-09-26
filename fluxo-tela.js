@@ -145,7 +145,19 @@
     // Novo cartão centrado em p. Depois de um await (modal, gravação de imagem) o app pode ter
     // redesenhado a tela e este editor já não ser o montado: aí vale o canvas que está no estado.
     function adicionarNo(base, p) {
-      if (!montados.has(inst)) canvas = opcoes.canvasAtual() || canvas;
+      if (!montados.has(inst)) {
+        // Instância morta: gravar direto no canvas mais recente do estado (não no `canvas` desta
+        // closure, que ficou parado no momento em que a tela redesenhou) e pedir um redesenho.
+        // Editar aqui e deixar a instância viva (nascida com esse canvas antigo) sobrescrever
+        // depois apagaria este cartão; redesenhar agora a recria já com ele.
+        const atual = opcoes.canvasAtual() || canvas;
+        const r = F.adicionarCartao(atual, { ...base, x: encaixar(p.x - base.width / 2), y: encaixar(p.y - base.height / 2) });
+        s.historico = F.empilhar(s.historico, atual);
+        s.selecao = new Set([r.id]);
+        opcoes.aoMudar(r.canvas);
+        opcoes.redesenhar();
+        return r.id;
+      }
       const r = F.adicionarCartao(canvas, { ...base, x: encaixar(p.x - base.width / 2), y: encaixar(p.y - base.height / 2) });
       s.selecao = new Set([r.id]);
       mudar(r.canvas);
@@ -497,6 +509,10 @@
       raiz.classList.add('soltando');
     });
     raiz.addEventListener('dragleave', e => { if (!raiz.contains(e.relatedTarget)) raiz.classList.remove('soltando'); });
+    // 'dragend' dispara na origem do arraste (a nota na árvore), não em `raiz`: sem isto, soltar
+    // fora de qualquer alvo (Esc, arraste cancelado) deixaria o destaque aceso.
+    const tirarSoltando = () => raiz.classList.remove('soltando');
+    document.addEventListener('dragend', tirarSoltando);
     raiz.addEventListener('drop', e => {
       if (!eNota(e)) return;
       e.preventDefault(); e.stopPropagation();
@@ -535,6 +551,7 @@
       terminarEdicao();
       montados.delete(inst);
       document.removeEventListener('pointerdown', foraDoFluxo);
+      document.removeEventListener('dragend', tirarSoltando);
       if (timerVista) { clearTimeout(timerVista); gravarVista(opcoes.chaveDaVista, id, s.vista); }
     }
     const inst = { desmontar, ocupado: () => !!gesto || !!editor };

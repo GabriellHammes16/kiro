@@ -674,6 +674,10 @@ function montarFluxos() {
       aviso: (texto, erro) => status(texto, erro),
       arquivoDaNota: id => getNote(id)?.file || null,
       guardarImagem: guardarImagemDoFluxo,
+      // Instância morta (o modal ficou aberto tempo bastante para o salvamento automático redesenhar
+      // a tela): render() remonta todo fluxo a partir do estado, e a instância viva nasce já com o
+      // cartão que acabou de entrar.
+      redesenhar: () => { if (currentView === 'studies') render(); },
     });
   }
 }
