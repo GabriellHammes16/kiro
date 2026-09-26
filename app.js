@@ -636,6 +636,22 @@ function fluxoHostMarkup(fluxo, painel) {
   if (fluxo.erro) return `<div class="fluxo-erro"><h2>${escapeHtml(fluxo.title)}</h2><p>Este fluxo não pôde ser lido e não será alterado pelo Kiro.</p><p><code>${escapeHtml(fluxo.erro)}</code></p></div>`;
   return `<div class="fluxo-host" data-fluxo="${escapeHtml(fluxo.id)}" data-painel="${painel}"></div>`;
 }
+// Cartão de arquivo aponta para a nota pelo caminho no cofre (sem diferenciar maiúsculas).
+const notaPorArquivo = arquivo => state.notes.find(n => n.file && Kiro.pathKey(n.file) === Kiro.pathKey(arquivo || ''));
+// "Na outra metade": uma coluna que já existe ao lado do fluxo, ou uma nova à direita dele.
+function abrirNotaDoFluxo(arquivo, painel) {
+  const nota = notaPorArquivo(arquivo);
+  if (!nota) return status('Nota não encontrada no cofre.', true);
+  const outra = painel + 1 < abas.paineis.length ? painel + 1 : painel - 1;
+  if (outra >= 0 && outra !== painel) return abrirNota(nota, { painel: outra, novaAba: true, duplicar: true });
+  if (!cabeOutraColuna()) return abrirNota(nota, { painel, novaAba: true, duplicar: true });
+  return abrirNota(nota, { colunaNova: true, painel: painel + 1, duplicar: true });
+}
+function abrirLinkDoFluxo(url) {
+  const seguro = Kiro.safeUrl(url);
+  if (!seguro) return status('Esse link não é http nem https.', true);
+  window.open(seguro, '_blank', 'noopener,noreferrer');
+}
 function montarFluxos() {
   for (const host of document.querySelectorAll('.fluxo-host')) {
     const fluxo = getFluxo(host.dataset.fluxo);
@@ -646,6 +662,10 @@ function montarFluxos() {
       menu: (evento, itens) => abrirMenuContexto(evento, document.body, itens),
       chaveDaVista: 'kiro.fluxoVista:' + (state.vaultPath || ''),
       aoMudar: canvas => mudarFluxo(fluxo.id, canvas),
+      urlDoArquivo: urlDoAnexo,
+      nota: arquivo => { const n = notaPorArquivo(arquivo); return n ? { titulo: n.title || 'Sem título', html: renderizarMarkdown(n.body.slice(0, 2000)) } : null; },
+      abrirNota: arquivo => abrirNotaDoFluxo(arquivo, Number(host.dataset.painel)),
+      abrirLink: abrirLinkDoFluxo,
     });
   }
 }

@@ -1204,6 +1204,14 @@ body, button, input, textarea, select { font-family:var(--fonte-interface); }
 .fluxo-bolinha { fill:var(--fluxo-cor, none); stroke:var(--muted); }
 .fluxo:focus-visible { outline:none; box-shadow:inset 0 0 0 2px var(--acento); }
 .fluxo-zoom:focus-visible, .fluxo-barra .icon-button:focus-visible { outline:2px solid var(--acento); outline-offset:2px; }
+.fluxo-conteudo:has(> .fluxo-imagem) { padding:0; overflow:hidden; }
+.fluxo-imagem { display:block; width:100%; height:100%; object-fit:contain; border-radius:8px; }
+.fluxo-nota-titulo { font-weight:700; margin-bottom:6px; }
+.fluxo-nota-previa { font-size:13px; color:var(--muted); }
+.fluxo-nota-previa :is(h1,h2,h3) { font-size:14px; margin:6px 0; }
+.fluxo-ausente { margin:0; color:var(--muted); font-style:italic; }
+.fluxo-link-titulo { margin:0 0 4px; font-weight:600; word-break:break-all; }
+.fluxo-grupo-editor { position:absolute; width:220px; height:auto; transform:translateY(-110%); padding:4px 8px; border:1px solid var(--acento); border-radius:6px; background:var(--panel); font-size:14px; }
 .tree-tipo { flex:0 0 auto; margin-left:auto; padding-left:8px; font-size:10px; letter-spacing:.06em; color:var(--muted); }
 .painel-fluxo { display:flex; align-items:center; gap:6px; width:100%; padding:4px 6px; border:0; border-radius:6px; background:none; color:var(--ink); font:inherit; text-align:left; cursor:pointer; }
 .painel-fluxo:hover, .painel-fluxo:focus-visible { background:color-mix(in srgb, var(--line) 45%, transparent); }

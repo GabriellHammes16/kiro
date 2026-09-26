@@ -47,8 +47,20 @@
     // ---- Desenho ----
     function conteudo(c) {
       if (c.type === 'text') return opcoes.markdown(c.text);
-      if (c.type === 'file') return `<p class="fluxo-arquivo">${esc(c.file)}</p>`;
-      if (c.type === 'link') return `<p class="fluxo-link">${esc(c.url)}</p>`;
+      if (c.type === 'file') {
+        if (F.ehImagem(c.file)) {
+          // Só caminho relativo ao cofre vira <img>: um .canvas de fora não aponta para ../ nem para o disco.
+          if (!F.caminhoSeguro(c.file)) return `<p class="fluxo-arquivo">${esc(c.file)}</p>`;
+          return `<img class="fluxo-imagem" src="${esc(opcoes.urlDoArquivo(c.file))}" alt="${esc(c.file.split('/').pop())}" draggable="false">`;
+        }
+        const nota = opcoes.nota(c.file);
+        if (!nota) return `<p class="fluxo-ausente">Nota não encontrada<br><small>${esc(c.file)}</small></p>`;
+        return `<div class="fluxo-nota-titulo">${esc(nota.titulo)}</div><div class="fluxo-nota-previa">${nota.html}</div>`;
+      }
+      if (c.type === 'link') {
+        const titulo = c.url.replace(/^[a-z][a-z0-9+.-]*:\/\//i, '').replace(/\/$/, '');
+        return `<p class="fluxo-link-titulo">${esc(titulo)}</p><p class="fluxo-link">${esc(c.url)}</p>`;
+      }
       return '';
     }
     function cartaoHtml(c) {
@@ -116,6 +128,12 @@
       for (const el of caminhos.children) el.classList.toggle('selecionada', s.seta === el.dataset.seta);
     }
     function selecionar(ids) { s.selecao = new Set(ids); s.seta = null; marcarSelecao(); }
+    // Arrastar um grupo leva junto os cartões que estão inteiramente dentro dele.
+    function comConteudo(ids) {
+      const todos = new Set(ids);
+      for (const idNo of ids) { const c = no(idNo); if (c?.type === 'group') for (const dentro of F.contidos(canvas.nodes, c)) todos.add(dentro); }
+      return [...todos];
+    }
     function criarCartao(p) {
       const r = F.adicionarCartao(canvas, { type: 'text', text: '', x: encaixar(p.x - 130), y: encaixar(p.y - 30), width: 260, height: 60 });
       s.selecao = new Set([r.id]);
@@ -187,6 +205,32 @@
       campo.addEventListener('blur', () => concluir(true));
       campo.focus(); campo.select();
     }
+    // Rótulo do grupo: um <input> sobre a borda de cima. Enter ou sair gravam; Esc desiste.
+    function editarGrupo(idNo) {
+      const c = no(idNo);
+      if (!c || c.type !== 'group') return;
+      terminarEdicao();
+      const campo = document.createElement('input');
+      campo.className = 'fluxo-editor fluxo-grupo-editor';
+      campo.value = c.label || '';
+      campo.setAttribute('aria-label', 'Nome do grupo');
+      Object.assign(campo.style, { left: `${Number(c.x)}px`, top: `${Number(c.y)}px` });
+      mundo.appendChild(campo);
+      let feito = false;
+      const concluir = gravar => {
+        if (feito) return;
+        feito = true; editor = null; campo.remove();
+        const label = campo.value.trim() || undefined;
+        if (gravar && label !== c.label) mudar(F.editarCartao(canvas, idNo, { label }));
+      };
+      editor = { concluir };
+      campo.addEventListener('keydown', e => {
+        e.stopPropagation();
+        if (e.key === 'Enter' || e.key === 'Escape') { e.preventDefault(); concluir(e.key === 'Enter'); raiz.focus({ preventScroll: true }); }
+      });
+      campo.addEventListener('blur', () => concluir(true));
+      campo.focus(); campo.select();
+    }
     // ---- Menus do botão direito ----
     const NOMES_DAS_CORES = { '': 'Sem cor', 1: 'Vermelho', 2: 'Laranja', 3: 'Amarelo', 4: 'Verde', 5: 'Ciano', 6: 'Roxo' };
     const bolinha = cor => `<svg class="icone" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="7" class="fluxo-bolinha"${corData(cor)} style="${corCss(cor)}"/></svg>`;
@@ -209,6 +253,9 @@
         { rotulo: 'Cor', icone: bolinha(no(idNo)?.color), filhos: itensDaCor(cor => mudar(ids.reduce((c, x) => F.editarCartao(c, x, { color: cor }), canvas))) },
         { rotulo: 'Duplicar', icone: opcoes.icone('copiar'), acao: () => { const r = F.duplicarCartoes(canvas, ids); s.selecao = new Set(r.ids); mudar(r.canvas); } },
         ...(ids.length === 1 && no(idNo)?.type === 'text' ? [{ rotulo: 'Editar texto', icone: opcoes.icone('renomear'), acao: () => editar(idNo) }] : []),
+        ...(ids.length === 1 && no(idNo)?.type === 'group' ? [{ rotulo: 'Renomear grupo', icone: opcoes.icone('renomear'), acao: () => editarGrupo(idNo) }] : []),
+        ...(ids.length === 1 && no(idNo)?.type === 'file' && !F.ehImagem(no(idNo).file) ? [{ rotulo: 'Abrir nota', icone: opcoes.icone('nota'), acao: () => opcoes.abrirNota(no(idNo).file) }] : []),
+        ...(ids.length === 1 && no(idNo)?.type === 'link' ? [{ rotulo: 'Abrir link', icone: opcoes.icone('link'), acao: () => opcoes.abrirLink(no(idNo).url) }] : []),
         { separador: true },
         { rotulo: ids.length > 1 ? `Excluir ${ids.length} cartões` : 'Excluir', icone: opcoes.icone('lixeira'), acao: () => mudar(F.removerCartoes(canvas, ids)) },
       ];
@@ -328,7 +375,7 @@
         const idNo = cartao.dataset.no;
         if (e.shiftKey) { const outra = new Set(s.selecao); if (outra.has(idNo)) outra.delete(idNo); else outra.add(idNo); selecionar([...outra]); return null; }
         if (!s.selecao.has(idNo)) selecionar([idNo]);
-        return { tipo: 'mover', ids: [idNo, ...[...s.selecao].filter(x => x !== idNo)], p0: p };
+        return { tipo: 'mover', ids: comConteudo([idNo, ...[...s.selecao].filter(x => x !== idNo)]), p0: p };
       }
       const base = e.shiftKey ? [...s.selecao] : [];
       if (!e.shiftKey) selecionar([]);
@@ -366,8 +413,12 @@
     raiz.addEventListener('dblclick', e => {
       if (e.target.closest('.fluxo-barra, .fluxo-editor, .fluxo-seta')) return;
       const cartao = e.target.closest('.fluxo-cartao');
-      if (cartao) editar(cartao.dataset.no);
-      else criarCartao(pontoDoCanvas(e));
+      if (!cartao) return void criarCartao(pontoDoCanvas(e));
+      const c = no(cartao.dataset.no);
+      if (c?.type === 'file' && !F.ehImagem(c.file)) return void opcoes.abrirNota(c.file);
+      if (c?.type === 'link') return void opcoes.abrirLink(c.url);
+      if (c?.type === 'group') return void editarGrupo(c.id);
+      editar(cartao.dataset.no);
     });
     raiz.addEventListener('dblclick', e => { const seta = e.target.closest('.fluxo-seta'); if (seta) editarRotulo(seta.dataset.seta); });
     raiz.addEventListener('keydown', e => {
