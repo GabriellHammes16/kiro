@@ -222,6 +222,12 @@ test('renomearArquivos troca o caminho dos cartões de arquivo; sem mudança dev
   assert.equal(F.renomearArquivos(c, f => f), c);
 });
 
+test('renomearArquivos ignora nó nulo ou sem arquivo em vez de estourar', () => {
+  const c = canvas([null, { id: 'x', type: 'file' }]);
+  assert.doesNotThrow(() => F.renomearArquivos(c, () => 'novo.png'));
+  assert.equal(F.renomearArquivos(c, () => 'novo.png'), c);
+});
+
 test('caminhoSeguro recusa subir pastas, raiz do disco e vazio', () => {
   for (const ok of ['anexos/x.png', 'A/B/nota.md', 'x.png']) assert.equal(F.caminhoSeguro(ok), true, ok);
   for (const ruim of ['', '../x.png', 'a/../../x.png', '/etc/x.png', '\\x.png', 'C:/x.png', 'c:\\x.png', undefined, 3]) assert.equal(F.caminhoSeguro(ruim), false, String(ruim));

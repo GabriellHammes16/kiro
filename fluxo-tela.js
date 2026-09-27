@@ -177,8 +177,12 @@
       const sel = canvas.nodes.filter(n => s.selecao.has(n.id));
       const caixa = sel.length ? F.caixaDe(sel) : { x: p.x - 200, y: p.y - 150, width: 400, height: 300 };
       const r = F.adicionarCartao(canvas, { type: 'group', label: 'Grupo', x: encaixar(caixa.x), y: encaixar(caixa.y), width: encaixarPraCima(caixa.width), height: encaixarPraCima(caixa.height) });
+      // JSON Canvas: a ordem da lista é a ordem de empilhamento. adicionarCartao põe o grupo no
+      // fim (topo); um viewer que respeite isso à risca (ao contrário do nosso desenhar()) o
+      // desenharia por cima dos cartões (M4). Ele entra no índice 0 (fundo).
+      const nodes = r.canvas.nodes;
       s.selecao = new Set([r.id]);
-      mudar(r.canvas);
+      mudar({ ...r.canvas, nodes: [nodes.at(-1), ...nodes.slice(0, -1)] });
       editarGrupo(r.id);
     }
     // Texto colado: URL sozinha vira link; o resto, cartão de texto com altura estimada.
@@ -551,7 +555,7 @@
     }
     raiz.addEventListener('paste', e => {
       if (editor || e.target !== raiz || !e.clipboardData) return;
-      const imagens = [...e.clipboardData.files].filter(f => f.type.startsWith('image/'));
+      const imagens = opcoes.imagensColadas(e.clipboardData);   // mesmo filtro do editor de notas (M5)
       if (imagens.length) { e.preventDefault(); return void colarImagens(imagens, centroDaVista()); }
       const texto = e.clipboardData.getData('text/plain');
       if (texto.trim()) { e.preventDefault(); colarTexto(texto, centroDaVista()); }

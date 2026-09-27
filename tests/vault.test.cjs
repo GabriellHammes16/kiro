@@ -473,6 +473,33 @@ test('fluxo: restaurar recusa se o nome já foi reusado na mesma pasta, e nada m
   assert.ok((await vault.trash()).some(i => i.kind === 'fluxo'));
 });
 
+test('fluxo: cartão de imagem acompanha o arquivo quando a pasta é renomeada', async t => {
+  const vault = await setup(t); let s = await seed(vault);
+  s = await vault.save({ ...s, folders: [{ id: 'p1', title: 'Ideias', parentId: '', description: '', color: '' }] });
+  await escreverCanvas(vault, 'Ideias/foto.png', 'fake-png-bytes');
+  s = await vault.load();
+  s = await vault.save({ ...s, fluxos: [{ id: 'f1', title: 'Mapa', folderId: '', canvas: { nodes: [{ id: 'i', type: 'file', file: 'Ideias/foto.png', x: 0, y: 0, width: 200, height: 150 }], edges: [] } }] });
+  s = await vault.save({ ...s, folders: [{ ...s.folders[0], title: 'Projetos' }] });
+  const lido = JSON.parse(await fs.readFile(path.join(vault.directory, 'Mapa.canvas'), 'utf8'));
+  assert.equal(lido.nodes[0].file, 'Projetos/foto.png');
+  await fs.access(path.join(vault.directory, 'Projetos', 'foto.png'));
+});
+
+test('fluxo: excluído na mesma gravação que apaga a pasta é arquivado uma vez só, sem sobrar no caminho antigo', async t => {
+  const vault = await setup(t); let s = await seed(vault);
+  s = await vault.save({ ...s, folders: [{ id: 'p1', title: 'Ideias', parentId: '', description: '', color: '' }] });
+  s = await vault.save({ ...s, fluxos: [{ id: 'f1', title: 'Plano', folderId: 'p1', canvas: { nodes: [], edges: [] } }] });
+  s = await vault.save({ ...s, folders: [], fluxos: [] });
+  await assert.rejects(fs.access(path.join(vault.directory, 'Ideias', 'Plano.canvas')));
+  await assert.rejects(fs.access(path.join(vault.directory, 'Plano.canvas')));
+  const lixeira = await vault.trash();
+  assert.equal(lixeira.filter(i => i.kind === 'fluxo').length, 0, 'não deve haver entrada de fluxo separada da pasta');
+  const pastaEntry = lixeira.find(i => i.kind === 'folder');
+  assert.ok(pastaEntry, 'a pasta deveria estar na lixeira');
+  const entry = await vault.readTrash(pastaEntry.entryId);
+  assert.ok(entry.files.includes('Ideias/Plano.canvas'), 'o .canvas deve estar arquivado dentro da pasta');
+});
+
 test('fluxo com erro pode ser excluído: o arquivo vai intacto para a lixeira', async t => {
   const vault = await setup(t); await seed(vault);
   await escreverCanvas(vault, 'Quebrado.canvas', '{nope');

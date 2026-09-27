@@ -183,7 +183,7 @@
   function renomearArquivos(c, destino) {
     let mudou = false;
     const nodes = c.nodes.map(n => {
-      if (n.type !== 'file') return n;
+      if (!n || n.type !== 'file' || typeof n.file !== 'string') return n;
       const novo = destino(n.file);
       if (!novo || novo === n.file) return n;
       mudou = true;

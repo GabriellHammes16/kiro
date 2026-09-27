@@ -675,6 +675,7 @@ function montarFluxos() {
       // cartão que um paste/seletor assíncrono estava prestes a gravar (F1).
       salvando: () => busy,
       aviso: (texto, erro) => status(texto, erro),
+      imagensColadas: dados => imagensDoEvento(dados),
       arquivoDaNota: id => getNote(id)?.file || null,
       guardarImagem: guardarImagemDoFluxo,
       transformarEmNota: (idNo, texto) => transformarCartaoEmNota(fluxo.id, idNo, texto),
@@ -1398,7 +1399,8 @@ function fluxoModal(fluxo){
 // Cartão de texto → nota na pasta do fluxo, e o cartão vira o cartão dessa nota, no mesmo lugar e
 // tamanho. Duas gravações: a nota precisa existir para ter caminho no cofre.
 async function transformarCartaoEmNota(fluxoId,idNo,texto){
-  if(busy||failed||!loaded||!getFluxo(fluxoId)?.canvas)return false;
+  if(busy){status('Salvando… tente de novo em um instante.',true);return false;}
+  if(failed||!loaded||!getFluxo(fluxoId)?.canvas)return false;
   if(!await gravarFluxoPendente())return false;
   const corpo=String(texto).trim(),id=uid(),agora=Date.now();
   state.notes.unshift({id,title:tituloDoTexto(corpo),body:corpo,links:[],tags:[],createdAt:agora,updatedAt:agora,folderId:getFluxo(fluxoId).folderId||''});
@@ -1412,7 +1414,8 @@ async function transformarCartaoEmNota(fluxoId,idNo,texto){
 }
 // Excluir: o arquivo vai para a lixeira (Configurações → Sistema → Lixeira) e pode voltar.
 async function excluirFluxo(id){
-  if(busy||failed||!loaded)return;
+  if(busy){status('Salvando… tente de novo em um instante.',true);return;}
+  if(failed||!loaded)return;
   const fluxo=getFluxo(id);
   if(!fluxo||!confirm(`Excluir o fluxo "${fluxo.title}"? Ele vai para a lixeira e pode ser restaurado.`))return;
   if(!await gravarFluxoPendente())return;
