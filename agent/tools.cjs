@@ -281,6 +281,29 @@ const FERRAMENTAS = [
     target: (args, resultado) => resultado?.path || args.path || args.id,
   },
   {
+    name: 'create_fluxo',
+    risk: 'write',
+    permission: 'create',
+    description: 'Cria um fluxo (mapa mental ou canvas de ideias, arquivo .canvas compatível com o Obsidian). Você manda a estrutura e o Kiro posiciona: cartões sem x/y viram uma árvore da esquerda para a direita a partir de "root" (ou do primeiro cartão sem ligação chegando). Cada cartão tem um "id" que é um apelido seu; as ligações usam esses apelidos e a resposta traz os ids reais em "ids". Tipos: text (Markdown, com código e fórmulas), note (uma nota do cofre, por caminho ou título), link (URL http/https) e group (moldura com rótulo). Receita para transformar uma nota em mapa mental: leia a nota com read_note; faça um cartão por ideia, com texto curto; o título da nota vira a raiz, cada título (##) vira um ramo ligado à raiz e o que está sob ele vira filhos do ramo; cada bloco de código vira um cartão próprio; passe a nota em sourceNote, para o mapa ficar ligado a ela e ser gravado na mesma pasta. Até 300 cartões e 5.000 caracteres por cartão. Recusa um segundo fluxo com o mesmo título na mesma pasta.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        title: { type: 'string', maxLength: 120, description: 'Título do fluxo. Vira o nome do arquivo .canvas.' },
+        folder: { type: 'string', description: 'Pasta de destino relativa ao cofre. Sem isso, usa a pasta de sourceNote ou a raiz do cofre.' },
+        nodes: {
+          type: 'array', maxItems: 300, items: { type: 'object' },
+          description: 'Cartões: { id, type: "text" | "note" | "link" | "group", text | note | url | label, color?, x?, y?, width?, height? }. color: "1" a "6" (vermelho, laranja, amarelo, verde, ciano, roxo) ou #rrggbb.',
+        },
+        edges: { type: 'array', maxItems: 600, items: { type: 'object' }, description: 'Ligações: { from, to, label?, color? }, com from/to sendo ids (apelidos) de "nodes".' },
+        root: { type: 'string', description: 'Id (apelido) do cartão raiz da árvore.' },
+        sourceNote: { type: 'string', description: 'Nota de origem (caminho ou título). Ganha um cartão ligado à raiz.' },
+      },
+      required: ['title', 'nodes'],
+    },
+    run: (api, args, ctx) => api.createFluxo(args, ctx),
+    target: (args, resultado) => resultado?.fluxo?.path || args.title,
+  },
+  {
     name: 'get_vault_info',
     risk: 'read',
     permission: 'read',

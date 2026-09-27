@@ -393,3 +393,142 @@ test('fluxo com arquivo corrompido aparece com error e não é lido; alvos invá
   await assert.rejects(toolkit.call('read_fluxo', { id: 'nao-existe' }, cliente), codigo('FLUXO_NOT_FOUND'));
   await assert.rejects(toolkit.call('read_fluxo', {}, cliente), codigo('INVALID_INPUT'));
 });
+
+test('create_fluxo grava o .canvas na pasta, troca os apelidos por ids reais e posiciona em árvore', async t => {
+  const { toolkit, directory } = await montar(t);
+  const criado = await toolkit.call('create_fluxo', {
+    title: 'Python', folder: 'Estudos',
+    nodes: [
+      { id: 'raiz', type: 'text', text: '# Python' },
+      { id: 'tipos', type: 'text', text: '## Tipos' },
+      { id: 'listas', type: 'text', text: 'Listas: `[1, 2, 3]`', color: '4' },
+      { id: 'dic', type: 'text', text: 'Dicionários' },
+    ],
+    edges: [{ from: 'raiz', to: 'tipos' }, { from: 'tipos', to: 'listas', label: 'exemplo' }, { from: 'tipos', to: 'dic' }],
+  }, cliente);
+
+  assert.equal(criado.success, true);
+  assert.equal(criado.fluxo.path, 'Estudos/Python.canvas');
+  assert.deepEqual(Object.keys(criado.ids), ['raiz', 'tipos', 'listas', 'dic']);
+  for (const real of Object.values(criado.ids)) assert.match(real, /^[0-9a-f]{16}$/);
+  assert.match(await fs.readFile(path.join(directory, 'Estudos/Python.canvas'), 'utf8'), /^\{\n\t"nodes"/);
+
+  const { nodes, edges } = await lerFluxo(toolkit, { id: criado.fluxo.id });
+  const no = a => nodes.find(n => n.id === criado.ids[a]);
+  semSobreposicao(nodes);
+  assert.ok(no('tipos').x > no('raiz').x + no('raiz').width);
+  assert.equal(no('listas').x, no('dic').x);
+  for (const n of nodes) assert.ok(n.x % 20 === 0 && n.y % 20 === 0, `${n.id} fora da grade`);
+  assert.equal(no('listas').color, '4');
+  assert.deepEqual(edges.map(e => [e.from, e.to, e.label]), [
+    [criado.ids.raiz, criado.ids.tipos, undefined],
+    [criado.ids.tipos, criado.ids.listas, 'exemplo'],
+    [criado.ids.tipos, criado.ids.dic, undefined],
+  ]);
+});
+
+test('create_fluxo respeita x/y dados e posiciona só quem veio sem posição', async t => {
+  const { toolkit } = await montar(t);
+  const criado = await toolkit.call('create_fluxo', {
+    title: 'Solto',
+    nodes: [
+      { id: 'fixo', type: 'text', text: 'Aqui', x: 1000, y: 500, width: 200, height: 80 },
+      { id: 'livre', type: 'group', label: 'Grupo' },
+    ],
+  }, cliente);
+  const { nodes } = await lerFluxo(toolkit, { id: criado.fluxo.id });
+  assert.deepEqual(nodes.find(n => n.id === criado.ids.fixo), { id: criado.ids.fixo, type: 'text', text: 'Aqui', x: 1000, y: 500, width: 200, height: 80 });
+  const livre = nodes.find(n => n.id === criado.ids.livre);
+  assert.equal(livre.label, 'Grupo');
+  assert.equal(livre.width, 400);
+  semSobreposicao(nodes);
+});
+
+test('create_fluxo com sourceNote liga a nota de origem à raiz e grava na pasta dela', async t => {
+  const { toolkit } = await montar(t);
+  const nota = await toolkit.call('create_note', { title: 'Listas', folder: 'Estudos/Python', content: '# Listas' }, cliente);
+  const criado = await toolkit.call('create_fluxo', {
+    title: 'Mapa de listas', sourceNote: 'Listas',
+    nodes: [{ id: 'raiz', type: 'text', text: 'Listas' }, { id: 'a', type: 'text', text: 'append' }],
+    edges: [{ from: 'raiz', to: 'a' }],
+  }, cliente);
+  assert.equal(criado.fluxo.path, 'Estudos/Python/Mapa de listas.canvas');
+  const { nodes, edges } = await lerFluxo(toolkit, { id: criado.fluxo.id });
+  const origem = nodes.find(n => n.type === 'note');
+  assert.equal(origem.note, nota.note.path);
+  assert.ok(edges.some(e => e.from === origem.id && e.to === criado.ids.raiz));
+  assert.ok(origem.x + origem.width <= nodes.find(n => n.id === criado.ids.raiz).x);
+  semSobreposicao(nodes);
+});
+
+test('create_fluxo acha nota por caminho ou título e recusa tudo se alguma não existe', async t => {
+  const { toolkit } = await montar(t);
+  const a = await toolkit.call('create_note', { title: 'Resumo', folder: 'A', content: 'a' }, cliente);
+  const b = await toolkit.call('create_note', { title: 'Resumo', folder: 'B', content: 'b' }, cliente);
+  const criado = await toolkit.call('create_fluxo', { title: 'Notas', nodes: [
+    { id: 'pelo-caminho', type: 'note', note: b.note.path },
+    { id: 'pelo-titulo', type: 'note', note: 'Resumo' },
+  ] }, cliente);
+  const { nodes } = await lerFluxo(toolkit, { id: criado.fluxo.id });
+  assert.equal(nodes.find(n => n.id === criado.ids['pelo-caminho']).note, b.note.path);
+  assert.ok([a.note.path, b.note.path].includes(nodes.find(n => n.id === criado.ids['pelo-titulo']).note));
+
+  await assert.rejects(toolkit.call('create_fluxo', { title: 'Faltando', nodes: [
+    { id: 'x', type: 'note', note: 'Não existe' }, { id: 'y', type: 'note', note: 'Pasta/Outra.md' },
+  ] }, cliente), erro => erro.code === 'NOTE_NOT_FOUND' && erro.details.missing.length === 2);
+  assert.equal((await toolkit.call('list_fluxos', {}, cliente)).fluxos.length, 1);
+});
+
+test('create_fluxo recusa pedido inválido sem gravar nada', async t => {
+  const { toolkit } = await montar(t);
+  const um = [{ id: 'a', type: 'text', text: 'A' }];
+  const casos = [
+    { title: 'x', nodes: [] },
+    { title: 'x', nodes: [...um, { id: 'a', type: 'text', text: 'B' }] },
+    { title: 'x', nodes: um, edges: [{ from: 'a', to: 'b' }] },
+    { title: 'x', nodes: um, edges: [{ from: 'a', to: 'a' }] },
+    { title: 'x', nodes: [{ id: 'a', type: 'text', text: 'x'.repeat(5001) }] },
+    { title: 'x', nodes: [{ id: 'a', type: 'link', url: 'javascript:alert(1)' }] },
+    { title: 'x', nodes: [{ id: 'a', type: 'text', text: 'A', color: 'red; background:url(x)' }] },
+    { title: 'x', nodes: [{ id: 'a', type: 'imagem', text: 'A' }] },
+    { title: 'x', nodes: [{ id: 'a', type: 'text', text: 'A', x: 'longe' }] },
+    { title: 'x', nodes: [{ id: 'a', type: 'text', text: 'A', extra: 1 }] },
+    { title: 'x', nodes: um, root: 'b' },
+    { title: 'x', nodes: Array.from({ length: 301 }, (_, i) => ({ id: `n${i}`, type: 'text', text: 'x' })) },
+  ];
+  for (const caso of casos) {
+    await assert.rejects(toolkit.call('create_fluxo', caso, cliente), codigo('INVALID_INPUT'), JSON.stringify(caso).slice(0, 80));
+  }
+  for (const titulo of ['a/b', 'con', 'fim.', '']) {
+    await assert.rejects(toolkit.call('create_fluxo', { title: titulo, nodes: um }, cliente), codigo('INVALID_NAME'), titulo);
+  }
+  assert.equal((await toolkit.call('list_fluxos', {}, cliente)).fluxos.length, 0);
+});
+
+test('create_fluxo recusa um segundo fluxo com o mesmo título na mesma pasta, sem mexer no primeiro', async t => {
+  const { toolkit, directory } = await montar(t);
+  await toolkit.call('create_fluxo', { title: 'Mapa', folder: 'Estudos', nodes: [{ id: 'a', type: 'text', text: 'Primeiro' }] }, cliente);
+  const antes = await fs.readFile(path.join(directory, 'Estudos/Mapa.canvas'), 'utf8');
+  for (const titulo of ['Mapa', 'mapa']) {
+    await assert.rejects(toolkit.call('create_fluxo', { title: titulo, folder: 'Estudos', nodes: [{ id: 'a', type: 'text', text: 'Segundo' }] }, cliente), codigo('FLUXO_EXISTS'));
+  }
+  assert.equal(await fs.readFile(path.join(directory, 'Estudos/Mapa.canvas'), 'utf8'), antes);
+  // Em outra pasta, o mesmo título pode.
+  await toolkit.call('create_fluxo', { title: 'Mapa', nodes: [{ id: 'a', type: 'text', text: 'Raiz' }] }, cliente);
+});
+
+test('create_fluxo respeita a permissão de criar, é auditado e emite fluxo.created', async t => {
+  const { toolkit, config, events, audit } = await montar(t);
+  const vistos = [];
+  events.on('fluxo.created', carga => vistos.push(carga));
+  const criado = await toolkit.call('create_fluxo', { title: 'Evento', nodes: [{ id: 'a', type: 'text', text: 'A' }] }, cliente);
+  assert.equal(vistos.length, 1);
+  assert.equal(vistos[0].id, criado.fluxo.id);
+  assert.equal(vistos[0].source, 'agent');
+  const registro = (await audit.read({ limit: 5 })).find(r => r.action === 'create_fluxo');
+  assert.equal(registro.status, 'success');
+  assert.equal(registro.target, 'Evento.canvas');
+
+  await config.save({ permissions: { create: false } });
+  await assert.rejects(toolkit.call('create_fluxo', { title: 'Negado', nodes: [{ id: 'a', type: 'text', text: 'A' }] }, cliente), codigo('PERMISSION_DENIED'));
+});

@@ -16,7 +16,7 @@ const KiroFluxo = require('../fluxo.js');
 const { AgentError, vaultRelativePath, folderSegments, noteTitle, tagList } = require('./security.cjs');
 const { KiroEvents } = require('./events.cjs');
 
-const { pathKey, normalize, wikiLinks, findLinkedNote, localDate, habitStats, tags: tagsDaNota } = domain;
+const { pathKey, normalize, wikiLinks, findLinkedNote, localDate, habitStats, tags: tagsDaNota, validFolderName, safeUrl } = domain;
 
 const CONFLITO = /mudou|ocupado/i;
 const MAX_LIMITE = 200;
@@ -56,6 +56,70 @@ function cartaoParaIA(n, posicoes) {
   return saida;
 }
 const setaParaIA = e => ({ id: e.id, from: e.fromNode, to: e.toNode, ...(e.label ? { label: e.label } : {}), ...(e.color ? { color: e.color } : {}) });
+
+// ---- Entrada da IA para fluxos. O schema só confere o topo; cada cartão é validado aqui.
+const MAX_TEXTO_CARTAO = 5000;
+const CAMPOS_DO_CARTAO = ['id', 'type', 'text', 'note', 'url', 'label', 'color', 'x', 'y', 'width', 'height'];
+
+function objeto(valor, onde) {
+  if (!valor || typeof valor !== 'object' || Array.isArray(valor)) throw new AgentError('INVALID_INPUT', `${onde} deve ser um objeto.`);
+  return valor;
+}
+function textoDoCartao(valor, campo, onde) {
+  if (typeof valor !== 'string') throw new AgentError('INVALID_INPUT', `${onde}: "${campo}" deve ser texto.`);
+  if (valor.length > MAX_TEXTO_CARTAO) throw new AgentError('INVALID_INPUT', `${onde}: "${campo}" passa de ${MAX_TEXTO_CARTAO} caracteres. Divida o conteúdo em mais cartões.`);
+  return valor;
+}
+// Posição e tamanho: números finitos; tamanho a partir do mínimo do editor (80 × 40).
+function geometria(e, onde) {
+  const saida = {};
+  for (const campo of ['x', 'y', 'width', 'height']) {
+    if (e[campo] === undefined || e[campo] === null) continue;
+    if (typeof e[campo] !== 'number' || !Number.isFinite(e[campo]) || Math.abs(e[campo]) > 1e6) {
+      throw new AgentError('INVALID_INPUT', `${onde}: "${campo}" deve ser um número.`);
+    }
+    saida[campo] = e[campo];
+  }
+  if ((saida.width !== undefined && saida.width < 80) || (saida.height !== undefined && saida.height < 40)) {
+    throw new AgentError('INVALID_INPUT', `${onde}: largura mínima 80 e altura mínima 40.`);
+  }
+  return saida;
+}
+function corDoCartao(valor, onde) {
+  if (valor === undefined || valor === null) return undefined;
+  if (!KiroFluxo.corValida(valor)) throw new AgentError('INVALID_INPUT', `${onde}: "color" deve ser "1" a "6" (vermelho, laranja, amarelo, verde, ciano, roxo) ou #rrggbb.`);
+  return valor;
+}
+function apelido(e, onde, vistos) {
+  objeto(e, onde);
+  if (typeof e.id !== 'string' || !e.id.trim() || e.id.length > 100) {
+    throw new AgentError('INVALID_INPUT', `${onde}: "id" é obrigatório (um apelido seu, como "raiz" ou "ideia-1"; o Kiro troca pelo id real).`);
+  }
+  if (vistos.has(e.id)) throw new AgentError('INVALID_INPUT', `${onde}: o id "${e.id}" se repete.`);
+  vistos.add(e.id);
+  return e.id;
+}
+// Ligação pedida pela IA. `resolver` troca a referência (apelido ou id real) pelo id do cartão.
+function setaDaIA(e, onde, resolver, dica) {
+  objeto(e, onde);
+  const extras = Object.keys(e).filter(k => !['from', 'to', 'label', 'color'].includes(k));
+  if (extras.length) throw new AgentError('INVALID_INPUT', `${onde}: campo desconhecido "${extras[0]}". Aceitos: from, to, label, color.`);
+  const de = typeof e.from === 'string' ? resolver(e.from) : undefined;
+  const para = typeof e.to === 'string' ? resolver(e.to) : undefined;
+  if (!de || !para) throw new AgentError('INVALID_INPUT', `${onde}: "from" e "to" precisam ser ${dica}.`);
+  if (de === para) throw new AgentError('INVALID_INPUT', `${onde}: uma ligação não pode sair e chegar no mesmo cartão.`);
+  const cor = corDoCartao(e.color, onde);
+  const rotulo = e.label === undefined || e.label === null ? '' : textoDoCartao(e.label, 'label', onde);
+  return { fromNode: de, toNode: para, ...(rotulo ? { label: rotulo } : {}), ...(cor ? { color: cor } : {}) };
+}
+// O título vira o nome do arquivo .canvas: mesmas regras de um nome de pasta.
+function tituloDoFluxo(valor) {
+  const titulo = noteTitle(valor);
+  if (!validFolderName(titulo)) {
+    throw new AgentError('INVALID_NAME', `"${titulo}" não serve como nome de arquivo. Evite < > : " / \\ | ? * , nomes reservados do Windows e ponto ou espaço no início ou no final.`);
+  }
+  return titulo;
+}
 
 class KiroAgentApi {
   constructor(vault, { events } = {}) {
@@ -635,6 +699,93 @@ class KiroAgentApi {
       nodes: fluxo.canvas.nodes.map(n => cartaoParaIA(n, args.positions === true)),
       edges: fluxo.canvas.edges.map(setaParaIA),
     };
+  }
+
+  // Nota por caminho ("Estudos/Python.md") ou por título ("Python"), como um [[link]].
+  #notaPorReferencia(state, ref) {
+    const alvo = String(ref).trim().replace(/\.md$/i, '');
+    return alvo ? findLinkedNote(state.notes, alvo) : undefined;
+  }
+
+  // Cartão pedido pela IA → cartão do canvas, sem id; x/y só se vierem. Nota que não existe
+  // entra em `faltando`: a chamada inteira é recusada depois, com a lista toda.
+  #cartaoDaIA(state, e, onde, faltando) {
+    objeto(e, onde);
+    const extras = Object.keys(e).filter(k => !CAMPOS_DO_CARTAO.includes(k));
+    if (extras.length) throw new AgentError('INVALID_INPUT', `${onde}: campo desconhecido "${extras[0]}".`);
+    let cartao;
+    if (e.type === 'text') cartao = { type: 'text', text: textoDoCartao(e.text ?? '', 'text', onde) };
+    else if (e.type === 'note') {
+      const ref = textoDoCartao(e.note, 'note', onde);
+      const nota = this.#notaPorReferencia(state, ref);
+      if (!nota) faltando.push(ref);
+      cartao = { type: 'file', file: nota?.file || ref };
+    } else if (e.type === 'link') {
+      const url = safeUrl(textoDoCartao(e.url, 'url', onde));
+      if (!url) throw new AgentError('INVALID_INPUT', `${onde}: "url" precisa começar com http:// ou https://.`);
+      cartao = { type: 'link', url };
+    } else if (e.type === 'group') {
+      cartao = { type: 'group', ...(e.label !== undefined && e.label !== null ? { label: textoDoCartao(e.label, 'label', onde) } : {}) };
+    } else throw new AgentError('INVALID_INPUT', `${onde}: "type" deve ser text, note, link ou group.`);
+    const cor = corDoCartao(e.color, onde);
+    return { ...cartao, ...(cor ? { color: cor } : {}), ...KiroFluxo.tamanhoPadrao(cartao), ...geometria(e, onde) };
+  }
+
+  async createFluxo(args = {}, contexto = {}) {
+    const titulo = tituloDoFluxo(args.title);
+    const temPasta = args.folder !== undefined && args.folder !== null;
+    const segmentos = temPasta ? folderSegments(args.folder) : [];
+    if (!Array.isArray(args.nodes) || !args.nodes.length) throw new AgentError('INVALID_INPUT', 'Informe ao menos um cartão em "nodes".');
+
+    const id = randomUUID();
+    const { antes, depois, resultado } = await this.#mutate(state => {
+      const faltando = [], vistos = new Set();
+      const pedidos = args.nodes.map((e, i) => ({ apelido: apelido(e, `nodes[${i}]`, vistos), cartao: this.#cartaoDaIA(state, e, `nodes[${i}]`, faltando) }));
+      const temOrigem = args.sourceNote !== undefined && args.sourceNote !== null;
+      const origem = temOrigem ? this.#notaPorReferencia(state, textoDoCartao(args.sourceNote, 'sourceNote', 'sourceNote')) : null;
+      if (temOrigem && !origem) faltando.push(args.sourceNote);
+      if (faltando.length) {
+        throw new AgentError('NOTE_NOT_FOUND', `Notas não encontradas: ${faltando.join(', ')}. Confira os caminhos com search_notes ou list_notes.`, { missing: faltando });
+      }
+      const temRaiz = args.root !== undefined && args.root !== null;
+      if (temRaiz && !vistos.has(args.root)) throw new AgentError('INVALID_INPUT', '"root" deve ser o id de um dos cartões de "nodes".');
+
+      // Sem pasta, o fluxo vai para a pasta da nota de origem.
+      const { folderId, criadas } = temPasta || !origem ? this.#garantirPasta(state, segmentos) : { folderId: origem.folderId || '', criadas: [] };
+      state.fluxos = state.fluxos || [];
+      if (state.fluxos.some(f => (f.folderId || '') === folderId && pathKey(f.title) === pathKey(titulo))) {
+        throw new AgentError('FLUXO_EXISTS', `Já existe o fluxo "${titulo}" nesta pasta. Use update_fluxo para alterá-lo ou escolha outro título.`);
+      }
+
+      const ocupados = new Set(), real = new Map();
+      const reservar = () => { const novo = KiroFluxo.novoId(ocupados); ocupados.add(novo); return novo; };
+      const nodes = pedidos.map(({ apelido: a, cartao }) => { const idReal = reservar(); real.set(a, idReal); return { id: idReal, ...cartao }; });
+      const edges = (args.edges || []).map((e, i) => ({ id: reservar(), ...setaDaIA(e, `edges[${i}]`, ref => real.get(ref), 'ids de cartões de "nodes"') }));
+      let raiz = temRaiz ? real.get(args.root) : undefined;
+      if (origem) {
+        const cartao = { id: reservar(), type: 'file', file: origem.file, ...KiroFluxo.tamanhoPadrao({ type: 'file', file: origem.file }) };
+        edges.push({ id: reservar(), fromNode: cartao.id, toNode: raiz || KiroFluxo.raizDe(nodes, edges) });
+        nodes.unshift(cartao);
+        raiz = cartao.id;
+      }
+      // Quem veio sem x/y é posicionado pelo layout; quem veio com posição fica onde a IA pôs.
+      if (nodes.some(n => n.x === undefined || n.y === undefined)) {
+        const posicoes = KiroFluxo.layout(nodes, edges, { raiz });
+        for (const n of nodes) if (n.x === undefined || n.y === undefined) Object.assign(n, posicoes.get(n.id));
+      }
+      const canvas = { nodes, edges };
+      const lido = KiroFluxo.ler(KiroFluxo.serializar(canvas));
+      if (lido.erro) throw new AgentError('INVALID_INPUT', lido.erro);
+      state.fluxos.push({ id, title: titulo, folderId, canvas });
+      return { criadas, ids: Object.fromEntries(real) };
+    });
+
+    const criado = (depois.fluxos || []).find(f => f.id === id);
+    for (const pasta of resultado.criadas) {
+      this.events.emitVaultEvent('folder.created', { id: pasta.id, path: this.#caminhoDaPasta(depois, pasta.id), source: 'agent', clientId: contexto.clientId });
+    }
+    this.events.emitVaultEvent('fluxo.created', { id, path: criado?.file, source: 'agent', clientId: contexto.clientId });
+    return { success: true, fluxo: this.#resumoFluxo(depois, criado), ids: resultado.ids, revisionBefore: antes.revision, revision: depois.revision };
   }
 
   async describeVault() {
