@@ -112,6 +112,11 @@ um endereço vira link e uma imagem vai para os anexos. Um cartão de texto pode
 manda o arquivo para a lixeira, de onde ele pode ser restaurado. No painel da direita de uma
 nota, "Aparece nos fluxos" lista os fluxos que a citam.
 
+Uma IA conectada pelo MCP também cria e edita fluxos (`kiro_create_fluxo`, `kiro_update_fluxo`):
+peça "transforma a nota X num mapa mental" e ela manda os cartões e as ligações; o Kiro organiza
+tudo numa árvore da esquerda para a direita e, nas edições, encaixa os cartões novos sem mexer
+nos que já estavam.
+
 ## Fontes
 
 O aplicativo embarca as próprias fontes, em `fonts/`, e nunca busca fonte na internet: a aparência é a mesma em qualquer máquina, com ou sem rede.

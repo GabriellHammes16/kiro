@@ -104,6 +104,49 @@ Nomes sem prefixo. A camada MCP publica os mesmos com `kiro_` na frente.
 | `search_by_tag` | read | read |
 | `get_vault_info` | read | read |
 
+### Fluxos
+
+Fluxos são arquivos `.canvas` no formato aberto JSON Canvas, compatível com o Obsidian.
+A IA manda a estrutura (cartões e ligações) e o Kiro posiciona.
+
+| Ferramenta | Risco | Permissão | O que faz |
+|---|---|---|---|
+| `list_fluxos` | read | read | Lista id, caminho, título, pasta e quantidade de cartões e ligações. Fluxo corrompido vem com `error`. |
+| `read_fluxo` | read | read | Lê por `id` ou `path`: cartões `{ id, type, text \| note \| url \| label \| file, color }` e ligações `{ id, from, to, label }`. `positions: true` inclui `x`, `y`, `width`, `height`. |
+| `create_fluxo` | write | create | Cria a partir de `{ title, folder?, nodes, edges?, root?, sourceNote? }`. Cartões sem posição viram uma árvore da esquerda para a direita. |
+| `update_fluxo` | write | update | `add_nodes`, `add_edges`, `update_nodes`, `remove_nodes`, `remove_edges`. Cartões novos sem posição entram perto do pai, sem mexer nos existentes. |
+
+- O `id` de cada cartão em `create_fluxo` e `add_nodes` é um apelido; as ligações usam os
+  apelidos e a resposta devolve `ids: { apelido: idReal }`.
+- `note` aceita caminho (`"Estudos/Python.md"`) ou título. Nota que não existe recusa a
+  chamada inteira (`NOTE_NOT_FOUND`, com `details.missing`).
+- Limites: 300 cartões por lista, 600 ligações e 5.000 caracteres por cartão.
+- Tudo-ou-nada: qualquer erro vira `AgentError` e nada é gravado. Fluxo com o arquivo
+  corrompido devolve `FLUXO_INVALID` e não é tocado.
+- Eventos: `fluxo.created` e `fluxo.updated`.
+
+Exemplo: "transforma a nota Listas num fluxo". O agente lê a nota com `read_note` e chama:
+
+```jsonc
+// create_fluxo
+{ "title": "Listas (mapa)", "sourceNote": "Estudos/Python/Listas.md",
+  "nodes": [
+    { "id": "raiz", "type": "text", "text": "# Listas" },
+    { "id": "criar", "type": "text", "text": "## Criar" },
+    { "id": "ex1", "type": "text", "text": "```python\nxs = [1, 2, 3]\n```" },
+    { "id": "metodos", "type": "text", "text": "## Métodos" },
+    { "id": "append", "type": "text", "text": "`append` põe no fim" }
+  ],
+  "edges": [
+    { "from": "raiz", "to": "criar" }, { "from": "criar", "to": "ex1" },
+    { "from": "raiz", "to": "metodos" }, { "from": "metodos", "to": "append" }
+  ] }
+// resposta
+{ "success": true, "fluxo": { "id": "…", "path": "Estudos/Python/Listas (mapa).canvas",
+  "title": "Listas (mapa)", "folder": "Estudos/Python", "cards": 6, "links": 5 },
+  "ids": { "raiz": "3f9c…", "criar": "a01b…", "ex1": "…", "metodos": "…", "append": "…" } }
+```
+
 ### Schemas
 
 Exemplos. `toolkit.list()` devolve o schema completo de cada ferramenta.

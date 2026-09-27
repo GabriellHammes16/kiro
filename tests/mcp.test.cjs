@@ -28,7 +28,8 @@ test('servidor MCP publica as ferramentas e opera o cofre por stdio', async t =>
   const nomes = tools.map(f => f.name);
   for (const esperada of ['kiro_create_note', 'kiro_read_note', 'kiro_update_note', 'kiro_delete_note',
     'kiro_search_notes', 'kiro_list_notes', 'kiro_create_folder', 'kiro_list_folders', 'kiro_move_note',
-    'kiro_get_backlinks', 'kiro_get_outgoing_links', 'kiro_get_recent_notes']) {
+    'kiro_get_backlinks', 'kiro_get_outgoing_links', 'kiro_get_recent_notes',
+    'kiro_list_fluxos', 'kiro_read_fluxo', 'kiro_create_fluxo', 'kiro_update_fluxo']) {
     assert.ok(nomes.includes(esperada), `faltou a tool ${esperada}`);
   }
   // nenhuma ferramenta genérica de sistema é publicada
