@@ -1395,15 +1395,17 @@ function fluxoModal(fluxo){
 // Cartão de texto → nota na pasta do fluxo, e o cartão vira o cartão dessa nota, no mesmo lugar e
 // tamanho. Duas gravações: a nota precisa existir para ter caminho no cofre.
 async function transformarCartaoEmNota(fluxoId,idNo,texto){
-  if(busy||failed||!loaded||!getFluxo(fluxoId)?.canvas)return;
-  if(!await gravarFluxoPendente())return;
-  const id=uid(),agora=Date.now();
-  state.notes.unshift({id,title:tituloDoTexto(texto),body:texto,links:[],tags:[],createdAt:agora,updatedAt:agora,folderId:getFluxo(fluxoId).folderId||''});
-  if(!await save())return;
+  if(busy||failed||!loaded||!getFluxo(fluxoId)?.canvas)return false;
+  if(!await gravarFluxoPendente())return false;
+  const corpo=String(texto).trim(),id=uid(),agora=Date.now();
+  state.notes.unshift({id,title:tituloDoTexto(corpo),body:corpo,links:[],tags:[],createdAt:agora,updatedAt:agora,folderId:getFluxo(fluxoId).folderId||''});
+  if(!await save())return false;
   const nota=getNote(id),fluxo=getFluxo(fluxoId);
-  if(!nota?.file||!fluxo?.canvas||!fluxo.canvas.nodes.some(n=>n.id===idNo))return;
+  if(!nota?.file||!fluxo?.canvas||!fluxo.canvas.nodes.some(n=>n.id===idNo)){status('A nota foi criada, mas o cartão não existe mais no fluxo.',true);return false;}
   state.fluxos=state.fluxos.map(f=>f.id===fluxoId?{...f,canvas:KiroFluxo.editarCartao(f.canvas,idNo,{type:'file',text:undefined,file:nota.file})}:f);
-  if(await save())status('Cartão transformado em nota');
+  if(!await save())return false;
+  status('Cartão transformado em nota');
+  return true;
 }
 // Excluir: o arquivo vai para a lixeira (Configurações → Sistema → Lixeira) e pode voltar.
 async function excluirFluxo(id){

@@ -271,14 +271,18 @@
       campo.addEventListener('blur', () => concluir(true));
       campo.focus(); campo.select();
     }
-    // O app cria a nota e troca o cartão numa gravação própria (que redesenha a tela); o passo
-    // de desfazer guardado aqui volta ao cartão de texto (a nota criada continua no cofre).
+    // O app cria a nota e troca o cartão numa gravação própria (que redesenha a tela). O passo de
+    // desfazer só entra no histórico se a troca realmente aconteceu: `transformarCartaoEmNota`
+    // devolve false em qualquer caída no meio do caminho (busy, gravação falhou, cartão sumiu), e
+    // empilhar mesmo assim criaria um desfazer que não desfaz nada e comeria o que dava pra refazer.
+    // `s` é a sessão do fluxo (sobrevive ao remonte do editor pelos salvamentos), por isso o
+    // `.then` ainda acerta o histórico certo mesmo depois da instância atual ter sido substituída.
     function transformarEmNota(idNo) {
       const c = no(idNo);
       if (!c || c.type !== 'text' || !c.text.trim()) return;
       terminarEdicao();
-      s.historico = F.empilhar(s.historico, canvas);
-      opcoes.transformarEmNota(idNo, no(idNo).text);
+      const antes = canvas, texto = no(idNo).text;
+      Promise.resolve(opcoes.transformarEmNota(idNo, texto)).then(ok => { if (ok) s.historico = F.empilhar(s.historico, antes); });
     }
     // ---- Menus do botão direito ----
     const NOMES_DAS_CORES = { '': 'Sem cor', 1: 'Vermelho', 2: 'Laranja', 3: 'Amarelo', 4: 'Verde', 5: 'Ciano', 6: 'Roxo' };
