@@ -209,7 +209,72 @@
     return Math.min(600, Math.max(60, (linhas + 1) * 24));
   }
 
-  const api = { TIPOS, LADOS, CORES, GRADE, ZOOM, OPOSTO, corValida, ler, serializar, adicionarCartao, moverCartoes, redimensionar, editarCartao, removerCartoes, duplicarCartoes, ligar, editarSeta, removerSetas, encaixar, historicoVazio, empilhar, desfazer, refazer, vistaValida, paraCanvas, zoomEm, enquadrar, pontoDoLado, ladoMaisProximo, ladosDaSeta, caminhoDaSeta, geometriaDaSeta, dentro, renomearArquivos, caminhoSeguro, ehImagem, contidos, caixaDe, alturaEstimada };
+  // ---- Layout automático (IA) ----
+  const LARGURA_PADRAO = 280, ENTRE_COLUNAS = 80, ENTRE_IRMAOS = 20;
+  const praCima = v => Math.ceil(v / GRADE) * GRADE;
+  // Tamanho de um cartão que chega sem tamanho (da IA): o mesmo dos cartões criados na tela.
+  function tamanhoPadrao(c) {
+    if (c.type === 'text') return { width: LARGURA_PADRAO, height: praCima(alturaEstimada(c.text ?? '')) };
+    if (c.type === 'file') return ehImagem(c.file) ? { width: 320, height: 240 } : { width: 400, height: 280 };
+    if (c.type === 'link') return { width: 320, height: 100 };
+    return { width: 400, height: 300 };
+  }
+  // Raiz implícita: o primeiro cartão sem seta chegando de outro; se todos têm, o primeiro.
+  function raizDe(nodes, edges) {
+    const ids = new Set(nodes.map(n => n.id));
+    const chegam = new Set(edges.filter(e => e.fromNode !== e.toNode && ids.has(e.fromNode)).map(e => e.toNode));
+    return (nodes.find(n => !chegam.has(n.id)) || nodes[0])?.id;
+  }
+  // Árvore da esquerda para a direita: cada nível é uma coluna (80 px entre colunas), irmãos
+  // empilhados a 20 px, e o pai centrado na altura do ramo, então nada se sobrepõe. Busca em
+  // largura a partir da raiz, nas setas em ordem: cada cartão entra pela primeira seta que o
+  // alcança, e as outras (ciclos, ligações cruzadas) não contam. Quem a raiz não alcança vai
+  // para uma fileira embaixo. Recebe cartões com width/height; devolve Map id → { x, y }.
+  function layout(nodes, edges, { raiz } = {}) {
+    const posicoes = new Map();
+    if (!nodes.length) return posicoes;
+    const porId = new Map(nodes.map(n => [n.id, n]));
+    const inicio = porId.has(raiz) ? raiz : raizDe(nodes, edges);
+    const filhos = new Map([[inicio, []]]), nivel = new Map([[inicio, 0]]), fila = [inicio];
+    while (fila.length) {
+      const pai = fila.shift();
+      for (const e of edges) {
+        if (e.fromNode !== pai || !porId.has(e.toNode) || nivel.has(e.toNode)) continue;
+        nivel.set(e.toNode, nivel.get(pai) + 1);
+        filhos.get(pai).push(e.toNode);
+        filhos.set(e.toNode, []);
+        fila.push(e.toNode);
+      }
+    }
+    const larguras = [];
+    for (const [id, k] of nivel) larguras[k] = Math.max(larguras[k] || 0, porId.get(id).width);
+    const colunas = [0];
+    for (let k = 1; k < larguras.length; k++) colunas[k] = colunas[k - 1] + larguras[k - 1] + ENTRE_COLUNAS;
+    const alturas = new Map();
+    const somaDosFilhos = id => filhos.get(id).reduce((t, f) => t + alturas.get(f), 0) + ENTRE_IRMAOS * Math.max(0, filhos.get(id).length - 1);
+    const alturaDoRamo = id => {
+      for (const f of filhos.get(id)) alturaDoRamo(f);
+      alturas.set(id, Math.max(porId.get(id).height, somaDosFilhos(id)));
+    };
+    alturaDoRamo(inicio);
+    const posicionar = (id, topo) => {
+      const h = alturas.get(id);
+      posicoes.set(id, { x: encaixar(colunas[nivel.get(id)]), y: encaixar(topo + (h - porId.get(id).height) / 2) });
+      let y = topo + (h - somaDosFilhos(id)) / 2;
+      for (const f of filhos.get(id)) { posicionar(f, y); y += alturas.get(f) + ENTRE_IRMAOS; }
+    };
+    posicionar(inicio, 0);
+    const fileira = alturas.get(inicio) + ENTRE_COLUNAS;
+    let x = 0;
+    for (const n of nodes) {
+      if (posicoes.has(n.id)) continue;
+      posicoes.set(n.id, { x: encaixar(x), y: encaixar(fileira) });
+      x += n.width + ENTRE_IRMAOS;
+    }
+    return posicoes;
+  }
+
+  const api = { TIPOS, LADOS, CORES, GRADE, ZOOM, OPOSTO, corValida, ler, serializar, adicionarCartao, moverCartoes, redimensionar, editarCartao, removerCartoes, duplicarCartoes, ligar, editarSeta, removerSetas, encaixar, historicoVazio, empilhar, desfazer, refazer, vistaValida, paraCanvas, zoomEm, enquadrar, pontoDoLado, ladoMaisProximo, ladosDaSeta, caminhoDaSeta, geometriaDaSeta, dentro, renomearArquivos, caminhoSeguro, ehImagem, contidos, caixaDe, alturaEstimada, tamanhoPadrao, raizDe, layout };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.KiroFluxo = api;
 })(globalThis);

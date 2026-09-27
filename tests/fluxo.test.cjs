@@ -277,3 +277,67 @@ test('fluxosQueCitam: cartão com o caminho da nota (sem diferenciar maiúsculas
   ] };
   assert.deepEqual(domain.fluxosQueCitam(stateComNulo, notas[0]).map(x => x.id), ['f5']);
 });
+
+// ---- Etapa 3: layout ----
+const caixa = (id, width = 280, height = 60) => ({ id, width, height });
+const seta = (fromNode, toNode) => ({ fromNode, toNode });
+const posicoesDe = mapa => Object.fromEntries([...mapa].map(([id, p]) => [id, p]));
+
+test('tamanhoPadrao: texto 280 × altura estimada na grade; nota, imagem, link e grupo com os tamanhos da tela', () => {
+  assert.deepEqual(F.tamanhoPadrao({ type: 'text', text: 'curto' }), { width: 280, height: 60 });
+  assert.deepEqual(F.tamanhoPadrao({ type: 'text', text: 'x'.repeat(100) }), { width: 280, height: 100 });
+  assert.deepEqual(F.tamanhoPadrao({ type: 'file', file: 'Estudos/Python.md' }), { width: 400, height: 280 });
+  assert.deepEqual(F.tamanhoPadrao({ type: 'file', file: 'anexos/foto.png' }), { width: 320, height: 240 });
+  assert.deepEqual(F.tamanhoPadrao({ type: 'link', url: 'https://a.b' }), { width: 320, height: 100 });
+  assert.deepEqual(F.tamanhoPadrao({ type: 'group' }), { width: 400, height: 300 });
+});
+
+test('layout: colunas da esquerda para a direita, pai centrado no ramo, irmãos a 20 px, na grade', () => {
+  const nodes = [caixa('r'), caixa('a', 280, 100), caixa('b'), caixa('a1', 280, 140), caixa('a2')];
+  const edges = [seta('r', 'a'), seta('r', 'b'), seta('a', 'a1'), seta('a', 'a2')];
+  // Ramo de a = 140 + 20 + 60 = 220; ramo de r = 220 + 20 + 60 = 300.
+  assert.deepEqual(posicoesDe(F.layout(nodes, edges)), {
+    r: { x: 0, y: 120 },
+    a: { x: 360, y: 60 },
+    b: { x: 360, y: 240 },
+    a1: { x: 720, y: 0 },
+    a2: { x: 720, y: 160 },
+  });
+});
+
+test('layout: raiz implícita é o primeiro sem seta chegando; raiz explícita manda', () => {
+  const nodes = [caixa('b'), caixa('a')];
+  const edges = [seta('a', 'b')];
+  assert.equal(F.raizDe(nodes, edges), 'a');
+  assert.deepEqual(posicoesDe(F.layout(nodes, edges)), { a: { x: 0, y: 0 }, b: { x: 360, y: 0 } });
+  // Com raiz "b", "a" não é alcançado pelas setas e vai para a fileira de baixo.
+  assert.deepEqual(posicoesDe(F.layout(nodes, edges, { raiz: 'b' })), { b: { x: 0, y: 0 }, a: { x: 0, y: 140 } });
+});
+
+test('layout: ciclo não trava; só a primeira seta que alcança o cartão conta', () => {
+  const nodes = [caixa('a'), caixa('b'), caixa('c')];
+  const edges = [seta('a', 'b'), seta('b', 'c'), seta('c', 'a')];
+  assert.equal(F.raizDe(nodes, edges), 'a');   // todos têm seta chegando: o primeiro
+  assert.deepEqual(posicoesDe(F.layout(nodes, edges)), { a: { x: 0, y: 0 }, b: { x: 360, y: 0 }, c: { x: 720, y: 0 } });
+});
+
+test('layout: cartões fora da árvore ficam numa fileira embaixo; vazio não quebra', () => {
+  const nodes = [caixa('a'), caixa('b'), caixa('c'), caixa('d')];
+  assert.deepEqual(posicoesDe(F.layout(nodes, [seta('a', 'b')])), {
+    a: { x: 0, y: 0 }, b: { x: 360, y: 0 }, c: { x: 0, y: 140 }, d: { x: 300, y: 140 },
+  });
+  assert.equal(F.layout([], []).size, 0);
+});
+
+test('layout: nenhum cartão se sobrepõe, mesmo com alturas fora da grade', () => {
+  const nodes = [caixa('r', 280, 70), caixa('a', 280, 130), caixa('b', 280, 50), caixa('c', 280, 90),
+    caixa('a1', 280, 110), caixa('a2', 280, 30), caixa('c1', 280, 250), caixa('solto', 280, 45)];
+  const edges = [seta('r', 'a'), seta('r', 'b'), seta('r', 'c'), seta('a', 'a1'), seta('a', 'a2'), seta('c', 'c1')];
+  const pos = F.layout(nodes, edges);
+  const postos = nodes.map(n => ({ ...n, ...pos.get(n.id) }));
+  for (let i = 0; i < postos.length; i++) for (let j = i + 1; j < postos.length; j++) {
+    const [p, q] = [postos[i], postos[j]];
+    assert.ok(!(p.x < q.x + q.width && q.x < p.x + p.width && p.y < q.y + q.height && q.y < p.y + p.height), `${p.id} e ${q.id} se sobrepõem`);
+  }
+  for (const p of postos) assert.ok(p.x % 20 === 0 && p.y % 20 === 0, `${p.id} fora da grade`);
+});
