@@ -114,6 +114,7 @@ function setaDaIA(e, onde, resolver, dica) {
 }
 // O título vira o nome do arquivo .canvas: mesmas regras de um nome de pasta.
 function tituloDoFluxo(valor) {
+  if (typeof valor === 'string' && !valor.trim()) throw new AgentError('INVALID_NAME', 'O fluxo precisa de um título.');
   const titulo = noteTitle(valor);
   if (!validFolderName(titulo)) {
     throw new AgentError('INVALID_NAME', `"${titulo}" não serve como nome de arquivo. Evite < > : " / \\ | ? * , nomes reservados do Windows e ponto ou espaço no início ou no final.`);
@@ -713,6 +714,8 @@ class KiroAgentApi {
     objeto(e, onde);
     const extras = Object.keys(e).filter(k => !CAMPOS_DO_CARTAO.includes(k));
     if (extras.length) throw new AgentError('INVALID_INPUT', `${onde}: campo desconhecido "${extras[0]}".`);
+    const temX = e.x !== undefined && e.x !== null, temY = e.y !== undefined && e.y !== null;
+    if (temX !== temY) throw new AgentError('INVALID_INPUT', `${onde}: "x" e "y" vêm juntos.`);
     let cartao;
     if (e.type === 'text') cartao = { type: 'text', text: textoDoCartao(e.text ?? '', 'text', onde) };
     else if (e.type === 'note') {
@@ -792,7 +795,8 @@ class KiroAgentApi {
   #editarCartaoDaIA(state, c, e, onde, faltando, vivos) {
     objeto(e, onde);
     if (typeof e.id !== 'string' || !vivos.has(e.id)) throw new AgentError('INVALID_INPUT', `${onde}: nenhum cartão com o id "${e.id}" neste fluxo.`);
-    const tipo = cartaoParaIA(c.nodes.find(n => n.id === e.id), false).type;
+    const atual = c.nodes.find(n => n.id === e.id);
+    const tipo = cartaoParaIA(atual, false).type;
     const conteudo = { text: 'text', note: 'note', link: 'url', group: 'label' }[tipo];
     const extras = Object.keys(e).filter(k => !['id', 'color', 'x', 'y', 'width', 'height', conteudo].includes(k));
     if (extras.length) {
@@ -801,7 +805,11 @@ class KiroAgentApi {
     const campos = geometria(e, onde);
     if (e.color !== undefined && e.color !== null) campos.color = e.color === '' ? undefined : corDoCartao(e.color, onde);
     const valor = conteudo && e[conteudo] !== undefined && e[conteudo] !== null ? textoDoCartao(e[conteudo], conteudo, onde) : undefined;
-    if (valor !== undefined && tipo === 'text') campos.text = valor;
+    if (valor !== undefined && tipo === 'text') {
+      campos.text = valor;
+      // Texto maior que a altura atual (clipada) cresce; texto menor não encolhe sozinho.
+      if (campos.height === undefined) campos.height = Math.max(atual.height, KiroFluxo.tamanhoPadrao({ type: 'text', text: valor }).height);
+    }
     if (valor !== undefined && tipo === 'group') campos.label = valor;
     if (valor !== undefined && tipo === 'link') {
       campos.url = safeUrl(valor);
@@ -809,7 +817,8 @@ class KiroAgentApi {
     }
     if (valor !== undefined && tipo === 'note') {
       const nota = this.#notaPorReferencia(state, valor);
-      if (nota) campos.file = nota.file; else faltando.push(valor);
+      // A nota mudou: um subpath (âncora para um trecho da nota antiga) do Obsidian ficaria errado.
+      if (nota) { campos.file = nota.file; campos.subpath = undefined; } else faltando.push(valor);
     }
     return KiroFluxo.editarCartao(c, e.id, campos);
   }

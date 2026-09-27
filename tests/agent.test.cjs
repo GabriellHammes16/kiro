@@ -492,6 +492,7 @@ test('create_fluxo recusa pedido inválido sem gravar nada', async t => {
     { title: 'x', nodes: [{ id: 'a', type: 'text', text: 'A', color: 'red; background:url(x)' }] },
     { title: 'x', nodes: [{ id: 'a', type: 'imagem', text: 'A' }] },
     { title: 'x', nodes: [{ id: 'a', type: 'text', text: 'A', x: 'longe' }] },
+    { title: 'x', nodes: [{ id: 'a', type: 'text', text: 'A', x: 10 }] },
     { title: 'x', nodes: [{ id: 'a', type: 'text', text: 'A', extra: 1 }] },
     { title: 'x', nodes: um, root: 'b' },
     { title: 'x', nodes: Array.from({ length: 301 }, (_, i) => ({ id: `n${i}`, type: 'text', text: 'x' })) },
@@ -569,6 +570,13 @@ test('update_fluxo muda conteúdo e cor, remove cartões com as ligações e rem
   const a = lido.nodes.find(n => n.id === base.ids.a);
   assert.equal(a.text, 'A editado');
   assert.equal(a.color, undefined);
+
+  // Texto bem maior sem height: a altura cresce para caber, em vez de ficar clipada.
+  const textao = 'linha\n'.repeat(80);
+  await toolkit.call('update_fluxo', { id: base.fluxo.id, update_nodes: [{ id: base.ids.a, text: textao }] }, cliente);
+  lido = await lerFluxo(toolkit, { id: base.fluxo.id });
+  const aCrescido = lido.nodes.find(n => n.id === base.ids.a);
+  assert.ok(aCrescido.height > 60, `esperava altura maior que 60, veio ${aCrescido.height}`);
 
   await assert.rejects(toolkit.call('update_fluxo', { id: base.fluxo.id, update_nodes: [{ id: base.ids.a, url: 'https://a.b' }] }, cliente), codigo('INVALID_INPUT'));
 

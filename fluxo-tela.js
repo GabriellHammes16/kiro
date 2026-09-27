@@ -590,14 +590,17 @@
     const inst = { desmontar, ocupado: () => !!gesto || !!editor };
     montados.add(inst);
     desenhar(); aplicarVista();
-    // Primeira abertura: cartões de texto com altura estimada (da IA, de outro editor) crescem
-    // até caber o conteúdo. Só crescem, e fora do desfazer, porque não é uma edição de quem usa.
-    // A vista é guardada já, para isto não se repetir a cada abertura.
+    // Primeira abertura: cartões de texto com a altura ainda igual à estimativa do Kiro (da IA,
+    // ou de outro editor que nunca tocou neles) crescem até caber o conteúdo. Um cartão com
+    // altura diferente da estimativa — fixada por quem editou, no Kiro ou no Obsidian (onde
+    // altura fixa e rolagem são normais) — fica como está: só cresce quem ainda não teve chance
+    // de se ajustar. Fora do desfazer, porque não é uma edição de quem usa. A vista é guardada
+    // já, para isto não se repetir a cada abertura.
     // ponytail: um cartão que cresce pode encostar no de baixo; refazer o layout se incomodar.
     if (primeiraVez) {
       let ajustado = canvas;
       for (const c of canvas.nodes) {
-        if (c.type !== 'text') continue;
+        if (c.type !== 'text' || c.height !== F.tamanhoPadrao(c).height) continue;
         const altura = alturaDoTexto(c.text, c.width);
         if (altura > c.height) ajustado = F.redimensionar(ajustado, c.id, c.width, encaixarPraCima(altura));
       }

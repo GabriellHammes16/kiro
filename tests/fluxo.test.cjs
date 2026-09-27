@@ -372,6 +372,13 @@ test('inserirPerto: pai novo que vem depois do filho na lista é posto antes del
   assert.deepEqual(onde(postos, 'F'), { x: 720, y: 80 });
 });
 
+test('inserirPerto: grupo em volta do pai não empurra o filho para baixo dele', () => {
+  const grupo = { id: 'g', type: 'group', x: -40, y: -40, width: 1200, height: 600 };
+  const c = { nodes: [grupo, noEm('A', 0, 0)], edges: [] };
+  const postos = F.inserirPerto(c, [caixa('N')], [seta('A', 'N')]);
+  assert.deepEqual(onde(postos, 'N'), { x: 360, y: 0 });
+});
+
 test('novoId: 16 hex e fora dos usados', () => {
   const usados = new Set(['a'.repeat(16)]);
   const id = F.novoId(usados);

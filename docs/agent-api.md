@@ -120,7 +120,7 @@ A IA manda a estrutura (cartões e ligações) e o Kiro posiciona.
   apelidos e a resposta devolve `ids: { apelido: idReal }`.
 - `note` aceita caminho (`"Estudos/Python.md"`) ou título. Nota que não existe recusa a
   chamada inteira (`NOTE_NOT_FOUND`, com `details.missing`).
-- Limites: 300 cartões por lista, 600 ligações e 5.000 caracteres por cartão.
+- Limites: 300 cartões por lista, 600 ligações e 5.000 caracteres por campo de texto (`text`, `label`).
 - Tudo-ou-nada: qualquer erro vira `AgentError` e nada é gravado. Fluxo com o arquivo
   corrompido devolve `FLUXO_INVALID` e não é tocado.
 - Eventos: `fluxo.created` e `fluxo.updated`.

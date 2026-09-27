@@ -299,7 +299,7 @@
         y = postos.length ? Math.max(...postos.map(n => n.y + n.height)) + ENTRE_COLUNAS : 0;
       }
       const posto = { ...novo, x: encaixar(x), y: praCima(y) };
-      for (let bate; (bate = postos.find(n => sobrepoe(n, posto)));) posto.y = praCima(bate.y + bate.height + ENTRE_IRMAOS);
+      for (let bate; (bate = postos.find(n => n.type !== 'group' && sobrepoe(n, posto)));) posto.y = praCima(bate.y + bate.height + ENTRE_IRMAOS);
       postos.push(posto); lugar.set(posto.id, posto); saida.push(posto);
     }
     return saida;

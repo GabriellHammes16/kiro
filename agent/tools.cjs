@@ -284,7 +284,7 @@ const FERRAMENTAS = [
     name: 'create_fluxo',
     risk: 'write',
     permission: 'create',
-    description: 'Cria um fluxo (mapa mental ou canvas de ideias, arquivo .canvas compatível com o Obsidian). Você manda a estrutura e o Kiro posiciona: cartões sem x/y viram uma árvore da esquerda para a direita a partir de "root" (ou do primeiro cartão sem ligação chegando). Cada cartão tem um "id" que é um apelido seu; as ligações usam esses apelidos e a resposta traz os ids reais em "ids". Tipos: text (Markdown, com código e fórmulas), note (uma nota do cofre, por caminho ou título), link (URL http/https) e group (moldura com rótulo). Receita para transformar uma nota em mapa mental: leia a nota com read_note; faça um cartão por ideia, com texto curto; o título da nota vira a raiz, cada título (##) vira um ramo ligado à raiz e o que está sob ele vira filhos do ramo; cada bloco de código vira um cartão próprio; passe a nota em sourceNote, para o mapa ficar ligado a ela e ser gravado na mesma pasta. Até 300 cartões e 5.000 caracteres por cartão. Recusa um segundo fluxo com o mesmo título na mesma pasta.',
+    description: 'Cria um fluxo (mapa mental ou canvas de ideias, arquivo .canvas compatível com o Obsidian). Você manda a estrutura e o Kiro posiciona: cartões sem x/y viram uma árvore da esquerda para a direita a partir de "root" (ou do primeiro cartão sem ligação chegando). Cada cartão tem um "id" que é um apelido seu; as ligações usam esses apelidos e a resposta traz os ids reais em "ids". Tipos: text (Markdown, com código e fórmulas), note (uma nota do cofre, por caminho ou título), link (URL http/https) e group (moldura com rótulo). Receita para transformar uma nota em mapa mental: leia a nota com read_note; faça um cartão por ideia, com texto curto; o título da nota vira a raiz, cada título (##) vira um ramo ligado à raiz e o que está sob ele vira filhos do ramo; cada bloco de código vira um cartão próprio; passe a nota em sourceNote, para o mapa ficar ligado a ela e ser gravado na mesma pasta. Até 300 cartões e 5.000 caracteres por campo de texto (text, label). Recusa um segundo fluxo com o mesmo título na mesma pasta.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -307,7 +307,7 @@ const FERRAMENTAS = [
     name: 'update_fluxo',
     risk: 'write',
     permission: 'update',
-    description: 'Altera um fluxo por operações, sem reescrevê-lo inteiro. Leia antes com read_fluxo para saber os ids. Ordem aplicada: remove_edges, remove_nodes (as ligações do cartão saem junto), update_nodes, add_nodes, add_edges. Cartões novos sem x/y ficam à direita do cartão de onde sai a primeira ligação que chega a eles, abaixo dos irmãos, sem mover nenhum cartão existente. Tudo-ou-nada: qualquer erro recusa a chamada inteira. Até 300 cartões por lista e 5.000 caracteres por cartão.',
+    description: 'Altera um fluxo por operações, sem reescrevê-lo inteiro. Leia antes com read_fluxo para saber os ids. Ordem aplicada: remove_edges, remove_nodes (as ligações do cartão saem junto), update_nodes, add_nodes, add_edges. Cartões novos sem x/y ficam à direita do cartão de onde sai a primeira ligação que chega a eles, abaixo dos irmãos, sem mover nenhum cartão existente. Tudo-ou-nada: qualquer erro recusa a chamada inteira. Até 300 cartões por lista e 5.000 caracteres por campo de texto (text, label).',
     inputSchema: {
       type: 'object',
       properties: {
