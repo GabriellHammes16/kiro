@@ -341,3 +341,40 @@ test('layout: nenhum cartão se sobrepõe, mesmo com alturas fora da grade', () 
   }
   for (const p of postos) assert.ok(p.x % 20 === 0 && p.y % 20 === 0, `${p.id} fora da grade`);
 });
+
+// ---- Etapa 3: inserirPerto ----
+const noEm = (id, x, y, width = 280, height = 60) => ({ id, type: 'text', text: id, x, y, width, height });
+const baseInserir = () => ({ nodes: [noEm('A', 0, 0), noEm('B', 360, 0)], edges: [{ id: 'e1', fromNode: 'A', toNode: 'B' }] });
+const onde = (lista, id) => { const n = lista.find(x => x.id === id); return { x: n.x, y: n.y }; };
+
+test('inserirPerto: à direita do pai, abaixo dos irmãos, sem mexer nos existentes', () => {
+  const c = baseInserir(), antes = structuredClone(c);
+  const postos = F.inserirPerto(c, [caixa('N')], [...c.edges, seta('A', 'N')]);
+  assert.deepEqual(onde(postos, 'N'), { x: 360, y: 80 });
+  assert.deepEqual(c, antes);
+});
+
+test('inserirPerto: desce até achar lugar livre quando outro cartão ocupa a vaga', () => {
+  const c = baseInserir();
+  c.nodes.push(noEm('C', 360, 80, 280, 100));
+  assert.deepEqual(onde(F.inserirPerto(c, [caixa('N')], [...c.edges, seta('A', 'N')]), 'N'), { x: 360, y: 200 });
+});
+
+test('inserirPerto: sem seta vai para baixo de tudo; canvas vazio começa em 0,0', () => {
+  assert.deepEqual(onde(F.inserirPerto(baseInserir(), [caixa('M')], baseInserir().edges), 'M'), { x: 0, y: 140 });
+  assert.deepEqual(onde(F.inserirPerto({ nodes: [], edges: [] }, [caixa('M')], []), 'M'), { x: 0, y: 0 });
+});
+
+test('inserirPerto: pai novo que vem depois do filho na lista é posto antes dele', () => {
+  const c = baseInserir();
+  const postos = F.inserirPerto(c, [caixa('F'), caixa('P')], [...c.edges, seta('A', 'P'), seta('P', 'F')]);
+  assert.deepEqual(onde(postos, 'P'), { x: 360, y: 80 });
+  assert.deepEqual(onde(postos, 'F'), { x: 720, y: 80 });
+});
+
+test('novoId: 16 hex e fora dos usados', () => {
+  const usados = new Set(['a'.repeat(16)]);
+  const id = F.novoId(usados);
+  assert.match(id, /^[0-9a-f]{16}$/);
+  assert.ok(!usados.has(id));
+});

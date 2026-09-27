@@ -274,7 +274,38 @@
     return posicoes;
   }
 
-  const api = { TIPOS, LADOS, CORES, GRADE, ZOOM, OPOSTO, corValida, ler, serializar, adicionarCartao, moverCartoes, redimensionar, editarCartao, removerCartoes, duplicarCartoes, ligar, editarSeta, removerSetas, encaixar, historicoVazio, empilhar, desfazer, refazer, vistaValida, paraCanvas, zoomEm, enquadrar, pontoDoLado, ladoMaisProximo, ladosDaSeta, caminhoDaSeta, geometriaDaSeta, dentro, renomearArquivos, caminhoSeguro, ehImagem, contidos, caixaDe, alturaEstimada, tamanhoPadrao, raizDe, layout };
+  const sobrepoe = (a, b) => a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
+  // Cartões novos (com tamanho, sem posição) entram sem mexer em nenhum que já está no canvas:
+  // à direita do cartão de onde sai a primeira seta que chega a eles, abaixo dos irmãos; sem
+  // seta, embaixo de tudo. Descem na grade até achar lugar livre. Devolve os novos posicionados.
+  function inserirPerto(c, novos, edges) {
+    const postos = [...c.nodes], lugar = new Map(postos.map(n => [n.id, n])), saida = [];
+    const chegam = new Map();
+    for (const e of edges) { if (!chegam.has(e.toNode)) chegam.set(e.toNode, []); chegam.get(e.toNode).push(e.fromNode); }
+    const paiDe = n => (chegam.get(n.id) || []).map(id => lugar.get(id)).find(Boolean);
+    const pendentes = [...novos];
+    while (pendentes.length) {
+      // Primeiro quem já tem o pai no lugar: um filho não vai parar embaixo de tudo só por ter
+      // vindo antes do pai na lista.
+      const [novo] = pendentes.splice(Math.max(0, pendentes.findIndex(n => paiDe(n))), 1);
+      const pai = paiDe(novo);
+      let x, y;
+      if (pai) {
+        x = pai.x + pai.width + ENTRE_COLUNAS;
+        const irmaos = edges.filter(e => e.fromNode === pai.id).map(e => lugar.get(e.toNode)).filter(Boolean);
+        y = Math.max(pai.y, ...irmaos.map(n => n.y + n.height + ENTRE_IRMAOS));
+      } else {
+        x = postos.length ? Math.min(...postos.map(n => n.x)) : 0;
+        y = postos.length ? Math.max(...postos.map(n => n.y + n.height)) + ENTRE_COLUNAS : 0;
+      }
+      const posto = { ...novo, x: encaixar(x), y: praCima(y) };
+      for (let bate; (bate = postos.find(n => sobrepoe(n, posto)));) posto.y = praCima(bate.y + bate.height + ENTRE_IRMAOS);
+      postos.push(posto); lugar.set(posto.id, posto); saida.push(posto);
+    }
+    return saida;
+  }
+
+  const api = { TIPOS, LADOS, CORES, GRADE, ZOOM, OPOSTO, corValida, ler, serializar, adicionarCartao, moverCartoes, redimensionar, editarCartao, removerCartoes, duplicarCartoes, ligar, editarSeta, removerSetas, encaixar, historicoVazio, empilhar, desfazer, refazer, vistaValida, paraCanvas, zoomEm, enquadrar, pontoDoLado, ladoMaisProximo, ladosDaSeta, caminhoDaSeta, geometriaDaSeta, dentro, renomearArquivos, caminhoSeguro, ehImagem, contidos, caixaDe, alturaEstimada, tamanhoPadrao, raizDe, layout, inserirPerto, novoId };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.KiroFluxo = api;
 })(globalThis);
