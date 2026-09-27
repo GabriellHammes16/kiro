@@ -88,6 +88,17 @@
       cartoes.innerHTML = [...canvas.nodes].sort((a, b) => ordem(a) - ordem(b)).map(cartaoHtml).join('');
       desenharSetas();
     }
+    // Altura que o Markdown de um cartão de texto ocupa na largura dele, mais a borda.
+    function alturaDoTexto(texto, largura) {
+      const medida = document.createElement('div');
+      medida.className = 'fluxo-conteudo fluxo-medida';
+      medida.style.width = `${largura}px`;
+      medida.innerHTML = opcoes.markdown(texto);
+      cartoes.appendChild(medida);
+      const altura = Math.ceil(medida.scrollHeight) + 4;
+      medida.remove();
+      return altura;
+    }
 
     // ---- Vista ----
     function aplicarVista() {
@@ -100,9 +111,12 @@
     }
     function guardarVista() { clearTimeout(timerVista); timerVista = setTimeout(() => { timerVista = null; gravarVista(opcoes.chaveDaVista, id, s.vista); }, 300); }
     function enquadrarTudo() { s.vista = F.enquadrar(canvas.nodes, ...tamanho()); aplicarVista(); guardarVista(); }
+    // Sem vista guardada: é a primeira vez que este fluxo abre neste Kiro, neste cofre.
+    let primeiraVez = false;
     if (!s.vista) {
       const salva = lerVistas(opcoes.chaveDaVista)[id];
-      s.vista = F.vistaValida(salva) ? salva : F.enquadrar(canvas.nodes, ...tamanho());
+      primeiraVez = !F.vistaValida(salva);
+      s.vista = primeiraVez ? F.enquadrar(canvas.nodes, ...tamanho()) : salva;
     }
 
     // ---- Mudanças ----
@@ -211,13 +225,7 @@
         const atual = no(idNo);
         if (!gravar || !atual || area.value === atual.text) return void desenhar();
         let novo = F.editarCartao(canvas, idNo, { text: area.value });
-        const medida = document.createElement('div');
-        medida.className = 'fluxo-conteudo fluxo-medida';
-        medida.style.width = `${atual.width}px`;
-        medida.innerHTML = opcoes.markdown(area.value);
-        cartoes.appendChild(medida);
-        const altura = Math.ceil(medida.scrollHeight) + 4;   // + a borda do cartão
-        medida.remove();
+        const altura = alturaDoTexto(area.value, atual.width);
         if (altura > atual.height) novo = F.redimensionar(novo, idNo, atual.width, encaixarPraCima(altura));
         mudar(novo);
       };
@@ -582,6 +590,20 @@
     const inst = { desmontar, ocupado: () => !!gesto || !!editor };
     montados.add(inst);
     desenhar(); aplicarVista();
+    // Primeira abertura: cartões de texto com altura estimada (da IA, de outro editor) crescem
+    // até caber o conteúdo. Só crescem, e fora do desfazer, porque não é uma edição de quem usa.
+    // A vista é guardada já, para isto não se repetir a cada abertura.
+    // ponytail: um cartão que cresce pode encostar no de baixo; refazer o layout se incomodar.
+    if (primeiraVez) {
+      let ajustado = canvas;
+      for (const c of canvas.nodes) {
+        if (c.type !== 'text') continue;
+        const altura = alturaDoTexto(c.text, c.width);
+        if (altura > c.height) ajustado = F.redimensionar(ajustado, c.id, c.width, encaixarPraCima(altura));
+      }
+      if (ajustado !== canvas) { canvas = ajustado; desenhar(); enquadrarTudo(); opcoes.aoMudar(canvas); }
+      else guardarVista();
+    }
     // `.app-shell` ainda pode estar inert aqui (setBusy só volta depois do render): focar de
     // verdade só depois do quadro atual, quando o `finally` do `save()` já tirou o inert.
     if (s.foco) { s.foco = false; requestAnimationFrame(() => { if (document.contains(raiz)) raiz.focus({ preventScroll: true }); }); }
