@@ -532,3 +532,111 @@ test('create_fluxo respeita a permissão de criar, é auditado e emite fluxo.cre
   await config.save({ permissions: { create: false } });
   await assert.rejects(toolkit.call('create_fluxo', { title: 'Negado', nodes: [{ id: 'a', type: 'text', text: 'A' }] }, cliente), codigo('PERMISSION_DENIED'));
 });
+
+async function fluxoBase(toolkit) {
+  return toolkit.call('create_fluxo', {
+    title: 'Base',
+    nodes: [{ id: 'raiz', type: 'text', text: 'Raiz' }, { id: 'a', type: 'text', text: 'A', color: '2' }],
+    edges: [{ from: 'raiz', to: 'a', label: 'liga' }],
+  }, cliente);
+}
+
+test('update_fluxo põe cartões novos perto do pai sem mexer em nenhum existente', async t => {
+  const { toolkit } = await montar(t);
+  const base = await fluxoBase(toolkit);
+  const antes = await lerFluxo(toolkit, { id: base.fluxo.id });
+  const r = await toolkit.call('update_fluxo', {
+    id: base.fluxo.id,
+    add_nodes: [{ id: 'b', type: 'text', text: 'B' }, { id: 'b1', type: 'text', text: 'B1' }],
+    add_edges: [{ from: base.ids.raiz, to: 'b' }, { from: 'b', to: 'b1' }],
+  }, cliente);
+  const depois = await lerFluxo(toolkit, { id: base.fluxo.id });
+  for (const n of antes.nodes) assert.deepEqual(depois.nodes.find(x => x.id === n.id), n);
+  const no = id => depois.nodes.find(n => n.id === id);
+  const a = no(base.ids.a), b = no(r.ids.b), b1 = no(r.ids.b1);
+  assert.equal(b.x, a.x);
+  assert.ok(b.y >= a.y + a.height + 20);
+  assert.ok(b1.x > b.x + b.width);
+  semSobreposicao(depois.nodes);
+  assert.equal(depois.edges.length, 3);
+});
+
+test('update_fluxo muda conteúdo e cor, remove cartões com as ligações e remove ligações', async t => {
+  const { toolkit } = await montar(t);
+  const base = await fluxoBase(toolkit);
+  await toolkit.call('update_fluxo', { id: base.fluxo.id, update_nodes: [{ id: base.ids.a, text: 'A editado', color: '' }] }, cliente);
+  let lido = await lerFluxo(toolkit, { id: base.fluxo.id });
+  const a = lido.nodes.find(n => n.id === base.ids.a);
+  assert.equal(a.text, 'A editado');
+  assert.equal(a.color, undefined);
+
+  await assert.rejects(toolkit.call('update_fluxo', { id: base.fluxo.id, update_nodes: [{ id: base.ids.a, url: 'https://a.b' }] }, cliente), codigo('INVALID_INPUT'));
+
+  await toolkit.call('update_fluxo', { id: base.fluxo.id, remove_edges: [lido.edges[0].id] }, cliente);
+  lido = await lerFluxo(toolkit, { id: base.fluxo.id });
+  assert.equal(lido.edges.length, 0);
+  assert.equal(lido.nodes.length, 2);
+
+  await toolkit.call('update_fluxo', {
+    id: base.fluxo.id,
+    add_edges: [{ from: base.ids.raiz, to: base.ids.a }],
+  }, cliente);
+  await toolkit.call('update_fluxo', { id: base.fluxo.id, remove_nodes: [base.ids.a] }, cliente);
+  lido = await lerFluxo(toolkit, { id: base.fluxo.id });
+  assert.deepEqual(lido.nodes.map(n => n.id), [base.ids.raiz]);
+  assert.equal(lido.edges.length, 0);
+});
+
+test('update_fluxo preserva campos que o Kiro não conhece num canvas vindo do Obsidian', async t => {
+  const { toolkit, directory } = await montar(t);
+  await gravarCanvas(directory, 'Obsidian.canvas', {
+    nodes: [{ id: 'x1', type: 'text', text: 'Oi', x: 0, y: 0, width: 280, height: 60, obsidianExtra: { a: 1 } }],
+    edges: [],
+    metadata: { versao: '1.0' },
+  });
+  const { fluxos } = await toolkit.call('list_fluxos', {}, cliente);
+  await toolkit.call('update_fluxo', { id: fluxos[0].id, add_nodes: [{ id: 'n', type: 'text', text: 'Novo' }] }, cliente);
+  const disco = JSON.parse(await fs.readFile(path.join(directory, 'Obsidian.canvas'), 'utf8'));
+  assert.deepEqual(disco.metadata, { versao: '1.0' });
+  assert.deepEqual(disco.nodes[0].obsidianExtra, { a: 1 });
+  assert.equal(disco.nodes.length, 2);
+});
+
+test('update_fluxo é tudo-ou-nada e recusa fluxo corrompido sem tocar no arquivo', async t => {
+  const { toolkit, directory } = await montar(t);
+  const base = await fluxoBase(toolkit);
+  const arquivo = path.join(directory, 'Base.canvas');
+  const bytes = await fs.readFile(arquivo, 'utf8');
+  const revisao = (await toolkit.call('get_vault_info', {}, cliente)).revision;
+  const recusados = [
+    { add_nodes: [{ id: 'ok', type: 'text', text: 'ok' }], add_edges: [{ from: 'ok', to: 'nao-existe' }] },
+    { remove_nodes: [base.ids.a], add_edges: [{ from: base.ids.raiz, to: base.ids.a }] },
+    { add_nodes: [{ id: base.ids.a, type: 'text', text: 'apelido igual a um id existente' }] },
+    { update_nodes: [{ id: 'nao-existe', text: 'x' }] },
+    { remove_nodes: ['nao-existe'] },
+    { remove_edges: ['nao-existe'] },
+    { add_nodes: [{ id: 'n', type: 'note', note: 'Nota que não existe' }] },
+    {},
+  ];
+  for (const pedido of recusados) {
+    await assert.rejects(toolkit.call('update_fluxo', { id: base.fluxo.id, ...pedido }, cliente), codigo('INVALID_INPUT', 'NOTE_NOT_FOUND'), JSON.stringify(pedido));
+  }
+  assert.equal(await fs.readFile(arquivo, 'utf8'), bytes);
+  assert.equal((await toolkit.call('get_vault_info', {}, cliente)).revision, revisao);
+
+  await gravarCanvas(directory, 'Quebrado.canvas', '{ quebrado');
+  const quebrado = (await toolkit.call('list_fluxos', {}, cliente)).fluxos.find(f => f.error);
+  await assert.rejects(toolkit.call('update_fluxo', { id: quebrado.id, add_nodes: [{ id: 'n', type: 'text', text: 'x' }] }, cliente), codigo('FLUXO_INVALID'));
+  assert.equal(await fs.readFile(path.join(directory, 'Quebrado.canvas'), 'utf8'), '{ quebrado');
+});
+
+test('update_fluxo respeita a permissão de alterar e emite fluxo.updated', async t => {
+  const { toolkit, config, events } = await montar(t);
+  const base = await fluxoBase(toolkit);
+  const vistos = [];
+  events.on('fluxo.updated', carga => vistos.push(carga.id));
+  await toolkit.call('update_fluxo', { id: base.fluxo.id, update_nodes: [{ id: base.ids.a, text: 'x' }] }, cliente);
+  assert.deepEqual(vistos, [base.fluxo.id]);
+  await config.save({ permissions: { update: false } });
+  await assert.rejects(toolkit.call('update_fluxo', { id: base.fluxo.id, update_nodes: [{ id: base.ids.a, text: 'y' }] }, cliente), codigo('PERMISSION_DENIED'));
+});

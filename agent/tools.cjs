@@ -304,6 +304,25 @@ const FERRAMENTAS = [
     target: (args, resultado) => resultado?.fluxo?.path || args.title,
   },
   {
+    name: 'update_fluxo',
+    risk: 'write',
+    permission: 'update',
+    description: 'Altera um fluxo por operações, sem reescrevê-lo inteiro. Leia antes com read_fluxo para saber os ids. Ordem aplicada: remove_edges, remove_nodes (as ligações do cartão saem junto), update_nodes, add_nodes, add_edges. Cartões novos sem x/y ficam à direita do cartão de onde sai a primeira ligação que chega a eles, abaixo dos irmãos, sem mover nenhum cartão existente. Tudo-ou-nada: qualquer erro recusa a chamada inteira. Até 300 cartões por lista e 5.000 caracteres por cartão.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        ...alvoFluxo,
+        add_nodes: { type: 'array', maxItems: 300, items: { type: 'object' }, description: 'Cartões novos, no formato de create_fluxo: { id (apelido seu), type, text | note | url | label, color?, x?, y?, width?, height? }.' },
+        add_edges: { type: 'array', maxItems: 600, items: { type: 'object' }, description: 'Ligações novas { from, to, label?, color? }; from/to são ids de cartões do fluxo ou apelidos de add_nodes.' },
+        update_nodes: { type: 'array', maxItems: 300, items: { type: 'object' }, description: '{ id, text | note | url | label, color?, x?, y?, width?, height? }. Muda só o que vier; color "" tira a cor. O tipo do cartão não muda.' },
+        remove_nodes: { type: 'array', maxItems: 300, items: { type: 'string' }, description: 'Ids de cartões a remover.' },
+        remove_edges: { type: 'array', maxItems: 600, items: { type: 'string' }, description: 'Ids de ligações a remover.' },
+      },
+    },
+    run: (api, args, ctx) => api.updateFluxo(args, ctx),
+    target: (args, resultado) => resultado?.fluxo?.path || args.path || args.id,
+  },
+  {
     name: 'get_vault_info',
     risk: 'read',
     permission: 'read',

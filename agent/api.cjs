@@ -788,6 +788,82 @@ class KiroAgentApi {
     return { success: true, fluxo: this.#resumoFluxo(depois, criado), ids: resultado.ids, revisionBefore: antes.revision, revision: depois.revision };
   }
 
+  // update_nodes: muda conteúdo, cor, posição ou tamanho. O tipo do cartão não muda.
+  #editarCartaoDaIA(state, c, e, onde, faltando, vivos) {
+    objeto(e, onde);
+    if (typeof e.id !== 'string' || !vivos.has(e.id)) throw new AgentError('INVALID_INPUT', `${onde}: nenhum cartão com o id "${e.id}" neste fluxo.`);
+    const tipo = cartaoParaIA(c.nodes.find(n => n.id === e.id), false).type;
+    const conteudo = { text: 'text', note: 'note', link: 'url', group: 'label' }[tipo];
+    const extras = Object.keys(e).filter(k => !['id', 'color', 'x', 'y', 'width', 'height', conteudo].includes(k));
+    if (extras.length) {
+      throw new AgentError('INVALID_INPUT', `${onde}: "${extras[0]}" não se aplica a um cartão do tipo ${tipo}. O tipo não muda; para trocar, remova o cartão e crie outro.`);
+    }
+    const campos = geometria(e, onde);
+    if (e.color !== undefined && e.color !== null) campos.color = e.color === '' ? undefined : corDoCartao(e.color, onde);
+    const valor = conteudo && e[conteudo] !== undefined && e[conteudo] !== null ? textoDoCartao(e[conteudo], conteudo, onde) : undefined;
+    if (valor !== undefined && tipo === 'text') campos.text = valor;
+    if (valor !== undefined && tipo === 'group') campos.label = valor;
+    if (valor !== undefined && tipo === 'link') {
+      campos.url = safeUrl(valor);
+      if (!campos.url) throw new AgentError('INVALID_INPUT', `${onde}: "url" precisa começar com http:// ou https://.`);
+    }
+    if (valor !== undefined && tipo === 'note') {
+      const nota = this.#notaPorReferencia(state, valor);
+      if (nota) campos.file = nota.file; else faltando.push(valor);
+    }
+    return KiroFluxo.editarCartao(c, e.id, campos);
+  }
+
+  async updateFluxo(args = {}, contexto = {}) {
+    const listas = ['add_nodes', 'add_edges', 'update_nodes', 'remove_nodes', 'remove_edges'];
+    if (!listas.some(k => Array.isArray(args[k]) && args[k].length)) {
+      throw new AgentError('INVALID_INPUT', `Nada para alterar: informe ${listas.join(', ')}.`);
+    }
+    const { antes, depois, resultado } = await this.#mutate(state => {
+      const fluxo = this.#fluxoLegivel(state, args);
+      let c = fluxo.canvas;
+      const existentes = new Set(c.nodes.map(n => n.id));
+      const naoExistem = (lista, ids) => lista.filter(i => typeof i !== 'string' || !ids.has(i));
+      const setasQueFaltam = naoExistem(args.remove_edges || [], new Set(c.edges.map(e => e.id)));
+      if (setasQueFaltam.length) throw new AgentError('INVALID_INPUT', `remove_edges: estas ligações não existem neste fluxo: ${setasQueFaltam.join(', ')}.`);
+      const cartoesQueFaltam = naoExistem(args.remove_nodes || [], existentes);
+      if (cartoesQueFaltam.length) throw new AgentError('INVALID_INPUT', `remove_nodes: estes cartões não existem neste fluxo: ${cartoesQueFaltam.join(', ')}.`);
+      c = KiroFluxo.removerCartoes(KiroFluxo.removerSetas(c, args.remove_edges || []), args.remove_nodes || []);
+
+      const vivos = new Set(c.nodes.map(n => n.id)), faltando = [];
+      (args.update_nodes || []).forEach((e, i) => { c = this.#editarCartaoDaIA(state, c, e, `update_nodes[${i}]`, faltando, vivos); });
+
+      const vistos = new Set(), real = new Map(), ocupados = new Set([...c.nodes.map(n => n.id), ...c.edges.map(e => e.id)]);
+      const reservar = () => { const novo = KiroFluxo.novoId(ocupados); ocupados.add(novo); return novo; };
+      const novos = (args.add_nodes || []).map((e, i) => {
+        const onde = `add_nodes[${i}]`, a = apelido(e, onde, vistos);
+        if (existentes.has(a)) throw new AgentError('INVALID_INPUT', `${onde}: o id "${a}" já é de um cartão deste fluxo; escolha outro apelido.`);
+        const cartao = this.#cartaoDaIA(state, e, onde, faltando);
+        const idReal = reservar();
+        real.set(a, idReal);
+        return { id: idReal, ...cartao };
+      });
+      if (faltando.length) {
+        throw new AgentError('NOTE_NOT_FOUND', `Notas não encontradas: ${faltando.join(', ')}. Confira os caminhos com search_notes ou list_notes.`, { missing: faltando });
+      }
+      const resolver = ref => real.get(ref) || (vivos.has(ref) ? ref : undefined);
+      const setas = (args.add_edges || []).map((e, i) => ({ id: reservar(), ...setaDaIA(e, `add_edges[${i}]`, resolver, 'ids de cartões deste fluxo (de read_fluxo) ou apelidos de add_nodes') }));
+
+      // Quem veio com x/y entra onde a IA pôs; os outros, perto do pai, sem mover ninguém.
+      const semPosicao = novos.filter(n => n.x === undefined || n.y === undefined).map(({ x, y, ...n }) => n);
+      c = { ...c, nodes: [...c.nodes, ...novos.filter(n => n.x !== undefined && n.y !== undefined)] };
+      c = { ...c, nodes: [...c.nodes, ...KiroFluxo.inserirPerto(c, semPosicao, [...c.edges, ...setas])], edges: [...c.edges, ...setas] };
+      const lido = KiroFluxo.ler(KiroFluxo.serializar(c));
+      if (lido.erro) throw new AgentError('INVALID_INPUT', lido.erro);
+      fluxo.canvas = c;
+      return { id: fluxo.id, ids: Object.fromEntries(real) };
+    });
+
+    const atual = (depois.fluxos || []).find(f => f.id === resultado.id);
+    this.events.emitVaultEvent('fluxo.updated', { id: resultado.id, path: atual?.file, source: 'agent', clientId: contexto.clientId });
+    return { success: true, fluxo: this.#resumoFluxo(depois, atual), ids: resultado.ids, revisionBefore: antes.revision, revision: depois.revision };
+  }
+
   async describeVault() {
     const state = await this.load();
     return {
