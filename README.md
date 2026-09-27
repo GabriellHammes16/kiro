@@ -105,6 +105,13 @@ Atalhos dentro do fluxo: dois cliques no fundo criam um cartão; arraste de uma 
 (soltar no vazio cria um cartão já ligado); Ctrl+roda dá zoom; espaço+arrastar move a vista;
 Shift+1 enquadra tudo; Delete apaga; Ctrl+Z/Ctrl+Y desfazem e refazem.
 
+Cartões podem ser notas do cofre (com prévia; dois cliques abrem a nota ao lado), imagens,
+links e grupos. Arraste uma nota da árvore para dentro do fluxo, ou cole: texto vira cartão,
+um endereço vira link e uma imagem vai para os anexos. Um cartão de texto pode virar nota
+("Transformar em nota"), e quando uma nota muda de pasta o cartão acompanha. Excluir um fluxo
+manda o arquivo para a lixeira, de onde ele pode ser restaurado. No painel da direita de uma
+nota, "Aparece nos fluxos" lista os fluxos que a citam.
+
 ## Fontes
 
 O aplicativo embarca as próprias fontes, em `fonts/`, e nunca busca fonte na internet: a aparência é a mesma em qualquer máquina, com ou sem rede.
