@@ -671,6 +671,9 @@ function montarFluxos() {
       escolherImagem: escolherImagemDoSistema,
       pedirLink: pedirLinkDoFluxo,
       canvasAtual: () => getFluxo(fluxo.id)?.canvas,
+      // Um salvamento em andamento troca `state`: adicionarNo espera acabar para não perder o
+      // cartão que um paste/seletor assíncrono estava prestes a gravar (F1).
+      salvando: () => busy,
       aviso: (texto, erro) => status(texto, erro),
       arquivoDaNota: id => getNote(id)?.file || null,
       guardarImagem: guardarImagemDoFluxo,
