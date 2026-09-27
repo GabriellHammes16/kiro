@@ -17,6 +17,10 @@ const PERIODO = {
   until: { type: 'string', pattern: '^\\d{4}-\\d{2}-\\d{2}$', description: 'Só notas criadas ou alteradas até o fim deste dia (AAAA-MM-DD, fuso local).' },
 };
 const alvoNota = { id: { type: 'string', description: 'Id da nota. Use este ou "path".' }, path: { type: 'string', description: 'Caminho da nota relativo ao cofre, terminando em .md. Nunca um caminho absoluto.' } };
+const alvoFluxo = {
+  id: { type: 'string', description: 'Id do fluxo, de list_fluxos. Use este ou "path".' },
+  path: { type: 'string', description: 'Caminho do fluxo relativo ao cofre, terminando em .canvas, por exemplo "Estudos/Python.canvas".' },
+};
 
 const FERRAMENTAS = [
   {
@@ -251,6 +255,30 @@ const FERRAMENTAS = [
     },
     run: (api, args, ctx) => api.searchByTag(args, ctx),
     target: args => (args.tags || []).join(','),
+  },
+  {
+    name: 'list_fluxos',
+    risk: 'read',
+    permission: 'read',
+    description: 'Lista os fluxos do cofre: mapas mentais e canvas de ideias, arquivos .canvas no formato JSON Canvas (compatível com o Obsidian). Devolve id, caminho, título, pasta e quantos cartões e ligações cada um tem. Um fluxo com "error" está com o arquivo corrompido e não pode ser lido nem alterado.',
+    inputSchema: { type: 'object', properties: {} },
+    run: (api, args, ctx) => api.listFluxos(args, ctx),
+    target: () => 'vault',
+  },
+  {
+    name: 'read_fluxo',
+    risk: 'read',
+    permission: 'read',
+    description: 'Lê um fluxo pelo id ou pelo caminho. Devolve os cartões ({ id, type, text | note | url | label | file, color }) e as ligações ({ id, from, to, label }). Em cartões "note", o campo note é o caminho da nota do cofre que o cartão mostra (leia com read_note). Com positions: true, inclui x, y, width e height de cada cartão.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        ...alvoFluxo,
+        positions: { type: 'boolean', default: false, description: 'true inclui posição e tamanho dos cartões.' },
+      },
+    },
+    run: (api, args, ctx) => api.readFluxo(args, ctx),
+    target: (args, resultado) => resultado?.path || args.path || args.id,
   },
   {
     name: 'get_vault_info',

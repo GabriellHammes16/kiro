@@ -332,3 +332,64 @@ test('list_notes e search_notes filtram por período (since/until em dias locais
   assert.equal((await toolkit.call('search_notes', { query: 'java', since: amanha }, cliente)).total, 0);
   await assert.rejects(toolkit.call('list_notes', { since: '14/09/2026' }, cliente), codigo('INVALID_INPUT'));
 });
+
+// ---- Fluxo ----
+const sobrepoe = (a, b) => a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
+function semSobreposicao(nodes) {
+  for (let i = 0; i < nodes.length; i++) for (let j = i + 1; j < nodes.length; j++) {
+    assert.ok(!sobrepoe(nodes[i], nodes[j]), `${nodes[i].id} e ${nodes[j].id} se sobrepõem`);
+  }
+}
+async function gravarCanvas(directory, relativo, conteudo) {
+  const destino = path.join(directory, relativo);
+  await fs.mkdir(path.dirname(destino), { recursive: true });
+  await fs.writeFile(destino, typeof conteudo === 'string' ? conteudo : JSON.stringify(conteudo, null, '\t'));
+}
+const lerFluxo = (toolkit, alvo) => toolkit.call('read_fluxo', { ...alvo, positions: true }, cliente);
+
+test('list_fluxos e read_fluxo: cartões, ligações e posições; cartão de nota vira "note" com o caminho', async t => {
+  const { toolkit, directory } = await montar(t);
+  const nota = await toolkit.call('create_note', { title: 'Listas', folder: 'Estudos', content: 'x' }, cliente);
+  await gravarCanvas(directory, 'Estudos/Python.canvas', {
+    nodes: [
+      { id: 'a', type: 'text', text: '# Python', x: 0, y: 0, width: 280, height: 60, color: '4' },
+      { id: 'b', type: 'file', file: nota.note.path, x: 360, y: 0, width: 400, height: 280 },
+      { id: 'c', type: 'link', url: 'https://docs.python.org/', x: 360, y: 300, width: 320, height: 100 },
+      { id: 'd', type: 'file', file: 'anexos/foto.png', x: 800, y: 0, width: 320, height: 240 },
+    ],
+    edges: [{ id: 'e1', fromNode: 'a', toNode: 'b', label: 'estruturas' }, { id: 'e2', fromNode: 'a', toNode: 'c' }],
+  });
+
+  const { fluxos } = await toolkit.call('list_fluxos', {}, cliente);
+  assert.equal(fluxos.length, 1);
+  assert.equal(fluxos[0].path, 'Estudos/Python.canvas');
+  assert.equal(fluxos[0].title, 'Python');
+  assert.equal(fluxos[0].folder, 'Estudos');
+  assert.equal(fluxos[0].cards, 4);
+  assert.equal(fluxos[0].links, 2);
+
+  const lido = await toolkit.call('read_fluxo', { path: 'Estudos/Python.canvas' }, cliente);
+  assert.deepEqual(lido.nodes, [
+    { id: 'a', type: 'text', text: '# Python', color: '4' },
+    { id: 'b', type: 'note', note: nota.note.path },
+    { id: 'c', type: 'link', url: 'https://docs.python.org/' },
+    { id: 'd', type: 'file', file: 'anexos/foto.png' },
+  ]);
+  assert.deepEqual(lido.edges, [{ id: 'e1', from: 'a', to: 'b', label: 'estruturas' }, { id: 'e2', from: 'a', to: 'c' }]);
+
+  const comPosicoes = await lerFluxo(toolkit, { id: fluxos[0].id });
+  assert.deepEqual(comPosicoes.nodes[2], { id: 'c', type: 'link', url: 'https://docs.python.org/', x: 360, y: 300, width: 320, height: 100 });
+});
+
+test('fluxo com arquivo corrompido aparece com error e não é lido; alvos inválidos são recusados', async t => {
+  const { toolkit, directory } = await montar(t);
+  await gravarCanvas(directory, 'Quebrado.canvas', '{ isto não é json');
+  const { fluxos } = await toolkit.call('list_fluxos', {}, cliente);
+  assert.equal(fluxos[0].cards, null);
+  assert.match(fluxos[0].error, /JSON inválido/);
+  await assert.rejects(toolkit.call('read_fluxo', { path: 'Quebrado.canvas' }, cliente), codigo('FLUXO_INVALID'));
+  await assert.rejects(toolkit.call('read_fluxo', { path: '../fora.canvas' }, cliente), codigo('PATH_TRAVERSAL'));
+  await assert.rejects(toolkit.call('read_fluxo', { path: 'Estudos/Python.md' }, cliente), codigo('INVALID_PATH'));
+  await assert.rejects(toolkit.call('read_fluxo', { id: 'nao-existe' }, cliente), codigo('FLUXO_NOT_FOUND'));
+  await assert.rejects(toolkit.call('read_fluxo', {}, cliente), codigo('INVALID_INPUT'));
+});

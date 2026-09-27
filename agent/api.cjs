@@ -12,6 +12,7 @@
 const fs = require('node:fs/promises');
 const { randomUUID } = require('node:crypto');
 const domain = require('../domain.js');
+const KiroFluxo = require('../fluxo.js');
 const { AgentError, vaultRelativePath, folderSegments, noteTitle, tagList } = require('./security.cjs');
 const { KiroEvents } = require('./events.cjs');
 
@@ -41,6 +42,20 @@ function recortar(corpo, consulta) {
   const fim = Math.min(corpo.length, centro + 120);
   return `${inicio > 0 ? '…' : ''}${corpo.slice(inicio, fim).replace(/\s+/g, ' ').trim()}${fim < corpo.length ? '…' : ''}`;
 }
+
+// Cartão do canvas no formato que a IA lê. Cartão de arquivo .md é "note" com o caminho da
+// nota; imagem e outros arquivos ficam "file".
+function cartaoParaIA(n, posicoes) {
+  const saida = { id: n.id };
+  if (n.type === 'text') Object.assign(saida, { type: 'text', text: n.text });
+  else if (n.type === 'file') Object.assign(saida, /\.md$/i.test(n.file) ? { type: 'note', note: n.file } : { type: 'file', file: n.file });
+  else if (n.type === 'link') Object.assign(saida, { type: 'link', url: n.url });
+  else Object.assign(saida, { type: 'group' }, n.label !== undefined ? { label: n.label } : {});
+  if (n.color) saida.color = n.color;
+  if (posicoes) Object.assign(saida, { x: n.x, y: n.y, width: n.width, height: n.height });
+  return saida;
+}
+const setaParaIA = e => ({ id: e.id, from: e.fromNode, to: e.toNode, ...(e.label ? { label: e.label } : {}), ...(e.color ? { color: e.color } : {}) });
 
 class KiroAgentApi {
   constructor(vault, { events } = {}) {
@@ -564,6 +579,62 @@ class KiroAgentApi {
     if (args.folder !== undefined && args.folder !== null) campos.folder = args.folder;
     if (!Object.keys(campos).length) throw new AgentError('INVALID_INPUT', 'Informe title, tags ou folder.');
     return this.updateNote({ id: args.id, path: args.path, ...campos }, contexto);
+  }
+
+  // ----------------------------------------------------------------- fluxos
+
+  #acharFluxo(state, { id, path: caminho }) {
+    const fluxos = state.fluxos || [];
+    if (id !== undefined && id !== null && String(id).trim()) {
+      const alvo = String(id).trim();
+      const achado = fluxos.find(f => f.id === alvo);
+      if (achado) return achado;
+      throw new AgentError('FLUXO_NOT_FOUND', `Nenhum fluxo com o id "${alvo}". Use list_fluxos.`);
+    }
+    if (caminho !== undefined && caminho !== null && String(caminho).trim()) {
+      const relativo = vaultRelativePath(caminho, { campo: 'path', extensao: 'canvas' });
+      const achado = fluxos.find(f => f.file && pathKey(f.file) === pathKey(relativo));
+      if (achado) return achado;
+      throw new AgentError('FLUXO_NOT_FOUND', `Nenhum fluxo em "${relativo}". Use list_fluxos.`);
+    }
+    throw new AgentError('INVALID_INPUT', 'Informe "id" ou "path" do fluxo.');
+  }
+
+  // Fluxo cujo .canvas não abriu: a IA não lê nem grava, para não piorar o arquivo.
+  #fluxoLegivel(state, alvo) {
+    const fluxo = this.#acharFluxo(state, alvo);
+    if (fluxo.erro) {
+      throw new AgentError('FLUXO_INVALID', `O arquivo "${fluxo.file}" não é um JSON Canvas válido (${fluxo.erro}). Ele precisa ser corrigido no Kiro ou no Obsidian antes.`);
+    }
+    return fluxo;
+  }
+
+  #resumoFluxo(state, f) {
+    return {
+      id: f.id,
+      path: f.file || null,
+      title: f.title,
+      folder: this.#caminhoDaPasta(state, f.folderId),
+      cards: f.canvas ? f.canvas.nodes.length : null,
+      links: f.canvas ? f.canvas.edges.length : null,
+      ...(f.erro ? { error: f.erro } : {}),
+    };
+  }
+
+  async listFluxos() {
+    const state = await this.load();
+    const fluxos = [...(state.fluxos || [])].sort((a, b) => (a.file || a.title).localeCompare(b.file || b.title, 'pt-BR'));
+    return { fluxos: fluxos.map(f => this.#resumoFluxo(state, f)) };
+  }
+
+  async readFluxo(args = {}) {
+    const state = await this.load();
+    const fluxo = this.#fluxoLegivel(state, args);
+    return {
+      ...this.#resumoFluxo(state, fluxo),
+      nodes: fluxo.canvas.nodes.map(n => cartaoParaIA(n, args.positions === true)),
+      edges: fluxo.canvas.edges.map(setaParaIA),
+    };
   }
 
   async describeVault() {
