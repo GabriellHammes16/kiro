@@ -870,7 +870,8 @@ body, button, input, textarea, select { font-family:var(--fonte-interface); }
 .modal:has(.cfg) { max-width:920px; height:min(720px, 88vh); padding:0; display:flex; flex-direction:column; overflow:hidden; }
 .modal:has(.cfg) > .modal-head { padding:var(--esp-5) var(--esp-6); margin:0; border-bottom:1px solid var(--line); }
 .cfg { flex:1; min-height:0; display:grid; grid-template-columns:220px minmax(0,1fr); gap:0; }
-.cfg-abas { display:flex; flex-direction:column; gap:2px; padding:var(--esp-3); overflow-y:auto; border-right:1px solid var(--line); background:color-mix(in srgb, var(--panel) 70%, transparent); }
+.cfg-abas { display:flex; flex-direction:column; gap:2px; }
+.cfg > .cfg-lateral { padding:var(--esp-3); overflow-y:auto; border-right:1px solid var(--line); background:color-mix(in srgb, var(--panel) 70%, transparent); }
 .cfg-aba { display:flex; align-items:center; gap:10px; width:100%; min-height:36px; padding:0 var(--esp-3); border:0; border-radius:var(--raio-controle); background:transparent; color:var(--muted); font:500 var(--fs-interface)/1 var(--fonte-interface); text-align:left; cursor:pointer; transition:background var(--rapido) var(--curva), color var(--rapido) var(--curva); }
 .cfg-aba .icone { width:17px; height:17px; flex:0 0 auto; }
 .cfg-aba:hover { color:var(--ink); background:rgba(255,255,255,.045); }
@@ -1021,6 +1022,15 @@ html.janela-propria body { padding-top:var(--barra-titulo); }
 #barra-titulo { display:none; }
 html.janela-propria #barra-titulo { position:fixed; top:0; left:0; right:0; z-index:40; display:flex; align-items:center; gap:8px; height:var(--barra-titulo); padding:0 12px; background:var(--sidebar-bg); color:var(--muted); font-size:12px; font-weight:600; letter-spacing:.3px; -webkit-app-region:drag; user-select:none; }
 #barra-titulo img { width:16px; height:16px; }
+/* ---- Configurações: busca ---- */
+.cfg-lateral { display:flex; flex-direction:column; gap:10px; min-width:0; }
+.cfg-busca { width:100%; min-height:36px; padding:0 10px; border:1px solid var(--line); border-radius:8px; background:var(--campo); color:var(--ink); font:inherit; font-size:13px; }
+.cfg-busca:focus-visible { outline:2px solid var(--acento); outline-offset:1px; }
+.cfg.buscando .cfg-painel + .cfg-painel { margin-top:var(--esp-4, 16px); }
+.cfg-fora-da-busca { display:none !important; }
+/* Buscando, o resultado vem de todas as abas: nenhuma fica marcada como a atual. */
+.cfg.buscando .cfg-aba[aria-selected="true"] { color:inherit; background:transparent; font-weight:inherit; }
+.cfg.buscando .cfg-aba[aria-selected="true"] .icone { color:inherit; }
 /* Item de plug-in com nome longo fica numa linha só, cortado com reticências. */
 .sidebar .nav-item .rotulo { width:auto; flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; text-align:left; font-size:inherit; }
 .acoes-rapidas + nav { margin-top:0; }

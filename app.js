@@ -4248,7 +4248,7 @@ function ligarAbaPlugins(painel) {
 // ---- Fim da aba Plug-ins ----
 
 // Aparência aplica na hora; as permissões de agente só no botão Salvar.
-const ABAS_CFG = [['personalizacao', 'Personalização', 'realce'], ['hoje', 'Hoje', 'hoje'], ['sistema', 'Sistema', 'pasta-aberta'], ['integracoes', 'Integrações', 'link'], ['plugins', 'Plug-ins', 'plugin'], ['atalhos', 'Atalhos', 'codigo']];
+const ABAS_CFG = [['personalizacao', 'Aparência', 'realce'], ['papel', 'Papel de parede', 'imagem'], ['editor', 'Editor', 'notas'], ['hoje', 'Hoje', 'hoje'], ['sistema', 'Sistema', 'pasta-aberta'], ['integracoes', 'Integrações', 'link'], ['plugins', 'Plug-ins', 'plugin'], ['atalhos', 'Atalhos', 'codigo']];
 let abaDasConfiguracoes = 'personalizacao';
 // Fixos: fazem parte do editor e dos menus, não dá para trocar.
 const ATALHOS_FIXOS = [
@@ -4329,8 +4329,10 @@ async function showSettings(aba = abaDasConfiguracoes) {
   if (!ABAS_CFG.some(([id]) => id === aba)) aba = 'personalizacao';
   const painel = (id, conteudo) => `<div class="cfg-painel" data-painel="${id}" role="tabpanel" id="painel-${id}" aria-labelledby="aba-${id}" ${id === aba ? '' : 'hidden'}>${conteudo}</div>`;
   modal('Configurações', `<div class="cfg">
-    <nav class="cfg-abas" role="tablist" aria-orientation="vertical" aria-label="Seções das configurações">${ABAS_CFG.map(([id, rotulo, nomeIcone]) => `<button type="button" role="tab" class="cfg-aba" id="aba-${id}" data-aba="${id}" aria-controls="painel-${id}" aria-selected="${id === aba}" tabindex="${id === aba ? 0 : -1}">${icone(nomeIcone)}<span>${rotulo}</span></button>`).join('')}</nav>
+    <div class="cfg-lateral"><input type="search" class="cfg-busca" id="cfg-busca" placeholder="Buscar configuração" aria-label="Buscar nas configurações" autocomplete="off" />
+    <nav class="cfg-abas" role="tablist" aria-orientation="vertical" aria-label="Seções das configurações">${ABAS_CFG.map(([id, rotulo, nomeIcone]) => `<button type="button" role="tab" class="cfg-aba" id="aba-${id}" data-aba="${id}" aria-controls="painel-${id}" aria-selected="${id === aba}" tabindex="${id === aba ? 0 : -1}">${icone(nomeIcone)}<span>${rotulo}</span></button>`).join('')}</nav></div>
     <div class="cfg-conteudo">
+    <p class="cfg-sem-resultado small-muted" hidden>Nenhuma configuração com esse nome.</p>
     ${painel('personalizacao', `<section class="cfg-grupo cfg-aparencia">
       <header class="cfg-grupo-topo">${texto('Aparência', 'Muda na hora e vale só para esta instalação.')}<button type="button" class="secondary cfg-pequeno" id="cor-padrao">${icone('recarregar')} Restaurar padrão</button></header>
       <div class="cfg-linha cfg-linha-coluna">${texto('Tema', '', 'tema-rotulo')}
@@ -4348,14 +4350,17 @@ async function showSettings(aba = abaDasConfiguracoes) {
       <div class="cfg-linha cfg-linha-coluna">${texto('Skin', '', 'skin-rotulo')}
         <div class="skins" role="radiogroup" aria-labelledby="skin-rotulo">${SKINS.map(([id, nome, desc]) => `<label class="skin-opcao"><input type="radio" name="skin" value="${id}" class="sr-only" ${cores.skin === id ? 'checked' : ''} /><span class="skin-nome">${nome}</span><span class="skin-desc">${desc}</span></label>`).join('')}</div>
       </div>
-      <div class="cfg-linha cfg-linha-coluna" id="cfg-papel"${document.documentElement.classList.contains('com-papel-de-parede') ? ' data-tem-papel' : ''}>${texto('Papel de parede', 'Imagem até 4K (3840 × 2160), GIF ou vídeo MP4/WebM animado de até 200 MB. Preenche a janela e aparece atrás de todas as telas, menos a de Pastas.')}
-        <div class="papel-controles"><span class="papel-previa" aria-hidden="true"></span><label class="secondary cfg-pequeno papel-escolher">${icone('imagem')} Escolher imagem<input type="file" accept="image/*,video/mp4,video/webm" id="papel-arquivo" class="sr-only" /></label><button type="button" class="secondary cfg-pequeno papel-so-com" id="papel-remover">${icone('lixeira')} Remover</button></div>
+    </section>`)}
+    ${painel('papel', `<section class="cfg-grupo">
+      <header class="cfg-grupo-topo">${texto('Papel de parede', 'Imagem até 4K (3840 × 2160), GIF ou vídeo MP4/WebM animado de até 200 MB. Preenche a janela e aparece atrás de todas as telas, menos a de Pastas. Vale só para esta instalação.')}</header>
+      <div class="cfg-linha cfg-linha-coluna" id="cfg-papel"${document.documentElement.classList.contains('com-papel-de-parede') ? ' data-tem-papel' : ''}>${texto('Imagem ou vídeo')}
+        <div class="papel-controles"><span class="papel-previa" aria-hidden="true"></span><label class="secondary cfg-pequeno papel-escolher">${icone('imagem')} Escolher arquivo<input type="file" accept="image/*,video/mp4,video/webm" id="papel-arquivo" class="sr-only" /></label><button type="button" class="secondary cfg-pequeno papel-so-com" id="papel-remover">${icone('lixeira')} Remover</button></div>
         <label class="papel-veu papel-so-com"><span class="small-muted">Suavizar a imagem</span><input type="range" id="papel-veu" min="0" max="90" step="5" value="${lerPreferencia('papelDeParedeVeu') ?? VEU_PADRAO}" /></label>
         <label class="papel-veu papel-so-com"><span class="small-muted">Opacidade dos cartões</span><input type="range" id="papel-opacidade" min="30" max="100" step="5" value="${lerPreferencia('papelOpacidadeCartoes') ?? 100}" /></label>
         <p class="cfg-aviso" id="papel-erro" role="status" hidden></p>
       </div>
-    </section>
-    <section class="cfg-grupo">
+    </section>`)}
+    ${painel('editor', `<section class="cfg-grupo">
       <header class="cfg-grupo-topo">${texto('Notas', 'O que aparece junto do texto da nota aberta.')}</header>
       <label class="cfg-linha cfg-chave">${texto('Mostrar “Mencionada em”', 'Lista, no fim da nota, as notas que apontam para ela com [[links]].')}<input type="checkbox" id="cfg-mencoes" ${mostrarMencoes ? 'checked' : ''} /><span class="interruptor" aria-hidden="true"></span></label>
     </section>`)}
@@ -4380,9 +4385,8 @@ async function showSettings(aba = abaDasConfiguracoes) {
       <h4 class="cfg-subtitulo cfg-depende">O que o agente pode fazer</h4>
       ${CAIXAS.map(([id, rotulo]) => chave(id, rotulo.replace(/ \(.*\)$/, ''), conf.permissions[id], DETALHES[id], 'cfg-depende')).join('')}
       ${chave('confirm', 'Confirmar ações destrutivas', conf.requireConfirmationForDestructive, 'Pede confirmação antes de excluir.', 'cfg-depende')}
-      <p class="small-muted cfg-rodape">Guardado em <code>.kiro/agent.json</code>, dentro do cofre.</p>
-    </section>
-    <div class="form-actions cfg-acoes"><button type="button" class="primary" id="ai-save" disabled>Salvar permissões</button></div>` : `<p class="cfg-aviso">Não foi possível ler a configuração de agentes: ${escapeHtml(erroConf)}</p>`)}
+      <p class="small-muted cfg-rodape">Guardado em <code>.kiro/agent.json</code>, dentro do cofre. <span id="ai-estado" role="status" aria-live="polite"></span></p>
+    </section>` : `<p class="cfg-aviso">Não foi possível ler a configuração de agentes: ${escapeHtml(erroConf)}</p>`)}
     ${painel('plugins', abaPlugins)}
     ${painel('atalhos', `<section class="cfg-grupo">
       <header class="cfg-grupo-topo">${texto('Atalhos', 'Para fazer as coisas sem tirar a mão do teclado.')}</header>
@@ -4445,8 +4449,39 @@ async function showSettings(aba = abaDasConfiguracoes) {
     document.querySelectorAll('.cfg-painel').forEach(p => { p.hidden = p.dataset.painel !== id; });
     if (id === 'plugins' && trocou) redesenharAbaPlugins();   // estado das chaves e últimas chamadas em dia
   };
+  // Busca: mostra todas as abas de uma vez e só as linhas cujo texto combina (ou o grupo inteiro,
+  // se o título do grupo combina). Sem texto, volta para a aba de antes.
+  const caixa = document.querySelector('.cfg');
+  $('#cfg-busca').addEventListener('input', e => {
+    e.stopPropagation(); modalDirty = false;
+    const termo = Kiro.normalize(e.target.value.trim());
+    caixa.classList.toggle('buscando', Boolean(termo));
+    document.querySelectorAll('.cfg-fora-da-busca').forEach(el => el.classList.remove('cfg-fora-da-busca'));
+    let achou = false;
+    if (termo) for (const painelDaAba of document.querySelectorAll('.cfg-painel')) {
+      painelDaAba.hidden = false;   // todas as abas de uma vez; as sem resultado somem pela classe
+      let noPainel = false;
+      for (const grupo of painelDaAba.querySelectorAll('.cfg-grupo')) {
+        const topo = grupo.querySelector(':scope > .cfg-grupo-topo');
+        const todoOGrupo = topo && Kiro.normalize(topo.textContent).includes(termo);
+        let noGrupo = todoOGrupo;
+        for (const linha of grupo.querySelectorAll(':scope > :not(.cfg-grupo-topo)')) {
+          const combina = todoOGrupo || Kiro.normalize(linha.textContent).includes(termo);
+          linha.classList.toggle('cfg-fora-da-busca', !combina);
+          noGrupo ||= combina;
+        }
+        grupo.classList.toggle('cfg-fora-da-busca', !noGrupo);
+        noPainel ||= noGrupo;
+      }
+      painelDaAba.classList.toggle('cfg-fora-da-busca', !noPainel);
+      achou ||= noPainel;
+    }
+    document.querySelector('.cfg-sem-resultado').hidden = !termo || achou;
+    if (!termo) mostrar(abaDasConfiguracoes);
+  });
+  $('#cfg-busca').addEventListener('change', e => e.stopPropagation());
   abas.forEach((b, i) => {
-    b.onclick = () => mostrar(b.dataset.aba);
+    b.onclick = () => { if ($('#cfg-busca').value) { $('#cfg-busca').value = ''; $('#cfg-busca').dispatchEvent(new Event('input')); } mostrar(b.dataset.aba); };
     b.onkeydown = e => {
       const proxima = e.key === 'ArrowDown' || e.key === 'ArrowRight', anterior = e.key === 'ArrowUp' || e.key === 'ArrowLeft';
       if (!proxima && !anterior) return;
@@ -4500,10 +4535,11 @@ async function showSettings(aba = abaDasConfiguracoes) {
 
   ligarAbaPlugins($('#painel-plugins'));
 
-  // Integrações: Salvar só depois de mexer nas permissões.
+  // Integrações: cada interruptor salva na hora, como nas outras abas.
   if (!conf) return;
-  document.querySelectorAll('[data-perm]').forEach(c => c.addEventListener('change', () => { $('#ai-save').disabled = false; }));
-  $('#ai-save').onclick = async () => {
+  const estadoDasPermissoes = $('#ai-estado');
+  document.querySelectorAll('[data-perm]').forEach(c => c.addEventListener('change', async e => {
+    e.stopPropagation(); modalDirty = false;
     const marcado = id => document.querySelector(`[data-perm="${id}"]`).checked;
     try {
       await agentApi.save({
@@ -4512,9 +4548,13 @@ async function showSettings(aba = abaDasConfiguracoes) {
         permissions: Object.fromEntries(CAIXAS.map(([id]) => [id, marcado(id)])),
         requireConfirmationForDestructive: marcado('confirm'),
       });
-      modalDirty = false; $('#ai-save').disabled = true; $('#ai-save').textContent = 'Permissões salvas';
-    } catch (error) { status('Não foi possível salvar: ' + error.message, true); }
-  };
+      estadoDasPermissoes.textContent = '· Salvo';
+    } catch (error) {
+      c.checked = !c.checked;   // volta a chave: o que está na tela é o que está gravado
+      estadoDasPermissoes.textContent = '';
+      status('Não foi possível salvar: ' + error.message, true);
+    }
+  }));
 }
 // Árvore: botão direito abre o menu da nota ou da pasta; arrastar uma nota para uma pasta a move.
 document.addEventListener('contextmenu',e=>{
