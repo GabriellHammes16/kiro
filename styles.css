@@ -119,8 +119,8 @@ body { background:var(--content-bg,#0B0F14); }
 .link-row { border-color:var(--line); }
 
 @media (min-width:781px) {
-  .app-shell { display:flex; width:100%; min-height:var(--altura-util, 100vh); overflow-x:hidden; }
-  .sidebar { position:sticky; top:0; flex:0 0 252px; width:252px; height:var(--altura-util, 100vh); }
+  .app-shell { display:flex; width:100%; min-height:var(--altura-util, 100vh); overflow-x:clip; }
+  .sidebar { position:sticky; top:var(--barra-titulo, 0px); flex:0 0 252px; width:252px; height:var(--altura-util, 100vh); }
   .content { flex:1 1 0; min-width:0; margin-left:0; width:auto; max-width:none; }
   .today-grid { grid-template-columns:minmax(0,1.15fr) minmax(0,.85fr); }
   .task-layout { grid-template-columns:minmax(0,2fr) minmax(260px,1fr); }
@@ -286,7 +286,7 @@ select:focus-visible, textarea:focus-visible, .tree-row:focus-visible {
 /* Sem a navegação principal, a barra de status começa logo depois da árvore. */
 .app-shell.cofre-aberto ~ #save-status { left:var(--largura-arvore, 272px); right:0; transition:left .2s ease; }
 .cofre { display:flex; align-items:stretch; min-height:var(--altura-util, 100vh); }
-.cofre-lateral { flex:0 0 var(--largura-arvore, 272px); display:flex; flex-direction:column; min-width:0; height:var(--altura-util, 100vh); position:sticky; top:0; overflow:hidden;
+.cofre-lateral { flex:0 0 var(--largura-arvore, 272px); display:flex; flex-direction:column; min-width:0; height:var(--altura-util, 100vh); position:sticky; top:var(--barra-titulo, 0px); overflow:hidden;
   background:var(--sidebar-bg,#11161D); border-right:1px solid var(--line); transition:flex-basis .2s ease; }
 .cofre-topo { display:flex; align-items:center; gap:6px; padding:12px 10px 8px; }
 .cofre-nome { flex:1; font-size:12px; text-transform:uppercase; letter-spacing:1.4px; color:var(--muted); font-weight:600; opacity:.7; }
