@@ -2,7 +2,7 @@
 
 Antes de sair lendo arquivos para entender o projeto, consulte o grafo de
 conhecimento em `graphify-out/` — ele já mapeia os 98 arquivos do repositório
-(1708 nós, 3499 arestas, 112 comunidades).
+(1757 nós, 3606 arestas, 125 comunidades).
 
 - Pergunta sobre arquitetura, quem chama o quê, onde mora uma decisão:
   `graphify query "<pergunta>"`
