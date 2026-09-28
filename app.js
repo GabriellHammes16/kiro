@@ -390,14 +390,26 @@ const TRACOS = {
   desfazer: '<path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/>',
   refazer: '<path d="m15 14 5-5-5-5"/><path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13"/>',
 };
-const icone = (nome, classe = '') => `<svg class="icone${classe ? ' ' + classe : ''}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">${TRACOS[nome] || ''}</svg>`;
+// Nomes dos botões da barra lateral: começam iguais aos genéricos, mas cada tema de anime pode
+// redesenhá-los sem mexer no "+" ou no "detalhes" do resto do app.
+Object.assign(TRACOS, { 'nova-nota': TRACOS.mais, 'nota-diaria': TRACOS.calendario, 'ir-para-nota': '<circle cx="10.5" cy="10.5" r="6.5"/><path d="m15.3 15.3 5.2 5.2"/>', 'alternar-cofre': '<path d="m8 9.5 4-4 4 4M8 14.5l4 4 4-4"/>', configuracoes: '<path d="M18.8 9.6 21.1 10.2 21.1 13.8 18.8 14.4 18.5 15.1 19.8 17.1 17.1 19.8 15.1 18.5 14.4 18.8 13.8 21.1 10.2 21.1 9.6 18.8 8.9 18.5 6.9 19.8 4.2 17.1 5.5 15.1 5.2 14.4 2.9 13.8 2.9 10.2 5.2 9.6 5.5 8.9 4.2 6.9 6.9 4.2 8.9 5.5 9.6 5.2 10.2 2.9 13.8 2.9 14.4 5.2 15.1 5.5 17.1 4.2 19.8 6.9 18.5 8.9z"/><circle cx="12" cy="12" r="3"/>' });
+// Tema cujos ícones estão em uso (icones-tema.js); sem conjunto próprio, vale o desenho padrão.
+let temaDosIcones = '';
+const tracoDoIcone = nome => globalThis.KiroIconesTema?.[temaDosIcones]?.[nome] ?? TRACOS[nome] ?? '';
+const icone = (nome, classe = '') => `<svg class="icone${classe ? ' ' + classe : ''}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">${tracoDoIcone(nome)}</svg>`;
 // Ícones do HTML fixo: o marcador data-icone vira desenho quando o app abre.
+// Redesenha quando o tema troca, porque o desenho pode ser outro.
 function desenharIconesFixos() {
   for (const alvo of document.querySelectorAll('[data-icone]')) {
-    if (!alvo.querySelector('svg')) alvo.insertAdjacentHTML('afterbegin', icone(alvo.dataset.icone));
+    if (alvo.dataset.iconeDoTema === temaDosIcones && alvo.querySelector(':scope > svg')) continue;
+    alvo.querySelector(':scope > svg')?.remove();
+    alvo.insertAdjacentHTML('afterbegin', icone(alvo.dataset.icone));
+    alvo.dataset.iconeDoTema = temaDosIcones;
   }
 }
 
+// Seleção múltipla de notas e fluxos na árvore (ids; nota e fluxo nunca dividem um id).
+let selecaoArvore = new Set(), ancoraArvore = null, marcandoComDireito = null;
 function treeMarkup(parentId, depth) {
   if (depth > 20) return ""; // guarda contra ciclo, mesmo que validateState já recuse
   const folders = childFolders(parentId).map(folder => {
@@ -409,10 +421,10 @@ function treeMarkup(parentId, depth) {
   }).join("");
   const notes = folderNotes(parentId).map(note => {
     const tags = Kiro.tags(note).slice(0,2).map(t=>`#${escapeHtml(t)}`).join(" ");
-    return `<div class="tree-row tree-note${editing?.id === note.id ? " ativa" : ""}" draggable="true" data-action="edit-note" data-id="${note.id}" style="--depth:${depth}"><span class="twisty"></span><span class="tree-icone">${icone('nota')}</span><span class="tree-name" title="${escapeHtml(note.title||"Sem título")}">${escapeHtml(note.title||"Sem título")}</span><span class="tree-meta">${tags}</span></div>`;
+    return `<div class="tree-row tree-note${editing?.id === note.id ? " ativa" : ""}${selecaoArvore.has(note.id) ? " selecionada" : ""}" draggable="true" data-action="edit-note" data-id="${note.id}" style="--depth:${depth}"><span class="twisty"></span><span class="tree-icone">${icone('nota')}</span><span class="tree-name" title="${escapeHtml(note.title||"Sem título")}">${escapeHtml(note.title||"Sem título")}</span><span class="tree-meta">${tags}</span></div>`;
   }).join("");
   const ativo = KiroAbas.notaAtiva(abas);
-  const fluxos = folderFluxos(parentId).map(f => `<div class="tree-row tree-fluxo${ativo === f.id ? " ativa" : ""}" data-action="abrir-fluxo" data-id="${f.id}" style="--depth:${depth}"><span class="twisty"></span><span class="tree-icone">${icone('fluxo')}</span><span class="tree-name" title="${escapeHtml(f.title)}">${escapeHtml(f.title)}</span><span class="tree-tipo">FLUXO</span></div>`).join("");
+  const fluxos = folderFluxos(parentId).map(f => `<div class="tree-row tree-fluxo${ativo === f.id ? " ativa" : ""}${selecaoArvore.has(f.id) ? " selecionada" : ""}" draggable="true" data-action="abrir-fluxo" data-id="${f.id}" style="--depth:${depth}"><span class="twisty"></span><span class="tree-icone">${icone('fluxo')}</span><span class="tree-name" title="${escapeHtml(f.title)}">${escapeHtml(f.title)}</span><span class="tree-tipo">FLUXO</span></div>`).join("");
   return folders + notes + fluxos;
 }
 // Anima a altura em pixels: height:auto não é interpolável, e o interpolate-size
@@ -905,6 +917,14 @@ function bindAbas(painel) {
     if (e.target.closest('[data-fechar-aba]')) fecharAba(painel, aba.dataset.aba);
     else abrirPorId(aba.dataset.aba, { painel });
   });
+  // Botão direito no +: escolher entre nota e fluxo, os dois numa aba nova desta coluna.
+  barra.addEventListener('contextmenu', e => {
+    if (!e.target.closest('[data-nova-aba]')) return;
+    abrirMenuContexto(e, document.body, [
+      { rotulo: 'Nova nota', icone: icone('nota'), acao: () => abrirNota(notaVazia(), { novaAba: true, painel }) },
+      { rotulo: 'Novo fluxo', icone: icone('fluxo'), acao: () => novoFluxo('', { novaAba: true, painel }) },
+    ], { compacto: true });
+  });
   barra.addEventListener('auxclick', e => {
     if (e.button !== 1) return;
     const aba = e.target.closest('.aba');
@@ -1132,6 +1152,46 @@ function deleteFolder(id) {
   save();render();
 }
 // Mover nota entre pastas: pelo arrastar na árvore ou pelo menu do botão direito.
+function marcarSelecaoArvore() {
+  for (const l of document.querySelectorAll('.tree-note, .tree-fluxo')) l.classList.toggle('selecionada', selecaoArvore.has(l.dataset.id));
+}
+// Mover e excluir vários de uma vez: uma gravação só (cada gravação vira um snapshot em .history).
+async function moverSelecao(folderId) {
+  if (busy || failed || !loaded) return;
+  const ids = new Set(selecaoArvore);
+  if (editing?.id && ids.has(editing.id) && editorDirty && !await salvarNota()) return;
+  if (!await gravarFluxoPendente()) return;
+  const nomes = new Set((state.fluxos || []).filter(f => !ids.has(f.id) && (f.folderId || '') === folderId).map(f => Kiro.pathKey(f.title)));
+  const repetidos = [];
+  state.notes = state.notes.map(n => ids.has(n.id) && (n.folderId || '') !== folderId ? { ...n, folderId, updatedAt: Date.now() } : n);
+  state.fluxos = (state.fluxos || []).map(f => {
+    if (!ids.has(f.id) || f.erro || (f.folderId || '') === folderId) return f;
+    const chave = Kiro.pathKey(f.title);
+    if (nomes.has(chave)) { repetidos.push(f.title); return f; }
+    nomes.add(chave);
+    return { ...f, folderId };
+  });
+  if (editing?.id && ids.has(editing.id)) editing.folderId = folderId;
+  if (folderId && expanded) expanded.add(folderId);
+  selecaoArvore.clear();
+  await save();
+  if (repetidos.length) status(`Não movidos, já existe um fluxo com o mesmo nome no destino: ${repetidos.join(', ')}.`, true);
+}
+async function excluirSelecao() {
+  if (busy) { status('Salvando… tente de novo em um instante.', true); return; }
+  if (failed || !loaded) return;
+  const ids = new Set(selecaoArvore);
+  const notas = state.notes.filter(n => ids.has(n.id)).length, fluxos = (state.fluxos || []).filter(f => ids.has(f.id)).length;
+  if (!notas && !fluxos) return;
+  const partes = [notas && `${notas} nota${notas === 1 ? '' : 's'}`, fluxos && `${fluxos} fluxo${fluxos === 1 ? '' : 's'}`].filter(Boolean).join(' e ');
+  if (!confirm(`Excluir ${partes}? Tudo vai para a lixeira e pode ser restaurado.`)) return;
+  if (!await gravarFluxoPendente()) return;
+  state.notes = state.notes.filter(n => !ids.has(n.id));
+  state.fluxos = (state.fluxos || []).filter(f => !ids.has(f.id));
+  if (editing?.id && ids.has(editing.id)) { editing = null; editorDirty = false; }
+  selecaoArvore.clear();
+  await save(); render();
+}
 async function moverNota(id, folderId) {
   if (busy || failed || !loaded) return;
   const nota = getNote(id);
@@ -1145,11 +1205,20 @@ async function moverNota(id, folderId) {
 const bolinha = cor => `<svg class="icone" viewBox="0 0 24 24"><circle cx="12" cy="12" r="7" style="fill:${cor ? `var(--cor-pasta)` : 'none'};stroke:var(--muted)" data-cor-pasta="${cor}"/></svg>`;
 // As ações buscam a nota ou a pasta na hora do clique: a releitura do cofre a cada 5 s troca
 // os objetos de state, e alterar a cópia de quando o menu abriu não seria gravado.
+const destinosDePasta = () => [{ id: '', rotulo: 'Raiz do cofre' }, ...state.folders.slice().sort((a, b) => (a.path || a.title).localeCompare(b.path || b.title, 'pt-BR')).map(f => ({ id: f.id, rotulo: f.path || f.title }))];
+function menuDaSelecao() {
+  const n = selecaoArvore.size, itens = `${n} ${n === 1 ? 'item' : 'itens'}`;
+  return [
+    { rotulo: `Mover ${itens} para`, icone: icone('pastas'), filhos: destinosDePasta().map(d => ({ rotulo: d.rotulo, icone: icone(d.id ? 'pastas' : 'casa'), acao: () => moverSelecao(d.id) })) },
+    { separador: true },
+    { rotulo: `Excluir ${itens}`, icone: icone('lixeira'), acao: () => excluirSelecao() },
+  ];
+}
 function menuDaArvore(linha) {
   const id = linha.dataset.id, pastaAtual = () => state.folders.find(f => f.id === id);
   if (linha.classList.contains('tree-fluxo')) {
     const fluxo = getFluxo(id);
-    const destinos = [{ id: '', rotulo: 'Raiz do cofre' }, ...state.folders.slice().sort((a, b) => (a.path || a.title).localeCompare(b.path || b.title, 'pt-BR')).map(f => ({ id: f.id, rotulo: f.path || f.title }))];
+    const destinos = destinosDePasta();
     return [
       { rotulo: 'Abrir', icone: icone('fluxo'), acao: () => getFluxo(id) && abrirFluxo(getFluxo(id)) },
       // Fluxo com erro não é regravado pelo cofre: renomear ou mover não teriam efeito.
@@ -1162,7 +1231,7 @@ function menuDaArvore(linha) {
     ];
   }
   if (linha.classList.contains('tree-note')) {
-    const destinos = [{ id: '', rotulo: 'Raiz do cofre' }, ...state.folders.slice().sort((a, b) => (a.path || a.title).localeCompare(b.path || b.title, 'pt-BR')).map(f => ({ id: f.id, rotulo: f.path || f.title }))];
+    const destinos = destinosDePasta();
     return [
       { rotulo: 'Abrir', icone: icone('nota'), acao: () => getNote(id) && abrirNota(getNote(id)) },
       { rotulo: 'Mover para', icone: icone('pastas'), filhos: destinos.map(d => ({ rotulo: d.rotulo, icone: icone(d.id ? 'pastas' : 'casa'), ativo: () => (getNote(id)?.folderId || '') !== d.id, acao: () => moverNota(id, d.id) })) },
@@ -1373,7 +1442,7 @@ async function abrirFluxo(fluxo,{novaAba=false,painel,duplicar=false,colunaNova=
   editing=null;editorDirty=false;currentView='studies';render();
 }
 // Fluxo novo: "Sem título", "Sem título 1", … sem repetir nome (sem diferenciar maiúsculas) na pasta.
-async function novoFluxo(folderId=''){
+async function novoFluxo(folderId='',abrirComo={}){
   if(busy||failed||!loaded)return;
   const usados=new Set((state.fluxos||[]).filter(f=>(f.folderId||'')===folderId).map(f=>Kiro.pathKey(f.title)));
   let title='Sem título',i=1;
@@ -1381,7 +1450,7 @@ async function novoFluxo(folderId=''){
   const fluxo={id:uid(),title,folderId,canvas:{nodes:[],edges:[]}};
   state.fluxos=[...(state.fluxos||[]),fluxo];
   if(folderId&&expanded)expanded.add(folderId);
-  if(await save())await abrirFluxo(getFluxo(fluxo.id)||fluxo);
+  if(await save())await abrirFluxo(getFluxo(fluxo.id)||fluxo,abrirComo);
 }
 function fluxoModal(fluxo){
   modal('Renomear fluxo',`<form class="form" id="fluxo-form"><div class="field"><label for="fluxo-nome">Nome</label><input id="fluxo-nome" name="title" required value="${escapeHtml(fluxo.title)}" /><small class="small-muted">Vira o nome do arquivo .canvas: sem &lt; &gt; : " / \\ | ? * e sem ponto ou espaço no início ou no final.</small></div><div class="form-actions"><button type="button" class="secondary" id="cancel">Cancelar</button><button class="primary">Salvar</button></div></form>`);
@@ -1425,7 +1494,7 @@ async function excluirFluxo(id){
 async function moverFluxo(id,folderId){
   if(busy||failed||!loaded)return;
   const fluxo=getFluxo(id);
-  if(!fluxo||(fluxo.folderId||'')===folderId)return;
+  if(!fluxo||fluxo.erro||(fluxo.folderId||'')===folderId)return;
   if((state.fluxos||[]).some(f=>f.id!==id&&(f.folderId||'')===folderId&&Kiro.pathKey(f.title)===Kiro.pathKey(fluxo.title)))return status('Já existe um fluxo com esse nome na pasta de destino.',true);
   if(folderId&&expanded)expanded.add(folderId);
   state.fluxos=state.fluxos.map(f=>f.id===id?{...f,folderId}:f);
@@ -4285,11 +4354,58 @@ async function showSettings(aba = abaDasConfiguracoes) {
 // Árvore: botão direito abre o menu da nota ou da pasta; arrastar uma nota para uma pasta a move.
 document.addEventListener('contextmenu',e=>{
   if(!loaded||busy||failed)return;
+  // Menu pedido com o botão direito ainda apertado (há navegadores e sistemas que o abrem no apertar):
+  // segura e abre no soltar, para dar tempo de marcar passando por cima dos itens.
+  if(marcandoComDireito&&(e.buttons&2)){e.preventDefault();marcandoComDireito.adiado=true;return;}
   const linha=e.target.closest('.tree-row');
+  // Seleção feita segurando o botão direito, ou botão direito sobre um item de uma seleção: menu do lote.
+  const doLote=marcandoComDireito?.moveu||(linha&&selecaoArvore.size>1&&selecaoArvore.has(linha.dataset.id));
+  marcandoComDireito=null;
+  if(doLote)return abrirMenuContexto(e,document.body,menuDaSelecao());
+  if(selecaoArvore.size&&!(linha&&selecaoArvore.has(linha.dataset.id))){selecaoArvore.clear();marcarSelecaoArvore();}
   if(linha)return abrirMenuContexto(e,document.body,menuDaArvore(linha));
+  // Espaço vazio da árvore: criar na raiz do cofre.
+  if(e.target.closest('.cofre-lateral .tree'))return abrirMenuContexto(e,document.body,[
+    {rotulo:'Nova nota',icone:icone('nota'),acao:()=>abrirNota(notaVazia())},
+    {rotulo:'Nova pasta',icone:icone('pasta-nova'),acao:()=>folderModal({title:'',description:'',parentId:''})},
+    {rotulo:'Novo fluxo',icone:icone('fluxo'),acao:()=>novoFluxo('')},
+  ]);
   const habito=e.target.closest('[data-habito]');
   if(habito)return abrirMenuContexto(e,document.body,menuDoHabito(habito.dataset.habito));
   if(e.target.closest('.card.habitos, .habitos-lista'))abrirMenuContexto(e,document.body,menuDosHabitos());
+});
+// Seleção na árvore. Ctrl+clique alterna um item, Shift+clique marca do último clicado até este (só o
+// que está visível, sem entrar em pasta fechada). Clique comum desfaz a seleção e abre o item.
+const linhasVisiveisDaArvore=()=>[...document.querySelectorAll('.cofre-lateral .tree .tree-note, .cofre-lateral .tree .tree-fluxo')].filter(l=>!l.closest('.tree-node:not(.open) > .tree-children'));
+document.addEventListener('click',e=>{
+  const linha=e.target.closest?.('.cofre-lateral .tree-note, .cofre-lateral .tree-fluxo');
+  if(!linha)return;
+  const id=linha.dataset.id;
+  if(!(e.ctrlKey||e.metaKey||e.shiftKey)){if(selecaoArvore.size){selecaoArvore.clear();marcarSelecaoArvore();}ancoraArvore=id;return;}
+  e.preventDefault();e.stopImmediatePropagation();
+  const ordem=linhasVisiveisDaArvore().map(l=>l.dataset.id),a=ordem.indexOf(ancoraArvore),b=ordem.indexOf(id);
+  if(e.shiftKey&&a!==-1&&b!==-1){if(!(e.ctrlKey||e.metaKey))selecaoArvore.clear();for(const x of ordem.slice(Math.min(a,b),Math.max(a,b)+1))selecaoArvore.add(x);}
+  else{if(selecaoArvore.has(id))selecaoArvore.delete(id);else selecaoArvore.add(id);ancoraArvore=id;}
+  marcarSelecaoArvore();
+},true);
+// Segurar o botão direito sobre um item e passar por cima de outros marca todos; o menu do lote abre
+// ao soltar. Um clique direito rápido abre o menu normal.
+document.addEventListener('pointerdown',e=>{
+  marcandoComDireito=null;
+  const linha=e.button===2&&e.target.closest?.('.cofre-lateral .tree-note, .cofre-lateral .tree-fluxo');
+  if(linha)marcandoComDireito={inicio:linha.dataset.id,moveu:false};
+});
+document.addEventListener('pointerover',e=>{
+  if(!marcandoComDireito||!(e.buttons&2))return;
+  const linha=e.target.closest?.('.cofre-lateral .tree-note, .cofre-lateral .tree-fluxo');
+  if(!linha||(!marcandoComDireito.moveu&&linha.dataset.id===marcandoComDireito.inicio))return;
+  if(!marcandoComDireito.moveu){marcandoComDireito.moveu=true;selecaoArvore=new Set([marcandoComDireito.inicio]);}
+  selecaoArvore.add(linha.dataset.id);marcarSelecaoArvore();
+});
+document.addEventListener('pointerup',e=>{
+  if(e.button!==2||!marcandoComDireito?.adiado)return;
+  const alvo=document.elementFromPoint(e.clientX,e.clientY)||document.body;
+  alvo.dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,cancelable:true,clientX:e.clientX,clientY:e.clientY,button:2,buttons:0}));
 });
 // Soltar sobre uma nota vale como soltar na pasta dela; fora das pastas, é a raiz.
 const alvoDaSoltura=e=>{const no=e.target.closest?.('.tree-node');return no?no.querySelector(':scope > .tree-folder'):e.target.closest?.('.tree');};
@@ -4298,18 +4414,24 @@ const limparSoltura=(exceto)=>document.querySelectorAll('.soltar-aqui').forEach(
 // (mover, `move`) e a área das notas (abrir numa coluna, `copy`). Com `effectAllowed='move'` o
 // navegador força a `none` o `dropEffect='copy'` da área, e o arraste vira cursor de bloqueio:
 // o `dragover` roda e destaca o alvo, mas o `drop` nunca chega.
+// Fluxo da árvore também se arrasta para uma pasta (tipo próprio: a área das notas e o fluxo aberto só aceitam nota).
 document.addEventListener('dragstart',e=>{const nota=e.target.closest?.('.tree-note');if(!nota)return;e.dataTransfer.setData('text/kiro-nota',nota.dataset.id);e.dataTransfer.effectAllowed='copyMove';});
+// Arrastar um item que faz parte de uma seleção leva a seleção inteira; fora dela, a seleção some.
+document.addEventListener('dragstart',e=>{const linha=e.target.closest?.('.tree-note, .tree-fluxo');if(!linha)return;if(selecaoArvore.has(linha.dataset.id)&&selecaoArvore.size>1)e.dataTransfer.setData('text/kiro-selecao','1');else if(selecaoArvore.size){selecaoArvore.clear();marcarSelecaoArvore();}});
+document.addEventListener('dragstart',e=>{const fluxo=e.target.closest?.('.tree-fluxo');if(!fluxo)return;e.dataTransfer.setData('text/kiro-fluxo',fluxo.dataset.id);e.dataTransfer.effectAllowed='move';});
 document.addEventListener('dragover',e=>{
-  if(!e.dataTransfer.types.includes('text/kiro-nota'))return;
+  if(!e.dataTransfer.types.includes('text/kiro-nota')&&!e.dataTransfer.types.includes('text/kiro-fluxo'))return;
   const alvo=alvoDaSoltura(e);limparSoltura(alvo);if(!alvo)return;
   e.preventDefault();e.dataTransfer.dropEffect='move';alvo.classList.add('soltar-aqui');
 });
 document.addEventListener('dragend',()=>limparSoltura());
 document.addEventListener('drop',e=>{
-  const id=e.dataTransfer.getData('text/kiro-nota');const alvo=id&&alvoDaSoltura(e);
+  const id=e.dataTransfer.getData('text/kiro-nota'),idFluxo=e.dataTransfer.getData('text/kiro-fluxo');const alvo=(id||idFluxo)&&alvoDaSoltura(e);
   limparSoltura();
   if(!alvo)return;
-  e.preventDefault();moverNota(id,alvo.classList.contains('tree-folder')?alvo.dataset.id:'');
+  const destino=alvo.classList.contains('tree-folder')?alvo.dataset.id:'';
+  e.preventDefault();
+  if(e.dataTransfer.getData('text/kiro-selecao'))moverSelecao(destino);else if(id)moverNota(id,destino);else moverFluxo(idFluxo,destino);
 });
 // Arrastar cartões no modo Personalizar: solta antes do cartão sob o ponteiro (metade de cima)
 // ou depois dele; numa coluna vazia, no fim dela.

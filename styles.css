@@ -609,7 +609,8 @@ body, button, input, textarea, select { font-family:var(--fonte-interface); }
 .grafo-cor-solta { width:44px; height:26px; padding:2px; border:1px solid var(--line); border-radius:6px; background:transparent; cursor:pointer; }
 
 /* Arrastar nota para pasta: realce do destino (pasta ou a raiz da árvore). */
-.tree-note[draggable="true"] { cursor:grab; }
+.tree-note[draggable="true"], .tree-fluxo[draggable="true"] { cursor:grab; }
+.tree-row.selecionada { background:color-mix(in srgb, var(--acento) 20%, transparent); box-shadow:inset 0 0 0 1px color-mix(in srgb, var(--acento) 45%, transparent); }
 .tree-folder.soltar-aqui { outline:2px dashed var(--acento); outline-offset:-2px; background:var(--accent-soft); }
 .tree.soltar-aqui { outline:2px dashed color-mix(in srgb, var(--acento) 50%, transparent); outline-offset:-4px; border-radius:8px; }
 
