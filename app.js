@@ -459,6 +459,90 @@ function toggleFolder(id) {
 // quem usava o aplicativo com o nome anterior não perde o que tinha escolhido.
 const lerPreferencia = chave => { try { return localStorage.getItem(`kiro.${chave}`) ?? localStorage.getItem(`kuroi.${chave}`); } catch { return null; } };
 let lateralRecolhida = lerPreferencia('lateralRecolhida') === '1';
+// Papel de parede: imagem atrás do conteúdo de todas as telas, menos Pastas (onde se lê e escreve).
+// Fica nesta instalação, como a aparência. Um véu com a cor de fundo do tema, na força escolhida,
+// mantém o texto legível sobre qualquer foto. A imagem (até 4K) mora no IndexedDB como Blob e entra
+// na tela por uma URL blob:. Nem localStorage (uns 5 MB para o app inteiro) nem data: URL servem: o
+// Chromium descarta, sem erro, URL com mais de 2 MB, e uma foto 4K passa disso.
+const VEU_PADRAO = 60, LADO_MAXIMO_DO_PAPEL = 3840, LIMITE_DO_PAPEL_ANIMADO = 200 * 1024 * 1024;
+let urlDoPapel = null;
+const semAnimacao = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
+// Papel animado: GIF vai como imagem (o navegador anima); vídeo (MP4/WebM) toca num <video> fixo atrás de
+// tudo, sem som e em laço. Para na tela de Pastas, com a janela escondida e para quem pede menos movimento.
+function sincronizarVideoDoPapel() {
+  const video = document.querySelector('#papel-video');
+  if (!video) return;
+  const parar = semAnimacao() || document.hidden || document.querySelector('.app-shell')?.classList.contains('cofre-aberto');
+  if (parar) video.pause(); else video.play().catch(() => { /* sem permissão de tocar: fica o primeiro quadro */ });
+}
+// Opacidade dos cartões: as cores de painel do tema, com transparência, só na área de conteúdo e só com
+// papel de parede (o CSS troca --panel por --panel-vidro lá). Abaixo de 100%, o fundo ganha desfoque.
+function aplicarVidro() {
+  const html = document.documentElement, raiz = getComputedStyle(html);
+  const opacidade = Math.min(100, Math.max(30, Number(lerPreferencia('papelOpacidadeCartoes') ?? 100) || 100));
+  for (const v of ['panel', 'panel-raised', 'campo']) html.style.setProperty(`--${v}-vidro`, `color-mix(in srgb, ${raiz.getPropertyValue(`--${v}`).trim()} ${opacidade}%, transparent)`);
+  html.classList.toggle('cartoes-vidro', opacidade < 100);
+}
+function papelGuardado(acao, valor) {
+  return new Promise((ok, erro) => {
+    const pedido = indexedDB.open('kiro-papel-de-parede', 1);
+    pedido.onupgradeneeded = () => pedido.result.createObjectStore('papel');
+    pedido.onerror = () => erro(pedido.error);
+    pedido.onsuccess = () => {
+      const loja = pedido.result.transaction('papel', acao === 'ler' ? 'readonly' : 'readwrite').objectStore('papel');
+      const r = acao === 'ler' ? loja.get('imagem') : acao === 'gravar' ? loja.put(valor, 'imagem') : loja.delete('imagem');
+      r.onsuccess = () => ok(r.result);
+      r.onerror = () => erro(r.error);
+    };
+  });
+}
+async function aplicarPapelDeParede() {
+  let imagem = null;
+  try {
+    // Versão anterior guardava no localStorage: muda de lugar uma vez.
+    const antiga = lerPreferencia('papelDeParede');
+    if (antiga) { await papelGuardado('gravar', antiga); localStorage.removeItem('kiro.papelDeParede'); }
+    imagem = await papelGuardado('ler');
+  } catch { /* sem IndexedDB (janela privada): segue sem papel de parede */ }
+  const veu = Number(lerPreferencia('papelDeParedeVeu') ?? VEU_PADRAO), html = document.documentElement;
+  html.classList.toggle('com-papel-de-parede', Boolean(imagem));
+  const linha = document.querySelector('#cfg-papel');
+  if (linha) linha.toggleAttribute('data-tem-papel', Boolean(imagem));
+  if (urlDoPapel) { URL.revokeObjectURL(urlDoPapel); urlDoPapel = null; }
+  const emVideo = imagem instanceof Blob && imagem.type.startsWith('video/');
+  html.classList.toggle('papel-em-video', emVideo);
+  let video = document.querySelector('#papel-video');
+  const previa = document.querySelector('#cfg-papel .papel-previa');
+  if (previa) previa.replaceChildren();
+  aplicarVidro();
+  if (!imagem) { video?.remove(); return void html.style.removeProperty('--papel-de-parede'); }
+  // Blob (atual) ou data: URL de antes, que era sempre pequena.
+  if (imagem instanceof Blob) urlDoPapel = URL.createObjectURL(imagem);
+  const url = urlDoPapel || imagem;
+  if (!emVideo) { video?.remove(); html.style.setProperty('--papel-de-parede', `url("${url}")`); }
+  else {
+    html.style.removeProperty('--papel-de-parede');
+    if (!video) {
+      video = Object.assign(document.createElement('video'), { id: 'papel-video', muted: true, loop: true, playsInline: true });
+      video.setAttribute('aria-hidden', 'true');
+      document.body.prepend(video);
+    }
+    video.src = url;
+    sincronizarVideoDoPapel();
+    if (previa) previa.append(Object.assign(document.createElement('video'), { src: url, muted: true, loop: true, autoplay: !semAnimacao(), playsInline: true }));
+  }
+  html.style.setProperty('--papel-veu', `${Number.isFinite(veu) ? veu : VEU_PADRAO}%`);
+}
+// Até 3840 px no lado maior (4K); maior que isso é reduzido, sem distorcer. JPEG de boa qualidade.
+async function reduzirImagem(arquivo) {
+  const bitmap = await createImageBitmap(arquivo);
+  const escala = Math.min(1, LADO_MAXIMO_DO_PAPEL / Math.max(bitmap.width, bitmap.height));
+  const tela = document.createElement('canvas');
+  tela.width = Math.round(bitmap.width * escala); tela.height = Math.round(bitmap.height * escala);
+  tela.getContext('2d').drawImage(bitmap, 0, 0, tela.width, tela.height);
+  bitmap.close?.();
+  return new Promise((ok, erro) => tela.toBlob(b => (b ? ok(b) : erro(new Error('Imagem vazia.'))), 'image/jpeg', 0.9));
+}
 // Largura da árvore de Pastas: arrastar a linha entre a árvore e a nota; fica no navegador.
 // O mínimo cabe a casinha, as três ações e a seta de recolher.
 const LARGURA_ARVORE = { min: 200, max: 480, padrao: 272 };
@@ -3896,8 +3980,11 @@ function aplicarAparencia(valores) {
 }
 function gravarAparencia(a) {
   try { localStorage.setItem('kiro.aparencia', JSON.stringify(a)); } catch { /* janela privada: só aplica na sessão */ }
+  const temaAntes = temaDosIcones;
   aplicarAparencia(a);
+  aplicarVidro();
   avisarTemaAsMolduras();
+  if (temaDosIcones !== temaAntes && loaded && !busy) render();   // árvore e menus com os ícones do tema novo
 }
 const CAIXAS = [['read','Ler notas'],['create','Criar notas'],['update','Editar notas'],['delete','Excluir notas (vai para a lixeira)']];
 const agentApi = {
@@ -4238,6 +4325,12 @@ async function showSettings(aba = abaDasConfiguracoes) {
       <div class="cfg-linha cfg-linha-coluna">${texto('Skin', '', 'skin-rotulo')}
         <div class="skins" role="radiogroup" aria-labelledby="skin-rotulo">${SKINS.map(([id, nome, desc]) => `<label class="skin-opcao"><input type="radio" name="skin" value="${id}" class="sr-only" ${cores.skin === id ? 'checked' : ''} /><span class="skin-nome">${nome}</span><span class="skin-desc">${desc}</span></label>`).join('')}</div>
       </div>
+      <div class="cfg-linha cfg-linha-coluna" id="cfg-papel"${document.documentElement.classList.contains('com-papel-de-parede') ? ' data-tem-papel' : ''}>${texto('Papel de parede', 'Imagem até 4K (3840 × 2160), GIF ou vídeo MP4/WebM animado de até 200 MB. Preenche a janela e aparece atrás de todas as telas, menos a de Pastas.')}
+        <div class="papel-controles"><span class="papel-previa" aria-hidden="true"></span><label class="secondary cfg-pequeno papel-escolher">${icone('imagem')} Escolher imagem<input type="file" accept="image/*,video/mp4,video/webm" id="papel-arquivo" class="sr-only" /></label><button type="button" class="secondary cfg-pequeno papel-so-com" id="papel-remover">${icone('lixeira')} Remover</button></div>
+        <label class="papel-veu papel-so-com"><span class="small-muted">Suavizar a imagem</span><input type="range" id="papel-veu" min="0" max="90" step="5" value="${lerPreferencia('papelDeParedeVeu') ?? VEU_PADRAO}" /></label>
+        <label class="papel-veu papel-so-com"><span class="small-muted">Opacidade dos cartões</span><input type="range" id="papel-opacidade" min="30" max="100" step="5" value="${lerPreferencia('papelOpacidadeCartoes') ?? 100}" /></label>
+        <p class="cfg-aviso" id="papel-erro" role="status" hidden></p>
+      </div>
     </section>
     <section class="cfg-grupo">
       <header class="cfg-grupo-topo">${texto('Notas', 'O que aparece junto do texto da nota aberta.')}</header>
@@ -4279,6 +4372,40 @@ async function showSettings(aba = abaDasConfiguracoes) {
   // Abas: clique ou setas esquerda/direita; a última aberta volta na próxima vez.
   ligarAbaAtalhos(texto);
   // Grava na hora: não há o que "descartar" ao fechar a janela.
+  // Papel de parede. stopPropagation: senão o change/input chega ao modal e o marca como alterado.
+  const erroDoPapel = $('#papel-erro');
+  $('#papel-arquivo')?.addEventListener('change', async e => {
+    e.stopPropagation(); modalDirty = false;
+    const arquivo = e.target.files?.[0];
+    e.target.value = '';
+    if (!arquivo) return;
+    const animado = arquivo.type.startsWith('video/') || arquivo.type === 'image/gif';
+    if (animado && arquivo.size > LIMITE_DO_PAPEL_ANIMADO) { erroDoPapel.textContent = 'Arquivo grande demais: GIF ou vídeo de até 200 MB.'; erroDoPapel.hidden = false; return; }
+    let imagem;
+    // GIF e vídeo vão como vieram (reduzir tiraria a animação); foto é reduzida até 4K.
+    try { imagem = animado ? arquivo : await reduzirImagem(arquivo); }
+    catch { erroDoPapel.textContent = 'Não foi possível abrir essa imagem.'; erroDoPapel.hidden = false; return; }
+    try { await papelGuardado('gravar', imagem); }
+    catch { erroDoPapel.textContent = 'Não foi possível guardar a imagem neste navegador (janela privada ou sem espaço).'; erroDoPapel.hidden = false; return; }
+    erroDoPapel.hidden = true;
+    await aplicarPapelDeParede();
+  });
+  $('#papel-remover')?.addEventListener('click', async () => {
+    try { await papelGuardado('apagar'); } catch { /* sem IndexedDB: nada guardado */ }
+    await aplicarPapelDeParede();
+  });
+  $('#papel-veu')?.addEventListener('input', e => {
+    e.stopPropagation(); modalDirty = false;
+    try { localStorage.setItem('kiro.papelDeParedeVeu', e.target.value); } catch { /* janela privada: vale só nesta sessão */ }
+    document.documentElement.style.setProperty('--papel-veu', `${e.target.value}%`);
+  });
+  $('#papel-opacidade')?.addEventListener('input', e => {
+    e.stopPropagation(); modalDirty = false;
+    try { localStorage.setItem('kiro.papelOpacidadeCartoes', e.target.value); } catch { /* janela privada: vale só nesta sessão */ }
+    aplicarVidro();
+  });
+  $('#papel-veu')?.addEventListener('change', e => e.stopPropagation());
+  $('#papel-opacidade')?.addEventListener('change', e => e.stopPropagation());
   $('#cfg-mencoes')?.addEventListener('change', e => {
     mostrarMencoes = e.target.checked;
     try { localStorage.setItem('kiro.mostrarMencoes', mostrarMencoes ? '1' : '0'); } catch { /* janela privada: vale só nesta sessão */ }
@@ -4589,6 +4716,9 @@ window.addEventListener('focus',()=>reload());
 setInterval(()=>{if(document.hidden)return;if(lastDay!==today()){lastDay=today();if(loaded&&!busy)render();}reload();if(loaded)for(const id of pluginsAtivos.keys())entregarDia(id);},5000);
 desenharIconesFixos();
 aplicarAparencia();
+aplicarPapelDeParede();
+new MutationObserver(sincronizarVideoDoPapel).observe(document.querySelector('.app-shell'), { attributes: true, attributeFilter: ['class'] });
+document.addEventListener('visibilitychange', sincronizarVideoDoPapel);
 aplicarLateralCompacta();
 aplicarLarguraArvore(larguraArvore);
 document.querySelector('#alternar-lateral').onclick = alternarLateralCompacta;

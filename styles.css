@@ -981,6 +981,29 @@ body, button, input, textarea, select { font-family:var(--fonte-interface); }
 .sidebar-bottom .quiet-button:focus-visible { outline:2px solid var(--acento); outline-offset:2px; }
 .sidebar-bottom .quiet-button .icone { width:19px; height:19px; }
 .sidebar-bottom .quiet-button .rotulo { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; }
+/* ---- Papel de parede (fora da tela de Pastas) ---- */
+html.com-papel-de-parede .app-shell:not(.cofre-aberto) > .content {
+  background-image:linear-gradient(color-mix(in srgb, var(--content-bg) var(--papel-veu, 60%), transparent), color-mix(in srgb, var(--content-bg) var(--papel-veu, 60%), transparent)), var(--papel-de-parede);
+  background-size:cover; background-position:center; background-attachment:fixed;
+}
+html.com-papel-de-parede .app-shell:not(.cofre-aberto) > .content { --panel:var(--panel-vidro); --panel-raised:var(--panel-raised-vidro); --campo:var(--campo-vidro); }
+/* Vídeo: fica atrás de tudo; a área de conteúdo só leva o véu. */
+#papel-video { position:fixed; inset:0; z-index:-1; width:100%; height:100%; object-fit:cover; pointer-events:none; }
+html:not(.papel-em-video) #papel-video, html:has(.app-shell.cofre-aberto) #papel-video { display:none; }
+html.papel-em-video .app-shell:not(.cofre-aberto) > .content { background-color:transparent; background-image:linear-gradient(color-mix(in srgb, var(--content-bg) var(--papel-veu, 60%), transparent), color-mix(in srgb, var(--content-bg) var(--papel-veu, 60%), transparent)); }
+/* Cartões translúcidos borram o que está atrás: a imagem aparece e o texto continua legível. */
+html.com-papel-de-parede.cartoes-vidro .app-shell:not(.cofre-aberto) > .content :is(.card, .note-card, .secondary, .capture, .segmentos, .habito-stats, .plugin-bloco, .search) { -webkit-backdrop-filter:blur(16px) saturate(1.3); backdrop-filter:blur(16px) saturate(1.3); }
+/* Texto direto sobre a imagem (título e data da página): sombra na cor do fundo para destacar. */
+html.com-papel-de-parede .app-shell:not(.cofre-aberto) > .content .page-head :is(h1, p) { text-shadow:0 1px 2px color-mix(in srgb, var(--content-bg) 80%, transparent), 0 2px 14px color-mix(in srgb, var(--content-bg) 90%, transparent); }
+.papel-previa video { width:100%; height:100%; object-fit:cover; border-radius:inherit; display:block; }
+@media (prefers-reduced-motion: reduce) { html.com-papel-de-parede .content { background-attachment:scroll; } }
+.papel-controles { display:flex; flex-wrap:wrap; align-items:center; gap:8px; }
+.papel-previa { width:104px; height:60px; border:1px solid var(--line); border-radius:8px; background:var(--papel-de-parede) center / cover no-repeat; }
+.papel-escolher { cursor:pointer; }
+.papel-escolher:focus-within { outline:2px solid var(--acento); outline-offset:2px; }
+.papel-veu { display:flex; align-items:center; gap:12px; max-width:420px; }
+.papel-veu input { flex:1; accent-color:var(--acento); cursor:pointer; }
+#cfg-papel:not([data-tem-papel]) :is(.papel-previa, .papel-so-com) { display:none; }
 /* Item de plug-in com nome longo fica numa linha só, cortado com reticências. */
 .sidebar .nav-item .rotulo { width:auto; flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; text-align:left; font-size:inherit; }
 .acoes-rapidas + nav { margin-top:0; }
