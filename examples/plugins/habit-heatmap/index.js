@@ -5,12 +5,14 @@
 // ```kiro:habit-heatmap
 // 12
 // ```
-// draws the last N weeks (default 12) in a frame. The same heatmap.html is the
-// plugin's page, opened from "Plug-ins" in the sidebar.
+// draws the last N weeks in a frame; an empty block uses the "Semanas no mapa"
+// setting (Settings → Plug-ins). The same heatmap.html is the plugin's page,
+// opened from "Plug-ins" in the sidebar.
 export default {
   activate(kiro) {
-    kiro.block(source => {
-      const semanas = Math.min(52, Math.max(1, parseInt(source, 10) || 12));
+    kiro.block(async source => {
+      const { semanas: padrao } = await kiro.settings.get();
+      const semanas = Math.min(52, Math.max(1, parseInt(source, 10) || padrao));
       return { frame: 'heatmap.html', data: { weeks: semanas }, height: 60 + 18 * 7 };
     });
   },

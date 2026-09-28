@@ -3558,6 +3558,20 @@ function chamarPlugin(id, registro, dados) {
 // Toda gravação (da interface ou de plug-in) e toda recarga que troca o estado
 // passam por eventosDoCofre, que compara com as notas da última leitura/gravação.
 const PROFUNDIDADE_EVENTOS = 3, NOTAS_POR_EVENTO = 20, CHAVE_DO_DIA = 'kiro:lastDay';
+// Configurações que a pessoa escolheu para o plug-in (Configurações → Plug-ins). Ficam nos dados do
+// próprio plug-in, numa chave que ele não lê nem grava pelo storage: quem muda é só a pessoa.
+const CHAVE_DAS_CONFIGURACOES = 'kiro:settings';
+const manifestoDoPlugin = id => [...planoDosPlugins.carregar, ...planoDosPlugins.pendentes].find(p => p.id === id)?.manifesto || null;
+// Valores efetivos: o que foi guardado e ainda vale pela declaração; o resto, o padrão.
+function valoresDasConfiguracoes(declaracoes, guardadas) {
+  const g = guardadas && typeof guardadas === 'object' && !Array.isArray(guardadas) ? guardadas : {};
+  return Object.fromEntries(declaracoes.map(o => [o.key, Object.hasOwn(g, o.key) && KiroHoje.valorValido(o, g[o.key]) ? g[o.key] : o.default]));
+}
+async function configuracoesDoPlugin(id) {
+  const m = manifestoDoPlugin(id);
+  if (!m?.settings.length) return {};
+  return valoresDasConfiguracoes(m.settings, (await pluginApi.dados(id))[CHAVE_DAS_CONFIGURACOES]);
+}
 let notasDoCofre = null;                  // [{ id, updatedAt }] do cofre; null até a primeira carga
 
 function eventosDoCofre(origem) {
@@ -3948,9 +3962,10 @@ async function executarMetodo(id, metodo, args) {
     }
     // O espaço do próprio plug-in: 1 MB, conferido no cofre.
     // A chave do último dia entregue é do Kiro: fica fora do que o plug-in vê e grava.
-    case 'storage.get': { const { [CHAVE_DO_DIA]: _dia, ...dados } = await pluginApi.dados(id); return a === undefined ? dados : (dados[String(a)] ?? null); }
+    case 'storage.get': { const { [CHAVE_DO_DIA]: _dia, [CHAVE_DAS_CONFIGURACOES]: _cfg, ...dados } = await pluginApi.dados(id); return a === undefined ? dados : (dados[String(a)] ?? null); }
+    case 'settings.get': { const valores = await configuracoesDoPlugin(id); return a === undefined ? valores : (valores[String(a)] ?? null); }
     case 'storage.set': {
-      if (String(a) === CHAVE_DO_DIA) throw new Error('Essa chave é reservada pelo Kiro.');
+      if (String(a) === CHAVE_DO_DIA || String(a) === CHAVE_DAS_CONFIGURACOES) throw new Error('Essa chave é reservada pelo Kiro.');
       const dados = await pluginApi.dados(id);
       if (b === undefined || b === null) delete dados[String(a)]; else dados[String(a)] = b;
       await pluginApi.gravarDados(id, dados);
@@ -4014,6 +4029,31 @@ const agentApi = {
   load: () => window.cadernoDesktop ? window.cadernoDesktop.agentConfig() : api('agent-config'),
   save: parcial => window.cadernoDesktop ? window.cadernoDesktop.saveAgentConfig(parcial) : api('agent-config', parcial),
 };
+// Configurações dos plug-ins: fica fora da aba (abaixo), onde a guarda dos testes confere que o
+// valor de uma chave secreta só é lido para o envio.
+async function gravarConfiguracao(campo) {
+  const id = campo.dataset.configPlugin, chave = campo.dataset.config;
+  const o = manifestoDoPlugin(id)?.settings.find(x => x.key === chave);
+  const msg = campo.closest('.plugin-configuracoes')?.querySelector('.plugin-config-msg');
+  if (!o) return;
+  const valor = o.type === 'boolean' ? campo.checked : o.type === 'number' ? Number(campo.value) : campo.value;
+  try {
+    const dados = await pluginApi.dados(id);
+    const guardadas = { ...(dados[CHAVE_DAS_CONFIGURACOES] || {}) };
+    if (!KiroHoje.valorValido(o, valor)) {
+      const atual = valoresDasConfiguracoes([o], guardadas)[chave];
+      if (o.type === 'boolean') campo.checked = atual; else campo.value = atual;
+      if (msg) msg.textContent = o.type === 'number' ? `${o.label}: use um número${o.min !== undefined ? ` de ${o.min}` : ''}${o.max !== undefined ? ` a ${o.max}` : ''}.` : 'Valor inválido.';
+      return;
+    }
+    // O arquivo guarda só o que mudou do padrão.
+    if (valor === o.default) delete guardadas[chave]; else guardadas[chave] = valor;
+    await pluginApi.gravarDados(id, { ...dados, [CHAVE_DAS_CONFIGURACOES]: guardadas });
+    if (msg) msg.textContent = 'Salvo';
+    // Painéis e cartões do plug-in na Hoje leem as configurações de novo.
+    if (currentView === 'today' && loaded && !busy) render();
+  } catch (erro) { if (msg) msg.textContent = 'Não foi possível salvar: ' + erro.message; }
+}
 // ---- Aba Plug-ins ----
 // Tudo aqui age na hora: ligar pede consentimento num modal do Kiro (nunca a
 // caixa nativa do navegador) e só grava depois do "sim"; desligar encerra o worker e tira os cards.
@@ -4080,7 +4120,18 @@ function ultimasChamadas(id) {
 }
 
 // Uma linha por plug-in. Todo texto do manifesto entra escapado.
-function linhaDoPlugin({ id, manifesto }, situacao, erro = '', chaves = {}) {
+// Campos das configurações do plug-in: os mesmos tipos das opções de painel da Hoje.
+function camposDasConfiguracoes(id, declaracoes, valores) {
+  return `<div class="plugin-configuracoes"><span class="plugin-chave-rotulo">Configurações</span>${declaracoes.map(o => {
+    const alvo = `data-config-plugin="${escapeHtml(id)}" data-config="${escapeHtml(o.key)}"`, v = valores[o.key];
+    const campo = o.type === 'boolean' ? `<input type="checkbox" ${alvo} ${v ? 'checked' : ''} />`
+      : o.type === 'number' ? `<input type="number" ${alvo} value="${v}" step="any"${o.min !== undefined ? ` min="${o.min}"` : ''}${o.max !== undefined ? ` max="${o.max}"` : ''} />`
+      : o.type === 'select' ? `<select ${alvo}>${o.choices.map(c => `<option value="${escapeHtml(c)}" ${c === v ? 'selected' : ''}>${escapeHtml(c)}</option>`).join('')}</select>`
+      : `<input type="text" ${alvo} value="${escapeHtml(v)}" maxlength="80" />`;
+    return `<label class="plugin-config"><span>${escapeHtml(o.label)}</span>${campo}</label>`;
+  }).join('')}<span class="plugin-config-msg small-muted" role="status" aria-live="polite"></span></div>`;
+}
+function linhaDoPlugin({ id, manifesto }, situacao, erro = '', chaves = {}, configuracoes = {}) {
   const m = manifesto, nome = escapeHtml(m ? m.name : id);
   const { novas, hostsNovos, segredosNovos = [] } = situacao === 'aguardando' ? novidadesDoPlugin(id, m) : {};
   const ligado = situacao === 'ativo' || situacao === 'parou';
@@ -4096,6 +4147,7 @@ function linhaDoPlugin({ id, manifesto }, situacao, erro = '', chaves = {}) {
     ${m?.description ? `<span class="small-muted">${escapeHtml(m.description)}</span>` : ''}
     ${m ? itensDePermissao(m, novas, hostsNovos) : ''}
     ${m?.secrets.length ? `<div class="plugin-chaves">${m.secrets.map(s => itemDaChave(id, s, !!chaves[s.name], segredosNovos.includes(s.name))).join('')}</div>` : ''}
+    ${m?.settings?.length ? camposDasConfiguracoes(id, m.settings, valoresDasConfiguracoes(m.settings, configuracoes)) : ''}
     ${situacao === 'ativo' && m.permissions.includes('network') ? ultimasChamadas(id) : ''}
     ${comandos ? `<div class="cfg-botoes plugin-comandos-cfg">${comandos}</div>` : ''}
     ${situacao === 'aguardando' ? `<p class="cfg-aviso">Uma atualização pediu mais acesso${segredosNovos.length ? ` (chave nova: ${segredosNovos.map(n => escapeHtml(m.secrets.find(s => s.name === n)?.label || n)).join(', ')})` : ''}. Ligue de novo para revisar o que é novo.</p>` : ''}
@@ -4110,12 +4162,15 @@ async function conteudoDaAbaPlugins() {
   // Estado das chaves ({ nome: true }); se não der para ler, aparecem como não configuradas.
   const comChaves = [...carregar, ...pendentes].filter(p => p.manifesto?.secrets.length);
   const chaves = Object.fromEntries(await Promise.all(comChaves.map(p => pluginApi.chaves(p.id).then(c => [p.id, c || {}], () => [p.id, {}]))));
+  // Configurações já escolhidas ({ chave: valor }); sem leitura, aparecem os padrões.
+  const comConfig = [...carregar, ...pendentes].filter(p => p.manifesto?.settings.length);
+  const cfg = Object.fromEntries(await Promise.all(comConfig.map(p => pluginApi.dados(p.id).then(d => [p.id, d?.[CHAVE_DAS_CONFIGURACOES] || {}], () => [p.id, {}]))));
   const grupos = [
-    ['Ativos', carregar.filter(p => pluginsAtivos.has(p.id)).map(p => linhaDoPlugin(p, 'ativo', '', chaves[p.id]))],
-    ['Aguardando permissão', pendentes.filter(p => p.motivo === 'permissoes-novas').map(p => linhaDoPlugin(p, 'aguardando', '', chaves[p.id]))],
-    ['Desligados', pendentes.filter(p => p.motivo === 'desligado').map(p => linhaDoPlugin(p, 'desligado', '', chaves[p.id]))],
+    ['Ativos', carregar.filter(p => pluginsAtivos.has(p.id)).map(p => linhaDoPlugin(p, 'ativo', '', chaves[p.id], cfg[p.id]))],
+    ['Aguardando permissão', pendentes.filter(p => p.motivo === 'permissoes-novas').map(p => linhaDoPlugin(p, 'aguardando', '', chaves[p.id], cfg[p.id]))],
+    ['Desligados', pendentes.filter(p => p.motivo === 'desligado').map(p => linhaDoPlugin(p, 'desligado', '', chaves[p.id], cfg[p.id]))],
     ['Com problema', [
-      ...carregar.filter(p => !pluginsAtivos.has(p.id)).map(p => linhaDoPlugin(p, 'parou', problemasDosPlugins.get(p.id) || 'O plug-in parou nesta sessão.', chaves[p.id])),
+      ...carregar.filter(p => !pluginsAtivos.has(p.id)).map(p => linhaDoPlugin(p, 'parou', problemasDosPlugins.get(p.id) || 'O plug-in parou nesta sessão.', chaves[p.id], cfg[p.id])),
       ...problemas.map(p => linhaDoPlugin({ id: p.id }, 'problema', p.erro)),
     ]],
   ];
@@ -4190,6 +4245,8 @@ async function desligarPlugin(id) {
 // Eventos por delegação: o conteúdo do painel é redesenhado a cada mudança.
 function ligarAbaPlugins(painel) {
   painel.addEventListener('change', evento => {
+    const campoDeConfig = evento.target.closest('[data-config-plugin]');
+    if (campoDeConfig) return void gravarConfiguracao(campoDeConfig);
     const caixa = evento.target.closest('[data-plugin-id]');
     if (!caixa) return;
     const id = caixa.dataset.pluginId;

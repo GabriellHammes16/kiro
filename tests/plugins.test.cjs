@@ -22,6 +22,18 @@ test('manifesto inválido é recusado com motivo', () => {
   assert.match(P.validarManifesto('nada', { versaoDoKiro: '0.15.0' }).erro, /manifesto/i);
 });
 
+test('configurações do manifesto: mesmo formato das opções de painel, recusadas se inválidas', () => {
+  assert.deepEqual(validar().manifesto.settings, []);
+  const semanas = { key: 'semanas', type: 'number', label: 'Semanas no mapa', default: 26, min: 4, max: 52 };
+  const inicio = { key: 'inicio', type: 'select', label: 'Semana começa em', default: 'Domingo', choices: ['Domingo', 'Segunda-feira'] };
+  assert.deepEqual(validar({ settings: [semanas, inicio] }).manifesto.settings, [semanas, inicio]);
+  assert.match(validar({ settings: 'x' }).erro, /settings/);
+  assert.match(validar({ settings: [{ ...semanas, default: 99 }] }).erro, /settings.*semanas/);
+  assert.match(validar({ settings: [semanas, semanas] }).erro, /repetida/);
+  // Ler as próprias configurações não pede permissão: todo plug-in pode.
+  assert.ok(P.metodosPermitidos([]).includes('settings.get'));
+});
+
 test('consentimento só é pedido quando o plug-in passa a pedir mais', () => {
   const registro = { enabled: true, permissions: ['notes:read'], network: [] };
   assert.equal(P.precisaConsentir(registro, base), false);

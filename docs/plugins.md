@@ -61,6 +61,7 @@ fastest way to start.
 | `permissions` | Optional list. Only the names in the table below; an unknown name refuses the whole plugin. |
 | `network` | Optional list of exact hosts, e.g. `api.example.com`. No wildcards, no scheme, no path. A non-empty list also requires the `network` permission. |
 | `secrets` | Optional list of API keys the user types in. See [Secrets](#secrets). |
+| `settings` | Optional list of plugin settings the user changes in Settings → Plug-ins. See [Plugin settings](#plugin-settings). Needs `minKiro` 0.17.7 or newer. |
 | `page` | Optional `{ title, file }`. Gives the plugin its own full-page screen, opened from a "Plug-ins" entry in the sidebar. `title` is 1–40 characters; `file` must match `[a-z0-9][a-z0-9._-]{0,60}\.html` — no slash, no subfolder. See [Frames (custom UI)](#frames-custom-ui). |
 
 An invalid manifest does not disable one feature — it stops the plugin from
@@ -156,8 +157,15 @@ Your own JSON storage, kept in `.kiro/plugins/<id>/data.json`, capped at 1 MB.
 It is the only place outside notes where a plugin writes. Both are async.
 `get(key)` returns `null` for a missing key and `get()` with no key returns the
 whole object; `set(key, null)` removes the key. Kiro keeps one internal key of its
-own in that file (the last day `onDay` ran, see below): it never shows up in
-`get`, and `set` refuses it.
+own in that file (the last day `onDay` ran, see below), plus your plugin's
+settings (see [Plugin settings](#plugin-settings)): they never show up in `get`,
+and `set` refuses them.
+
+### kiro.settings.get(key)
+
+The values the user chose for your [plugin settings](#plugin-settings), always
+complete (defaults filled in). `get()` returns the whole object; `get(key)` one
+value. Needs no permission. Also available inside frames.
 
 ### Events: kiro.onSave, kiro.onCreate, kiro.onDay
 
@@ -436,6 +444,32 @@ error instead of your panel and has no options; the rest of the plugin keeps
 working. Values are stored in the vault (`.kiro/hoje.json`); a stored value that
 no longer fits your declaration (you changed it in a new version) falls back to
 the default.
+
+## Plugin settings
+
+Settings that belong to the whole plugin, not to one panel: how many weeks a
+heatmap shows, how a board sorts its cards. Declare them in `manifest.json` and
+Kiro draws the form under your plugin in Settings → Plug-ins; you never build a
+settings screen.
+
+```json
+"settings": [
+  { "key": "weeks", "type": "number", "label": "Weeks in the map", "default": 26, "min": 4, "max": 52 },
+  { "key": "start", "type": "select", "label": "Week starts on", "default": "Sunday", "choices": ["Sunday", "Monday"] }
+]
+```
+
+```js
+const { weeks, start } = await kiro.settings.get();
+```
+
+The fields follow the same rules as [panel options](#panel-options) (same four
+types, up to 12). An invalid declaration refuses the plugin, like any other
+manifest error. Every change is saved at once, in your plugin's `data.json`
+under a key only Kiro writes; Today's panels are redrawn, but a frame that is
+already open reads the new values the next time it asks. A stored value that no
+longer fits your declaration falls back to the default. Both example plugins
+`habit-heatmap` and `kanban-tasks` use settings.
 
 ## Panels
 

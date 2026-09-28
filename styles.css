@@ -1022,6 +1022,12 @@ html.janela-propria body { padding-top:var(--barra-titulo); }
 #barra-titulo { display:none; }
 html.janela-propria #barra-titulo { position:fixed; top:0; left:0; right:0; z-index:40; display:flex; align-items:center; gap:8px; height:var(--barra-titulo); padding:0 12px; background:var(--sidebar-bg); color:var(--muted); font-size:12px; font-weight:600; letter-spacing:.3px; -webkit-app-region:drag; user-select:none; }
 #barra-titulo img { width:16px; height:16px; }
+/* ---- Plug-ins: configurações ---- */
+.plugin-configuracoes { display:grid; gap:8px; width:100%; max-width:460px; box-sizing:border-box; margin-top:8px; padding:10px 12px; border:1px solid var(--line); border-radius:var(--raio-controle, 8px); }
+.plugin-config { display:flex; align-items:center; justify-content:space-between; gap:12px; font-size:13px; color:var(--ink); }
+.plugin-config :is(input[type="number"], input[type="text"], select) { min-width:0; width:180px; min-height:32px; padding:0 8px; border:1px solid var(--line); border-radius:6px; background:var(--campo); color:var(--ink); font:inherit; }
+.plugin-config input[type="checkbox"] { width:18px; height:18px; accent-color:var(--acento); }
+.plugin-config-msg:empty { display:none; }
 /* ---- Configurações: busca ---- */
 .cfg-lateral { display:flex; flex-direction:column; gap:10px; min-width:0; }
 .cfg-busca { width:100%; min-height:36px; padding:0 10px; border:1px solid var(--line); border-radius:8px; background:var(--campo); color:var(--ink); font:inherit; font-size:13px; }

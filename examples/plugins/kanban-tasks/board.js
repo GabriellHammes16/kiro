@@ -23,18 +23,21 @@
   };
   const vencida = due => due && due < hoje();
 
-  let kiro, tarefas = [], columns = {}, vuelta = {}, config = {};
+  let kiro, tarefas = [], columns = {}, vuelta = {}, config = {}, ajustes = { ordem: 'Data', finalizadas: 20 };
   let editando = null, arrastrando = null;
 
   // Columna de uma tarefa: done=true é "finalizado"; senão a que guardamos (padrão "a fazer").
   const columnaDe = t => t.done ? 'finalizado' : (COLUMNAS.includes(columns[t.id]) ? columns[t.id] : 'a-fazer');
   const rotulo = id => (config[id] && config[id].trim()) || PADRAO[id];
 
+  // Ordem escolhida em Configurações → Plug-ins; o desempate é sempre pelo título.
+  const PESO = { Alta: 0, 'Média': 1, Baixa: 2 };
+  const porTitulo = (a, b) => a.title.localeCompare(b.title, 'pt-BR');
+  const porData = (a, b) => (a.due !== b.due ? (!a.due ? 1 : !b.due ? -1 : a.due < b.due ? -1 : 1) : 0);   // sem data vai ao fim
   function ordenar(lista) {
-    return [...lista].sort((a, b) => {
-      if (a.due !== b.due) return a.due < b.due ? -1 : 1;   // sem data vai ao fim
-      return a.title.localeCompare(b.title, 'pt-BR');
-    });
+    const criterio = ajustes.ordem === 'Prioridade' ? (a, b) => (PESO[a.priority] ?? 1) - (PESO[b.priority] ?? 1) || porData(a, b)
+      : ajustes.ordem === 'Título' ? () => 0 : porData;
+    return [...lista].sort((a, b) => criterio(a, b) || porTitulo(a, b));
   }
 
   async function cargar() {
@@ -42,6 +45,7 @@
     columns = (await kiro.storage.get('columns')) || {};
     vuelta = (await kiro.storage.get('vuelta')) || {};
     config = (await kiro.storage.get('config')) || {};
+    ajustes = await kiro.settings.get();
     render();
   }
 
@@ -74,11 +78,15 @@
 
     $('#tauler').innerHTML = COLUMNAS.map(col => {
       const items = ordenar(porCol[col]);
+      // Finalizado mostra só as primeiras N; o contador continua com o total.
+      const visiveis = col === 'finalizado' ? items.slice(0, ajustes.finalizadas) : items;
+      const resto = items.length - visiveis.length;
       const vazio = items.length ? '' : '<p class="vazio">Nada por aqui.</p>';
+      const mais = resto ? `<p class="vazio">e mais ${resto}</p>` : '';
       return `<section class="col" data-col="${col}"><header>
           <i class="ponto" aria-hidden="true"></i><h2>${escapar(rotulo(col))}</h2>
           <b class="livro" aria-label="Tarefas">${items.length}</b>
-        </header><div class="lista">${vazio}${items.map(tarjeta).join('')}</div></section>`;
+        </header><div class="lista">${vazio}${visiveis.map(tarjeta).join('')}${mais}</div></section>`;
     }).join('');
 
     // Re-ligar os handlers depois de reconstruir o DOM.

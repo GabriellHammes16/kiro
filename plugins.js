@@ -150,6 +150,14 @@
       if (typeof s.format !== 'string' || s.format.length > 120 || temControle(s.format) || s.format.split('{value}').length !== 2) return recusa(`O format do segredo ${s.name} precisa ter {value} exatamente uma vez, sem quebra de linha.`);
       secrets.push({ name: s.name, label: s.label, host: s.host, header: s.header, format: s.format });
     }
+    // Configurações do plug-in: o Kiro desenha o formulário em Configurações → Plug-ins, no mesmo
+    // formato das opções de painel; o plug-in lê os valores com kiro.settings.get().
+    let settings = [];
+    if (bruto.settings !== undefined) {
+      const v = validarOpcoesDoPainel(bruto.settings);
+      if (!v.ok) return recusa(`Em settings: ${v.erro}`);
+      settings = v.opcoes;
+    }
     let page = null;
     if (bruto.page !== undefined) {
       const p = bruto.page;
@@ -158,7 +166,7 @@
       if (!arquivoDeTela(p.file)) return recusa('page.file precisa ser um arquivo .html da pasta do plug-in, sem barra.');
       page = { title: p.title, file: p.file };
     }
-    return { ok: true, manifesto: { id: bruto.id, name: bruto.name, author: bruto.author, description: bruto.description || '', version: bruto.version, minKiro: bruto.minKiro, permissions, network, secrets, page } };
+    return { ok: true, manifesto: { id: bruto.id, name: bruto.name, author: bruto.author, description: bruto.description || '', version: bruto.version, minKiro: bruto.minKiro, permissions, network, secrets, settings, page } };
   }
 
   /**
@@ -229,7 +237,7 @@
     'tasks.list': 'tasks:read', 'tasks.create': 'tasks:write', 'tasks.update': 'tasks:write',
     'habits.list': 'habits:read', 'habits.mark': 'habits:write',
     'folders.create': 'folders:write',
-    'storage.get': '', 'storage.set': '', 'notify': '',
+    'storage.get': '', 'storage.set': '', 'settings.get': '', 'notify': '',
     'fetch': 'network',
   };
   const tem = (objeto, chave) => Object.prototype.hasOwnProperty.call(objeto, chave);
