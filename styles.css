@@ -962,16 +962,18 @@ body, button, input, textarea, select { font-family:var(--fonte-interface); }
 .app-shell.pagina-plugin-aberta > .content { padding:0; }
 
 /* ---- Barra lateral: topo sem marca e modo compacto (só ícones) ---- */
-.sidebar-topo { display:flex; align-items:center; justify-content:space-between; gap:8px; margin:-12px -6px 16px; }
-/* ---- Topo da barra lateral: marca, busca e ações rápidas ---- */
-.marca { display:flex; align-items:center; gap:9px; min-width:0; padding-left:6px; color:var(--ink); font-size:16px; font-weight:800; letter-spacing:.5px; }
-.marca-logo { width:26px; height:26px; flex:0 0 auto; object-fit:contain; filter:drop-shadow(0 2px 6px color-mix(in srgb, var(--acento-forte) 30%, transparent)); }
+.sidebar-topo { display:flex; align-items:center; gap:2px; margin:-10px -4px 0 0; }
+.sidebar-topo .busca-rapida { flex:1; min-width:0; }
+.sidebar-topo .lateral-alternar { flex:0 0 auto; min-width:28px; min-height:40px; padding:0 4px; }
+.sidebar-topo .busca-rapida { gap:7px; padding:0 6px 0 10px; }
+.sidebar-topo .busca-rapida kbd { padding:2px 5px; }
+/* ---- Topo da barra lateral: busca, recolher e ações rápidas ---- */
 .busca-rapida { display:flex; align-items:center; gap:9px; width:100%; min-height:40px; padding:0 8px 0 11px; border:1px solid var(--line); border-radius:10px; background:var(--campo, transparent); color:var(--muted); font-size:13px; cursor:pointer; transition:border-color var(--rapido, .15s) ease, color var(--rapido, .15s) ease, background var(--rapido, .15s) ease; }
 .busca-rapida:hover { border-color:color-mix(in srgb, var(--acento) 55%, var(--line)); color:var(--ink); }
 .busca-rapida:focus-visible, .nota-diaria:focus-visible { outline:2px solid var(--acento); outline-offset:2px; }
-.busca-rapida .rotulo { flex:1; text-align:left; }
+.busca-rapida span.rotulo { flex:1; min-width:0; text-align:left; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .busca-rapida kbd { flex:0 0 auto; padding:2px 6px; border:1px solid var(--line); border-radius:6px; background:color-mix(in srgb, var(--ink) 5%, transparent); color:var(--muted); font:inherit; font-size:11px; line-height:1.3; }
-.acoes-rapidas { display:flex; gap:8px; margin:10px 0 12px; padding-bottom:14px; border-bottom:1px solid var(--line); }
+.acoes-rapidas { display:flex; gap:8px; margin:8px 0 12px; padding-bottom:14px; border-bottom:1px solid var(--line); }
 .acoes-rapidas .new-note { flex:1; width:auto; min-width:0; min-height:40px; justify-content:center; padding:0 12px; }
 .nota-diaria { display:inline-flex; flex:0 0 auto; align-items:center; justify-content:center; gap:7px; min-height:40px; padding:0 12px; border:1px solid var(--line); border-radius:8px; background:transparent; color:var(--ink); font-weight:600; font-size:13px; cursor:pointer; transition:border-color var(--rapido, .15s) ease, color var(--rapido, .15s) ease; }
 .nota-diaria:hover { border-color:var(--acento); color:var(--acento); }
@@ -1030,7 +1032,6 @@ html.janela-propria #barra-titulo { position:fixed; top:0; left:0; right:0; z-in
   .app-shell.lateral-compacta > .sidebar { flex-basis:64px; width:64px; padding-left:8px; padding-right:8px; }
   .app-shell.lateral-compacta ~ #save-status, .app-shell.lateral-compacta.grafo-aberto ~ #save-status { left:64px; }
   .app-shell.lateral-compacta .sidebar-topo { flex-direction:column; justify-content:center; gap:10px; margin:-12px 0 12px; }
-  .app-shell.lateral-compacta .marca { padding-left:0; }
   .app-shell.lateral-compacta .acoes-rapidas { flex-direction:column; }
   .app-shell.lateral-compacta .sidebar :is(.busca-rapida, .nota-diaria) { justify-content:center; gap:0; min-height:44px; padding-left:0; padding-right:0; }
   .app-shell.lateral-compacta .lateral-alternar .icone { transform:rotate(180deg); }

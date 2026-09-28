@@ -659,7 +659,7 @@ function aplicarLateralCompacta() {
   botao.setAttribute('aria-expanded', String(!lateralCompacta));
   botao.title = `${acao} (${teclaDe('lateral')})`;
   const tecla = document.querySelector('#go-note kbd');
-  if (tecla) tecla.textContent = teclaDe('irPara');
+  if (tecla) tecla.textContent = teclaDe('irPara').replace(/ \+ /g, '+');   // sem espaços: cabe ao lado do botão de recolher
   for (const item of document.querySelectorAll('.sidebar :is(.new-note, .quiet-button, .nav-item, .busca-rapida, .nota-diaria)')) {
     const rotulo = item.querySelector('.rotulo')?.textContent.trim();
     if (!rotulo) continue;
@@ -1286,14 +1286,16 @@ async function moverSelecao(folderId) {
   await save();
   if (repetidos.length) status(`Não movidos, já existe um fluxo com o mesmo nome no destino: ${repetidos.join(', ')}.`, true);
 }
-async function excluirSelecao() {
+const excluirSelecao = () => excluirItens(new Set(selecaoArvore));
+// Notas e fluxos para a lixeira, numa gravação só. Uma nota sozinha é chamada pelo título.
+async function excluirItens(ids) {
   if (busy) { status('Salvando… tente de novo em um instante.', true); return; }
   if (failed || !loaded) return;
-  const ids = new Set(selecaoArvore);
-  const notas = state.notes.filter(n => ids.has(n.id)).length, fluxos = (state.fluxos || []).filter(f => ids.has(f.id)).length;
-  if (!notas && !fluxos) return;
-  const partes = [notas && `${notas} nota${notas === 1 ? '' : 's'}`, fluxos && `${fluxos} fluxo${fluxos === 1 ? '' : 's'}`].filter(Boolean).join(' e ');
-  if (!confirm(`Excluir ${partes}? Tudo vai para a lixeira e pode ser restaurado.`)) return;
+  const notas = state.notes.filter(n => ids.has(n.id)), fluxos = (state.fluxos || []).filter(f => ids.has(f.id));
+  if (!notas.length && !fluxos.length) return;
+  const partes = notas.length === 1 && !fluxos.length ? `a nota "${notas[0].title || 'Sem título'}"`
+    : [notas.length && `${notas.length} nota${notas.length === 1 ? '' : 's'}`, fluxos.length && `${fluxos.length} fluxo${fluxos.length === 1 ? '' : 's'}`].filter(Boolean).join(' e ');
+  if (!confirm(`Excluir ${partes}? Vai para a lixeira e pode ser restaurado.`)) return;
   if (!await gravarFluxoPendente()) return;
   state.notes = state.notes.filter(n => !ids.has(n.id));
   state.fluxos = (state.fluxos || []).filter(f => !ids.has(f.id));
@@ -1344,6 +1346,8 @@ function menuDaArvore(linha) {
     return [
       { rotulo: 'Abrir', icone: icone('nota'), acao: () => getNote(id) && abrirNota(getNote(id)) },
       { rotulo: 'Mover para', icone: icone('pastas'), filhos: destinos.map(d => ({ rotulo: d.rotulo, icone: icone(d.id ? 'pastas' : 'casa'), ativo: () => (getNote(id)?.folderId || '') !== d.id, acao: () => moverNota(id, d.id) })) },
+      { separador: true },
+      { rotulo: 'Excluir', icone: icone('lixeira'), acao: () => excluirItens(new Set([id])) },
     ];
   }
   return [
