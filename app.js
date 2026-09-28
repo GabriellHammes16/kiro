@@ -965,7 +965,7 @@ function renderCofre() {
     </header>
     <div class="tree">${arvore}</div>
     <div class="cofre-divisor" role="separator" aria-orientation="vertical" aria-label="Largura da árvore de pastas" tabindex="0" aria-valuemin="${LARGURA_ARVORE.min}" aria-valuemax="${LARGURA_ARVORE.max}" aria-valuenow="${larguraArvore}" title="Arraste para ajustar a largura · dois cliques voltam ao padrão"></div>
-    <footer class="cofre-rodape"><span class="small-muted">${state.folders.length} pasta${state.folders.length === 1 ? '' : 's'} · ${state.notes.length} nota${state.notes.length === 1 ? '' : 's'}</span></footer>
+    <footer class="cofre-rodape">${rodapeDaArvore()}</footer>
   </aside>
   ${notas}
   ${painel}
@@ -1251,7 +1251,19 @@ function deleteFolder(id) {
 // Mover nota entre pastas: pelo arrastar na árvore ou pelo menu do botão direito.
 function marcarSelecaoArvore() {
   for (const l of document.querySelectorAll('.tree-note, .tree-fluxo')) l.classList.toggle('selecionada', selecaoArvore.has(l.dataset.id));
+  const rodape = document.querySelector('.cofre-rodape');
+  if (rodape) rodape.innerHTML = rodapeDaArvore();
 }
+// Com itens selecionados, o pé da árvore vira uma barra de ações: quantos, mover, excluir e sair.
+function rodapeDaArvore() {
+  const n = selecaoArvore.size;
+  if (!n) return `<span class="small-muted">${state.folders.length} pasta${state.folders.length === 1 ? '' : 's'} · ${state.notes.length} nota${state.notes.length === 1 ? '' : 's'}</span>`;
+  return `<div class="selecao-barra" role="status" aria-live="polite"><span class="selecao-total">${n} selecionado${n === 1 ? '' : 's'}</span>`
+    + `<button type="button" class="icon-button" data-selecao="mover" title="Mover para…" aria-label="Mover para">${icone('pastas')}</button>`
+    + `<button type="button" class="icon-button" data-selecao="excluir" title="Excluir" aria-label="Excluir">${icone('lixeira')}</button>`
+    + `<button type="button" class="icon-button" data-selecao="limpar" title="Sair da seleção (Esc)" aria-label="Sair da seleção">${icone('fechar')}</button></div>`;
+}
+function limparSelecaoArvore() { if (!selecaoArvore.size) return; selecaoArvore.clear(); marcarSelecaoArvore(); }
 // Mover e excluir vários de uma vez: uma gravação só (cada gravação vira um snapshot em .history).
 async function moverSelecao(folderId) {
   if (busy || failed || !loaded) return;
@@ -4530,7 +4542,7 @@ document.addEventListener('click',e=>{
   const linha=e.target.closest?.('.cofre-lateral .tree-note, .cofre-lateral .tree-fluxo');
   if(!linha)return;
   const id=linha.dataset.id;
-  if(!(e.ctrlKey||e.metaKey||e.shiftKey)){if(selecaoArvore.size){selecaoArvore.clear();marcarSelecaoArvore();}ancoraArvore=id;return;}
+  if(!(e.ctrlKey||e.metaKey||e.shiftKey)){ancoraArvore=id;return;}
   e.preventDefault();e.stopImmediatePropagation();
   const ordem=linhasVisiveisDaArvore().map(l=>l.dataset.id),a=ordem.indexOf(ancoraArvore),b=ordem.indexOf(id);
   if(e.shiftKey&&a!==-1&&b!==-1){if(!(e.ctrlKey||e.metaKey))selecaoArvore.clear();for(const x of ordem.slice(Math.min(a,b),Math.max(a,b)+1))selecaoArvore.add(x);}
@@ -4547,12 +4559,47 @@ document.addEventListener('pointerdown',e=>{
   const linha=e.target.closest('.tree-note, .tree-fluxo');
   marcandoComDireito={inicio:linha?.dataset.id||null,moveu:false};
 });
+// A seleção é a faixa contínua entre o primeiro item e o que está sob o ponteiro: voltar desmarca.
 document.addEventListener('pointerover',e=>{
   if(!marcandoComDireito||!(e.buttons&2))return;
   const linha=e.target.closest?.('.cofre-lateral .tree-note, .cofre-lateral .tree-fluxo');
   if(!linha||(!marcandoComDireito.moveu&&linha.dataset.id===marcandoComDireito.inicio))return;
-  if(!marcandoComDireito.moveu){marcandoComDireito.moveu=true;selecaoArvore=new Set(marcandoComDireito.inicio?[marcandoComDireito.inicio]:[]);}
-  selecaoArvore.add(linha.dataset.id);marcarSelecaoArvore();
+  if(!marcandoComDireito.moveu){marcandoComDireito.moveu=true;marcandoComDireito.ancora=marcandoComDireito.inicio||linha.dataset.id;}
+  const ordem=linhasVisiveisDaArvore().map(l=>l.dataset.id),a=ordem.indexOf(marcandoComDireito.ancora),b=ordem.indexOf(linha.dataset.id);
+  if(a===-1||b===-1)return;
+  selecaoArvore=new Set(ordem.slice(Math.min(a,b),Math.max(a,b)+1));
+  marcarSelecaoArvore();
+});
+// Contador que acompanha o cursor enquanto o botão direito está segurado.
+const contadorDoGesto=Object.assign(document.createElement('div'),{className:'selecao-contador',hidden:true});
+contadorDoGesto.setAttribute('aria-hidden','true');
+document.body.appendChild(contadorDoGesto);
+document.addEventListener('pointermove',e=>{
+  const ativo=marcandoComDireito?.moveu&&(e.buttons&2);
+  contadorDoGesto.hidden=!ativo;
+  if(!ativo)return;
+  contadorDoGesto.textContent=`${selecaoArvore.size} ${selecaoArvore.size===1?'item':'itens'}`;
+  contadorDoGesto.style.transform=`translate(${e.clientX+14}px, ${e.clientY+14}px)`;
+});
+document.addEventListener('pointerup',()=>{contadorDoGesto.hidden=true;},true);
+// Sair da seleção: clique esquerdo em qualquer lugar (menos na barra e nos menus dela) ou Esc.
+// Arrastar a seleção para uma pasta não gera clique, então continua funcionando.
+document.addEventListener('click',e=>{
+  if(!selecaoArvore.size||e.button!==0||e.ctrlKey||e.metaKey||e.shiftKey)return;
+  if(e.target.closest?.('.selecao-barra, .ctx-menu, .modal-backdrop'))return;
+  limparSelecaoArvore();
+},true);
+document.addEventListener('keydown',e=>{
+  if(e.key==='Escape'&&selecaoArvore.size&&!menuAberto&&!document.querySelector('.modal-backdrop'))limparSelecaoArvore();
+});
+document.addEventListener('click',e=>{
+  const botao=e.target.closest?.('[data-selecao]');
+  if(!botao)return;
+  const acao=botao.dataset.selecao;
+  if(acao==='limpar')return limparSelecaoArvore();
+  if(acao==='excluir')return excluirSelecao();
+  const r=botao.getBoundingClientRect();
+  abrirMenuContexto({preventDefault(){},clientX:r.left,clientY:r.top-8},document.body,menuDaSelecao()[0].filhos,{compacto:true,origem:botao});
 });
 document.addEventListener('pointerup',e=>{
   if(e.button!==2||!marcandoComDireito?.adiado)return;
