@@ -42,7 +42,6 @@ button { cursor:pointer; }
 .app-shell { display:grid; grid-template-columns:252px 1fr; min-height:var(--altura-util, 100vh); }
 .sidebar { position:fixed; width:252px; height:var(--altura-util, 100vh); padding:25px 16px 18px; border-right:1px solid var(--line); display:flex; flex-direction:column; }
 .brand { font-size:21px; font-weight:800; display:flex; gap:10px; align-items:center; padding:0 8px 24px; }
-.brand-logo { object-fit:contain; }
 .brand-mark { font-size:25px; }
 .new-note { width:100%; border:0; border-radius:8px; padding:11px; color:var(--primario-texto); font-weight:650; text-align:left; transition:.15s; }
 .new-note:hover { background:#315c40; transform:translateY(-1px); }
@@ -54,7 +53,7 @@ nav { margin-top:25px; display:grid; gap:4px; }
 .sidebar-bottom { margin-top:auto; padding:12px 8px 0; border-top:1px solid #dbe0da; }
 .quiet-button { border:0; background:transparent; padding:6px 0; display:block; font-size:12px; cursor:pointer; }
 
-.import-label input { display:none; }.sidebar-bottom p { margin:12px 0 0; font-size:12px; line-height:1.4; }
+.sidebar-bottom p { margin:12px 0 0; font-size:12px; line-height:1.4; }
 .content { margin-left:252px; padding:45px clamp(26px,5vw,78px); max-width:1450px; width:calc(100% - 252px); }
 .page-head { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:30px; }.eyebrow { font-size:12px; text-transform:uppercase; letter-spacing:1.3px; font-weight:750; margin:0 0 6px; }.page-head h1 { margin:0; font-size:32px; letter-spacing:-1.3px; }.subhead { margin:7px 0 0; font-size:14px; }
 .primary, .secondary, .icon-button { border-radius:8px; padding:10px 14px; border:1px solid transparent; font-weight:650; }.icon-button { padding:5px 8px; }.primary:hover { background:#315c40; }
@@ -83,7 +82,6 @@ body.saving { cursor:progress; }
 
 .sidebar { background:var(--sidebar-bg,#11161D); border-color:var(--line); }
 .brand { color:var(--ink); letter-spacing:1.7px; }
-.brand-logo { width:38px; height:38px; filter:drop-shadow(0 2px 7px color-mix(in srgb, var(--acento-forte) 26%, transparent)); }
 .brand-mark { color:var(--accent); }
 .new-note { background:linear-gradient(135deg,var(--accent-strong),var(--accent)); box-shadow:0 8px 20px color-mix(in srgb, var(--acento-escuro) 22%, transparent); }
 .new-note:hover,.primary:hover { background:var(--acento); color:var(--acento-texto); transform:translateY(-1px); }
@@ -416,7 +414,7 @@ body.com-imagem-inteira { overflow:hidden; }
 /* Um só tamanho de grade e a cor vinda do texto: o ícone acompanha hover e foco. */
 .icone { width:18px; height:18px; flex:0 0 auto; display:block; }
 .rotulo-icone { display:inline-flex; align-items:center; color:#8A8A96; transition:color var(--rapido) var(--curva); }
-.nav-item, .quiet-button, .new-note, .primary, .secondary, .import-label { display:inline-flex; align-items:center; gap:9px; }
+.nav-item, .quiet-button, .new-note, .primary, .secondary { display:inline-flex; align-items:center; gap:9px; }
 .quiet-button, .new-note { width:100%; }
 .nav-item .icone, .quiet-button .icone { width:17px; height:17px; }
 .nav-item:hover .rotulo-icone, .quiet-button:hover .rotulo-icone, .nav-item.active .rotulo-icone { color:var(--acento); }
@@ -708,8 +706,6 @@ body, button, input, textarea, select { font-family:var(--fonte-interface); }
 .cfg-aviso { margin:0; font-size:var(--fs-secundario); color:var(--warning); }
 .cfg-pequeno { min-height:var(--alt-p); padding:0 10px; font-size:var(--fs-legenda); gap:6px; flex:0 0 auto; }
 .cfg-pequeno .icone { width:14px; height:14px; }
-.cfg-acoes { margin-top:0; }
-.cfg-acoes .primary:disabled { opacity:.45; cursor:default; box-shadow:none; transform:none; }
 
 /* Interruptor no lugar da caixa de marcar (mesmo do painel do grafo). */
 .cfg-chave { cursor:pointer; }
@@ -864,7 +860,6 @@ body, button, input, textarea, select { font-family:var(--fonte-interface); }
 .cfg-botoes { display:flex; flex-wrap:wrap; gap:var(--esp-2); }
 .cfg-arquivo { cursor:pointer; }
 .cfg-arquivo input { display:none; }
-.cfg-painel .cfg-acoes { justify-content:flex-end; }
 
 /* ---- Configurações em duas colunas (como o Obsidian): seções à esquerda, opções à direita ---- */
 .modal:has(.cfg) { max-width:920px; height:min(720px, 88vh); padding:0; display:flex; flex-direction:column; overflow:hidden; }

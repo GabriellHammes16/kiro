@@ -166,7 +166,6 @@
 .skin-neon :where(.primary, .new-note) { box-shadow:0 0 12px color-mix(in srgb, var(--acento) 28%, transparent); }
 .skin-neon :is(.primary, .new-note):hover { box-shadow:0 0 18px color-mix(in srgb, var(--acento) 45%, transparent), 0 0 32px color-mix(in srgb, var(--acento-2) 18%, transparent); }
 .skin-neon :focus-visible { box-shadow:0 0 14px color-mix(in srgb, var(--acento) 45%, transparent); }
-.skin-neon .brand-logo { filter:drop-shadow(0 0 10px color-mix(in srgb, var(--acento) 60%, transparent)); }
 
 /* Paper: grão de papel (SVG em data: URI) e sombra de folha. */
 .skin-paper { --raio-card:6px; --shadow:0 1px 0 rgba(255,255,255,.03) inset, 0 2px 3px rgba(0,0,0,.35), 0 10px 24px rgba(0,0,0,.22); }

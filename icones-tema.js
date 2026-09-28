@@ -12,7 +12,6 @@
   const DOC = '<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/>';
   const CHECKS = '<path d="M4 7.2 5.4 8.6 8 6M4 16.2l1.4 1.4L8 15"/><path d="M11 7h9M11 17h4"/>';
   const MAIS = '<path d="M19 14.5v6.5M15.75 17.75h6.5"/>';
-  const AJUSTES = '<path d="M4 8h7M17.5 8H20M4 16h2.5M13 16h7"/>';
   // Motivo desenhado em 24×24, reduzido e posto em (x, y); o traço compensa a escala.
   const em = (motivo, x, y, s) => `<g transform="translate(${x} ${y}) scale(${s})" stroke-width="${+(1.75 / s).toFixed(2)}">${motivo}</g>`;
 

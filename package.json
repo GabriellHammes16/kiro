@@ -31,7 +31,12 @@
       "!tests/**",
       "!dist/**",
       "!.claude/**",
-      "!app.next.js"
+      "!.superpowers/**",
+      "!docs/**",
+      "!examples/**",
+      "!graphify-out/**",
+      "!{README,AGENTS,CLAUDE}.md",
+      "!kuroi-*.json"
     ],
     "win": {
       "target": "nsis",
