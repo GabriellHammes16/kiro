@@ -230,7 +230,7 @@
   const folderColor = value => FOLDER_COLORS.includes(value) ? value : '';
   // ---- Aparência: temas, skins e cores manuais (preferência da instalação, em localStorage) ----
   const TEMAS = [
-    ['kiro', 'Kiro', 'classicos'], ['escuro-azul', 'Escuro Azul', 'classicos'], ['escuro-verde', 'Escuro Verde', 'classicos'],
+    ['kiro', 'Kiro', 'classicos'], ['claro', 'Claro', 'classicos'], ['escuro-azul', 'Escuro Azul', 'classicos'], ['escuro-verde', 'Escuro Verde', 'classicos'],
     ['escuro-ambar', 'Escuro Âmbar', 'classicos'], ['alto-contraste', 'Alto Contraste', 'classicos'], ['meia-noite', 'Meia-noite', 'classicos'], ['floresta', 'Floresta', 'classicos'],
     ['neon-tokyo', 'Neon Tokyo', 'anime'], ['sakura-night', 'Sakura Night', 'anime'], ['shonen-fire', 'Shonen Fire', 'anime'], ['studio-ghibli', 'Studio Ghibli', 'anime'],
     ['evangelion', 'Evangelion', 'anime'], ['sailor-moon', 'Sailor Moon', 'anime'], ['violet-evergarden', 'Violet Evergarden', 'anime'], ['demon-blood', 'Demon Blood', 'anime'],

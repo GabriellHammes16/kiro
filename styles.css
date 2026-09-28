@@ -77,6 +77,7 @@ nav { margin-top:25px; display:grid; gap:4px; }
 body.saving { cursor:progress; }
 .content { padding-bottom:65px; }
 [hidden] { display:none !important; }
+@media (max-width:780px) { .sidebar-topo, .acoes-rapidas { margin:0; padding:0; border:0; } .busca-rapida { width:auto; } .busca-rapida kbd { display:none; } }
 @media (max-width:780px) { #save-status { left:0; } .sidebar { flex-wrap:wrap; } .sidebar-bottom { display:flex; flex-wrap:wrap; gap:8px; width:100%; } .sidebar-bottom p { display:none; } .quiet-button { padding:3px; } }
 :root { --bg:#0B0F14; --panel:#1A1F26; --panel-raised:#232A33; --ink:#E5E7EB; --muted:#94A3B8; --line:#2A3340; --acento:#9273FF; --acento-forte:#6B4AE8; --acento-escuro:#5836C7; --acento-texto:#000000; --acento-2:#3B82F6; --primario-texto:#FFFFFF; --campo:#12171E; --sidebar-bg:#11161D; --content-bg:#0B0F14; --accent:var(--acento-forte); --accent-strong:var(--acento-escuro); --accent-soft:color-mix(in srgb, var(--acento) 16%, transparent); --warning:#ffad85; --shadow:0 14px 40px rgba(0,0,0,.32); color-scheme:dark; }
 
@@ -88,9 +89,9 @@ body.saving { cursor:progress; }
 .new-note:hover,.primary:hover { background:var(--acento); color:var(--acento-texto); transform:translateY(-1px); }
 .nav-item { color:var(--muted); }
 .nav-item span { color:#777; }
-.nav-item b { background:color-mix(in srgb, var(--acento-forte) 17%, transparent); color:color-mix(in srgb, var(--acento) 55%, white); }
+.nav-item b { background:color-mix(in srgb, var(--acento-forte) 17%, transparent); color:color-mix(in srgb, var(--acento) 55%, var(--realce-base, white)); }
 .nav-item:hover { color:var(--ink); background:rgba(255,255,255,.045); }
-.nav-item.active { color:color-mix(in srgb, var(--acento) 14%, white); background:var(--accent-soft); font-weight:700; }
+.nav-item.active { color:color-mix(in srgb, var(--acento) 14%, var(--realce-base, white)); background:var(--accent-soft); font-weight:700; }
 .nav-item.active span { color:var(--acento); }
 .sidebar-bottom { border-color:var(--line); }
 .quiet-button { color:var(--muted); }.quiet-button:hover { color:var(--acento); }.sidebar-bottom p { color:var(--muted); }
@@ -99,11 +100,11 @@ body { background:var(--content-bg,#0B0F14); }
 .eyebrow { color:var(--acento); }.subhead { color:var(--muted); }
 .primary { background:var(--accent); color:var(--primario-texto); box-shadow:0 8px 18px color-mix(in srgb, var(--acento-escuro) 18%, transparent); }
 .secondary { background:var(--panel-raised); }
-.secondary:hover { background:var(--panel-raised); border-color:var(--acento); color:color-mix(in srgb, var(--acento) 14%, white); }
+.secondary:hover { background:var(--panel-raised); border-color:var(--acento); color:color-mix(in srgb, var(--acento) 14%, var(--realce-base, white)); }
 .icon-button { color:var(--muted); }
 .card, .note-card { background:var(--panel); border-color:var(--line); box-shadow:var(--shadow); }
 .card:hover, .note-card:hover { border-color:color-mix(in srgb, var(--acento) 42%, transparent); }
-.card-head a,.link-row a { color:var(--acento); }.card-head a:hover,.link-row a:hover { color:color-mix(in srgb, var(--acento) 19%, white); }
+.card-head a,.link-row a { color:var(--acento); }.card-head a:hover,.link-row a:hover { color:color-mix(in srgb, var(--acento) 19%, var(--realce-base, white)); }
 .progress { background:#242424; }.progress div { background:linear-gradient(90deg,var(--accent-strong),var(--acento)); }
 .routine-item,.task-item { border-color:var(--line); }
 .check { border-color:#565656; background:var(--campo); }.check:hover { border-color:var(--acento); }.check.done { border-color:var(--accent); background:var(--accent); }
@@ -156,7 +157,7 @@ body { background:var(--content-bg,#0B0F14); }
 .primary, .new-note { border-color: var(--accent); }
 .secondary { border-color: color-mix(in srgb, var(--acento-forte) 26%, transparent); color: var(--muted); }
 .primary:hover, .secondary:hover, .new-note:hover {
-  background: var(--accent-soft); border-color: var(--acento); color: color-mix(in srgb, var(--acento) 19%, white);
+  background: var(--accent-soft); border-color: var(--acento); color: color-mix(in srgb, var(--acento) 19%, var(--realce-base, white));
   transform: translateY(-1px); box-shadow: 0 6px 18px color-mix(in srgb, var(--acento-escuro) 15%, transparent);
 }
 .primary:active, .secondary:active, .new-note:active { transform: translateY(0) scale(.985); box-shadow: none; }
@@ -238,7 +239,7 @@ select:focus-visible, textarea:focus-visible, .tree-row:focus-visible {
 .ctx-item { display:flex; align-items:center; gap:10px; width:100%; position:relative;
   padding:7px 9px; border:0; border-radius:8px; background:transparent; color:var(--ink);
   font-size:13.5px; font-weight:500; text-align:left; }
-.ctx-item:hover:not(:disabled), .ctx-item:focus-visible:not(:disabled) { background:var(--accent-soft); color:color-mix(in srgb, var(--acento) 19%, white); }
+.ctx-item:hover:not(:disabled), .ctx-item:focus-visible:not(:disabled) { background:var(--accent-soft); color:color-mix(in srgb, var(--acento) 19%, var(--realce-base, white)); }
 .ctx-item:disabled { color:#5a5a5a; cursor:default; }
 .ctx-icone { width:17px; flex:0 0 auto; text-align:center; color:var(--muted); font-size:12px; }
 .ctx-item:hover:not(:disabled) .ctx-icone { color:var(--acento); }
@@ -259,7 +260,7 @@ select:focus-visible, textarea:focus-visible, .tree-row:focus-visible {
   padding:7px 9px 7px 13px; background:var(--panel-raised); border-bottom:1px solid var(--line); }
 .code-lang { color:var(--muted); font-size:12px; text-transform:uppercase; letter-spacing:1px; font-weight:700; }
 .code-copy { padding:4px 11px; font-size:12px; }
-.code-copy.copiado { border-color:var(--acento); color:color-mix(in srgb, var(--acento) 19%, white); background:var(--accent-soft); }
+.code-copy.copiado { border-color:var(--acento); color:color-mix(in srgb, var(--acento) 19%, var(--realce-base, white)); background:var(--accent-soft); }
 .code-area pre { margin:0; padding:14px; overflow-x:auto; }
 .code-area code { font-family:ui-monospace,Consolas,"Cascadia Mono",monospace; font-size:13px; line-height:1.65; color:color-mix(in srgb, var(--acento) 12%, var(--ink)); white-space:pre; }
 
@@ -267,7 +268,7 @@ select:focus-visible, textarea:focus-visible, .tree-row:focus-visible {
 .modal h4 { font-size:12px; text-transform:uppercase; letter-spacing:.8px; color:var(--muted); margin:12px 0 2px; }
 
 /* Grafo de conexões. */
-.graph-edge { stroke:color-mix(in srgb, var(--line) 96%, white); stroke-width:1.2; transition:stroke .15s ease, opacity .15s ease; }
+.graph-edge { stroke:color-mix(in srgb, var(--line) 96%, var(--realce-base, white)); stroke-width:1.2; transition:stroke .15s ease, opacity .15s ease; }
 .graph-edge.aceso { stroke:var(--acento); stroke-width:1.8; }
 .graph-edge.apagado { opacity:.18; }
 .graph-node { transition:opacity .15s ease; }
@@ -276,7 +277,7 @@ select:focus-visible, textarea:focus-visible, .tree-row:focus-visible {
 .graph-node.tipo-fantasma circle { fill:transparent; stroke:#5a5a66; stroke-dasharray:2 2; }
 .graph-node:hover circle { fill:var(--acento); }
 .graph-node text { fill:var(--muted); font-size:10px; text-anchor:middle; pointer-events:none; user-select:none; }
-.graph-node:hover text { fill:color-mix(in srgb, var(--acento) 19%, white); }
+.graph-node:hover text { fill:color-mix(in srgb, var(--acento) 19%, var(--realce-base, white)); }
 .graph-node.apagado { opacity:.2; }
 
 /* Modo cofre: a nota ocupa a página e a árvore fica discreta à esquerda, recolhível. */
@@ -369,13 +370,13 @@ select:focus-visible, textarea:focus-visible, .tree-row:focus-visible {
 .doc-corpo hr { border:0; border-top:1px solid var(--line); margin:22px 0; }
 .doc-corpo code { font-family:ui-monospace,Consolas,monospace; font-size:.9em; background:var(--campo); border:1px solid var(--line); border-radius:8px; padding:1px 5px; }
 .doc-corpo .code-area code { background:transparent; border:0; padding:0; font-size:13px; }
-.doc-corpo mark { background:color-mix(in srgb, var(--acento) 28%, transparent); color:color-mix(in srgb, var(--acento) 19%, white); border-radius:3px; padding:0 3px; }
+.doc-corpo mark { background:color-mix(in srgb, var(--acento) 28%, transparent); color:color-mix(in srgb, var(--acento) 19%, var(--realce-base, white)); border-radius:3px; padding:0 3px; }
 .md-comentario { color:#6a6a76; font-style:italic; }
 .md-tag { color:var(--acento); }
 
 /* Link entre notas: sem colchetes e em roxo. Tracejado quando a nota não existe. */
 .wikilink { color:var(--acento); cursor:pointer; text-decoration:none; border-bottom:1px solid color-mix(in srgb, var(--acento) 32%, transparent); }
-.wikilink:hover { color:color-mix(in srgb, var(--acento) 19%, white); border-bottom-color:var(--acento); }
+.wikilink:hover { color:color-mix(in srgb, var(--acento) 19%, var(--realce-base, white)); border-bottom-color:var(--acento); }
 .wikilink.ausente { color:color-mix(in srgb, var(--acento) 45%, var(--muted)); border-bottom-style:dashed; }
 .doc-corpo a[href] { color:var(--acento); }
 /* Pendência de gravação: um ponto, no lugar da barra de botões. */
@@ -463,10 +464,10 @@ body.com-imagem-inteira { overflow:hidden; }
 ::-webkit-scrollbar-track { background:transparent; }
 ::-webkit-scrollbar-thumb { background:#2E2E38; border:3px solid transparent; background-clip:content-box; border-radius:8px; }
 ::-webkit-scrollbar-thumb:hover { background:#3F3F4D; background-clip:content-box; }
-::selection { background:color-mix(in srgb, var(--acento-forte) 34%, transparent); color:color-mix(in srgb, var(--acento) 14%, white); }
+::selection { background:color-mix(in srgb, var(--acento-forte) 34%, transparent); color:color-mix(in srgb, var(--acento) 14%, var(--realce-base, white)); }
 .doc-title, .bloco-editor { caret-color:var(--acento); }
 /* A nota aberta fica marcada na árvore, para não se perder entre as pastas. */
-.tree-row.ativa { background:var(--accent-soft); color:color-mix(in srgb, var(--acento) 19%, white); }
+.tree-row.ativa { background:var(--accent-soft); color:color-mix(in srgb, var(--acento) 19%, var(--realce-base, white)); }
 .tree-row.ativa::before { opacity:1; transform:scaleY(1); }
 .tree-row.ativa > .tree-icone { color:var(--acento); }
 .tree-row.ativa > .tree-name { font-weight:650; }
@@ -666,7 +667,7 @@ body, button, input, textarea, select { font-family:var(--fonte-interface); }
 .search, .add-link input { height:var(--alt-m); padding-top:0; padding-bottom:0; border-radius:var(--raio-controle); }
 
 /* Contagens (0/2, pendentes, abertas) com o mesmo estilo de pílula. */
-.card-head > .small-muted, .nav-item b { min-width:22px; padding:1px 8px; border-radius:var(--raio-pilula); text-align:center; font-size:var(--fs-legenda); line-height:16px; background:var(--accent-soft); color:color-mix(in srgb, var(--acento) 55%, white); }
+.card-head > .small-muted, .nav-item b { min-width:22px; padding:1px 8px; border-radius:var(--raio-pilula); text-align:center; font-size:var(--fs-legenda); line-height:16px; background:var(--accent-soft); color:color-mix(in srgb, var(--acento) 55%, var(--realce-base, white)); }
 .card-head > .small-muted { margin-left:auto; }
 .card-head > h2 + .small-muted + .icon-button, .card-head > .small-muted + .icon-button { margin-left:0; }
 
@@ -708,7 +709,7 @@ body, button, input, textarea, select { font-family:var(--fonte-interface); }
 .cfg-chave input:checked + .interruptor::after { transform:translateX(15px); background:var(--primario-texto); }
 .cfg-chave input:focus-visible + .interruptor { outline:2px solid var(--acento); outline-offset:2px; }
 .cfg-chave:hover .interruptor { background:#4a4a58; }
-.cfg-chave:hover input:checked + .interruptor { background:color-mix(in srgb, var(--accent) 85%, white); }
+.cfg-chave:hover input:checked + .interruptor { background:color-mix(in srgb, var(--accent) 85%, var(--realce-base, white)); }
 
 /* Aba Plug-ins: o interruptor fica no alto da linha, que cresce com a lista de permissões. */
 .cfg-plugin { align-items:flex-start; padding:var(--esp-3) 0; }
@@ -952,7 +953,37 @@ body, button, input, textarea, select { font-family:var(--fonte-interface); }
 .app-shell.pagina-plugin-aberta > .content { padding:0; }
 
 /* ---- Barra lateral: topo sem marca e modo compacto (só ícones) ---- */
-.sidebar-topo { display:flex; justify-content:flex-end; margin:-12px -6px 12px; }
+.sidebar-topo { display:flex; align-items:center; justify-content:space-between; gap:8px; margin:-12px -6px 16px; }
+/* ---- Topo da barra lateral: marca, busca e ações rápidas ---- */
+.marca { display:flex; align-items:center; gap:9px; min-width:0; padding-left:6px; color:var(--ink); font-size:16px; font-weight:800; letter-spacing:.5px; }
+.marca-logo { width:26px; height:26px; flex:0 0 auto; object-fit:contain; filter:drop-shadow(0 2px 6px color-mix(in srgb, var(--acento-forte) 30%, transparent)); }
+.busca-rapida { display:flex; align-items:center; gap:9px; width:100%; min-height:40px; padding:0 8px 0 11px; border:1px solid var(--line); border-radius:10px; background:var(--campo, transparent); color:var(--muted); font-size:13px; cursor:pointer; transition:border-color var(--rapido, .15s) ease, color var(--rapido, .15s) ease, background var(--rapido, .15s) ease; }
+.busca-rapida:hover { border-color:color-mix(in srgb, var(--acento) 55%, var(--line)); color:var(--ink); }
+.busca-rapida:focus-visible, .nota-diaria:focus-visible { outline:2px solid var(--acento); outline-offset:2px; }
+.busca-rapida .rotulo { flex:1; text-align:left; }
+.busca-rapida kbd { flex:0 0 auto; padding:2px 6px; border:1px solid var(--line); border-radius:6px; background:color-mix(in srgb, var(--ink) 5%, transparent); color:var(--muted); font:inherit; font-size:11px; line-height:1.3; }
+.acoes-rapidas { display:flex; gap:8px; margin:10px 0 12px; padding-bottom:14px; border-bottom:1px solid var(--line); }
+.acoes-rapidas .new-note { flex:1; width:auto; min-width:0; min-height:40px; justify-content:center; padding:0 12px; }
+.nota-diaria { display:inline-flex; flex:0 0 auto; align-items:center; justify-content:center; gap:7px; min-height:40px; padding:0 12px; border:1px solid var(--line); border-radius:8px; background:transparent; color:var(--ink); font-weight:600; font-size:13px; cursor:pointer; transition:border-color var(--rapido, .15s) ease, color var(--rapido, .15s) ease; }
+.nota-diaria:hover { border-color:var(--acento); color:var(--acento); }
+/* Rodapé da barra lateral: Lixeira e Configurações lado a lado, só com ícone. */
+.sidebar-bottom { display:flex; flex-wrap:wrap; align-items:center; gap:4px; }
+.cofre-seletor { position:relative; flex:1; min-width:0; display:flex; align-items:center; gap:7px; min-height:36px; margin-right:4px; padding:0 10px 0 8px; border:0; border-radius:8px; background:color-mix(in srgb, var(--ink) 6%, transparent); color:var(--ink); font-size:13px; font-weight:600; cursor:pointer; transition:background var(--rapido, .15s) ease; }
+.cofre-seletor:hover { background:color-mix(in srgb, var(--ink) 11%, transparent); }
+.cofre-seletor:focus-visible { outline:2px solid var(--acento); outline-offset:2px; }
+.cofre-seletor .icone { width:15px; height:15px; }
+.cofre-seletor .rotulo { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+/* Dica escura acima do botão, com o caminho e o tamanho do cofre (quebras de linha do data-dica). */
+.cofre-seletor::after { content:attr(data-dica); position:absolute; left:0; bottom:calc(100% + 8px); z-index:30; padding:9px 14px; border-radius:8px; background:#101216; color:#F4F5F7; font-size:12px; font-weight:600; line-height:1.5; text-align:center; white-space:pre; box-shadow:0 8px 24px rgba(0,0,0,.35); opacity:0; pointer-events:none; transition:opacity var(--rapido, .15s) ease; }
+.cofre-seletor:is(:hover, :focus-visible)[data-dica]::after { opacity:1; transition-delay:.35s; }
+.sidebar-bottom .quiet-button { width:auto; min-width:40px; min-height:40px; justify-content:center; padding:0; border-radius:8px; transition:background var(--rapido, .15s) ease, color var(--rapido, .15s) ease; }
+.sidebar-bottom .quiet-button:hover { background:var(--accent-soft); }
+.sidebar-bottom .quiet-button:focus-visible { outline:2px solid var(--acento); outline-offset:2px; }
+.sidebar-bottom .quiet-button .icone { width:19px; height:19px; }
+.sidebar-bottom .quiet-button .rotulo { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; }
+/* Item de plug-in com nome longo fica numa linha só, cortado com reticências. */
+.sidebar .nav-item .rotulo { width:auto; flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; text-align:left; font-size:inherit; }
+.acoes-rapidas + nav { margin-top:0; }
 .lateral-alternar { color:var(--muted); }
 .lateral-alternar:hover { color:var(--ink); }
 .lateral-alternar .icone { width:17px; height:17px; transition:transform var(--medio) var(--curva); }
@@ -960,7 +991,10 @@ body, button, input, textarea, select { font-family:var(--fonte-interface); }
   .sidebar { transition:flex-basis .2s ease, width .2s ease, padding .2s ease; }
   .app-shell.lateral-compacta > .sidebar { flex-basis:64px; width:64px; padding-left:8px; padding-right:8px; }
   .app-shell.lateral-compacta ~ #save-status, .app-shell.lateral-compacta.grafo-aberto ~ #save-status { left:64px; }
-  .app-shell.lateral-compacta .sidebar-topo { justify-content:center; margin:-12px 0 12px; }
+  .app-shell.lateral-compacta .sidebar-topo { flex-direction:column; justify-content:center; gap:10px; margin:-12px 0 12px; }
+  .app-shell.lateral-compacta .marca { padding-left:0; }
+  .app-shell.lateral-compacta .acoes-rapidas { flex-direction:column; }
+  .app-shell.lateral-compacta .sidebar :is(.busca-rapida, .nota-diaria) { justify-content:center; gap:0; min-height:44px; padding-left:0; padding-right:0; }
   .app-shell.lateral-compacta .lateral-alternar .icone { transform:rotate(180deg); }
   /* Some da tela, não do leitor de tela: o nome continua sendo o rótulo do botão. */
   .app-shell.lateral-compacta .sidebar .rotulo, .app-shell.lateral-compacta .nav-grupo {
@@ -969,7 +1003,11 @@ body, button, input, textarea, select { font-family:var(--fonte-interface); }
   .app-shell.lateral-compacta .sidebar .nav-item { position:relative; }
   .app-shell.lateral-compacta .nav-item b { position:absolute; top:3px; right:3px; min-width:16px; margin:0; padding:0 4px; font-size:10px; line-height:15px; }
   .app-shell.lateral-compacta .nav-plugins { border-top:1px solid var(--line); padding-top:8px; }
-  .app-shell.lateral-compacta .sidebar-bottom { padding-left:0; padding-right:0; }
+  .app-shell.lateral-compacta .sidebar-bottom { padding-left:0; padding-right:0; justify-content:center; }
+  /* A dica do cofre passa por cima do conteúdo: a barra lateral fica acima dele (abaixo dos modais, z 5). */
+  .app-shell > .sidebar { z-index:4; }
+  .app-shell.lateral-compacta .cofre-seletor::after { left:calc(100% + 10px); bottom:0; }
+  .app-shell.lateral-compacta .cofre-seletor { flex:0 0 auto; justify-content:center; gap:0; min-width:40px; min-height:40px; margin:0; padding:0; }
 }
 
 /* ---- Atalhos editáveis ---- */

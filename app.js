@@ -20,7 +20,17 @@ async function save(origem = null) {
 function escapeHtml(value = '') { return String(value).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 function formatDate(date) { return new Intl.DateTimeFormat("pt-BR", { weekday:"long", day:"numeric", month:"long" }).format(new Date(`${date}T12:00:00`)); }
 function dateLabel(date) { return date === today() ? "Hoje" : new Intl.DateTimeFormat("pt-BR", { day:"2-digit", month:"short" }).format(new Date(`${date}T12:00:00`)); }
-function updateCount() { const open = state.tasks.filter(t => !t.done).length; document.querySelector("#task-count").textContent = open || ""; }
+function updateCount() { const open = state.tasks.filter(t => !t.done).length; document.querySelector("#task-count").textContent = open || ""; atualizarSeletorDeCofre(); }
+// Rodapé da barra lateral, como no Obsidian: nome do cofre; a dica mostra o caminho e o tamanho.
+function atualizarSeletorDeCofre() {
+  const botao = document.querySelector('#cofre-seletor');
+  if (!botao || !state.vaultPath) return;
+  const nome = 'Kiro';   // o nome da pasta do cofre aparece na dica, junto do caminho
+  const notas = state.notes.length, pastas = state.folders.length;
+  document.querySelector('#cofre-seletor-nome').textContent = nome;
+  botao.dataset.dica = `${state.vaultPath}\n\n${notas} nota${notas === 1 ? '' : 's'}, ${pastas} pasta${pastas === 1 ? '' : 's'}`;
+  botao.setAttribute('aria-label', `Cofre ${nome}: ${window.cadernoDesktop ? 'trocar de cofre' : 'ver nas configurações'}`);
+}
 function getNote(id) { return state.notes.find(n => n.id === id); }
 function getFluxo(id) { return (state.fluxos || []).find(f => f.id === id); }
 function render() {
@@ -362,6 +372,7 @@ const TRACOS = {
   salvar: '<path d="M5 6.5A1.5 1.5 0 0 1 6.5 5h9L19 8.5V18a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 5 18z"/><path d="M8.5 5v4.5h6M8.5 19.5v-5h7v5"/>',
   detalhes: '<path d="M4.5 8h8M17 8h2.5M4.5 16h3M12 16h7.5"/><circle cx="14.5" cy="8" r="2.2"/><circle cx="9.5" cy="16" r="2.2"/>',
   // Temas (cards de Aparência): um desenho por tema; os de anime são homenagens em traço, sem logos.
+  'tema-claro': '<circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4"/>',
   'tema-kiro': '<path d="M19 14.8A7.8 7.8 0 1 1 9.2 5a6.2 6.2 0 0 0 9.8 9.8z"/>',
   'tema-escuro-azul': '<path d="M12 3.5c3.3 4.1 5.8 7.2 5.8 10.6a5.8 5.8 0 0 1-11.6 0C6.2 10.7 8.7 7.6 12 3.5z"/>',
   'tema-escuro-verde': '<path d="M5.5 18.5C4.5 10.5 9.5 5 19.5 4.5 19 14.5 13.5 19.5 5.5 18.5z"/><path d="M4 20l9-9"/>',
@@ -563,10 +574,12 @@ function aplicarLateralCompacta() {
   botao.setAttribute('aria-label', acao);
   botao.setAttribute('aria-expanded', String(!lateralCompacta));
   botao.title = `${acao} (${teclaDe('lateral')})`;
-  for (const item of document.querySelectorAll('.sidebar :is(.new-note, .quiet-button, .nav-item)')) {
+  const tecla = document.querySelector('#go-note kbd');
+  if (tecla) tecla.textContent = teclaDe('irPara');
+  for (const item of document.querySelectorAll('.sidebar :is(.new-note, .quiet-button, .nav-item, .busca-rapida, .nota-diaria)')) {
     const rotulo = item.querySelector('.rotulo')?.textContent.trim();
     if (!rotulo) continue;
-    if (item.id === 'go-note') item.dataset.dica = teclaDe('irPara');
+    if (item.id === 'go-note') item.dataset.dica = `Ir para nota (${teclaDe('irPara')})`;
     item.dataset.dica ??= item.getAttribute('title') || '';   // a dica original, se houver
     const original = item.dataset.dica;
     if (lateralCompacta) item.title = original ? `${rotulo} (${original})` : rotulo;
@@ -3859,6 +3872,8 @@ function lerAparencia() {
 }
 function aplicarAparencia(valores) {
   const a = Kiro.aparenciaValida(valores || lerAparencia());
+  temaDosIcones = a.tema;
+  desenharIconesFixos();
   const html = document.documentElement, raiz = html.style;
   html.classList.remove(...[...html.classList].filter(c => /^(tema|skin)-/.test(c)));
   html.classList.add(...Kiro.classesDaAparencia(a));
@@ -4490,6 +4505,8 @@ $('#new-note').onclick=()=>{if(loaded&&!busy&&!failed)abrirNota(notaVazia());};
 $('#daily-note').onclick=()=>extraAction('daily');
 $('#go-note').onclick=irParaNota;
 $('#settings').onclick=()=>showSettings();
+$('#cofre-seletor').onclick=()=>{if(!loaded||busy)return;if(window.cadernoDesktop)escolherOutroCofre();else showSettings('sistema');};
+$('#lixeira-lateral').onclick=()=>{if(loaded&&!busy&&!failed)showTrash();};
 // ---- Ações de sistema: ficam na aba Sistema das Configurações ----
 async function escolherOutroCofre(){
   if(busy||!window.cadernoDesktop)return;closeModal(true);

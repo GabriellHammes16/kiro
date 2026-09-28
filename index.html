@@ -13,10 +13,15 @@
     <div id="abertura" role="presentation"><img src="kiro-abertura.png" alt="" /></div>
     <div class="app-shell">
       <aside class="sidebar">
-        <div class="sidebar-topo"><button class="icon-button lateral-alternar" id="alternar-lateral" data-icone="esquerda" aria-label="Recolher barra lateral" title="Recolher barra lateral (Ctrl+\)" aria-expanded="true"></button></div>
-        <button class="new-note" id="new-note"><span class="rotulo-icone" data-icone="mais"></span><span class="rotulo">Nova nota</span></button>
-        <button class="quiet-button" id="daily-note"><span class="rotulo-icone" data-icone="calendario"></span><span class="rotulo">Nota diária</span></button>
-        <button class="quiet-button" id="go-note" title="Ctrl+O"><span class="rotulo-icone" data-icone="ir-para"></span><span class="rotulo">Ir para nota</span></button>
+        <div class="sidebar-topo">
+          <span class="marca"><img class="marca-logo" src="kiro-logo.png" alt="" width="26" height="26" /><span class="rotulo">Kiro</span></span>
+          <button class="icon-button lateral-alternar" id="alternar-lateral" data-icone="esquerda" aria-label="Recolher barra lateral" title="Recolher barra lateral (Ctrl+\)" aria-expanded="true"></button>
+        </div>
+        <button class="busca-rapida" id="go-note" title="Ir para nota (Ctrl+O)"><span class="rotulo-icone" data-icone="ir-para-nota"></span><span class="rotulo">Ir para nota</span><kbd class="rotulo">Ctrl+O</kbd></button>
+        <div class="acoes-rapidas">
+          <button class="new-note" id="new-note"><span class="rotulo-icone" data-icone="nova-nota"></span><span class="rotulo">Nova nota</span></button>
+          <button class="nota-diaria" id="daily-note" title="Nota diária"><span class="rotulo-icone" data-icone="nota-diaria"></span><span class="rotulo">Diária</span></button>
+        </div>
         <nav aria-label="Navegação principal">
           <button class="nav-item active" data-view="today"><span class="rotulo-icone" data-icone="hoje"></span><span class="rotulo">Hoje</span></button>
           <button class="nav-item" data-view="notes"><span class="rotulo-icone" data-icone="notas"></span><span class="rotulo">Notas</span></button>
@@ -26,7 +31,9 @@
         </nav>
         <nav id="nav-plugins" class="nav-plugins" aria-label="Plug-ins" hidden></nav>
         <div class="sidebar-bottom">
-          <button class="quiet-button" id="settings"><span class="rotulo-icone" data-icone="detalhes"></span><span class="rotulo">Configurações</span></button>
+          <button class="cofre-seletor" id="cofre-seletor" aria-label="Trocar de cofre"><span class="rotulo-icone" data-icone="alternar-cofre"></span><span class="rotulo" id="cofre-seletor-nome">Kiro</span></button>
+          <button class="quiet-button" id="lixeira-lateral" title="Lixeira" aria-label="Lixeira"><span class="rotulo-icone" data-icone="lixeira"></span><span class="rotulo">Lixeira</span></button>
+          <button class="quiet-button" id="settings" title="Configurações" aria-label="Configurações"><span class="rotulo-icone" data-icone="configuracoes"></span><span class="rotulo">Configurações</span></button>
         </div>
       </aside>
       <main id="app" class="content" tabindex="-1"></main>
@@ -40,6 +47,7 @@
     <script src="fluxo.js"></script>
     <script src="fluxo-tela.js"></script>
     <script src="hoje.js"></script>
+    <script src="icones-tema.js"></script>
     <script src="app.js"></script>
   </body>
 </html>
