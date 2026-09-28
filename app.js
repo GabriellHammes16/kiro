@@ -3978,11 +3978,18 @@ function aplicarAparencia(valores) {
   }
   return a;
 }
+// Botões da janela (app desktop) com as cores do tema: fundo da faixa e cor do texto.
+function coresDaJanela() {
+  if (!window.cadernoDesktop?.janelaPropria) return;
+  const estilo = getComputedStyle(document.documentElement);
+  window.cadernoDesktop.coresDaJanela({ fundo: estilo.getPropertyValue('--sidebar-bg').trim(), simbolo: estilo.getPropertyValue('--ink').trim() });
+}
 function gravarAparencia(a) {
   try { localStorage.setItem('kiro.aparencia', JSON.stringify(a)); } catch { /* janela privada: só aplica na sessão */ }
   const temaAntes = temaDosIcones;
   aplicarAparencia(a);
   aplicarVidro();
+  coresDaJanela();
   avisarTemaAsMolduras();
   if (temaDosIcones !== temaAntes && loaded && !busy) render();   // árvore e menus com os ícones do tema novo
 }
@@ -4715,7 +4722,9 @@ window.addEventListener('beforeunload',e=>{if(busy||failed||modalDirty||editorDi
 window.addEventListener('focus',()=>reload());
 setInterval(()=>{if(document.hidden)return;if(lastDay!==today()){lastDay=today();if(loaded&&!busy)render();}reload();if(loaded)for(const id of pluginsAtivos.keys())entregarDia(id);},5000);
 desenharIconesFixos();
+if (window.cadernoDesktop?.janelaPropria) document.documentElement.classList.add('janela-propria');
 aplicarAparencia();
+coresDaJanela();
 aplicarPapelDeParede();
 new MutationObserver(sincronizarVideoDoPapel).observe(document.querySelector('.app-shell'), { attributes: true, attributeFilter: ['class'] });
 document.addEventListener('visibilitychange', sincronizarVideoDoPapel);

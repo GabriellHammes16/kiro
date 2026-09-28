@@ -22,8 +22,14 @@ const CSP_DO_WORKER = "default-src 'none'; script-src 'self' kiro-plugin:; conne
 // (vault.pluginPath aceita só [a-z0-9-]), então nunca colide com a pasta de um plug-in.
 const HOST_DO_KIRO = 'kiro.app';
 const ARQUIVOS_DO_KIRO = new Set(['plugin-worker.js', 'plugins.js', 'kiro-frame.js']);
+// Janela como a do Obsidian (Windows e Linux): sem a barra de título do sistema; os botões de
+// minimizar, maximizar e fechar são os do sistema, desenhados por cima da faixa do app e pintados
+// com as cores do tema (a página manda as cores por 'janela:cores'). No macOS fica a janela padrão.
+const JANELA_PROPRIA = process.platform !== 'darwin';
+const ALTURA_DA_BARRA = 32;
 function createWindow() {
-  const window = new BrowserWindow({ width: 1280, height: 820, minWidth: 900, minHeight: 620, backgroundColor: '#0a0a0a', title: 'Kiro', icon: join(__dirname, '..', 'kiro-logo.png'), webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true, preload: join(__dirname, 'preload.cjs') } });
+  const window = new BrowserWindow({ width: 1280, height: 820, minWidth: 900, minHeight: 620, backgroundColor: '#0a0a0a', title: 'Kiro',
+    ...(JANELA_PROPRIA ? { titleBarStyle: 'hidden', titleBarOverlay: { color: '#11161D', symbolColor: '#E5E7EB', height: ALTURA_DA_BARRA } } : {}), icon: join(__dirname, '..', 'kiro-logo.png'), webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true, preload: join(__dirname, 'preload.cjs') } });
   window.loadFile(join(__dirname, '..', 'index.html'));
   window.webContents.on('will-navigate', event => event.preventDefault());
   window.webContents.setWindowOpenHandler(({ url }) => { if (/^https?:/i.test(url)) shell.openExternal(url); return { action: 'deny' }; });
@@ -124,6 +130,13 @@ else app.whenReady().then(async () => {
   // Plug-ins: a lista da pasta, as escolhas do usuário e o espaço de cada plug-in.
   // A versão do app é o que a página compara com o minKiro do manifesto.
   ipcMain.handle('app:version', () => app.getVersion());
+  // Cores dos botões da janela: só as duas cores, validadas, para a janela que pediu.
+  ipcMain.on('janela:cores', (event, cores) => {
+    const cor = v => (typeof v === 'string' && /^#[0-9a-f]{6}$/i.test(v.trim()) ? v.trim() : null);
+    const janela = BrowserWindow.fromWebContents(event.sender);
+    const fundo = cor(cores?.fundo), simbolo = cor(cores?.simbolo);
+    if (JANELA_PROPRIA && janela && fundo && simbolo) janela.setTitleBarOverlay({ color: fundo, symbolColor: simbolo, height: ALTURA_DA_BARRA });
+  });
   ipcMain.handle('plugins:list', () => vault.listPlugins());
   ipcMain.handle('plugins:choices:get', () => vault.readPluginChoices());
   ipcMain.handle('plugins:choices:set', (_event, escolhas) => vault.writePluginChoices(escolhas));

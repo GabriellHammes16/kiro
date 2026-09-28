@@ -1,5 +1,7 @@
 const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('cadernoDesktop', {
+  janelaPropria: process.platform !== 'darwin',
+  coresDaJanela: cores => ipcRenderer.send('janela:cores', cores),
   loadState: () => ipcRenderer.invoke('vault:load'),
   saveState: state => ipcRenderer.invoke('vault:save', state),
   openVault: () => ipcRenderer.invoke('vault:open'),

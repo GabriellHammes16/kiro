@@ -39,8 +39,8 @@
 body { margin:0; color:var(--ink); }
 button, input, textarea, select { font:inherit; }
 button { cursor:pointer; }
-.app-shell { display:grid; grid-template-columns:252px 1fr; min-height:100vh; }
-.sidebar { position:fixed; width:252px; height:100vh; padding:25px 16px 18px; border-right:1px solid var(--line); display:flex; flex-direction:column; }
+.app-shell { display:grid; grid-template-columns:252px 1fr; min-height:var(--altura-util, 100vh); }
+.sidebar { position:fixed; width:252px; height:var(--altura-util, 100vh); padding:25px 16px 18px; border-right:1px solid var(--line); display:flex; flex-direction:column; }
 .brand { font-size:21px; font-weight:800; display:flex; gap:10px; align-items:center; padding:0 8px 24px; }
 .brand-logo { object-fit:contain; }
 .brand-mark { font-size:25px; }
@@ -119,8 +119,8 @@ body { background:var(--content-bg,#0B0F14); }
 .link-row { border-color:var(--line); }
 
 @media (min-width:781px) {
-  .app-shell { display:flex; width:100%; min-height:100vh; overflow-x:hidden; }
-  .sidebar { position:sticky; top:0; flex:0 0 252px; width:252px; height:100vh; }
+  .app-shell { display:flex; width:100%; min-height:var(--altura-util, 100vh); overflow-x:hidden; }
+  .sidebar { position:sticky; top:0; flex:0 0 252px; width:252px; height:var(--altura-util, 100vh); }
   .content { flex:1 1 0; min-width:0; margin-left:0; width:auto; max-width:none; }
   .today-grid { grid-template-columns:minmax(0,1.15fr) minmax(0,.85fr); }
   .task-layout { grid-template-columns:minmax(0,2fr) minmax(260px,1fr); }
@@ -285,8 +285,8 @@ select:focus-visible, textarea:focus-visible, .tree-row:focus-visible {
 .app-shell.cofre-aberto > .content { padding:0; }
 /* Sem a navegação principal, a barra de status começa logo depois da árvore. */
 .app-shell.cofre-aberto ~ #save-status { left:var(--largura-arvore, 272px); right:0; transition:left .2s ease; }
-.cofre { display:flex; align-items:stretch; min-height:100vh; }
-.cofre-lateral { flex:0 0 var(--largura-arvore, 272px); display:flex; flex-direction:column; min-width:0; height:100vh; position:sticky; top:0; overflow:hidden;
+.cofre { display:flex; align-items:stretch; min-height:var(--altura-util, 100vh); }
+.cofre-lateral { flex:0 0 var(--largura-arvore, 272px); display:flex; flex-direction:column; min-width:0; height:var(--altura-util, 100vh); position:sticky; top:0; overflow:hidden;
   background:var(--sidebar-bg,#11161D); border-right:1px solid var(--line); transition:flex-basis .2s ease; }
 .cofre-topo { display:flex; align-items:center; gap:6px; padding:12px 10px 8px; }
 .cofre-nome { flex:1; font-size:12px; text-transform:uppercase; letter-spacing:1.4px; color:var(--muted); font-weight:600; opacity:.7; }
@@ -306,7 +306,7 @@ select:focus-visible, textarea:focus-visible, .tree-row:focus-visible {
 .cofre-lateral .tree-folder > .tree-name { font-weight:600; }
 .cofre-lateral .tree-meta { display:none; }
 .cofre-rodape { padding:8px 12px; opacity:.6; }
-.cofre-nota { flex:1 1 0; min-width:0; height:100vh; display:flex; flex-direction:column; position:relative; }
+.cofre-nota { flex:1 1 0; min-width:0; height:var(--altura-util, 100vh); display:flex; flex-direction:column; position:relative; }
 .cofre-nota-corpo { flex:1 1 auto; min-height:0; overflow-y:auto; padding:34px clamp(28px,5vw,72px) 40px; }
 .cofre-vazio { display:flex; flex-direction:column; align-items:center; justify-content:center;
   gap:14px; min-height:60vh; color:var(--muted); text-align:center; }
@@ -323,8 +323,8 @@ select:focus-visible, textarea:focus-visible, .tree-row:focus-visible {
 }
 
 /* ---- Tela dividida: duas metades, cada uma com a própria barra de abas ---- */
-.cofre-metades { flex:1 1 0; min-width:0; height:100vh; display:grid; grid-template-columns: calc(var(--proporcao) * 100%) auto 1fr; }
-.cofre-metade { min-width:0; height:100vh; display:flex; flex-direction:column; position:relative; overflow:hidden; }
+.cofre-metades { flex:1 1 0; min-width:0; height:var(--altura-util, 100vh); display:grid; grid-template-columns: calc(var(--proporcao) * 100%) auto 1fr; }
+.cofre-metade { min-width:0; height:var(--altura-util, 100vh); display:flex; flex-direction:column; position:relative; overflow:hidden; }
 .metades-divisor { width:7px; position:relative; cursor:col-resize; touch-action:none; }
 .metades-divisor::after { content:""; position:absolute; top:0; bottom:0; left:50%; transform:translateX(-50%); width:2px; background:transparent; transition:background-color var(--rapido) var(--curva); }
 .metades-divisor:hover::after, .metades-divisor:focus-visible::after, .arrastando-divisor .metades-divisor::after { background:var(--acento); }
@@ -492,7 +492,7 @@ body, button, input, textarea, select { font-family:var(--fonte-interface); }
 /* ---- Grafo: tela cheia, com o painel de opções flutuando por cima. ---- */
 .app-shell.grafo-aberto > .content { padding:0; }
 .app-shell.grafo-aberto ~ #save-status { left:252px; }
-.grafo-tela { position:relative; height:100vh; overflow:hidden;
+.grafo-tela { position:relative; height:var(--altura-util, 100vh); overflow:hidden;
   background:radial-gradient(circle at 50% 38%, color-mix(in srgb, var(--acento-forte) 7%, transparent), transparent 62%), var(--content-bg,#0B0F14); }
 #graph-svg { width:100%; height:100%; display:block; cursor:grab; touch-action:none; }
 #graph-svg:active { cursor:grabbing; }
@@ -506,7 +506,7 @@ body, button, input, textarea, select { font-family:var(--fonte-interface); }
   color:var(--muted); padding:24px; pointer-events:none; max-width:420px; margin:auto; }
 .grafo-abrir { position:absolute; right:14px; top:14px; background:var(--panel); border:1px solid var(--line); }
 .grafo-tela:not(.sem-painel) .grafo-abrir { display:none; }
-.grafo-painel { position:absolute; right:14px; top:14px; width:268px; max-height:calc(100vh - 80px); overflow-y:auto;
+.grafo-painel { position:absolute; right:14px; top:14px; width:268px; max-height:calc(var(--altura-util, 100vh) - 80px); overflow-y:auto;
   background:var(--panel); border:1px solid var(--line); border-radius:12px; box-shadow:var(--shadow);
   padding:12px; display:grid; gap:16px; animation:menuIn var(--medio) var(--curva) both; }
 .grafo-tela.sem-painel .grafo-painel { display:none; }
@@ -948,7 +948,7 @@ body, button, input, textarea, select { font-family:var(--fonte-interface); }
 .plugin-moldura { display: block; width: 100%; border: 0; border-radius: var(--raio, 10px); background: transparent; color-scheme: normal; }
 .nav-plugins { margin-top:12px; display:grid; gap:2px; }
 .nav-plugins .nav-grupo { margin:0 0 4px 12px; font-size:11px; letter-spacing:.06em; text-transform:uppercase; color:var(--muted); }
-.plugin-pagina { height:100%; min-height:calc(100vh - 48px); display:flex; }
+.plugin-pagina { height:100%; min-height:calc(var(--altura-util, 100vh) - 48px); display:flex; }
 .plugin-pagina .plugin-moldura { flex:1; height:auto !important; border-radius:0; }
 .app-shell.pagina-plugin-aberta > .content { padding:0; }
 
@@ -1004,6 +1004,12 @@ html.com-papel-de-parede .app-shell:not(.cofre-aberto) > .content .page-head :is
 .papel-veu { display:flex; align-items:center; gap:12px; max-width:420px; }
 .papel-veu input { flex:1; accent-color:var(--acento); cursor:pointer; }
 #cfg-papel:not([data-tem-papel]) :is(.papel-previa, .papel-so-com) { display:none; }
+/* ---- Janela do app desktop (Windows/Linux): faixa do topo no lugar da barra do sistema ---- */
+html.janela-propria { --barra-titulo:32px; --altura-util:calc(100vh - var(--barra-titulo)); }
+html.janela-propria body { padding-top:var(--barra-titulo); }
+#barra-titulo { display:none; }
+html.janela-propria #barra-titulo { position:fixed; top:0; left:0; right:0; z-index:40; display:flex; align-items:center; gap:8px; height:var(--barra-titulo); padding:0 12px; background:var(--sidebar-bg); color:var(--muted); font-size:12px; font-weight:600; letter-spacing:.3px; -webkit-app-region:drag; user-select:none; }
+#barra-titulo img { width:16px; height:16px; }
 /* Item de plug-in com nome longo fica numa linha só, cortado com reticências. */
 .sidebar .nav-item .rotulo { width:auto; flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; text-align:left; font-size:inherit; }
 .acoes-rapidas + nav { margin-top:0; }
@@ -1139,7 +1145,7 @@ html.com-papel-de-parede .app-shell:not(.cofre-aberto) > .content .page-head :is
 .aba.ativa { flex-shrink:0; }
 
 /* ---- Painel da direita (links de volta/saída, sumário, etiquetas da nota em edição) ---- */
-.painel-direito { position:relative; flex:0 0 auto; height:100vh; min-width:0; display:flex; flex-direction:column;
+.painel-direito { position:relative; flex:0 0 auto; height:var(--altura-util, 100vh); min-width:0; display:flex; flex-direction:column;
   background:var(--sidebar-bg,#11161D); border-left:1px solid var(--line); }
 .painel-direito-divisor { position:absolute; top:0; left:0; bottom:0; width:7px; z-index:2; cursor:col-resize; touch-action:none; }
 .painel-direito-divisor::after { content:""; position:absolute; top:0; bottom:0; left:0; width:2px; background:transparent; transition:background-color var(--rapido) var(--curva); }
