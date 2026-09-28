@@ -4539,16 +4539,19 @@ document.addEventListener('click',e=>{
 },true);
 // Segurar o botão direito sobre um item e passar por cima de outros marca todos; o menu do lote abre
 // ao soltar. Um clique direito rápido abre o menu normal.
+// O gesto pode começar em qualquer ponto da árvore (uma pasta, o espaço vazio): marca as notas e os
+// fluxos por onde o ponteiro passar.
 document.addEventListener('pointerdown',e=>{
   marcandoComDireito=null;
-  const linha=e.button===2&&e.target.closest?.('.cofre-lateral .tree-note, .cofre-lateral .tree-fluxo');
-  if(linha)marcandoComDireito={inicio:linha.dataset.id,moveu:false};
+  if(e.button!==2||!e.target.closest?.('.cofre-lateral .tree'))return;
+  const linha=e.target.closest('.tree-note, .tree-fluxo');
+  marcandoComDireito={inicio:linha?.dataset.id||null,moveu:false};
 });
 document.addEventListener('pointerover',e=>{
   if(!marcandoComDireito||!(e.buttons&2))return;
   const linha=e.target.closest?.('.cofre-lateral .tree-note, .cofre-lateral .tree-fluxo');
   if(!linha||(!marcandoComDireito.moveu&&linha.dataset.id===marcandoComDireito.inicio))return;
-  if(!marcandoComDireito.moveu){marcandoComDireito.moveu=true;selecaoArvore=new Set([marcandoComDireito.inicio]);}
+  if(!marcandoComDireito.moveu){marcandoComDireito.moveu=true;selecaoArvore=new Set(marcandoComDireito.inicio?[marcandoComDireito.inicio]:[]);}
   selecaoArvore.add(linha.dataset.id);marcarSelecaoArvore();
 });
 document.addEventListener('pointerup',e=>{
