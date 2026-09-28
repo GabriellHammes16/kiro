@@ -4121,8 +4121,11 @@ function ultimasChamadas(id) {
 
 // Uma linha por plug-in. Todo texto do manifesto entra escapado.
 // Campos das configurações do plug-in: os mesmos tipos das opções de painel da Hoje.
-function camposDasConfiguracoes(id, declaracoes, valores) {
-  return `<div class="plugin-configuracoes"><span class="plugin-chave-rotulo">Configurações</span>${declaracoes.map(o => {
+function camposDasConfiguracoes(id, nome, declaracoes, valores) {
+  const alvo = `plugin-cfg-${escapeHtml(id)}`;
+  const botao = `<button type="button" class="icon-button plugin-config-botao" popovertarget="${alvo}" title="Configurações de ${nome}" aria-label="Configurações de ${nome}">${icone('configuracoes')}</button>`;
+  return botao + `<div popover id="${alvo}" class="plugin-configuracoes" role="dialog" aria-label="Configurações de ${nome}">`
+    + `<header class="plugin-config-topo"><h3>${nome}</h3><button type="button" class="icon-button" popovertarget="${alvo}" popovertargetaction="hide" aria-label="Fechar">${icone('fechar')}</button></header>${declaracoes.map(o => {
     const alvo = `data-config-plugin="${escapeHtml(id)}" data-config="${escapeHtml(o.key)}"`, v = valores[o.key];
     const campo = o.type === 'boolean' ? `<input type="checkbox" ${alvo} ${v ? 'checked' : ''} />`
       : o.type === 'number' ? `<input type="number" ${alvo} value="${v}" step="any"${o.min !== undefined ? ` min="${o.min}"` : ''}${o.max !== undefined ? ` max="${o.max}"` : ''} />`
@@ -4147,12 +4150,11 @@ function linhaDoPlugin({ id, manifesto }, situacao, erro = '', chaves = {}, conf
     ${m?.description ? `<span class="small-muted">${escapeHtml(m.description)}</span>` : ''}
     ${m ? itensDePermissao(m, novas, hostsNovos) : ''}
     ${m?.secrets.length ? `<div class="plugin-chaves">${m.secrets.map(s => itemDaChave(id, s, !!chaves[s.name], segredosNovos.includes(s.name))).join('')}</div>` : ''}
-    ${m?.settings?.length ? camposDasConfiguracoes(id, m.settings, valoresDasConfiguracoes(m.settings, configuracoes)) : ''}
     ${situacao === 'ativo' && m.permissions.includes('network') ? ultimasChamadas(id) : ''}
     ${comandos ? `<div class="cfg-botoes plugin-comandos-cfg">${comandos}</div>` : ''}
     ${situacao === 'aguardando' ? `<p class="cfg-aviso">Uma atualização pediu mais acesso${segredosNovos.length ? ` (chave nova: ${segredosNovos.map(n => escapeHtml(m.secrets.find(s => s.name === n)?.label || n)).join(', ')})` : ''}. Ligue de novo para revisar o que é novo.</p>` : ''}
     ${erro ? `<p class="cfg-aviso">${escapeHtml(erro)}</p>` : ''}
-  </span>${chave}</div>`;
+  </span><span class="plugin-acoes">${m?.settings?.length ? camposDasConfiguracoes(id, nome, m.settings, valoresDasConfiguracoes(m.settings, configuracoes)) : ''}${chave}</span></div>`;
 }
 
 async function conteudoDaAbaPlugins() {
