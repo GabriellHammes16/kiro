@@ -459,6 +459,15 @@ function toggleFolder(id) {
 // Preferências de tela salvas por instalação. A chave antiga (kuroi.*) ainda é lida:
 // quem usava o aplicativo com o nome anterior não perde o que tinha escolhido.
 const lerPreferencia = chave => { try { return localStorage.getItem(`kiro.${chave}`) ?? localStorage.getItem(`kuroi.${chave}`); } catch { return null; } };
+// Corretor ortográfico: preferência desta instalação, ligado por padrão. Desligado, o html
+// ganha spellcheck="false" (vale para todos os campos, no app e no navegador) e, no app,
+// os dicionários saem da memória.
+let corretorLigado = lerPreferencia('corretor') !== '0';
+function aplicarCorretor() {
+  if (corretorLigado) document.documentElement.removeAttribute('spellcheck');
+  else document.documentElement.setAttribute('spellcheck', 'false');
+  window.cadernoDesktop?.definirCorretor?.(corretorLigado);
+}
 let lateralRecolhida = lerPreferencia('lateralRecolhida') === '1';
 // Papel de parede: imagem atrás do conteúdo de todas as telas, menos Pastas (onde se lê e escreve).
 // Fica nesta instalação, como a aparência. Um véu com a cor de fundo do tema, na força escolhida,
@@ -2912,8 +2921,14 @@ function bindCorpo(corpo) {
     const link = evento.target.closest('.wikilink');
     if (link) { evento.preventDefault(); seguirWikilink(link); }
   });
-  // O botão direito já abriu o bloco no mousedown; o menu age sobre ele.
-  corpo.addEventListener('contextmenu', evento => abrirMenuContexto(evento, blocoAberto?.campo ?? abrirNoPonto(evento)));
+  // O botão direito já abriu o bloco no mousedown; o menu age sobre ele. Shift + botão direito
+  // deixa o menu do navegador (na versão web, é onde ficam as sugestões de ortografia).
+  corpo.addEventListener('contextmenu', evento => {
+    if (evento.shiftKey) return;
+    const area = blocoAberto?.campo ?? abrirNoPonto(evento);
+    if (podeCorrigir(evento)) return esperarCorretor(evento, area, menuDaNota());
+    abrirMenuContexto(evento, area);
+  });
   // change cobre mouse e teclado (espaço na caixa focada).
   corpo.addEventListener('change', evento => { if (evento.target.matches('.md-tarefa input[type="checkbox"]')) marcarTarefa(evento.target); });
   corpo.addEventListener('dragover', evento => { if (evento.dataTransfer?.types.includes('Files')) evento.preventDefault(); });
@@ -3151,6 +3166,27 @@ function abrirMenuContexto(evento, area, itens = menuDaNota(), opcoes = {}) {
   window.addEventListener('blur', fecharMenuContexto);
   window.addEventListener('resize', fecharMenuContexto);
 }
+// Corretor no app: num campo de texto o menu nativo não é bloqueado, para o processo principal
+// descobrir a palavra sob o clique; ele devolve palavra e sugestões e o menu do Kiro abre com
+// elas no topo. Sem resposta em 400 ms, abre o menu de sempre.
+let menuDoCorretor = null, limiteDoCorretor = 0;
+const CAMPO_DE_TEXTO = 'textarea, input[type="text"], input[type="search"], input:not([type]), [contenteditable="true"], [contenteditable=""]';
+const podeCorrigir = evento => Boolean(window.cadernoDesktop?.aoMenuDoCorretor && corretorLigado && evento.target.closest?.(CAMPO_DE_TEXTO));
+function esperarCorretor(evento, area, itens) {
+  menuDoCorretor = { x: evento.clientX, y: evento.clientY, area, itens };
+  clearTimeout(limiteDoCorretor);
+  limiteDoCorretor = setTimeout(() => abrirMenuDoCorretor({ palavra: '' }), 400);
+}
+function abrirMenuDoCorretor(dados) {
+  const pendente = menuDoCorretor;
+  menuDoCorretor = null;
+  clearTimeout(limiteDoCorretor);
+  if (!pendente) return;
+  const doCorretor = KiroCorretor.itensDoCorretor(dados, { trocar: s => window.cadernoDesktop.trocarPalavra(s), adicionar: p => window.cadernoDesktop.adicionarAoDicionario(p), t });
+  const itens = doCorretor.length && pendente.itens.length ? [...doCorretor, { separador: true }, ...pendente.itens] : [...doCorretor, ...pendente.itens];
+  if (itens.length) abrirMenuContexto({ clientX: pendente.x, clientY: pendente.y, preventDefault() {} }, pendente.area, itens);
+}
+window.cadernoDesktop?.aoMenuDoCorretor?.(abrirMenuDoCorretor);
 async function acaoEditor(tipo){
   if(tipo==='salvar')return void await salvarNota();
   if(tipo==='fechar'){ if(editing) await fecharAba(abas.ativo,idDaAba(editing)); return; }
@@ -4466,6 +4502,7 @@ async function showSettings(aba = abaDasConfiguracoes) {
     ${painel('editor', `<section class="cfg-grupo">
       <header class="cfg-grupo-topo">${texto('Notas', 'O que aparece junto do texto da nota aberta.')}</header>
       <label class="cfg-linha cfg-chave">${texto('Mostrar “Mencionada em”', 'Lista, no fim da nota, as notas que apontam para ela com [[links]].')}<input type="checkbox" id="cfg-mencoes" ${mostrarMencoes ? 'checked' : ''} /><span class="interruptor" aria-hidden="true"></span></label>
+      <label class="cfg-linha cfg-chave">${texto(t('Corretor ortográfico'), t('Sublinha palavras erradas em português e em inglês, ao mesmo tempo. Botão direito sobre a palavra mostra as sugestões.'))}<input type="checkbox" id="cfg-corretor" ${corretorLigado ? 'checked' : ''} /><span class="interruptor" aria-hidden="true"></span></label>
     </section>`)}
     ${painel('hoje', `<div id="cfg-hoje">${conteudoDaAbaHoje()}</div>`)}
     ${painel('sistema', `<section class="cfg-grupo">
@@ -4546,6 +4583,13 @@ async function showSettings(aba = abaDasConfiguracoes) {
     await trocarIdioma(e.target.value);
     closeModal(true);
     showSettings('sistema');   // a janela reabre já no idioma novo
+  });
+  $('#cfg-corretor')?.addEventListener('change', e => {
+    e.stopPropagation();
+    modalDirty = false;
+    corretorLigado = e.target.checked;
+    try { localStorage.setItem('kiro.corretor', corretorLigado ? '1' : '0'); } catch { /* janela privada: vale só nesta sessão */ }
+    aplicarCorretor();
   });
   $('#cfg-mencoes')?.addEventListener('change', e => {
     mostrarMencoes = e.target.checked;
@@ -4932,6 +4976,7 @@ setInterval(()=>{if(document.hidden)return;if(lastDay!==today()){lastDay=today()
 desenharIconesFixos();
 if (window.cadernoDesktop?.janelaPropria) document.documentElement.classList.add('janela-propria');
 aplicarAparencia();
+aplicarCorretor();
 coresDaJanela();
 aplicarPapelDeParede();
 new MutationObserver(sincronizarVideoDoPapel).observe(document.querySelector('.app-shell'), { attributes: true, attributeFilter: ['class'] });
@@ -4939,6 +4984,8 @@ document.addEventListener('visibilitychange', sincronizarVideoDoPapel);
 aplicarLateralCompacta();
 aplicarLarguraArvore(larguraArvore);
 document.querySelector('#alternar-lateral').onclick = alternarLateralCompacta;
+// Campos de texto sem menu próprio (títulos, buscas, cartões): no app, só as sugestões do corretor.
+document.addEventListener('contextmenu', e => { if (!e.defaultPrevented && !e.shiftKey && !menuDoCorretor && podeCorrigir(e)) esperarCorretor(e, e.target, []); });
 iniciar();
 
 // ---- Início ----

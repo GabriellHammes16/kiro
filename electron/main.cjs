@@ -2,10 +2,13 @@ const { app, BrowserWindow, ipcMain, Menu, shell, dialog, protocol, safeStorage 
 const ligacaoRede = require('../ligacao-rede-plugins.cjs');
 const { criarGuardaDeSegredos } = require('../segredos-plugins.cjs');
 const KiroPlugins = require('../plugins.js');
-const { readFile, readdir, mkdir } = require('node:fs/promises');
+const { readFile, readdir, mkdir, copyFile } = require('node:fs/promises');
 const { join, dirname } = require('node:path');
 const { existsSync } = require('node:fs');
 const { Vault, atomicWrite } = require('../vault.cjs');
+const { palavraValida, palavraParaDicionario } = require('../corretor.js');
+// Corretor: português e inglês juntos (a palavra vale se estiver certa em um dos dois).
+const IDIOMAS_DO_CORRETOR = ['pt-BR', 'en-US'];
 const { AgentConfig } = require('../agent/index.cjs');
 let vault, settings, primeiraVez = false;
 // As imagens das notas chegam à janela por este esquema, servido pelo Vault: a página
@@ -27,10 +30,28 @@ const ARQUIVOS_DO_KIRO = new Set(['plugin-worker.js', 'plugins.js', 'kiro-frame.
 // com as cores do tema (a página manda as cores por 'janela:cores'). No macOS fica a janela padrão.
 const JANELA_PROPRIA = process.platform !== 'darwin';
 const ALTURA_DA_BARRA = 32;
+// Dicionários embutidos (dicionarios/*.bdic) vão para a pasta onde o Chromium os procura, então
+// ele não baixa nada. Sem a pasta (corretor do sistema), só ativa os idiomas.
+async function prepararCorretor(sessao) {
+  const embutidos = join(__dirname, '..', 'dicionarios');
+  if (existsSync(embutidos)) {
+    const destino = join(app.getPath('userData'), 'Dictionaries');
+    await mkdir(destino, { recursive: true });
+    for (const arquivo of (await readdir(embutidos)).filter(a => a.endsWith('.bdic')))
+      if (!existsSync(join(destino, arquivo))) await copyFile(join(embutidos, arquivo), join(destino, arquivo));
+  }
+  sessao.setSpellCheckerLanguages(IDIOMAS_DO_CORRETOR.filter(i => sessao.availableSpellCheckerLanguages.includes(i)));
+}
 function createWindow() {
   const window = new BrowserWindow({ width: 1280, height: 820, minWidth: 900, minHeight: 620, backgroundColor: '#0a0a0a', title: 'Kiro',
     ...(JANELA_PROPRIA ? { titleBarStyle: 'hidden', titleBarOverlay: { color: '#11161D', symbolColor: '#E5E7EB', height: ALTURA_DA_BARRA } } : {}), icon: join(__dirname, '..', 'kiro-logo.png'), webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true, preload: join(__dirname, 'preload.cjs') } });
   window.loadFile(join(__dirname, '..', 'index.html'));
+  // Depois da página, para não atrasar a abertura.
+  window.webContents.once('did-finish-load', () => prepararCorretor(window.webContents.session).catch(() => { /* sem corretor, o app segue */ }));
+  // Botão direito num campo de texto: a página abre o próprio menu com a palavra e as sugestões.
+  window.webContents.on('context-menu', (_evento, p) => {
+    if (p.isEditable) window.webContents.send('corretor:menu', { palavra: p.misspelledWord || '', sugestoes: (p.dictionarySuggestions || []).slice(0, 5) });
+  });
   window.webContents.on('will-navigate', event => event.preventDefault());
   window.webContents.setWindowOpenHandler(({ url }) => { if (/^https?:/i.test(url)) shell.openExternal(url); return { action: 'deny' }; });
 }
@@ -131,6 +152,9 @@ else app.whenReady().then(async () => {
   // A versão do app é o que a página compara com o minKiro do manifesto.
   ipcMain.handle('app:version', () => app.getVersion());
   // Cores dos botões da janela: só as duas cores, validadas, para a janela que pediu.
+  ipcMain.on('corretor:definir', (event, ligado) => event.sender.session.setSpellCheckerEnabled(ligado === true));
+  ipcMain.on('corretor:trocar', (event, palavra) => { if (palavraValida(palavra)) event.sender.replaceMisspelling(palavra); });
+  ipcMain.on('corretor:adicionar', (event, palavra) => { if (palavraParaDicionario(palavra)) event.sender.session.addWordToSpellCheckerDictionary(palavra); });
   ipcMain.on('janela:cores', (event, cores) => {
     const cor = v => (typeof v === 'string' && /^#[0-9a-f]{6}$/i.test(v.trim()) ? v.trim() : null);
     const janela = BrowserWindow.fromWebContents(event.sender);

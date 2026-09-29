@@ -2,6 +2,11 @@ const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('cadernoDesktop', {
   janelaPropria: process.platform !== 'darwin',
   coresDaJanela: cores => ipcRenderer.send('janela:cores', cores),
+  definirCorretor: ligado => ipcRenderer.send('corretor:definir', ligado === true),
+  aoMenuDoCorretor: fn => ipcRenderer.on('corretor:menu', (_evento, dados) => fn(dados)),
+  trocarPalavra: palavra => ipcRenderer.send('corretor:trocar', palavra),
+  adicionarAoDicionario: palavra => ipcRenderer.send('corretor:adicionar', palavra),
+  definirIdioma: codigo => ipcRenderer.send('idioma:definir', codigo),
   loadState: () => ipcRenderer.invoke('vault:load'),
   saveState: state => ipcRenderer.invoke('vault:save', state),
   openVault: () => ipcRenderer.invoke('vault:open'),
