@@ -5,16 +5,16 @@ Data: 2026-09-28 · Estado: aprovado no brainstorming.
 ## Objetivo
 
 A interface do Kiro passa a existir em vários idiomas, escolhidos nas Configurações, e o
-editor ganha um corretor ortográfico que reconhece sozinho se a pessoa escreve em português,
-inglês ou espanhol — a interface pode estar em inglês e as notas em português.
+editor ganha um corretor ortográfico que reconhece sozinho se a pessoa escreve em português
+ou inglês — a interface pode estar em inglês e as notas em português.
 
 O trabalho tem duas etapas, cada uma com spec, plano e versão próprios:
 
 1. **Etapa 1 (esta spec):** mecanismo de tradução, seletor de idioma, corretor com
    ligar/desligar e sugestões no menu do botão direito, datas e ordenação por idioma, e a
    tradução completa para o **inglês** (a prova do mecanismo).
-2. **Etapa 2:** traduções para **espanhol**, **chinês simplificado** (`zh-CN`) e **chinês
-   tradicional** (`zh-TW`). Com a base pronta, é escrever os arquivos de tradução e somar os
+2. **Etapa 2:** traduções para **chinês simplificado** (`zh-CN`) e **chinês tradicional**
+   (`zh-TW`). Com a base pronta, é escrever os arquivos de tradução e somar os
    códigos ao seletor e à detecção do idioma do sistema.
 
 ## Decisões
@@ -22,18 +22,18 @@ O trabalho tem duas etapas, cada uma com spec, plano e versão próprios:
 | Assunto | Decisão |
 |---|---|
 | Abordagem | A frase em português é a chave: `t('Sem título')`; um arquivo por idioma mapeia `'Sem título' → 'Untitled'` |
-| Idiomas (ao fim das duas etapas) | Português (padrão), inglês, espanhol, chinês simplificado, chinês tradicional |
+| Idiomas (ao fim das duas etapas) | Português do Brasil (padrão), inglês, chinês simplificado, chinês tradicional |
 | Onde se escolhe | Configurações → **Sistema**, primeira linha: "Idioma" |
 | Onde grava | `localStorage`, chave `kiro.idioma` (preferência de tela, como a aparência; não vai para o cofre) |
 | Primeira abertura | Segue `navigator.language` se for um idioma suportado; senão, português |
 | Troca de idioma | Na hora, sem reiniciar: `definirIdioma` → grava → `render()` |
-| Corretor: idiomas | Português, inglês e espanhol **sempre ativos juntos**; a palavra vale se estiver certa em qualquer um. Sem ajuste por idioma |
+| Corretor: idiomas | Português do Brasil e inglês **sempre ativos juntos**; a palavra vale se estiver certa em qualquer um. Sem ajuste por idioma |
 | Corretor: onde se liga | Configurações → **Editor**: interruptor "Corretor ortográfico", ligado por padrão; `localStorage`, chave `kiro.corretor` |
 | Dicionários | Embutidos no instalador (sem rede); se o Electron não aceitar dicionários locais, cai no download padrão do Google e a decisão é revista com o dono |
 | Fica em português | API do agente, MCP, logs do servidor, `docs/` |
 
-Custo aceito: com português e espanhol ativos juntos, um erro de português que é palavra certa
-em espanhol ("tambien", "nuevo") não é sublinhado.
+Custo aceito: com os dois ativos juntos, um erro de português que é palavra certa em inglês
+("ten" no lugar de "tem") não é sublinhado — caso raro entre essas duas línguas.
 
 ## Tradução
 
@@ -52,11 +52,11 @@ no Node por `module.exports`, para os testes). Expõe:
   idioma + opções e um `Intl.Collator` por idioma (`numeric: true`); o cache é refeito só
   quando o idioma muda.
 - `IDIOMAS` — lista do seletor, cada um com o nome no próprio idioma
-  (`Português`, `English`; na etapa 2 `Español`, `简体中文`, `繁體中文`).
+  (`Português`, `English`; na etapa 2 `简体中文`, `繁體中文`).
 
 ### Arquivos de tradução
 
-`idiomas/en.js` (etapa 2: `es.js`, `zh-CN.js`, `zh-TW.js`) registra um objeto
+`idiomas/en.js` (etapa 2: `zh-CN.js`, `zh-TW.js`) registra um objeto
 `{ 'frase em português': 'tradução', … }` em `KiroIdiomas`. Não existe arquivo de português: o
 texto do código já é o português.
 
@@ -78,7 +78,7 @@ nova sem título ganha "Sem título" no idioma atual.
 ### Desktop (Electron)
 
 - Depois que a página carrega (não antes, para não atrasar a abertura), `main.cjs` chama
-  `session.setSpellCheckerLanguages` com `pt-BR`, `en-US` e `es`, filtrados por
+  `session.setSpellCheckerLanguages` com `pt-BR` e `en-US`, filtrados por
   `availableSpellCheckerLanguages`; o que não existir é ignorado.
 - Dicionários embutidos: o primeiro passo do plano verifica se o Electron carrega `.bdic` locais
   (por `setSpellCheckerDictionaryDownloadURL` apontando para arquivos do app). Se não der, fica
@@ -102,7 +102,7 @@ nova sem título ganha "Sem título" no idioma atual.
 
 ### Chinês
 
-A interface fica em chinês; o corretor continua verificando português, inglês e espanhol, e os
+A interface fica em chinês; o corretor continua verificando português e inglês, e os
 ideogramas não são sublinhados.
 
 ## Desempenho
@@ -134,13 +134,14 @@ ideogramas não são sublinhados.
   `en.js`, se sobrar em `en.js` frase que o código não usa, ou se os marcadores `{…}` não
   baterem; `t()` com e sem valores; português não carrega arquivo; código desconhecido cai no
   padrão; cache de formatadores refeito na troca de idioma.
-- `main.cjs`: ativa os três idiomas e trata `corretor:definir` e o pedido de sugestões (mesmo
+- `main.cjs`: ativa os dois idiomas e trata `corretor:definir` e o pedido de sugestões (mesmo
   estilo de inspeção de `plugins.test.cjs`).
 - Função pura dos itens de sugestão do menu.
 - Os testes atuais que procuram texto em português no código continuam valendo.
 
 ## Fora do escopo
 
+- Espanhol (na interface e no corretor).
 - Escolher em quais idiomas o corretor verifica.
 - Detectar o idioma por parágrafo (o Chromium não aplica dicionário por trecho).
 - Traduzir a API do agente, o MCP, os logs e a documentação.
