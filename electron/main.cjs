@@ -10,6 +10,10 @@ const { palavraValida, palavraParaDicionario } = require('../corretor.js');
 // Corretor: português e inglês juntos (a palavra vale se estiver certa em um dos dois).
 const IDIOMAS_DO_CORRETOR = ['pt-BR', 'en-US'];
 const { AgentConfig } = require('../agent/index.cjs');
+const KiroIdiomas = require('../idiomas.js');
+KiroIdiomas.registrar('en', require('../idiomas/en.js'));
+// frase() só marca a mensagem para a página traduzir (aqui ela segue em português); t() traduz na hora.
+const { t, frase } = KiroIdiomas;
 let vault, settings, primeiraVez = false;
 // As imagens das notas chegam à janela por este esquema, servido pelo Vault: a página
 // (file://) não lê o disco, e só arquivos de imagem de dentro do cofre passam.
@@ -84,13 +88,13 @@ else app.whenReady().then(async () => {
   ipcMain.handle('vault:first-run', () => (primeiraVez ? { primeiraVez: true, padrao: directory } : { primeiraVez: false }));
   // Boas-vindas: 'padrao' usa Documentos/Kiro/vault; 'criar' e 'abrir' perguntam a pasta.
   ipcMain.handle('vault:setup', async (event, modo) => {
-    if (!primeiraVez) throw new Error('O cofre já foi escolhido.');
+    if (!primeiraVez) throw new Error(frase('O cofre já foi escolhido.'));
     let pasta = directory;
     if (modo === 'criar' || modo === 'abrir') {
       const criar = modo === 'criar';
       const resultado = await dialog.showOpenDialog(BrowserWindow.fromWebContents(event.sender), {
-        title: criar ? 'Onde criar o cofre do Kiro' : 'Abrir uma pasta de notas como cofre',
-        buttonLabel: criar ? 'Criar cofre aqui' : 'Abrir cofre',
+        title: criar ? t('Onde criar o cofre do Kiro') : t('Abrir uma pasta de notas como cofre'),
+        buttonLabel: criar ? t('Criar cofre aqui') : t('Abrir cofre'),
         defaultPath: app.getPath('documents'),
         properties: ['openDirectory', 'createDirectory'],
       });
@@ -99,7 +103,7 @@ else app.whenReady().then(async () => {
       // Criar numa pasta que já tem coisas (Documentos, por exemplo) não mistura as notas
       // com o resto: o cofre vira a subpasta "Kiro". Pasta vazia vira o próprio cofre.
       if (criar && (await readdir(pasta)).length) pasta = join(pasta, 'Kiro');
-    } else if (modo !== 'padrao') throw new Error('Opção de cofre inválida.');
+    } else if (modo !== 'padrao') throw new Error(frase('Opção de cofre inválida.'));
     const escolhido = new Vault(pasta);
     await escolhido.load();
     await atomicWrite(settings, JSON.stringify({ directory: escolhido.directory }));
@@ -109,14 +113,14 @@ else app.whenReady().then(async () => {
     return { directory: escolhido.directory };
   });
   ipcMain.handle('vault:load', () => {
-    if (!vault) throw new Error('Escolha onde ficam suas notas para começar.');
+    if (!vault) throw new Error(frase('Escolha onde ficam suas notas para começar.'));
     return vault.load();
   });
   ipcMain.handle('vault:save', (_event, state) => vault.save(state));
   ipcMain.handle('vault:trash', () => vault.trash());
   ipcMain.handle('vault:restore', (_event, pedido) => vault.restore(pedido));
   ipcMain.handle('vault:attachment', (_event, pedido) => {
-    if (!(pedido?.dados instanceof Uint8Array)) throw new Error('Imagem inválida.');
+    if (!(pedido?.dados instanceof Uint8Array)) throw new Error(frase('Imagem inválida.'));
     return vault.saveAttachment({ name: String(pedido.nome || ''), data: Buffer.from(pedido.dados) });
   });
   // `vault` é lido a cada pedido: depois de escolher outro cofre, as imagens vêm do novo.
@@ -134,7 +138,7 @@ else app.whenReady().then(async () => {
     try {
       const url = new URL(request.url);
       const arquivo = decodeURIComponent(url.pathname.replace(/^\//, ''));
-      if (url.hostname === HOST_DO_KIRO && !ARQUIVOS_DO_KIRO.has(arquivo)) throw new Error('Arquivo do Kiro fora da lista.');
+      if (url.hostname === HOST_DO_KIRO && !ARQUIVOS_DO_KIRO.has(arquivo)) throw new Error(frase('Arquivo do Kiro fora da lista.'));
       const tipo = url.hostname === HOST_DO_KIRO ? 'text/javascript; charset=utf-8' : KiroPlugins.tipoDoArquivoDoPlugin(arquivo);
       let corpo = url.hostname === HOST_DO_KIRO ? await readFile(join(__dirname, '..', arquivo)) : await vault.readPluginFile(url.hostname, arquivo);
       const cabecalhos = { 'Content-Type': tipo, 'X-Content-Type-Options': 'nosniff', 'Content-Security-Policy': CSP_DO_WORKER, 'Access-Control-Allow-Origin': '*' };
@@ -152,6 +156,7 @@ else app.whenReady().then(async () => {
   // A versão do app é o que a página compara com o minKiro do manifesto.
   ipcMain.handle('app:version', () => app.getVersion());
   // Cores dos botões da janela: só as duas cores, validadas, para a janela que pediu.
+  ipcMain.on('idioma:definir', (_event, codigo) => KiroIdiomas.definirIdioma(String(codigo || '')));
   ipcMain.on('corretor:definir', (event, ligado) => event.sender.session.setSpellCheckerEnabled(ligado === true));
   ipcMain.on('corretor:trocar', (event, palavra) => { if (palavraValida(palavra)) event.sender.replaceMisspelling(palavra); });
   ipcMain.on('corretor:adicionar', (event, palavra) => { if (palavraParaDicionario(palavra)) event.sender.session.addWordToSpellCheckerDictionary(palavra); });
@@ -179,7 +184,7 @@ else app.whenReady().then(async () => {
   ipcMain.handle('plugins:fetch', (_event, pluginId, pedido) => ligacaoRede.atenderFetch({ ...contextoDeRede(), pluginId, pedido }));
   ipcMain.handle('plugins:secrets:state', (_event, pluginId) => ligacaoRede.estadoDasChaves({ ...contextoDeRede(), pluginId }));
   ipcMain.handle('plugins:secrets:set', (_event, pluginId, nome, valor) => {
-    if (!safeStorage.isEncryptionAvailable()) throw new Error('A cifra do sistema não está disponível neste computador; a chave não foi gravada.');
+    if (!safeStorage.isEncryptionAvailable()) throw new Error(frase('A cifra do sistema não está disponível neste computador; a chave não foi gravada.'));
     return ligacaoRede.gravarChave({ ...contextoDeRede(), pluginId, nome, valor });
   });
   ipcMain.handle('plugins:secrets:remove', (_event, pluginId, nome) => ligacaoRede.removerChave({ ...contextoDeRede(), pluginId, nome }));
@@ -190,7 +195,7 @@ else app.whenReady().then(async () => {
   ipcMain.handle('agent:config:get', () => agentConfig.load());
   ipcMain.handle('agent:config:set', (_event, parcial) => agentConfig.save(parcial));
   ipcMain.handle('vault:choose', async event => {
-    const result = await dialog.showOpenDialog(BrowserWindow.fromWebContents(event.sender), { title: 'Abrir pasta como cofre Kiro', properties: ['openDirectory', 'createDirectory'] });
+    const result = await dialog.showOpenDialog(BrowserWindow.fromWebContents(event.sender), { title: t('Abrir pasta como cofre Kiro'), properties: ['openDirectory', 'createDirectory'] });
     if (result.canceled) return null;
     const selected = new Vault(result.filePaths[0]);
     const state = await selected.load();

@@ -4,6 +4,8 @@
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const { createHash, randomUUID } = require('node:crypto');
+// Marca a frase para tradução na tela (idiomas.js); aqui o texto segue em português.
+const frase = f => f;
 
 const ID = /^[a-z0-9][a-z0-9-]{1,39}$/;
 const NOME = /^[a-zA-Z][a-zA-Z0-9_]{0,39}$/;
@@ -11,19 +13,19 @@ const LIMITE = 4096;
 
 // Mesmo cofre, mesma chave: resolve, barras normais e, no Windows, sem diferença de caixa.
 function cofreNormalizado(cofre) {
-  if (typeof cofre !== 'string' || !cofre) throw new Error('Caminho do cofre inválido.');
+  if (typeof cofre !== 'string' || !cofre) throw new Error(frase('Caminho do cofre inválido.'));
   let p = path.resolve(cofre).replace(/\\/g, '/');
   if (p.length > 1 && !/^[a-zA-Z]:\/$/.test(p)) p = p.replace(/\/+$/, '');
   return process.platform === 'win32' ? p.toLowerCase() : p;
 }
 
 function prefixo(cofre, pluginId) {
-  if (typeof pluginId !== 'string' || !ID.test(pluginId)) throw new Error('Identificador de plug-in inválido.');
+  if (typeof pluginId !== 'string' || !ID.test(pluginId)) throw new Error(frase('Identificador de plug-in inválido.'));
   return `${createHash('sha256').update(cofreNormalizado(cofre)).digest('hex')}:${pluginId}:`;
 }
 
 function chave(cofre, pluginId, nome) {
-  if (typeof nome !== 'string' || !NOME.test(nome)) throw new Error('Nome de segredo inválido.');
+  if (typeof nome !== 'string' || !NOME.test(nome)) throw new Error(frase('Nome de segredo inválido.'));
   return prefixo(cofre, pluginId) + nome;
 }
 
@@ -63,12 +65,12 @@ function criarGuardaDeSegredos({ arquivo, cifrar, decifrar }) {
     definir(cofre, pluginId, nome, valor) {
       return enfileirar(async () => {
         const k = chave(cofre, pluginId, nome);
-        if (typeof valor !== 'string') throw new Error('A chave precisa ser texto.');
-        if (!valor) throw new Error('A chave não pode ficar vazia.');
+        if (typeof valor !== 'string') throw new Error(frase('A chave precisa ser texto.'));
+        if (!valor) throw new Error(frase('A chave não pode ficar vazia.'));
         if (valor.length > LIMITE) throw new Error(`A chave passa do tamanho máximo (${LIMITE} caracteres).`);
         let cifrado;
-        try { cifrado = cifrar(valor); } catch { throw new Error('Não foi possível cifrar a chave neste computador.'); }
-        if (typeof cifrado !== 'string') throw new Error('Não foi possível cifrar a chave neste computador.');
+        try { cifrado = cifrar(valor); } catch { throw new Error(frase('Não foi possível cifrar a chave neste computador.')); }
+        if (typeof cifrado !== 'string') throw new Error(frase('Não foi possível cifrar a chave neste computador.'));
         const entradas = await ler();
         entradas[k] = cifrado;
         await gravar(entradas);

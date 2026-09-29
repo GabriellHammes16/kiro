@@ -2,12 +2,14 @@
 // comparação de permissões e consentimento. Roda no navegador e no Node, como o
 // domain.js. A API pública dos plug-ins é em inglês; o resto segue em português.
 (function (root) {
+  // Marca a frase para tradução na tela (idiomas.js); aqui o texto segue em português.
+  const frase = f => f;
   const PERMISSOES = ['notes:read', 'notes:write', 'tasks:read', 'tasks:write', 'habits:read', 'habits:write', 'folders:write', 'network'];
   const ROTULOS = {
-    'notes:read': 'ler suas notas', 'notes:write': 'criar e alterar notas',
-    'tasks:read': 'ver suas tarefas', 'tasks:write': 'criar e alterar tarefas',
-    'habits:read': 'ver seus hábitos', 'habits:write': 'criar e alterar hábitos',
-    'folders:write': 'criar e renomear pastas', network: 'acessar a internet',
+    'notes:read': frase('ler suas notas'), 'notes:write': frase('criar e alterar notas'),
+    'tasks:read': frase('ver suas tarefas'), 'tasks:write': frase('criar e alterar tarefas'),
+    'habits:read': frase('ver seus hábitos'), 'habits:write': frase('criar e alterar hábitos'),
+    'folders:write': frase('criar e renomear pastas'), network: frase('acessar a internet'),
   };
   const texto = (v, max) => typeof v === 'string' && v.length > 0 && v.length <= max;
   const versao = v => typeof v === 'string' && /^\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(v);
@@ -44,14 +46,14 @@
   const TIPOS_DE_OPCAO = ['boolean', 'number', 'select', 'text'];
   function validarOpcoesDoPainel(options, width) {
     const recusa = erro => ({ ok: false, erro });
-    if (width !== undefined && width !== 'normal' && width !== 'full') return recusa('width precisa ser "normal" ou "full".');
+    if (width !== undefined && width !== 'normal' && width !== 'full') return recusa(frase('width precisa ser "normal" ou "full".'));
     const largura = width === 'full' ? 'inteira' : 'normal';
     if (options === undefined) return { ok: true, opcoes: [], largura };
-    if (!Array.isArray(options) || options.length > 12) return recusa('options precisa ser uma lista de até 12 opções.');
+    if (!Array.isArray(options) || options.length > 12) return recusa(frase('options precisa ser uma lista de até 12 opções.'));
     const chaves = new Set(), opcoes = [];
     const finito = v => v === undefined || (typeof v === 'number' && Number.isFinite(v));
     for (const o of options) {
-      if (!o || typeof o !== 'object') return recusa('Cada opção precisa ser um objeto.');
+      if (!o || typeof o !== 'object') return recusa(frase('Cada opção precisa ser um objeto.'));
       if (typeof o.key !== 'string' || !/^[a-z][a-zA-Z0-9]{0,31}$/.test(o.key) || chaves.has(o.key)) return recusa(`Chave de opção inválida ou repetida: ${String(o.key).slice(0, 40)}.`);
       chaves.add(o.key);
       if (!TIPOS_DE_OPCAO.includes(o.type)) return recusa(`Tipo de opção desconhecido em ${o.key}.`);
@@ -84,7 +86,7 @@
     return (m && TIPOS_DE_ARQUIVO[m[1].toLowerCase()]) || null;
   };
   function validarMoldura(valor) {
-    if (!valor || typeof valor !== 'object' || !arquivoDeTela(valor.frame)) return { ok: false, erro: 'A moldura precisa de um arquivo .html da pasta do plug-in.' };
+    if (!valor || typeof valor !== 'object' || !arquivoDeTela(valor.frame)) return { ok: false, erro: frase('A moldura precisa de um arquivo .html da pasta do plug-in.') };
     const { min, max, padrao } = ALTURA_DA_MOLDURA;
     const altura = Number.isFinite(valor.height) ? Math.min(max, Math.max(min, Math.round(valor.height))) : padrao;
     return { ok: true, frame: valor.frame, height: altura, data: valor.data === undefined ? null : valor.data };
@@ -119,28 +121,28 @@
 
   function validarManifesto(bruto, { versaoDoKiro } = {}) {
     const recusa = erro => ({ ok: false, erro });
-    if (!bruto || typeof bruto !== 'object' || Array.isArray(bruto)) return recusa('O manifesto precisa ser um objeto JSON.');
-    if (!/^[a-z0-9][a-z0-9-]{1,39}$/.test(bruto.id || '')) return recusa('O campo id deve ter de 2 a 40 caracteres, em minúsculas, números e hífen.');
+    if (!bruto || typeof bruto !== 'object' || Array.isArray(bruto)) return recusa(frase('O manifesto precisa ser um objeto JSON.'));
+    if (!/^[a-z0-9][a-z0-9-]{1,39}$/.test(bruto.id || '')) return recusa(frase('O campo id deve ter de 2 a 40 caracteres, em minúsculas, números e hífen.'));
     for (const campo of ['name', 'author']) if (!texto(bruto[campo], 200)) return recusa(`O campo ${campo} é obrigatório e vai até 200 caracteres.`);
-    if (bruto.description !== undefined && !texto(bruto.description, 200)) return recusa('A descrição vai até 200 caracteres.');
-    if (!versao(bruto.version)) return recusa('A versão deve ser no formato 1.0.0.');
-    if (!versao(bruto.minKiro)) return recusa('O campo minKiro deve ser no formato 1.0.0.');
+    if (bruto.description !== undefined && !texto(bruto.description, 200)) return recusa(frase('A descrição vai até 200 caracteres.'));
+    if (!versao(bruto.version)) return recusa(frase('A versão deve ser no formato 1.0.0.'));
+    if (!versao(bruto.minKiro)) return recusa(frase('O campo minKiro deve ser no formato 1.0.0.'));
     if (versaoDoKiro && compararVersoes(bruto.minKiro, versaoDoKiro) > 0) return recusa(`Este plug-in precisa do Kiro ${bruto.minKiro} ou mais novo.`);
-    if (bruto.permissions !== undefined && !Array.isArray(bruto.permissions)) return recusa('O campo permissions deve ser uma lista de permissões.');
-    if (bruto.network !== undefined && !Array.isArray(bruto.network)) return recusa('O campo network deve ser uma lista de endereços.');
+    if (bruto.permissions !== undefined && !Array.isArray(bruto.permissions)) return recusa(frase('O campo permissions deve ser uma lista de permissões.'));
+    if (bruto.network !== undefined && !Array.isArray(bruto.network)) return recusa(frase('O campo network deve ser uma lista de endereços.'));
     const permissions = lista(bruto.permissions);
     const estranha = permissions.find(p => !PERMISSOES.includes(p));
     if (estranha !== undefined) return recusa(`Permissão desconhecida: ${estranha}.`);
     const network = lista(bruto.network);
     // O esquema vem antes do formato: quem escreveu "http://exemplo.com" merece o aviso do https.
-    if (network.some(h => typeof h === 'string' && /^[a-z]+:\/\//i.test(h))) return recusa('Em network, use só o host, sem https:// na frente.');
+    if (network.some(h => typeof h === 'string' && /^[a-z]+:\/\//i.test(h))) return recusa(frase('Em network, use só o host, sem https:// na frente.'));
     const ruim = network.find(h => !hostValido(h));
     if (ruim !== undefined) return recusa(`Endereço de rede inválido: ${ruim}. Use o host exato, como api.exemplo.com.`);
-    if (network.length && !permissions.includes('network')) return recusa('Para usar rede, declare a permissão network.');
-    if (bruto.secrets !== undefined && !Array.isArray(bruto.secrets)) return recusa('O campo secrets precisa ser uma lista.');
+    if (network.length && !permissions.includes('network')) return recusa(frase('Para usar rede, declare a permissão network.'));
+    if (bruto.secrets !== undefined && !Array.isArray(bruto.secrets)) return recusa(frase('O campo secrets precisa ser uma lista.'));
     const secrets = [];
     for (const s of lista(bruto.secrets)) {
-      if (!s || typeof s !== 'object' || Array.isArray(s)) return recusa('Cada item de secrets precisa ser um objeto.');
+      if (!s || typeof s !== 'object' || Array.isArray(s)) return recusa(frase('Cada item de secrets precisa ser um objeto.'));
       if (!nomeDeSegredo(s.name)) return recusa(`Nome de segredo inválido: ${String(s.name)}.`);
       if (secrets.some(x => x.name === s.name)) return recusa(`Segredo repetido: ${s.name}.`);
       if (!texto(s.label, 80)) return recusa(`O segredo ${s.name} precisa de label até 80 caracteres.`);
@@ -161,9 +163,9 @@
     let page = null;
     if (bruto.page !== undefined) {
       const p = bruto.page;
-      if (!p || typeof p !== 'object' || Array.isArray(p)) return recusa('O campo page precisa ser um objeto { title, file }.');
-      if (!texto(p.title, 40) || temControle(p.title)) return recusa('O título da página (page.title) é obrigatório e vai até 40 caracteres.');
-      if (!arquivoDeTela(p.file)) return recusa('page.file precisa ser um arquivo .html da pasta do plug-in, sem barra.');
+      if (!p || typeof p !== 'object' || Array.isArray(p)) return recusa(frase('O campo page precisa ser um objeto { title, file }.'));
+      if (!texto(p.title, 40) || temControle(p.title)) return recusa(frase('O título da página (page.title) é obrigatório e vai até 40 caracteres.'));
+      if (!arquivoDeTela(p.file)) return recusa(frase('page.file precisa ser um arquivo .html da pasta do plug-in, sem barra.'));
       page = { title: p.title, file: p.file };
     }
     return { ok: true, manifesto: { id: bruto.id, name: bruto.name, author: bruto.author, description: bruto.description || '', version: bruto.version, minKiro: bruto.minKiro, permissions, network, secrets, settings, page } };
@@ -177,26 +179,26 @@
     const recusa = erro => ({ ok: false, erro });
     const p = pedido && typeof pedido === 'object' ? pedido : {};
     const bruta = p.url;
-    if (typeof bruta !== 'string' || bruta.length > 8192) return recusa('Endereço (URL) inválido ou longo demais.');
+    if (typeof bruta !== 'string' || bruta.length > 8192) return recusa(frase('Endereço (URL) inválido ou longo demais.'));
     // O parser do URL apaga espaço, tab e quebra de linha e troca \ por /: o que ele
     // "conserta" em silêncio pode não ser o que o plug-in mostrou. Recusa antes.
-    if (/[\s\\\x00-\x1f\x7f-\x9f]/.test(bruta)) return recusa('Endereço (URL) inválido: espaço, barra invertida ou caractere de controle.');
+    if (/[\s\\\x00-\x1f\x7f-\x9f]/.test(bruta)) return recusa(frase('Endereço (URL) inválido: espaço, barra invertida ou caractere de controle.'));
     let url;
-    try { url = new URL(bruta); } catch { return recusa('Endereço (URL) inválido.'); }
-    if (url.protocol !== 'https:') return recusa('Só endereços https são permitidos.');
+    try { url = new URL(bruta); } catch { return recusa(frase('Endereço (URL) inválido.')); }
+    if (url.protocol !== 'https:') return recusa(frase('Só endereços https são permitidos.'));
     // "https:api.x" e "https:/api.x" são aceitos pelo parser; exige a forma inteira.
-    if (!/^https:\/\//i.test(bruta)) return recusa('Endereço (URL) inválido: use https://host/caminho.');
-    if (url.port && url.port !== '443') return recusa('Só a porta 443 é permitida.');
-    if (url.username || url.password) return recusa('URL com usuário ou senha (credenciais) não é permitida.');
+    if (!/^https:\/\//i.test(bruta)) return recusa(frase('Endereço (URL) inválido: use https://host/caminho.'));
+    if (url.port && url.port !== '443') return recusa(frase('Só a porta 443 é permitida.'));
+    if (url.username || url.password) return recusa(frase('URL com usuário ou senha (credenciais) não é permitida.'));
     const host = url.hostname.toLowerCase();
-    if (ipLiteral(host.replace(/\.$/, ''))) return recusa('Use o nome do host, não um endereço IP.');
+    if (ipLiteral(host.replace(/\.$/, ''))) return recusa(frase('Use o nome do host, não um endereço IP.'));
     // Comparação exata: "api.x.com." (ponto final) e punycode não casam com "api.x.com".
     if (!lista(hostsConcedidos).some(h => typeof h === 'string' && h.toLowerCase() === host)) return recusa(`Host não liberado: ${host}.`);
     const method = p.method === undefined || p.method === null ? 'GET' : typeof p.method === 'string' ? p.method.toUpperCase() : '';
     if (!METODOS_DE_REDE.has(method)) return recusa(`Método não permitido: ${typeof p.method === 'string' ? p.method : typeof p.method}.`);
     const headers = {};
     if (p.headers !== undefined && p.headers !== null && (typeof p.headers !== 'object' || Array.isArray(p.headers) || Object.getPrototypeOf(p.headers) !== Object.prototype))
-      return recusa('Os cabeçalhos precisam ser um objeto simples.');
+      return recusa(frase('Os cabeçalhos precisam ser um objeto simples.'));
     for (const [nome, valor] of Object.entries(p.headers || {})) {
       if (!nomeDeCabecalho(nome) || cabecalhoProibido(nome)) return recusa(`Cabeçalho não permitido: ${nome}.`);
       const chave = nome.toLowerCase();
@@ -204,9 +206,9 @@
       if (typeof valor !== 'string' || valor.length > 4096 || temControle(valor)) return recusa(`Valor inválido no cabeçalho ${nome}: texto até 4096 caracteres, sem quebra de linha.`);
       headers[chave] = valor;
     }
-    if (p.body !== undefined && p.body !== null && typeof p.body !== 'string') return recusa('O corpo precisa ser texto.');
+    if (p.body !== undefined && p.body !== null && typeof p.body !== 'string') return recusa(frase('O corpo precisa ser texto.'));
     const body = p.body ?? null;
-    if (body && bytes(body) > LIMITE_CORPO) return recusa('O corpo passa de 1 MB.');
+    if (body && bytes(body) > LIMITE_CORPO) return recusa(frase('O corpo passa de 1 MB.'));
     let secret = null;
     if (p.secret !== undefined && p.secret !== null) {
       const s = typeof p.secret === 'string' ? lista(segredos).find(x => x && x.name === p.secret) : undefined;
@@ -255,7 +257,7 @@
       const { ok, manifesto, erro } = validarManifesto(achado.manifesto, { versaoDoKiro });
       if (!ok) { plano.problemas.push({ id: achado.id, erro }); continue; }
       // A rota serve pelo nome da pasta: id diferente enganaria quem lê as permissões.
-      if (manifesto.id !== achado.id) { plano.problemas.push({ id: achado.id, erro: 'O id do manifesto é diferente do nome da pasta.' }); continue; }
+      if (manifesto.id !== achado.id) { plano.problemas.push({ id: achado.id, erro: frase('O id do manifesto é diferente do nome da pasta.') }); continue; }
       const registro = (escolhas || {})[achado.id];
       if (!registro || !registro.enabled) { plano.pendentes.push({ id: achado.id, manifesto, motivo: 'desligado' }); continue; }
       if (precisaConsentir(registro, manifesto)) { plano.pendentes.push({ id: achado.id, manifesto, motivo: 'permissoes-novas' }); continue; }

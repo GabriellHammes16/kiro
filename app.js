@@ -15,7 +15,7 @@ async function save(origem = null) {
     state = window.cadernoDesktop ? await window.cadernoDesktop.saveState(snapshot) : await api('state', snapshot);
     status(t('Salvo no cofre')); render(); eventosDoCofre(origem); return true;
   } catch (error) {
-    failed = true; status(error.message + ' ' + t('Suas alterações continuam nesta janela. Exporte-as antes de recarregar.'), true); return false;
+    failed = true; status(mensagemDoErro(error) + ' ' + t('Suas alterações continuam nesta janela. Exporte-as antes de recarregar.'), true); return false;
   } finally { setBusy(false); }
 }
 function escapeHtml(value = '') { return String(value).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
@@ -660,7 +660,7 @@ function alternarPainelDireito() {
 }
 // Atalhos que dá para trocar em Configurações → Atalhos (o padrão e a validação ficam no domain.js).
 let atalhos = Kiro.atalhosValidos((() => { try { return JSON.parse(lerPreferencia('atalhos') || 'null'); } catch { return null; } })());
-const teclaDe = id => Kiro.rotuloDaCombinacao(atalhos[id]);
+const teclaDe = id => Kiro.rotuloDaCombinacao(atalhos[id], t);
 let gravandoAtalho = false;   // enquanto Configurações escuta a combinação nova, os atalhos não disparam
 // Barra lateral principal compacta: só os ícones. O nome de cada item continua no
 // .rotulo (escondido só visualmente, para leitor de tela) e vira dica ao passar o mouse.
@@ -1503,6 +1503,9 @@ async function trocarIdioma(codigo) {
   aplicarIdiomaNaPagina();
   if (loaded) { updateCount(); render(); }
 }
+// Mensagem de erro de outro módulo (cofre, domínio, plug-ins, processo principal): as frases
+// fixas marcadas com frase() lá têm tradução; as montadas com dados seguem em português.
+const mensagemDoErro = erro => t(KiroIdiomas.semPrefixoDoIpc(erro?.message ?? erro));
 function status(message,error=false){$('#save-status').textContent=message;$('#save-status').classList.toggle('error',error);}
 let focoAntesDoBusy=null;   // inert tira o foco de qualquer coisa focada; ao sair do "ocupado" ele volta pra onde estava
 function setBusy(value){
@@ -1528,7 +1531,7 @@ async function reload(manual=false){
     // Recarregar de propósito descarta a edição: a nota aberta volta ao que está no cofre.
     if(manual&&editing){const n=editing.id&&getNote(editing.id);editing=n?{...n,tags:[...(n.tags||[])],links:[...(n.links||[])]}:null;editorDirty=false;if(!editing)currentView='today';}
     if(manual)closeModal(true);if(changed||manual)render();status(t('Cofre atualizado'));
-  }catch(error){status(t('Não foi possível ler o cofre: {erro}',{erro:error.message}),true);}
+  }catch(error){status(t('Não foi possível ler o cofre: {erro}',{erro:mensagemDoErro(error)}),true);}
   finally{setBusy(false);fecharAbertura();}
 }
 const itemQueAbre=n=>`<div class="routine-item"><span class="brand-mark">${icone('nota')}</span><a class="routine-title" data-action="edit-note" data-id="${n.id}">${escapeHtml(n.title||t('Sem título'))}</a></div>`;
@@ -2743,7 +2746,7 @@ function escolherImagemDoSistema() {
 async function guardarImagemDoFluxo(arquivo) {
   if (arquivo.size > LIMITE_DE_IMAGEM) { status(t('{nome} passa de 20 MB.', { nome: arquivo.name || t('A imagem') }), true); return null; }
   try { return (await guardarImagem(arquivo)).path; }
-  catch (erro) { status(t('Não foi possível guardar a imagem: {erro}', { erro: erro.message }), true); return null; }
+  catch (erro) { status(t('Não foi possível guardar a imagem: {erro}', { erro: mensagemDoErro(erro) }), true); return null; }
 }
 function pedirLinkDoFluxo() {
   if ($('#modal-root').firstChild) return Promise.resolve(null);
@@ -2771,7 +2774,7 @@ async function colarImagens(campo, arquivos) {
   for (const arquivo of arquivos) {
     if (arquivo.size > LIMITE_DE_IMAGEM) { status(t('{nome} passa de 20 MB.', { nome: arquivo.name || t('A imagem') }), true); continue; }
     try { trechos.push(`![[${(await guardarImagem(arquivo)).path}]]`); }
-    catch (erro) { status(t('Não foi possível guardar a imagem: {erro}', { erro: erro.message }), true); }
+    catch (erro) { status(t('Não foi possível guardar a imagem: {erro}', { erro: mensagemDoErro(erro) }), true); }
   }
   if (!trechos.length || !editing) return;
   // Se o bloco fechou enquanto a imagem era gravada, ela entra no fim da nota.
@@ -3254,10 +3257,10 @@ async function showTrash(){
         expanded=null;closeModal(true);render();status(t('Restaurado do cofre'));
       }catch(erro){
         // Falha ao restaurar não põe em risco o que está na janela: não trava a interface.
-        status(t('Não foi possível restaurar: {erro}',{erro:erro.message}),true);
+        status(t('Não foi possível restaurar: {erro}',{erro:mensagemDoErro(erro)}),true);
       }finally{setBusy(false);}
     });
-  }catch(error){status(error.message,true);}
+  }catch(error){status(mensagemDoErro(error),true);}
 }
 // ---- Plug-ins ----
 // O código de terceiro roda num worker; aqui só atendemos pedidos, sempre
@@ -3280,13 +3283,13 @@ let personalizandoHoje = false;
 async function carregarHoje() {
   clearTimeout(hojeTimer); hojeGravavel = false;
   try { hojeLayout = KiroHoje.limpar(await hojeApi.ler()); hojeGravavel = true; }
-  catch (erro) { hojeLayout = null; hojeGravavel = false; status(t('Não foi possível ler o layout da Hoje: {erro}', { erro: erro.message }), true); }
+  catch (erro) { hojeLayout = null; hojeGravavel = false; status(t('Não foi possível ler o layout da Hoje: {erro}', { erro: mensagemDoErro(erro) }), true); }
 }
 function gravarHojeDepois() {
   if (!hojeGravavel) return;
   clearTimeout(hojeTimer);
   const alvo = hojeLayout;
-  hojeTimer = setTimeout(() => hojeApi.gravar(alvo).catch(erro => status(t('Não foi possível gravar o layout da Hoje: {erro}', { erro: erro.message }), true)), 400);
+  hojeTimer = setTimeout(() => hojeApi.gravar(alvo).catch(erro => status(t('Não foi possível gravar o layout da Hoje: {erro}', { erro: mensagemDoErro(erro) }), true)), 400);
 }
 // Toda mudança de layout passa por aqui, venha da Hoje ou das Configurações.
 function mudarHoje(fn) {
@@ -3474,7 +3477,7 @@ async function carregarPlugins() {
     planoDosPlugins = KiroPlugins.planoDeCarga(achados, escolhas, { versaoDoKiro: VERSAO });
   } catch (erro) {
     planoDosPlugins = { carregar: [], pendentes: [], problemas: [] };
-    return status(t('Não foi possível ler os plug-ins: {erro}', { erro: erro.message }), true);
+    return status(t('Não foi possível ler os plug-ins: {erro}', { erro: mensagemDoErro(erro) }), true);
   }
   for (const { id, erro } of planoDosPlugins.problemas) problemasDosPlugins.set(id, erro);
   for (const alvo of planoDosPlugins.carregar) ativarPlugin(alvo);
@@ -3531,7 +3534,7 @@ async function atenderPlugin(id, data) {
     estado.comandos = (data.registros?.command || []).map(r => ({ id: String(r.id), label: String(r.label || r.id) }));
     estado.paineis = (data.registros?.panel || []).map(r => {
       const v = KiroPlugins.validarOpcoesDoPainel(r.options, r.width);
-      return { id: String(r.id), label: String(r.label || r.id), opcoes: v.ok ? v.opcoes : [], largura: v.ok ? v.largura : 'normal', erro: v.ok ? '' : t('Opções do painel inválidas: {erro}', { erro: v.erro }) };
+      return { id: String(r.id), label: String(r.label || r.id), opcoes: v.ok ? v.opcoes : [], largura: v.ok ? v.largura : 'normal', erro: v.ok ? '' : t('Opções do painel inválidas: {erro}', { erro: t(v.erro) }) };
     });
     estado.eventos = (data.registros?.event || []).map(String);
     estado.desenhaBlocos = (data.registros?.block || []).includes('render');
@@ -3757,7 +3760,7 @@ function guardarPainel(id, painel, dados) {
   const alvo = document.querySelector(`${seletorDoPainel(id, painel)} .plugin-conteudo`);
   if (dados && typeof dados.frame === 'string') {
     const m = KiroPlugins.validarMoldura(dados);
-    if (!m.ok) return guardarPainel(id, painel, { type: 'text', text: m.erro });
+    if (!m.ok) return guardarPainel(id, painel, { type: 'text', text: t(m.erro) });
     const chaveMoldura = chaveDaMolduraDoPainel(id, painel);
     dadosDasMolduras.set(chaveMoldura, m.data);
     const viva = alvo?.querySelector(':scope > iframe.plugin-moldura');
@@ -3782,13 +3785,13 @@ function acaoDoPainel(id, painel, acao, values) {
   if (!registro || registro.erro) return;
   chamarPlugin(id, { tipo: 'panel', id: painel }, { action: acao, values: values || {}, options: opcoesDoPainel(id, registro) })
     .then(dados => { if (dados) guardarPainel(id, painel, dados); })
-    .catch(erro => status(t('Plug-in {nome}: {erro}', { nome: pluginsAtivos.get(id)?.manifesto?.name || id, erro: erro.message }), true));
+    .catch(erro => status(t('Plug-in {nome}: {erro}', { nome: pluginsAtivos.get(id)?.manifesto?.name || id, erro: mensagemDoErro(erro) }), true));
 }
 
 function rodarComandoDoPlugin(id, comando) {
   chamarPlugin(id, { tipo: 'command', id: comando }, {})
     .then(() => desenharPaineisDosPlugins())   // o comando pode ter mudado o que o painel mostra
-    .catch(erro => status(t('Plug-in {nome}: {erro}', { nome: pluginsAtivos.get(id)?.manifesto?.name || id, erro: erro.message }), true));
+    .catch(erro => status(t('Plug-in {nome}: {erro}', { nome: pluginsAtivos.get(id)?.manifesto?.name || id, erro: mensagemDoErro(erro) }), true));
 }
 
 // ---- Blocos ```kiro:<id> nas notas ----
@@ -3851,7 +3854,7 @@ function desenharBlocosDosPlugins() {
       for (const outro of document.querySelectorAll('.plugin-bloco[data-plugin]')) {
         if (outro.dataset.plugin !== id || outro.dataset.fonte !== fonte) continue;
         const caixa = outro.querySelector(':scope > .plugin-bloco-conteudo');
-        if (caixa) caixa.innerHTML = avisoDeBloco(t('Erro no bloco: {erro}', { erro: erro.message }));
+        if (caixa) caixa.innerHTML = avisoDeBloco(t('Erro no bloco: {erro}', { erro: mensagemDoErro(erro) }));
       }
     });
   }
@@ -3861,7 +3864,7 @@ function desenharBlocosDosPlugins() {
 function htmlDoBloco(valor, id, chave) {
   if (valor && typeof valor.frame === 'string') {
     const m = KiroPlugins.validarMoldura(valor);
-    if (!m.ok) return avisoDeBloco(m.erro);
+    if (!m.ok) return avisoDeBloco(t(m.erro));
     dadosDasMolduras.set(chave, m.data);
     // ponytail: redesenhar a nota recria a moldura (a tela recarrega); guardar o iframe vivo se algum plug-in precisar de estado.
     return molduraHtml(id, m.frame, m.height, chave);
@@ -4141,7 +4144,7 @@ async function gravarConfiguracao(campo) {
     if (msg) msg.textContent = t('Salvo');
     // Painéis e cartões do plug-in na Hoje leem as configurações de novo.
     if (currentView === 'today' && loaded && !busy) render();
-  } catch (erro) { if (msg) msg.textContent = t('Não foi possível salvar: {erro}', { erro: erro.message }); }
+  } catch (erro) { if (msg) msg.textContent = t('Não foi possível salvar: {erro}', { erro: mensagemDoErro(erro) }); }
 }
 // ---- Aba Plug-ins ----
 // Tudo aqui age na hora: ligar pede consentimento num modal do Kiro (nunca a
@@ -4167,7 +4170,7 @@ function itensDePermissao(m, novas = [], hostsNovos = []) {
   return `<ul class="plugin-permissoes">${m.permissions.map(p => {
     const nova = novas.includes(p) || (p === 'network' && hostsNovos.length > 0);
     const hosts = p === 'network' && m.network.length ? `, ${t('só nestes sites:')} ${m.network.map(h => escapeHtml(h)).join(', ')}` : '';
-    return `<li${nova ? ' class="nova"' : ''}>${escapeHtml(KiroPlugins.rotuloDaPermissao(p))}${hosts}${nova ? ` ${seloNova()}` : ''}</li>`;
+    return `<li${nova ? ' class="nova"' : ''}>${escapeHtml(t(KiroPlugins.rotuloDaPermissao(p)))}${hosts}${nova ? ` ${seloNova()}` : ''}</li>`;
   }).join('')}</ul>`;
 }
 const novidadesDoPlugin = (id, m) => ({
@@ -4242,13 +4245,13 @@ function linhaDoPlugin({ id, manifesto }, situacao, erro = '', chaves = {}, conf
     ${situacao === 'ativo' && m.permissions.includes('network') ? ultimasChamadas(id) : ''}
     ${comandos ? `<div class="cfg-botoes plugin-comandos-cfg">${comandos}</div>` : ''}
     ${situacao === 'aguardando' ? `<p class="cfg-aviso">${segredosNovos.length ? t('Uma atualização pediu mais acesso (chave nova: {chaves}). Ligue de novo para revisar o que é novo.', { chaves: segredosNovos.map(n => escapeHtml(m.secrets.find(s => s.name === n)?.label || n)).join(', ') }) : t('Uma atualização pediu mais acesso. Ligue de novo para revisar o que é novo.')}</p>` : ''}
-    ${erro ? `<p class="cfg-aviso">${escapeHtml(erro)}</p>` : ''}
+    ${erro ? `<p class="cfg-aviso">${escapeHtml(t(erro))}</p>` : ''}
   </span><span class="plugin-acoes">${m?.settings?.length ? camposDasConfiguracoes(id, nome, m.settings, valoresDasConfiguracoes(m.settings, configuracoes)) : ''}${chave}</span></div>`;
 }
 
 async function conteudoDaAbaPlugins() {
   try { await lerPlugins(); }
-  catch (erro) { return `<p class="cfg-aviso">${t('Não foi possível ler os plug-ins: {erro}', { erro: escapeHtml(erro.message) })}</p>`; }
+  catch (erro) { return `<p class="cfg-aviso">${t('Não foi possível ler os plug-ins: {erro}', { erro: escapeHtml(mensagemDoErro(erro)) })}</p>`; }
   const { carregar, pendentes, problemas } = planoDosPlugins;
   // Estado das chaves ({ nome: true }); se não der para ler, aparecem como não configuradas.
   const comChaves = [...carregar, ...pendentes].filter(p => p.manifesto?.secrets.length);
@@ -4314,7 +4317,7 @@ function pedirConsentimento(id) {
       await pluginApi.gravarEscolhas(escolhas);
     } catch (erro) {
       botao.disabled = false;
-      return status(t('Não foi possível ativar o plug-in: {erro}', { erro: erro.message }), true);
+      return status(t('Não foi possível ativar o plug-in: {erro}', { erro: mensagemDoErro(erro) }), true);
     }
     ativarPlugin({ id, manifesto: m, permissoes: m.permissions });
     voltar();
@@ -4329,7 +4332,7 @@ async function desligarPlugin(id) {
   try {
     const escolhas = await pluginApi.escolhas();
     if (escolhas[id]) { escolhas[id] = { ...escolhas[id], enabled: false }; await pluginApi.gravarEscolhas(escolhas); }
-  } catch (erro) { status(t('Não foi possível guardar a escolha: {erro}', { erro: erro.message }), true); }
+  } catch (erro) { status(t('Não foi possível guardar a escolha: {erro}', { erro: mensagemDoErro(erro) }), true); }
   redesenharAbaPlugins(id);
 }
 
@@ -4360,7 +4363,7 @@ function ligarAbaPlugins(painel) {
     } catch (erro) {
       msg.classList.add('erro');
       // O IPC do Electron embrulha a mensagem ("Error invoking remote method ..."): fica só o motivo.
-      msg.textContent = String(erro.message).replace(/^Error invoking remote method '[^']+': (Error: )?/, '');
+      msg.textContent = mensagemDoErro(erro);
     } finally {
       botoes.forEach(b => { b.disabled = false; });
       // Botão desabilitado ou escondido perde o foco: devolve ao campo, sem jogar o teclado para o topo.
@@ -4444,7 +4447,7 @@ function ligarAbaAtalhos(texto) {
       const combinacao = Kiro.combinacaoDoEvento(e);
       if (!combinacao) return;   // só o modificador por enquanto
       const problema = Kiro.problemaDoAtalho(combinacao, atalhos, id);
-      if (problema) { erro.textContent = problema; return; }
+      if (problema) { erro.textContent = t(problema); return; }
       encerrar();
       gravarAtalhos({ ...atalhos, [id]: combinacao });
       voltar();
@@ -4463,7 +4466,7 @@ async function showSettings(aba = abaDasConfiguracoes) {
   if (busy || !loaded) return;
   let conf = null, erroConf = '';
   const [, abaPlugins] = await Promise.all([
-    agentApi.load().then(c => { conf = c; }, error => { erroConf = error.message; }),
+    agentApi.load().then(c => { conf = c; }, error => { erroConf = mensagemDoErro(error); }),
     conteudoDaAbaPlugins(),
   ]);
   const cores = lerAparencia();
@@ -4719,7 +4722,7 @@ async function showSettings(aba = abaDasConfiguracoes) {
     } catch (error) {
       c.checked = !c.checked;   // volta a chave: o que está na tela é o que está gravado
       estadoDasPermissoes.textContent = '';
-      status(t('Não foi possível salvar: {erro}', { erro: error.message }), true);
+      status(t('Não foi possível salvar: {erro}', { erro: mensagemDoErro(error) }), true);
     }
   }));
 }
@@ -4913,7 +4916,7 @@ async function escolherOutroCofre(){
     // Plug-ins são do cofre: desliga os do anterior já (antes de ler o layout, para não entrarem no
     // hoje.json do novo) e carrega os que este cofre permite.
     carregarPlugins();await carregarHoje();personalizandoHoje=false;render();}}
-  catch(error){status(error.message,true);}finally{setBusy(false);}
+  catch(error){status(mensagemDoErro(error),true);}finally{setBusy(false);}
 }
 function exportarDados(){
   const a=document.createElement('a');const url=URL.createObjectURL(new Blob([JSON.stringify(state,null,2)],{type:'application/json'}));a.href=url;a.download=`kiro-${today()}.json`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
@@ -4923,7 +4926,7 @@ async function importarDados(arquivo){
   if(!arquivo||busy||failed||!loaded)return;
   let data;
   try{data=Kiro.validateState(JSON.parse(await arquivo.text()));}
-  catch(error){status(t('Importação cancelada: {erro}',{erro:error.message}),true);return;}
+  catch(error){status(t('Importação cancelada: {erro}',{erro:mensagemDoErro(error)}),true);return;}
   const contar=(n,um,varios)=>n===1?t(um):t(varios,{n});
   const partes=[contar(data.notes.length,frase('1 nota'),frase('{n} notas')),contar((data.folders||[]).length,frase('1 pasta'),frase('{n} pastas')),contar((data.habits||data.routine||[]).length,frase('1 hábito'),frase('{n} hábitos'))];
   modal(t('Importar backup'),`<p class="confirmar-texto">${t('Importar {resumo} de {arquivo} e substituir os dados atuais? As notas e os fluxos que saírem vão para a lixeira e uma cópia do cofre atual é preservada.',{resumo:`<strong>${partes.join(', ')}</strong>`,arquivo:`<strong>${escapeHtml(arquivo.name)}</strong>`})}</p><div class="form-actions"><button type="button" class="secondary" id="cancel">${t('Cancelar')}</button><button type="button" class="primary" id="confirmar-importacao">${t('Importar e substituir')}</button></div>`);
@@ -5050,7 +5053,7 @@ function mostrarBoasVindas(padrao) {
       aguardandoCofre = false;
       comecar();
     } catch (e) {
-      erro.textContent = t('Não foi possível usar essa pasta: {erro}', { erro: String(e.message).replace(/^Error invoking remote method '[^']+': (Error: )?/, '') });
+      erro.textContent = t('Não foi possível usar essa pasta: {erro}', { erro: mensagemDoErro(e) });
       botoes.forEach(b => { b.disabled = false; });
       botao.focus();
     }

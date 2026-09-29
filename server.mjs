@@ -9,6 +9,8 @@ import agentModule from './agent/index.cjs';
 import ligacaoRede from './ligacao-rede-plugins.cjs';
 import segredosModule from './segredos-plugins.cjs';
 import KiroPlugins from './plugins.js';
+// Marca a frase para tradução na tela (idiomas.js); aqui o texto segue em português.
+const frase = f => f;
 
 const { Vault } = vaultModule;
 const root = dirname(fileURLToPath(import.meta.url));
@@ -25,9 +27,9 @@ const allowedHosts = new Set([`localhost:${port}`, `127.0.0.1:${port}`]);
 const { version } = JSON.parse(await readFile(join(root, 'package.json'), 'utf8'));
 // Corpo JSON com teto de tamanho: o erro sobe para o catch e vira 400.
 const lerJson = async (request, limite) => {
-  if (request.headers['content-type']?.split(';')[0] !== 'application/json') throw new Error('Use JSON.');
+  if (request.headers['content-type']?.split(';')[0] !== 'application/json') throw new Error(frase('Use JSON.'));
   let bruto = '';
-  for await (const parte of request) { bruto += parte; if (bruto.length > limite) throw new Error('Pedido grande demais.'); }
+  for await (const parte of request) { bruto += parte; if (bruto.length > limite) throw new Error(frase('Pedido grande demais.')); }
   return JSON.parse(bruto || '{}');
 };
 // Chaves dos plug-ins na web: fora do cofre, sem cifra (limitação documentada na spec),
@@ -56,26 +58,26 @@ const send = (res, status, data) => { res.writeHead(status, { 'Content-Type': 'a
 createServer(async (request, response) => {
   response.setHeader('X-Content-Type-Options', 'nosniff');
   response.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob:; object-src 'none'; base-uri 'none'; frame-ancestors 'none'");
-  if (!allowedHosts.has(request.headers.host)) return send(response, 403, { error: 'Host não permitido.' });
-  if (request.headers.origin && ![`http://localhost:${port}`, `http://127.0.0.1:${port}`].includes(request.headers.origin)) return send(response, 403, { error: 'Origem não permitida.' });
+  if (!allowedHosts.has(request.headers.host)) return send(response, 403, { error: frase('Host não permitido.') });
+  if (request.headers.origin && ![`http://localhost:${port}`, `http://127.0.0.1:${port}`].includes(request.headers.origin)) return send(response, 403, { error: frase('Origem não permitida.') });
   try {
     if (request.url === '/api/state' && request.method === 'GET') return send(response, 200, await vault.load());
     if (request.url === '/api/trash' && request.method === 'GET') return send(response, 200, await vault.trash());
     if (request.url === '/api/restore' && request.method === 'POST') {
-      if (request.headers['content-type']?.split(';')[0] !== 'application/json') return send(response, 415, { error: 'Use JSON.' });
-      let bruto = ''; for await (const parte of request) { bruto += parte; if (bruto.length > 4096) return send(response, 413, { error: 'Pedido grande demais.' }); }
+      if (request.headers['content-type']?.split(';')[0] !== 'application/json') return send(response, 415, { error: frase('Use JSON.') });
+      let bruto = ''; for await (const parte of request) { bruto += parte; if (bruto.length > 4096) return send(response, 413, { error: frase('Pedido grande demais.') }); }
       return send(response, 200, await vault.restore(JSON.parse(bruto)));
     }
     if (request.url === '/api/agent-config' && request.method === 'GET') return send(response, 200, await agentConfig.load());
     if (request.url === '/api/agent-config' && request.method === 'POST') {
-      if (request.headers['content-type']?.split(';')[0] !== 'application/json') return send(response, 415, { error: 'Use JSON.' });
-      let bruto = ''; for await (const parte of request) { bruto += parte; if (bruto.length > 8192) return send(response, 413, { error: 'Configuração grande demais.' }); }
+      if (request.headers['content-type']?.split(';')[0] !== 'application/json') return send(response, 415, { error: frase('Use JSON.') });
+      let bruto = ''; for await (const parte of request) { bruto += parte; if (bruto.length > 8192) return send(response, 413, { error: frase('Configuração grande demais.') }); }
       return send(response, 200, await agentConfig.save(JSON.parse(bruto)));
     }
     if (request.url === '/api/state' && request.method === 'POST') {
-      if (request.headers['content-type']?.split(';')[0] !== 'application/json') return send(response, 415, { error: 'Use JSON.' });
+      if (request.headers['content-type']?.split(';')[0] !== 'application/json') return send(response, 415, { error: frase('Use JSON.') });
       let size = 0; const chunks = [];
-      for await (const chunk of request) { size += chunk.length; if (size > 20 * 1024 * 1024) return send(response, 413, { error: 'Backup maior que 20 MB.' }); chunks.push(chunk); }
+      for await (const chunk of request) { size += chunk.length; if (size > 20 * 1024 * 1024) return send(response, 413, { error: frase('Backup maior que 20 MB.') }); chunks.push(chunk); }
       return send(response, 200, await vault.save(JSON.parse(Buffer.concat(chunks).toString('utf8'))));
     }
     if (devTools && request.url === '/dev/events' && request.method === 'GET') return devTools.eventos(request, response);
@@ -85,9 +87,9 @@ createServer(async (request, response) => {
     }
     if (request.url === '/api/anexo' && request.method === 'POST') {
       // O tipo declarado só filtra o pedido; o Vault confere a imagem pelo conteúdo.
-      if (!['image/png', 'image/jpeg', 'image/gif', 'image/webp'].includes(request.headers['content-type']?.split(';')[0])) return send(response, 415, { error: 'Envie uma imagem PNG, JPEG, GIF ou WebP.' });
+      if (!['image/png', 'image/jpeg', 'image/gif', 'image/webp'].includes(request.headers['content-type']?.split(';')[0])) return send(response, 415, { error: frase('Envie uma imagem PNG, JPEG, GIF ou WebP.') });
       let tamanho = 0; const partes = [];
-      for await (const parte of request) { tamanho += parte.length; if (tamanho > 20 * 1024 * 1024) return send(response, 413, { error: 'Imagem maior que 20 MB.' }); partes.push(parte); }
+      for await (const parte of request) { tamanho += parte.length; if (tamanho > 20 * 1024 * 1024) return send(response, 413, { error: frase('Imagem maior que 20 MB.') }); partes.push(parte); }
       let nome = ''; try { nome = decodeURIComponent(request.headers['x-kiro-nome'] || ''); } catch { /* nome ilegível: a imagem recebe um nome gerado */ }
       return send(response, 200, await vault.saveAttachment({ name: nome, data: Buffer.concat(partes) }));
     }
@@ -98,7 +100,7 @@ createServer(async (request, response) => {
         const { data, type } = await vault.readAttachment(rota.slice('/anexo/'.length).split('/').map(decodeURIComponent).join('/'));
         response.writeHead(200, { 'Content-Type': type, 'Cache-Control': 'no-cache', 'Content-Security-Policy': "default-src 'none'" });
         return response.end(data);
-      } catch { return send(response, 404, { error: 'Imagem não encontrada.' }); }
+      } catch { return send(response, 404, { error: frase('Imagem não encontrada.') }); }
     }
     // KaTeX embarcado: só os três tipos de arquivo que a página pede.
     const katex = rota.match(/^\/vendor\/katex\/(katex\.min\.(?:js|css)|fonts\/KaTeX_[A-Za-z0-9-]+\.woff2)$/);
@@ -108,7 +110,7 @@ createServer(async (request, response) => {
         const tipo = katex[1].endsWith('.js') ? 'text/javascript' : katex[1].endsWith('.css') ? 'text/css' : 'font/woff2';
         response.writeHead(200, { 'Content-Type': `${tipo}; charset=utf-8`, 'Cache-Control': 'max-age=86400' });
         return response.end(corpo);
-      } catch { return send(response, 404, { error: 'Arquivo não encontrado.' }); }
+      } catch { return send(response, 404, { error: frase('Arquivo não encontrado.') }); }
     }
     // Fontes embarcadas: nome fixo, sem caminho, e só .woff2 de dentro de fonts/.
     if (request.method === 'GET' && /^\/fonts\/[a-z0-9-]+\.woff2$/.test(rota)) {
@@ -116,7 +118,7 @@ createServer(async (request, response) => {
         const corpo = await readFile(join(root, 'fonts', rota.slice('/fonts/'.length)));
         response.writeHead(200, { 'Content-Type': 'font/woff2', 'Cache-Control': 'max-age=86400' });
         return response.end(corpo);
-      } catch { return send(response, 404, { error: 'Fonte não encontrada.' }); }
+      } catch { return send(response, 404, { error: frase('Fonte não encontrada.') }); }
     }
     // Dados dos plug-ins: a lista da pasta, as escolhas do usuário e o espaço de
     // cada plug-in. Quem decide o que carregar é a página; aqui só se lê e grava.
@@ -137,11 +139,11 @@ createServer(async (request, response) => {
     }
     // kiro.fetch e chaves: a página não é confiável; ligacao-rede-plugins.cjs relê tudo do cofre.
     if (rota === '/api/plugin-fetch' || rota.startsWith('/api/plugin-secrets/')) {
-      if (!mesmaOrigem(request)) return send(response, 403, { error: 'Só a própria página do Kiro pode usar esta rota.' });
+      if (!mesmaOrigem(request)) return send(response, 403, { error: frase('Só a própria página do Kiro pode usar esta rota.') });
       const contexto = { vault, guarda, versaoDoKiro: version };
       try {
         if (rota === '/api/plugin-fetch') {
-          if (request.method !== 'POST') return send(response, 404, { error: 'Não encontrado.' });
+          if (request.method !== 'POST') return send(response, 404, { error: frase('Não encontrado.') });
           const { pluginId, pedido } = await lerJson(request, 3 * 1024 * 1024);
           return send(response, 200, await ligacaoRede.atenderFetch({ ...contexto, ...redeFalsa, pluginId, pedido }));
         }
@@ -149,14 +151,14 @@ createServer(async (request, response) => {
         if (request.method === 'GET') return send(response, 200, await ligacaoRede.estadoDasChaves({ ...contexto, pluginId }));
         if (request.method === 'POST') { const { name, value } = await lerJson(request, 16 * 1024); return send(response, 200, await ligacaoRede.gravarChave({ ...contexto, pluginId, nome: name, valor: value })); }
         if (request.method === 'DELETE') { const { name } = await lerJson(request, 4096); return send(response, 200, await ligacaoRede.removerChave({ ...contexto, pluginId, nome: name })); }
-        return send(response, 404, { error: 'Não encontrado.' });
+        return send(response, 404, { error: frase('Não encontrado.') });
       } catch (erro) { return send(response, erro.status || 400, { error: erro.message }); }
     }
     // Código e tela do plug-in: só .js/.html/.css de dentro de .kiro/plugins. O .js segue
     // com a CSP do worker (rede cortada); o .html vira moldura isolada com o runtime injetado.
     if (rota.startsWith('/plugins/')) {
       const partes = rota.slice('/plugins/'.length).split('/');
-      if (request.method !== 'GET' || partes.length !== 2) return send(response, 404, { error: 'Não encontrado.' });
+      if (request.method !== 'GET' || partes.length !== 2) return send(response, 404, { error: frase('Não encontrado.') });
       try {
         const id = decodeURIComponent(partes[0]), arquivo = decodeURIComponent(partes[1]);
         const tipo = KiroPlugins.tipoDoArquivoDoPlugin(arquivo);
@@ -172,10 +174,10 @@ createServer(async (request, response) => {
         }
         response.writeHead(200, cabecalhos);
         return response.end(corpo);
-      } catch { return send(response, 404, { error: 'Plug-in não encontrado.' }); }
+      } catch { return send(response, 404, { error: frase('Plug-in não encontrado.') }); }
     }
     const file = publicFiles[rota];
-    if (request.method !== 'GET' || !file) return send(response, 404, { error: 'Não encontrado.' });
+    if (request.method !== 'GET' || !file) return send(response, 404, { error: frase('Não encontrado.') });
     let body = await readFile(join(root, file[0]));
     if (devTools && file[0] === 'index.html') body = devTools.injetar(body.toString('utf8'));
     // Quem manda no worker é a CSP do arquivo do worker, não a do plug-in importado:

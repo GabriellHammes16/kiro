@@ -72,7 +72,9 @@
     return comparador.compare(a, b);
   }
 
-  const api = { PADRAO, IDIOMAS, t, frase, idioma, locale, definirIdioma, registrar, carregar, detectar, escolherIdioma, formatarData, comparar };
+  // Erro que atravessa o IPC do Electron chega como "Error invoking remote method 'canal': Error: …".
+  const semPrefixoDoIpc = mensagem => String(mensagem ?? '').replace(/^Error invoking remote method '[^']+': (Error: )?/, '');
+  const api = { PADRAO, IDIOMAS, t, frase, idioma, locale, definirIdioma, registrar, carregar, detectar, escolherIdioma, formatarData, comparar, semPrefixoDoIpc };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.KiroIdiomas = api;
 })(globalThis);

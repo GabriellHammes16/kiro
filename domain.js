@@ -1,4 +1,6 @@
 (function (root) {
+  // Marca a frase para tradução na tela (idiomas.js); aqui o texto segue em português.
+  const frase = f => f;
   const localDate = (date = new Date()) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
   const text = value => typeof value === 'string';
   const id = value => text(value) && /^[a-zA-Z0-9_-]{1,100}$/.test(value);
@@ -7,7 +9,7 @@
     try { const url = new URL(value); return ['http:', 'https:'].includes(url.protocol) ? url.href : ''; } catch { return ''; }
   }
   function validateState(value) {
-    const fail = () => { throw new Error('Dados inválidos. O cofre não foi alterado.'); };
+    const fail = () => { throw new Error(frase('Dados inválidos. O cofre não foi alterado.')); };
     if (!value || typeof value !== 'object') fail();
     for (const key of ['notes', 'tasks', value.folders ? 'folders' : 'studies', ...(value.routine !== undefined ? ['routine'] : []), ...(value.habits !== undefined ? ['habits'] : [])]) {
       if (!Array.isArray(value[key])) fail();
@@ -58,19 +60,19 @@
   const pathKey = value => value.normalize('NFC').toLowerCase();
   function folderPaths(folders) {
     const byId = new Map(folders.map(f => [f.id, f])), paths = new Map(), active = new Set(), siblings = new Set();
-    if (byId.size !== folders.length) throw new Error('Identificadores de pasta duplicados.');
+    if (byId.size !== folders.length) throw new Error(frase('Identificadores de pasta duplicados.'));
     for (const f of folders) {
-      if (!id(f.id) || !validFolderName(f.title)) throw new Error('Nome de pasta inválido. Evite caracteres especiais, nomes reservados e espaços no início ou no final.');
+      if (!id(f.id) || !validFolderName(f.title)) throw new Error(frase('Nome de pasta inválido. Evite caracteres especiais, nomes reservados e espaços no início ou no final.'));
       const key = `${f.parentId || ''}/${pathKey(f.title)}`;
-      if (siblings.has(key)) throw new Error('Já existe uma pasta com esse nome neste local.');
+      if (siblings.has(key)) throw new Error(frase('Já existe uma pasta com esse nome neste local.'));
       siblings.add(key);
     }
     function visit(folder) {
       if (paths.has(folder.id)) return paths.get(folder.id);
-      if (active.has(folder.id)) throw new Error('Uma pasta não pode ficar dentro dela mesma ou de suas descendentes.');
+      if (active.has(folder.id)) throw new Error(frase('Uma pasta não pode ficar dentro dela mesma ou de suas descendentes.'));
       active.add(folder.id);
       const parent = folder.parentId ? byId.get(folder.parentId) : null;
-      if (folder.parentId && !parent) throw new Error('A pasta de destino não existe.');
+      if (folder.parentId && !parent) throw new Error(frase('A pasta de destino não existe.'));
       const result = parent ? `${visit(parent)}/${folder.title}` : folder.title;
       active.delete(folder.id); paths.set(folder.id, result); return result;
     }
@@ -230,16 +232,16 @@
   const folderColor = value => FOLDER_COLORS.includes(value) ? value : '';
   // ---- Aparência: temas, skins e cores manuais (preferência da instalação, em localStorage) ----
   const TEMAS = [
-    ['kiro', 'Kiro', 'classicos'], ['claro', 'Claro', 'classicos'], ['escuro-azul', 'Escuro Azul', 'classicos'], ['escuro-verde', 'Escuro Verde', 'classicos'],
-    ['escuro-ambar', 'Escuro Âmbar', 'classicos'], ['alto-contraste', 'Alto Contraste', 'classicos'], ['meia-noite', 'Meia-noite', 'classicos'], ['floresta', 'Floresta', 'classicos'],
+    ['kiro', 'Kiro', 'classicos'], ['claro', frase('Claro'), 'classicos'], ['escuro-azul', frase('Escuro Azul'), 'classicos'], ['escuro-verde', frase('Escuro Verde'), 'classicos'],
+    ['escuro-ambar', frase('Escuro Âmbar'), 'classicos'], ['alto-contraste', frase('Alto Contraste'), 'classicos'], ['meia-noite', frase('Meia-noite'), 'classicos'], ['floresta', frase('Floresta'), 'classicos'],
     ['neon-tokyo', 'Neon Tokyo', 'anime'], ['sakura-night', 'Sakura Night', 'anime'], ['shonen-fire', 'Shonen Fire', 'anime'], ['studio-ghibli', 'Studio Ghibli', 'anime'],
     ['evangelion', 'Evangelion', 'anime'], ['sailor-moon', 'Sailor Moon', 'anime'], ['violet-evergarden', 'Violet Evergarden', 'anime'], ['demon-blood', 'Demon Blood', 'anime'],
     ['cyber-lain', 'Cyber Lain', 'anime'], ['makoto-shinkai', 'Makoto Shinkai', 'anime'], ['jojo-stand', 'JoJo Stand', 'anime'],
   ];
   const SKINS = [
-    ['padrao', 'Padrão', 'O visual de sempre.'], ['minimal', 'Minimal', 'Menos bordas, mais respiro.'], ['compacto', 'Compacto', 'Mais coisa na tela.'],
-    ['terminal', 'Terminal', 'Fonte mono e cantos retos.'], ['suave', 'Suave', 'Cantos redondos e sombras leves.'], ['sharp', 'Sharp', 'Cantos retos, bordas marcadas.'],
-    ['neon', 'Neon', 'Brilho sutil no destaque.'], ['paper', 'Paper', 'Textura de papel ilustrado.'],
+    ['padrao', frase('Padrão'), frase('O visual de sempre.')], ['minimal', 'Minimal', frase('Menos bordas, mais respiro.')], ['compacto', frase('Compacto'), frase('Mais coisa na tela.')],
+    ['terminal', 'Terminal', frase('Fonte mono e cantos retos.')], ['suave', frase('Suave'), frase('Cantos redondos e sombras leves.')], ['sharp', 'Sharp', frase('Cantos retos, bordas marcadas.')],
+    ['neon', 'Neon', frase('Brilho sutil no destaque.')], ['paper', 'Paper', frase('Textura de papel ilustrado.')],
   ];
   const APARENCIA_PADRAO = Object.freeze({ tema: 'kiro', skin: 'padrao', sidebar: '#11161D', content: '#0B0F14', acento: '#9273FF' });
   const corValida = v => text(v) && /^#[0-9a-f]{6}$/i.test(v);
@@ -353,12 +355,12 @@
   // ---- Atalhos de teclado (os que dá para trocar em Configurações → Atalhos) ----
   // Combinação é texto: modificadores na ordem Ctrl, Alt, Shift e depois a tecla ("Ctrl+Shift+K").
   const ATALHOS_EDITAVEIS = [
-    ['captura', 'Captura rápida', 'De qualquer tela, direto para a caixa de entrada.', 'Ctrl+Space'],
-    ['irPara', 'Ir para nota', 'Busca uma nota pelo título.', 'Ctrl+O'],
-    ['novaNota', 'Nova nota', '', 'Ctrl+N'],
-    ['salvar', 'Salvar a nota aberta', '', 'Ctrl+S'],
-    ['lateral', 'Recolher a barra lateral', 'Alterna entre a barra completa e só os ícones.', 'Ctrl+\\'],
-    ['painelDireito', 'Painel da direita', 'Links, sumário e etiquetas da nota, na tela de Pastas.', 'Ctrl+Shift+L'],
+    ['captura', frase('Captura rápida'), frase('De qualquer tela, direto para a caixa de entrada.'), 'Ctrl+Space'],
+    ['irPara', frase('Ir para nota'), frase('Busca uma nota pelo título.'), 'Ctrl+O'],
+    ['novaNota', frase('Nova nota'), '', 'Ctrl+N'],
+    ['salvar', frase('Salvar a nota aberta'), '', 'Ctrl+S'],
+    ['lateral', frase('Recolher a barra lateral'), frase('Alterna entre a barra completa e só os ícones.'), 'Ctrl+\\'],
+    ['painelDireito', frase('Painel da direita'), frase('Links, sumário e etiquetas da nota, na tela de Pastas.'), 'Ctrl+Shift+L'],
   ];
   // Teclas que o sistema e o editor já usam: trocá-las quebraria copiar, colar, desfazer…
   const RESERVADOS = new Set(['Ctrl+C', 'Ctrl+V', 'Ctrl+X', 'Ctrl+Z', 'Ctrl+Y', 'Ctrl+A', 'Ctrl+Shift+Z', 'Ctrl+W', 'Ctrl+T', 'Ctrl+R', 'Ctrl+P', 'Ctrl+F', 'Alt+F4']);
@@ -368,11 +370,12 @@
     const tecla = e.code === 'Space' || e.key === ' ' ? 'Space' : e.key.length === 1 ? e.key.toUpperCase() : e.key;
     return [(e.ctrlKey || e.metaKey) && 'Ctrl', e.altKey && 'Alt', e.shiftKey && 'Shift', tecla].filter(Boolean).join('+');
   }
-  const rotuloDaCombinacao = c => String(c).split(/\+(?=.)/).map(p => p === 'Space' ? 'Espaço' : p).join(' + ');
+  // `traduzir` (o t() da página) traduz o nome da tecla; sem ele, sai em português.
+  const rotuloDaCombinacao = (c, traduzir = f => f) => String(c).split(/\+(?=.)/).map(p => p === 'Space' ? traduzir(frase('Espaço')) : p).join(' + ');
   // Sem Ctrl ou Alt, a tecla atrapalharia a escrita; F1–F12 sozinhas não atrapalham.
   const combinacaoAceita = c => typeof c === 'string' && c.length <= 40 && (/^(Ctrl|Alt)\+./.test(c) || /^(Shift\+)?F([1-9]|1[0-2])$/.test(c));
   function problemaDoAtalho(combinacao, atuais, id) {
-    if (!combinacaoAceita(combinacao)) return 'Use uma combinação com Ctrl ou Alt (ou uma tecla F1–F12).';
+    if (!combinacaoAceita(combinacao)) return frase('Use uma combinação com Ctrl ou Alt (ou uma tecla F1–F12).');
     if (RESERVADOS.has(combinacao)) return `${rotuloDaCombinacao(combinacao)} é reservado do sistema ou do editor.`;
     const dono = ATALHOS_EDITAVEIS.find(([outro]) => outro !== id && atuais[outro] === combinacao);
     return dono ? `${rotuloDaCombinacao(combinacao)} já é o atalho de ${dono[1]}.` : '';

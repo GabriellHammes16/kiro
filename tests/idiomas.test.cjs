@@ -114,3 +114,10 @@ test('palavraValida e palavraParaDicionario recusam o que não é palavra curta'
   assert.equal(C.palavraParaDicionario('Kiro'), true);
   assert.equal(C.palavraParaDicionario('a gente'), false);
 });
+
+test('semPrefixoDoIpc tira o prefixo que o Electron põe nos erros', () => {
+  assert.equal(I.semPrefixoDoIpc("Error invoking remote method 'vault:save': Error: O cofre mudou."), 'O cofre mudou.');
+  assert.equal(I.semPrefixoDoIpc("Error invoking remote method 'x': O cofre mudou."), 'O cofre mudou.');
+  assert.equal(I.semPrefixoDoIpc('O cofre mudou.'), 'O cofre mudou.');
+  assert.equal(I.semPrefixoDoIpc(undefined), '');
+});

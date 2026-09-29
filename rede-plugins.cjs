@@ -6,6 +6,8 @@
 const dns = require('node:dns');
 const https = require('node:https');
 const net = require('node:net');
+// Marca a frase para tradução na tela (idiomas.js); aqui o texto segue em português.
+const frase = f => f;
 
 const LIMITES = { tempo: 10000, resposta: 5 * 1024 * 1024, redirecionamentos: 3 };
 const CABECALHOS_DE_RESPOSTA = ['content-type', 'content-length', 'etag', 'last-modified', 'cache-control', 'retry-after'];
@@ -53,7 +55,7 @@ function lookupProtegido(base) {
       if (erro) return cb(erro);
       const lista = Array.isArray(enderecos) ? enderecos : [];
       if (!lista.length) return cb(erroProprio(`Nenhum endereço encontrado para ${host}.`));
-      if (lista.some(e => enderecoProibido(e && e.address))) return cb(erroProprio('O host aponta para a rede local; conexão recusada.'));
+      if (lista.some(e => enderecoProibido(e && e.address))) return cb(erroProprio(frase('O host aponta para a rede local; conexão recusada.')));
       if (o.all) return cb(null, lista);
       cb(null, lista[0].address, lista[0].family);
     });
@@ -135,7 +137,7 @@ async function executarPedido(pedido, { hostsConcedidos = [], cabecalhoDoSegredo
       resposta.destroy();
       if (saltos + 1 > lim.redirecionamentos) throw erroProprio(`Muitos redirecionamentos (limite de ${lim.redirecionamentos}).`);
       let proxima;
-      try { proxima = new URL(String(location), url).href; } catch { throw erroProprio('Redirecionamento recusado: endereço (URL) inválido.'); }
+      try { proxima = new URL(String(location), url).href; } catch { throw erroProprio(frase('Redirecionamento recusado: endereço (URL) inválido.')); }
       url = conferirDestino(proxima, concedidos, 'Redirecionamento recusado: ');
       if (resposta.statusCode === 303 || ((resposta.statusCode === 301 || resposta.statusCode === 302) && method === 'POST')) {
         method = 'GET';

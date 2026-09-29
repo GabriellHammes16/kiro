@@ -7,6 +7,8 @@
 const P = require('./plugins.js');
 const { executarPedido } = require('./rede-plugins.cjs');
 const { AuditLog } = require('./agent/audit.cjs');
+// Marca a frase para tradução na tela (idiomas.js); aqui o texto segue em português.
+const frase = f => f;
 
 // status: o código HTTP que o servidor usa; no Electron só a mensagem importa.
 const erro = (status, mensagem) => Object.assign(new Error(mensagem), { status });
@@ -14,7 +16,7 @@ const lista = v => Array.isArray(v) ? v : [];
 
 // Manifesto válido de um plug-in que existe na pasta (ativo ou não).
 async function manifestoDoPlugin(vault, pluginId, versaoDoKiro) {
-  if (typeof pluginId !== 'string' || !/^[a-z0-9][a-z0-9-]{1,39}$/.test(pluginId)) throw erro(403, 'Plug-in inválido.');
+  if (typeof pluginId !== 'string' || !/^[a-z0-9][a-z0-9-]{1,39}$/.test(pluginId)) throw erro(403, frase('Plug-in inválido.'));
   const achado = (await vault.listPlugins()).find(a => a.id === pluginId);
   if (!achado || achado.erro) throw erro(403, `Plug-in não encontrado: ${pluginId}.`);
   const r = P.validarManifesto(achado.manifesto, { versaoDoKiro });
@@ -36,7 +38,7 @@ async function atenderFetch({ vault, guarda, versaoDoKiro, pluginId, pedido, req
     const alvo = P.planoDeCarga(achados, escolhas, { versaoDoKiro }).carregar.find(a => a.id === pluginId);
     if (!alvo) throw erro(403, `O plug-in ${pluginId} não está ativo.`);
     const registro = escolhas[pluginId];
-    if (!P.podeChamar(registro.permissions, 'fetch')) throw erro(403, 'O plug-in não tem a permissão network.');
+    if (!P.podeChamar(registro.permissions, 'fetch')) throw erro(403, frase('O plug-in não tem a permissão network.'));
     // Vale o concedido que o manifesto ainda declara.
     const hostsConcedidos = lista(registro.network).filter(h => alvo.manifesto.network.includes(h));
     const validado = P.validarPedidoDeRede(pedido, { hostsConcedidos, segredos: alvo.manifesto.secrets });

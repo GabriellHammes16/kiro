@@ -4,6 +4,8 @@ const { createHash, randomUUID } = require('node:crypto');
 const { validateState, upgradeBackup, folderPaths, descendants, pathKey, folderColor, withHabits, validFolderName } = require('./domain.js');
 const yaml = require('js-yaml');
 const KiroFluxo = require('./fluxo.js');
+// Marca a frase para tradução na tela (idiomas.js); aqui o texto segue em português.
+const frase = f => f;
 
 const hash = value => createHash('sha256').update(value).digest('hex');
 const slug = value => value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 60) || 'nota';
@@ -23,7 +25,7 @@ async function atomicWrite(file, content) {
 
 function frontmatter(header) {
   const fields = header ? yaml.load(header[1], { schema: yaml.CORE_SCHEMA }) || {} : {};
-  if (typeof fields !== 'object' || Array.isArray(fields)) throw new Error('Metadados Markdown inválidos.');
+  if (typeof fields !== 'object' || Array.isArray(fields)) throw new Error(frase('Metadados Markdown inválidos.'));
   return fields;
 }
 const validDate = value => Number.isFinite(value) && value > 0 && value <= 8.64e15;
@@ -114,13 +116,13 @@ class Vault {
   constructor(directory, { historyLimit = HISTORY_LIMIT } = {}) { this.directory = path.resolve(directory); this.queue = Promise.resolve(); this.historyLimit = historyLimit; }
   exclusive(operation) { const result=this.queue.then(operation); this.queue=result.catch(()=>{}); return result; }
   async safePath(relative) {
-    if (typeof relative!=='string'||!relative||relative.includes(':')||relative.includes('\\')||relative.split('/').some(p=>!p||p==='.'||p==='..')) throw new Error('Caminho inválido.');
+    if (typeof relative!=='string'||!relative||relative.includes(':')||relative.includes('\\')||relative.split('/').some(p=>!p||p==='.'||p==='..')) throw new Error(frase('Caminho inválido.'));
     const target=path.resolve(this.directory,relative);
-    if(!target.startsWith(this.directory+path.sep))throw new Error('Caminho fora do cofre.');
+    if(!target.startsWith(this.directory+path.sep))throw new Error(frase('Caminho fora do cofre.'));
     let cursor=this.directory;
     for(const part of relative.split('/')){
       cursor=path.join(cursor,part);
-      try{if((await fs.lstat(cursor)).isSymbolicLink())throw new Error('Links simbólicos não são permitidos nas pastas gerenciadas.');}
+      try{if((await fs.lstat(cursor)).isSymbolicLink())throw new Error(frase('Links simbólicos não são permitidos nas pastas gerenciadas.'));}
       catch(error){if(error.code!=='ENOENT')throw error;}
     }
     return target;
@@ -141,10 +143,10 @@ class Vault {
   }
   async read() {
     await fs.mkdir(this.directory,{recursive:true});
-    if(await optionalRead(await this.safePath('.transaction.json')))throw new Error('Salvamento interrompido. Preserve o cofre e consulte .transaction.json e .history antes de continuar.');
+    if(await optionalRead(await this.safePath('.transaction.json')))throw new Error(frase('Salvamento interrompido. Preserve o cofre e consulte .transaction.json e .history antes de continuar.'));
     const metadata=await optionalRead(await this.safePath('caderno.json'));
     const data=metadata===null?{notes:[],tasks:[],habits:[],habitLog:{},studies:[]}:JSON.parse(metadata);
-    if(data.formatVersion&&![2,3].includes(data.formatVersion))throw new Error('Versão do cofre não suportada.');
+    if(data.formatVersion&&![2,3].includes(data.formatVersion))throw new Error(frase('Versão do cofre não suportada.'));
     const {files,directories}=await this.scan();
     const legacy=data.formatVersion?[]:validateState(data).notes;
     const notes=[...files].filter(([file])=>visible(file)&&/\.md$/i.test(file)).map(([file,value])=>parseMarkdown(value.data.toString('utf8'),file,value.mtime,legacy.find(n=>file===`Notas/${(n.file||'').replace(/\\/g,'/')}`)||{},value.birthtime));
@@ -206,14 +208,14 @@ class Vault {
   locked(operation){
     return this.exclusive(async()=>{
       await fs.mkdir(this.directory,{recursive:true});const lockPath=await this.safePath('.kiro.lock');let lock;
-      try{lock=await fs.open(lockPath,'wx');}catch(error){if(error.code==='EEXIST')throw new Error('O cofre está ocupado. Verifique .kiro.lock se houve uma interrupção.');throw error;}
+      try{lock=await fs.open(lockPath,'wx');}catch(error){if(error.code==='EEXIST')throw new Error(frase('O cofre está ocupado. Verifique .kiro.lock se houve uma interrupção.'));throw error;}
       try{return await operation();}finally{await lock.close();await fs.unlink(lockPath);}
     });
   }
   save(input){const snapshot=upgradeBackup(input);return this.locked(()=>this.write(snapshot));}
   async write(input,restoring=null){
     validateState(input);const before=await this.read();
-    if(input.revision!==before.state.revision)throw new Error('O cofre mudou em outro editor. Exporte suas alterações e recarregue antes de salvar.');
+    if(input.revision!==before.state.revision)throw new Error(frase('O cofre mudou em outro editor. Exporte suas alterações e recarregue antes de salvar.'));
     const paths=folderPaths(input.folders), beforeFolders=before.state.folders;
     for(const folderPath of paths.values())if(!folderPath.includes('/')&&await temMarcaDeAnexos(path.join(this.directory,folderPath)))throw new Error(`A pasta "${folderPath}" guarda as imagens coladas nas notas. Escolha outro nome.`);
     const owner=file=>beforeFolders.filter(f=>f.diskPath&&inside(file,f.diskPath)).sort((a,b)=>b.diskPath.length-a.diskPath.length)[0];
@@ -303,7 +305,7 @@ class Vault {
     for(const dir of before.directories)await fs.mkdir(await this.safePath(`${backup}/${dir}`),{recursive:true});
     for(const [file,v]of oldFiles)await atomicWrite(await this.safePath(`${backup}/${file}`),v.data);
     for(const [file,data]of writes)await atomicWrite(await this.safePath(`${stage}/${file}`),data);
-    if((await this.read()).state.revision!==input.revision)throw new Error('O cofre mudou durante o salvamento. Recarregue antes de continuar.');
+    if((await this.read()).state.revision!==input.revision)throw new Error(frase('O cofre mudou durante o salvamento. Recarregue antes de continuar.'));
     const deletedFolders=beforeFolders.filter(f=>!paths.has(f.id));
     const roots=deletedFolders.filter(f=>!deletedFolders.some(p=>p.id===f.parentId));
     const deletedNotes=before.state.notes.filter(n=>!input.notes.some(x=>x.id===n.id));
@@ -337,15 +339,15 @@ class Vault {
       const directory=await this.safePath(name);
       if(!await pathExists(directory)||await temMarcaDeAnexos(directory))return name;
     }
-    throw new Error('Não há pasta livre para guardar imagens. Renomeie a pasta "Anexos" do cofre.');
+    throw new Error(frase('Não há pasta livre para guardar imagens. Renomeie a pasta "Anexos" do cofre.'));
   }
   /** Guarda uma imagem e devolve o caminho relativo ao cofre, pronto para ![[...]]. */
   saveAttachment({name='',data}={}){
     return this.exclusive(async()=>{
-      if(!Buffer.isBuffer(data)||!data.length)throw new Error('Imagem vazia.');
-      if(data.length>ATTACHMENT_LIMIT)throw new Error('Imagem maior que 20 MB.');
+      if(!Buffer.isBuffer(data)||!data.length)throw new Error(frase('Imagem vazia.'));
+      if(data.length>ATTACHMENT_LIMIT)throw new Error(frase('Imagem maior que 20 MB.'));
       const extension=imageSignature(data);
-      if(!extension)throw new Error('O arquivo não é uma imagem PNG, JPEG, GIF ou WebP.');
+      if(!extension)throw new Error(frase('O arquivo não é uma imagem PNG, JPEG, GIF ou WebP.'));
       const folder=await this.attachmentFolder();
       // A marca vem antes da imagem: a pasta nunca aparece na varredura sem ela.
       const marker=await this.safePath(`${folder}/${ATTACHMENT_MARKER}`);
@@ -362,16 +364,16 @@ class Vault {
   /** Lê uma imagem do cofre para exibir. Só extensões de imagem e nada oculto. */
   async readAttachment(relative){
     const type=typeof relative==='string'&&relative.includes('.')&&!relative.split('/').some(part=>part.startsWith('.'))&&IMAGE_TYPES[relative.split('.').pop().toLowerCase()];
-    if(!type)throw new Error('Imagem inválida.');
+    if(!type)throw new Error(frase('Imagem inválida.'));
     const file=await this.safePath(relative);
     const info=await fs.stat(file);
-    if(!info.isFile()||info.size>ATTACHMENT_LIMIT)throw new Error('Imagem inválida.');
+    if(!info.isFile()||info.size>ATTACHMENT_LIMIT)throw new Error(frase('Imagem inválida.'));
     return {data:await fs.readFile(file),type};
   }
   /** Plug-ins ficam em <cofre>/.kiro/plugins/<id>/. Só o que está nessa pasta é servido. */
   async pluginPath(id,arquivo=''){
-    if(!/^[a-z0-9][a-z0-9-]{1,39}$/.test(id||''))throw new Error('Identificador de plug-in inválido.');
-    if(arquivo&&!/^[a-z0-9][a-z0-9._-]{0,60}$/i.test(arquivo))throw new Error('Caminho de plug-in inválido.');
+    if(!/^[a-z0-9][a-z0-9-]{1,39}$/.test(id||''))throw new Error(frase('Identificador de plug-in inválido.'));
+    if(arquivo&&!/^[a-z0-9][a-z0-9._-]{0,60}$/i.test(arquivo))throw new Error(frase('Caminho de plug-in inválido.'));
     // safePath ainda vale aqui: é ele que barra link simbólico apontando para fora do cofre.
     return this.safePath(`.kiro/plugins/${id}${arquivo?`/${arquivo}`:''}`);
   }
@@ -387,7 +389,7 @@ class Vault {
         const bruto=await fs.readFile(await this.pluginPath(entrada.name,'manifest.json'),'utf8');
         achados.push({id:entrada.name,manifesto:JSON.parse(bruto)});
       }catch(erro){
-        achados.push({id:entrada.name,erro:erro instanceof SyntaxError?'manifest.json não é um JSON válido.':erro.message});
+        achados.push({id:entrada.name,erro:erro instanceof SyntaxError?frase('manifest.json não é um JSON válido.'):erro.message});
       }
     }
     return achados;
@@ -395,9 +397,9 @@ class Vault {
   /** Código e telas: .js para o worker, .html e .css para as molduras. */
   async readPluginFile(id,arquivo){
     const alvo=await this.pluginPath(id,arquivo);
-    if(!/\.(js|html|css)$/i.test(arquivo))throw new Error('Só arquivos .js, .html ou .css de plug-in são servidos.');
+    if(!/\.(js|html|css)$/i.test(arquivo))throw new Error(frase('Só arquivos .js, .html ou .css de plug-in são servidos.'));
     const info=await fs.stat(alvo);
-    if(!info.isFile()||info.size>PLUGIN_FILE_LIMIT)throw new Error('Arquivo de plug-in inválido.');
+    if(!info.isFile()||info.size>PLUGIN_FILE_LIMIT)throw new Error(frase('Arquivo de plug-in inválido.'));
     return fs.readFile(alvo);
   }
   /** Escolhas do usuário (ativado, permissões concedidas) em .kiro/plugins.json. */
@@ -427,7 +429,7 @@ class Vault {
   }
   async writePluginData(id,dados){
     const texto=`${JSON.stringify(dados,null,2)}\n`;
-    if(Buffer.byteLength(texto)>PLUGIN_DATA_LIMIT)throw new Error('O plug-in passou de 1 MB de dados guardados.');
+    if(Buffer.byteLength(texto)>PLUGIN_DATA_LIMIT)throw new Error(frase('O plug-in passou de 1 MB de dados guardados.'));
     await atomicWrite(await this.pluginPath(id,'data.json'),texto);
     return dados;
   }
@@ -466,12 +468,12 @@ class Vault {
     await atomicWrite(await this.safePath(`${base}/entry.json`),JSON.stringify(entry));
   }
   async readTrash(entryId){
-    if(!/^[\w-]+\/[\w-]+$/.test(entryId))throw new Error('Item de lixeira inválido.');
+    if(!/^[\w-]+\/[\w-]+$/.test(entryId))throw new Error(frase('Item de lixeira inválido.'));
     const base=`.trash/${entryId}`;
     const current=await optionalRead(await this.safePath(`${base}/entry.json`));
     if(current)return JSON.parse(current);
     const old=await optionalRead(await this.safePath(`${base}/note.json`));
-    if(!old)throw new Error('Item não encontrado na lixeira.');
+    if(!old)throw new Error(frase('Item não encontrado na lixeira.'));
     const note=JSON.parse(old);
     return {kind:'note',id:note.id,title:note.title,notes:[note],folders:[],ancestors:[],files:[],directories:[],deletedAt:Number(entryId.split('-')[0])};
   }
@@ -488,13 +490,13 @@ class Vault {
     return result.sort((a,b)=>b.deletedAt-a.deletedAt).filter((n,i,all)=>all.findIndex(x=>x.id===n.id)===i);
   });}
   restore({entryId,revision}){return this.locked(async()=>{
-    const before=await this.read();if(before.state.revision!==revision)throw new Error('O cofre mudou. Recarregue antes de restaurar.');
+    const before=await this.read();if(before.state.revision!==revision)throw new Error(frase('O cofre mudou. Recarregue antes de restaurar.'));
     const entry=await this.readTrash(entryId), input=structuredClone(before.state);
-    if(input.folders.some(f=>f.id===entry.id)||input.notes.some(n=>n.id===entry.id))throw new Error('Este item já está no cofre.');
-    if((input.fluxos||[]).some(f=>f.id===entry.id))throw new Error('Este item já está no cofre.');
+    if(input.folders.some(f=>f.id===entry.id)||input.notes.some(n=>n.id===entry.id))throw new Error(frase('Este item já está no cofre.'));
+    if((input.fluxos||[]).some(f=>f.id===entry.id))throw new Error(frase('Este item já está no cofre.'));
     for(const ancestor of entry.ancestors)if(!input.folders.some(f=>f.id===ancestor.id))input.folders.push(ancestor);
-    for(const folder of entry.folders){if(input.folders.some(f=>f.id===folder.id))throw new Error('Uma subpasta já existe no cofre.');input.folders.push(folder);}
-    for(const note of entry.notes){if(input.notes.some(n=>n.id===note.id))throw new Error('Uma nota já existe no cofre.');input.notes.push({...note,folderId:input.folders.some(f=>f.id===note.folderId)?note.folderId:''});}
+    for(const folder of entry.folders){if(input.folders.some(f=>f.id===folder.id))throw new Error(frase('Uma subpasta já existe no cofre.'));input.folders.push(folder);}
+    for(const note of entry.notes){if(input.notes.some(n=>n.id===note.id))throw new Error(frase('Uma nota já existe no cofre.'));input.notes.push({...note,folderId:input.folders.some(f=>f.id===note.folderId)?note.folderId:''});}
     validateState(input);
     const files=new Map();for(const file of entry.files)files.set(file,await fs.readFile(await this.safePath(`.trash/${entryId}/files/${file}`)));
     const allFolders=[...entry.ancestors,...entry.folders];
