@@ -282,8 +282,8 @@ test('os painéis e comandos do plug-in chegam à tela Hoje', () => {
 test('Configurações têm a aba de plug-ins', () => {
   const app = require('node:fs').readFileSync(path.join(__dirname, '..', 'app.js'), 'utf8');
   // assert.ok em vez de match: a falha não despeja o app.js inteiro no terminal.
-  assert.ok(/\['plugins', 'Plug-ins', 'plugin'\]/.test(app), 'a aba existe');
-  assert.ok(/\['integracoes', 'Integrações', 'link'\], \['plugins', 'Plug-ins'/.test(app), 'logo depois de Integrações');
+  assert.ok(/\['plugins', frase\('Plug-ins'\), 'plugin'\]/.test(app), 'a aba existe');
+  assert.ok(/\['integracoes', frase\('Integrações'\), 'link'\], \['plugins', frase\('Plug-ins'\)/.test(app), 'logo depois de Integrações');
   // Consentimento é modal do app, nunca a caixa nativa.
   const secao = app.slice(app.indexOf('// ---- Aba Plug-ins ----'), app.indexOf('// ---- Fim da aba Plug-ins ----'));
   assert.ok(secao.length > 0, 'a aba tem seção própria');

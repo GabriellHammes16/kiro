@@ -4109,7 +4109,7 @@ function gravarAparencia(a) {
   avisarTemaAsMolduras();
   if (temaDosIcones !== temaAntes && loaded && !busy) render();   // árvore e menus com os ícones do tema novo
 }
-const CAIXAS = [['read','Ler notas'],['create','Criar notas'],['update','Editar notas'],['delete','Excluir notas (vai para a lixeira)']];
+const CAIXAS = [['read',frase('Ler notas')],['create',frase('Criar notas')],['update',frase('Editar notas')],['delete',frase('Excluir notas')]];
 const agentApi = {
   load: () => window.cadernoDesktop ? window.cadernoDesktop.agentConfig() : api('agent-config'),
   save: parcial => window.cadernoDesktop ? window.cadernoDesktop.saveAgentConfig(parcial) : api('agent-config', parcial),
@@ -4128,16 +4128,20 @@ async function gravarConfiguracao(campo) {
     if (!KiroHoje.valorValido(o, valor)) {
       const atual = valoresDasConfiguracoes([o], guardadas)[chave];
       if (o.type === 'boolean') campo.checked = atual; else campo.value = atual;
-      if (msg) msg.textContent = o.type === 'number' ? `${o.label}: use um número${o.min !== undefined ? ` de ${o.min}` : ''}${o.max !== undefined ? ` a ${o.max}` : ''}.` : 'Valor inválido.';
+      if (msg) msg.textContent = o.type !== 'number' ? t('Valor inválido.')
+        : o.min !== undefined && o.max !== undefined ? t('{rotulo}: use um número de {min} a {max}.', { rotulo: o.label, min: o.min, max: o.max })
+        : o.min !== undefined ? t('{rotulo}: use um número de {min}.', { rotulo: o.label, min: o.min })
+        : o.max !== undefined ? t('{rotulo}: use um número até {max}.', { rotulo: o.label, max: o.max })
+        : t('{rotulo}: use um número.', { rotulo: o.label });
       return;
     }
     // O arquivo guarda só o que mudou do padrão.
     if (valor === o.default) delete guardadas[chave]; else guardadas[chave] = valor;
     await pluginApi.gravarDados(id, { ...dados, [CHAVE_DAS_CONFIGURACOES]: guardadas });
-    if (msg) msg.textContent = 'Salvo';
+    if (msg) msg.textContent = t('Salvo');
     // Painéis e cartões do plug-in na Hoje leem as configurações de novo.
     if (currentView === 'today' && loaded && !busy) render();
-  } catch (erro) { if (msg) msg.textContent = 'Não foi possível salvar: ' + erro.message; }
+  } catch (erro) { if (msg) msg.textContent = t('Não foi possível salvar: {erro}', { erro: erro.message }); }
 }
 // ---- Aba Plug-ins ----
 // Tudo aqui age na hora: ligar pede consentimento num modal do Kiro (nunca a
@@ -4159,11 +4163,11 @@ async function lerPlugins() {
 
 // O que o plug-in vai poder fazer, em português; o que ainda não foi concedido ganha o selo "nova".
 function itensDePermissao(m, novas = [], hostsNovos = []) {
-  if (!m.permissions.length) return '<p class="small-muted plugin-permissoes-vazio">Não pede acesso aos seus dados.</p>';
+  if (!m.permissions.length) return `<p class="small-muted plugin-permissoes-vazio">${t('Não pede acesso aos seus dados.')}</p>`;
   return `<ul class="plugin-permissoes">${m.permissions.map(p => {
     const nova = novas.includes(p) || (p === 'network' && hostsNovos.length > 0);
-    const hosts = p === 'network' && m.network.length ? `, só nestes sites: ${m.network.map(h => escapeHtml(h)).join(', ')}` : '';
-    return `<li${nova ? ' class="nova"' : ''}>${escapeHtml(KiroPlugins.rotuloDaPermissao(p))}${hosts}${nova ? ' <span class="plugin-selo">nova</span>' : ''}</li>`;
+    const hosts = p === 'network' && m.network.length ? `, ${t('só nestes sites:')} ${m.network.map(h => escapeHtml(h)).join(', ')}` : '';
+    return `<li${nova ? ' class="nova"' : ''}>${escapeHtml(KiroPlugins.rotuloDaPermissao(p))}${hosts}${nova ? ` ${seloNova()}` : ''}</li>`;
   }).join('')}</ul>`;
 }
 const novidadesDoPlugin = (id, m) => ({
@@ -4171,25 +4175,25 @@ const novidadesDoPlugin = (id, m) => ({
   hostsNovos: KiroPlugins.comparar(escolhasDosPlugins[id]?.network, m.network).novas,
   segredosNovos: KiroPlugins.comparar(escolhasDosPlugins[id]?.secrets, m.secrets.map(s => s.name)).novas,
 });
-const seloNova = '<span class="plugin-selo">nova</span>';
+const seloNova = () => `<span class="plugin-selo">${t('nova')}</span>`;
 
 // Consentimento: as chaves que o plug-in vai usar e para onde cada uma vai.
 function itensDeChaves(m, segredosNovos = []) {
   if (!m.secrets.length) return '';
-  return `<p class="confirmar-texto">Ele pode usar chaves que você configurar depois em Configurações → Plug-ins. Cada chave só é enviada ao site indicado, e o plug-in nunca vê o valor:</p>
-    <ul class="plugin-permissoes">${m.secrets.map(s => `<li${segredosNovos.includes(s.name) ? ' class="nova"' : ''}>${escapeHtml(s.label)}, enviada só para ${escapeHtml(s.host)}${segredosNovos.includes(s.name) ? ` ${seloNova}` : ''}</li>`).join('')}</ul>`;
+  return `<p class="confirmar-texto">${t('Ele pode usar chaves que você configurar depois em Configurações → Plug-ins. Cada chave só é enviada ao site indicado, e o plug-in nunca vê o valor:')}</p>
+    <ul class="plugin-permissoes">${m.secrets.map(s => `<li${segredosNovos.includes(s.name) ? ' class="nova"' : ''}>${t('{chave}, enviada só para {site}', { chave: escapeHtml(s.label), site: escapeHtml(s.host) })}${segredosNovos.includes(s.name) ? ` ${seloNova()}` : ''}</li>`).join('')}</ul>`;
 }
 
 // Uma chave: o valor vai do campo direto para o envio e o campo é limpo; da chave só se sabe se está configurada.
 function itemDaChave(id, s, configurada, nova) {
   const campo = `chave-${escapeHtml(id)}-${escapeHtml(s.name)}`;
   return `<form class="plugin-chave" data-chave-plugin="${escapeHtml(id)}" data-chave="${escapeHtml(s.name)}">
-    <label for="${campo}" class="plugin-chave-rotulo">${escapeHtml(s.label)}${nova ? ` ${seloNova}` : ''}</label>
-    <span class="small-muted">Enviada só para ${escapeHtml(s.host)} · <span class="plugin-chave-estado">${configurada ? 'Configurada' : 'Não configurada'}</span></span>
+    <label for="${campo}" class="plugin-chave-rotulo">${escapeHtml(s.label)}${nova ? ` ${seloNova()}` : ''}</label>
+    <span class="small-muted">${t('Enviada só para {site}', { site: escapeHtml(s.host) })} · <span class="plugin-chave-estado">${configurada ? t('Configurada') : t('Não configurada')}</span></span>
     <span class="plugin-chave-campos">
-      <input id="${campo}" class="plugin-chave-campo" type="password" autocomplete="off" spellcheck="false" required aria-describedby="${campo}-msg" placeholder="Colar a chave" />
-      <button type="submit" class="secondary cfg-pequeno">Salvar</button>
-      <button type="button" class="secondary cfg-pequeno" data-remover-chave ${configurada ? '' : 'hidden'}>Remover</button>
+      <input id="${campo}" class="plugin-chave-campo" type="password" autocomplete="off" spellcheck="false" required aria-describedby="${campo}-msg" placeholder="${t('Colar a chave')}" />
+      <button type="submit" class="secondary cfg-pequeno">${t('Salvar')}</button>
+      <button type="button" class="secondary cfg-pequeno" data-remover-chave ${configurada ? '' : 'hidden'}>${t('Remover')}</button>
     </span>
     <span class="plugin-chave-msg small-muted" id="${campo}-msg" role="status" aria-live="polite"></span>
   </form>`;
@@ -4199,18 +4203,18 @@ const tamanhoLegivel = b => !(b > 0) ? '—' : b < 1024 ? `${b} B` : b < 1048576
 function ultimasChamadas(id) {
   const lista = chamadasDeRede.get(id) || [];
   const linhas = lista.map(c => `<tr><td>${KiroIdiomas.formatarData(new Date(c.quando), { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</td><td>${escapeHtml(c.metodo)}</td><td>${escapeHtml(c.host || '?')}</td><td>${escapeHtml(c.status ?? '')}</td><td>${tamanhoLegivel(c.bytes)}</td></tr>`).join('');
-  return `<div class="plugin-chamadas"><span class="plugin-chave-rotulo">Últimas chamadas</span>${lista.length
-    ? `<div class="plugin-tabela-rolagem"><table class="plugin-tabela"><thead><tr><th scope="col">Hora</th><th scope="col">Método</th><th scope="col">Site</th><th scope="col">Status</th><th scope="col">Tamanho</th></tr></thead><tbody>${linhas}</tbody></table></div>`
-    : '<span class="small-muted">Nenhuma chamada nesta sessão.</span>'}</div>`;
+  return `<div class="plugin-chamadas"><span class="plugin-chave-rotulo">${t('Últimas chamadas')}</span>${lista.length
+    ? `<div class="plugin-tabela-rolagem"><table class="plugin-tabela"><thead><tr><th scope="col">${t('Hora')}</th><th scope="col">${t('Método')}</th><th scope="col">${t('Site')}</th><th scope="col">${t('Status')}</th><th scope="col">${t('Tamanho')}</th></tr></thead><tbody>${linhas}</tbody></table></div>`
+    : `<span class="small-muted">${t('Nenhuma chamada nesta sessão.')}</span>`}</div>`;
 }
 
 // Uma linha por plug-in. Todo texto do manifesto entra escapado.
 // Campos das configurações do plug-in: os mesmos tipos das opções de painel da Hoje.
 function camposDasConfiguracoes(id, nome, declaracoes, valores) {
   const alvo = `plugin-cfg-${escapeHtml(id)}`;
-  const botao = `<button type="button" class="icon-button plugin-config-botao" popovertarget="${alvo}" title="Configurações de ${nome}" aria-label="Configurações de ${nome}">${icone('configuracoes')}</button>`;
-  return botao + `<div popover id="${alvo}" class="plugin-configuracoes" role="dialog" aria-label="Configurações de ${nome}">`
-    + `<header class="plugin-config-topo"><h3>${nome}</h3><button type="button" class="icon-button" popovertarget="${alvo}" popovertargetaction="hide" aria-label="Fechar">${icone('fechar')}</button></header>${declaracoes.map(o => {
+  const botao = `<button type="button" class="icon-button plugin-config-botao" popovertarget="${alvo}" title="${t('Configurações de {nome}', { nome })}" aria-label="${t('Configurações de {nome}', { nome })}">${icone('configuracoes')}</button>`;
+  return botao + `<div popover id="${alvo}" class="plugin-configuracoes" role="dialog" aria-label="${t('Configurações de {nome}', { nome })}">`
+    + `<header class="plugin-config-topo"><h3>${nome}</h3><button type="button" class="icon-button" popovertarget="${alvo}" popovertargetaction="hide" aria-label="${t('Fechar')}">${icone('fechar')}</button></header>${declaracoes.map(o => {
     const alvo = `data-config-plugin="${escapeHtml(id)}" data-config="${escapeHtml(o.key)}"`, v = valores[o.key];
     const campo = o.type === 'boolean' ? `<input type="checkbox" ${alvo} ${v ? 'checked' : ''} />`
       : o.type === 'number' ? `<input type="number" ${alvo} value="${v}" step="any"${o.min !== undefined ? ` min="${o.min}"` : ''}${o.max !== undefined ? ` max="${o.max}"` : ''} />`
@@ -4228,23 +4232,23 @@ function linhaDoPlugin({ id, manifesto }, situacao, erro = '', chaves = {}, conf
     .map(c => `<button type="button" class="secondary cfg-pequeno" data-comando-plugin="${escapeHtml(id)}" data-comando="${escapeHtml(c.id)}">${icone('plugin')} ${escapeHtml(c.label)}</button>`)
     .join('') : '';
   // Manifesto inválido não tem o que ligar; o que parou nesta sessão ainda pode ser desligado.
-  const chave = m ? `<label class="cfg-chave"><input type="checkbox" data-plugin-id="${escapeHtml(id)}" ${ligado ? 'checked' : ''} aria-label="${ligado ? 'Desativar' : 'Ativar'} ${nome}" /><span class="interruptor" aria-hidden="true"></span></label>` : '';
+  const chave = m ? `<label class="cfg-chave"><input type="checkbox" data-plugin-id="${escapeHtml(id)}" ${ligado ? 'checked' : ''} aria-label="${ligado ? t('Desativar {nome}', { nome }) : t('Ativar {nome}', { nome })}" /><span class="interruptor" aria-hidden="true"></span></label>` : '';
   return `<div class="cfg-linha cfg-plugin"><span class="cfg-texto">
     <span class="cfg-titulo">${nome}</span>
-    <span class="small-muted">${m ? `Versão ${escapeHtml(m.version)} · por ${escapeHtml(m.author)}` : `Pasta ${escapeHtml(id)}`}</span>
+    <span class="small-muted">${m ? t('Versão {versao} · por {autor}', { versao: escapeHtml(m.version), autor: escapeHtml(m.author) }) : t('Pasta {id}', { id: escapeHtml(id) })}</span>
     ${m?.description ? `<span class="small-muted">${escapeHtml(m.description)}</span>` : ''}
     ${m ? itensDePermissao(m, novas, hostsNovos) : ''}
     ${m?.secrets.length ? `<div class="plugin-chaves">${m.secrets.map(s => itemDaChave(id, s, !!chaves[s.name], segredosNovos.includes(s.name))).join('')}</div>` : ''}
     ${situacao === 'ativo' && m.permissions.includes('network') ? ultimasChamadas(id) : ''}
     ${comandos ? `<div class="cfg-botoes plugin-comandos-cfg">${comandos}</div>` : ''}
-    ${situacao === 'aguardando' ? `<p class="cfg-aviso">Uma atualização pediu mais acesso${segredosNovos.length ? ` (chave nova: ${segredosNovos.map(n => escapeHtml(m.secrets.find(s => s.name === n)?.label || n)).join(', ')})` : ''}. Ligue de novo para revisar o que é novo.</p>` : ''}
+    ${situacao === 'aguardando' ? `<p class="cfg-aviso">${segredosNovos.length ? t('Uma atualização pediu mais acesso (chave nova: {chaves}). Ligue de novo para revisar o que é novo.', { chaves: segredosNovos.map(n => escapeHtml(m.secrets.find(s => s.name === n)?.label || n)).join(', ') }) : t('Uma atualização pediu mais acesso. Ligue de novo para revisar o que é novo.')}</p>` : ''}
     ${erro ? `<p class="cfg-aviso">${escapeHtml(erro)}</p>` : ''}
   </span><span class="plugin-acoes">${m?.settings?.length ? camposDasConfiguracoes(id, nome, m.settings, valoresDasConfiguracoes(m.settings, configuracoes)) : ''}${chave}</span></div>`;
 }
 
 async function conteudoDaAbaPlugins() {
   try { await lerPlugins(); }
-  catch (erro) { return `<p class="cfg-aviso">Não foi possível ler os plug-ins: ${escapeHtml(erro.message)}</p>`; }
+  catch (erro) { return `<p class="cfg-aviso">${t('Não foi possível ler os plug-ins: {erro}', { erro: escapeHtml(erro.message) })}</p>`; }
   const { carregar, pendentes, problemas } = planoDosPlugins;
   // Estado das chaves ({ nome: true }); se não der para ler, aparecem como não configuradas.
   const comChaves = [...carregar, ...pendentes].filter(p => p.manifesto?.secrets.length);
@@ -4253,11 +4257,11 @@ async function conteudoDaAbaPlugins() {
   const comConfig = [...carregar, ...pendentes].filter(p => p.manifesto?.settings.length);
   const cfg = Object.fromEntries(await Promise.all(comConfig.map(p => pluginApi.dados(p.id).then(d => [p.id, d?.[CHAVE_DAS_CONFIGURACOES] || {}], () => [p.id, {}]))));
   const grupos = [
-    ['Ativos', carregar.filter(p => pluginsAtivos.has(p.id)).map(p => linhaDoPlugin(p, 'ativo', '', chaves[p.id], cfg[p.id]))],
-    ['Aguardando permissão', pendentes.filter(p => p.motivo === 'permissoes-novas').map(p => linhaDoPlugin(p, 'aguardando', '', chaves[p.id], cfg[p.id]))],
-    ['Desligados', pendentes.filter(p => p.motivo === 'desligado').map(p => linhaDoPlugin(p, 'desligado', '', chaves[p.id], cfg[p.id]))],
-    ['Com problema', [
-      ...carregar.filter(p => !pluginsAtivos.has(p.id)).map(p => linhaDoPlugin(p, 'parou', problemasDosPlugins.get(p.id) || 'O plug-in parou nesta sessão.', chaves[p.id], cfg[p.id])),
+    [t('Ativos'), carregar.filter(p => pluginsAtivos.has(p.id)).map(p => linhaDoPlugin(p, 'ativo', '', chaves[p.id], cfg[p.id]))],
+    [t('Aguardando permissão'), pendentes.filter(p => p.motivo === 'permissoes-novas').map(p => linhaDoPlugin(p, 'aguardando', '', chaves[p.id], cfg[p.id]))],
+    [t('Desligados'), pendentes.filter(p => p.motivo === 'desligado').map(p => linhaDoPlugin(p, 'desligado', '', chaves[p.id], cfg[p.id]))],
+    [t('Com problema'), [
+      ...carregar.filter(p => !pluginsAtivos.has(p.id)).map(p => linhaDoPlugin(p, 'parou', problemasDosPlugins.get(p.id) || t('O plug-in parou nesta sessão.'), chaves[p.id], cfg[p.id])),
       ...problemas.map(p => linhaDoPlugin({ id: p.id }, 'problema', p.erro)),
     ]],
   ];
@@ -4266,11 +4270,11 @@ async function conteudoDaAbaPlugins() {
   const caminho = state.vaultPath ? `${state.vaultPath.replace(/[\\/]+$/, '')}${separador}.kiro${separador}plugins${separador}` : '.kiro/plugins/';
   const botao = (id, rotulo, nomeIcone) => `<button type="button" class="secondary cfg-pequeno" id="${id}">${icone(nomeIcone)} ${rotulo}</button>`;
   return `<section class="cfg-grupo">
-    <header class="cfg-grupo-topo"><span class="cfg-texto"><span class="cfg-titulo">Plug-ins</span><span class="small-muted">Cada plug-in roda isolado e só alcança o que você permitir ao ligá-lo.</span></span></header>
-    ${lista || '<p class="small-muted cfg-rodape">Nenhum plug-in encontrado neste cofre.</p>'}
-    <div class="cfg-linha cfg-linha-coluna"><span class="cfg-texto"><span class="cfg-titulo">Pasta de plug-ins</span><span class="small-muted">Cada plug-in é uma pasta com manifest.json e index.js.</span></span>
+    <header class="cfg-grupo-topo"><span class="cfg-texto"><span class="cfg-titulo">${t('Plug-ins')}</span><span class="small-muted">${t('Cada plug-in roda isolado e só alcança o que você permitir ao ligá-lo.')}</span></span></header>
+    ${lista || `<p class="small-muted cfg-rodape">${t('Nenhum plug-in encontrado neste cofre.')}</p>`}
+    <div class="cfg-linha cfg-linha-coluna"><span class="cfg-texto"><span class="cfg-titulo">${t('Pasta de plug-ins')}</span><span class="small-muted">${t('Cada plug-in é uma pasta com manifest.json e index.js.')}</span></span>
       <code class="cfg-caminho">${escapeHtml(caminho)}</code>
-      <div class="cfg-botoes">${window.cadernoDesktop ? botao('cfg-plugins-abrir', 'Abrir pasta de plug-ins', 'pasta-aberta') : ''}${botao('cfg-plugins-copiar', 'Copiar caminho', 'copiar')}</div>
+      <div class="cfg-botoes">${window.cadernoDesktop ? botao('cfg-plugins-abrir', t('Abrir pasta de plug-ins'), 'pasta-aberta') : ''}${botao('cfg-plugins-copiar', t('Copiar caminho'), 'copiar')}</div>
     </div>
   </section>`;
 }
@@ -4289,15 +4293,15 @@ function pedirConsentimento(id) {
   if (!alvo) return redesenharAbaPlugins(id);
   const m = alvo.manifesto, nome = escapeHtml(m.name), aguardando = alvo.motivo === 'permissoes-novas';
   const { novas, hostsNovos, segredosNovos } = aguardando ? novidadesDoPlugin(id, m) : { novas: [], hostsNovos: [], segredosNovos: [] };
-  modal(aguardando ? 'Plug-in pede mais acesso' : 'Ativar plug-in', `<p class="confirmar-texto">${aguardando
-    ? `<strong>${nome}</strong> foi atualizado e agora pede mais do que você tinha permitido. O que está marcado como <span class="plugin-selo">nova</span> ainda não foi concedido.`
-    : `Ativar <strong>${nome}</strong>, de ${escapeHtml(m.author)}?`} Ele vai poder:</p>
+  modal(aguardando ? t('Plug-in pede mais acesso') : t('Ativar plug-in'), `<p class="confirmar-texto">${aguardando
+    ? t('{nome} foi atualizado e agora pede mais do que você tinha permitido. O que está marcado como {selo} ainda não foi concedido.', { nome: `<strong>${nome}</strong>`, selo: seloNova() })
+    : t('Ativar {nome}, de {autor}?', { nome: `<strong>${nome}</strong>`, autor: escapeHtml(m.author) })} ${t('Ele vai poder:')}</p>
     ${itensDePermissao(m, novas, hostsNovos)}
     ${itensDeChaves(m, segredosNovos)}
-    ${m.page ? `<p class="small-muted plugin-tela-propria">Tem uma tela própria (“${escapeHtml(m.page.title)}”), que aparece na barra lateral.</p>` : ''}
-    ${m.permissions.some(p => p.endsWith(':read')) ? `<p class="small-muted plugin-aviso-tela">As telas de plug-in rodam isoladas e sem rede, mas o navegador não deixa bloquear por completo o envio por WebRTC. Um plug-in que lê seus dados só deve ser ativado se você confia em quem o escreveu.</p>` : ''}
-    <p class="small-muted plugin-consentimento-nota">Dá para desligar quando quiser, em Configurações → Plug-ins.</p>
-    <div class="form-actions"><button type="button" class="secondary" id="cancel">Cancelar</button><button type="button" class="primary" id="confirmar-plugin">${aguardando ? 'Permitir e ativar' : 'Ativar plug-in'}</button></div>`);
+    ${m.page ? `<p class="small-muted plugin-tela-propria">${t('Tem uma tela própria (“{titulo}”), que aparece na barra lateral.', { titulo: escapeHtml(m.page.title) })}</p>` : ''}
+    ${m.permissions.some(p => p.endsWith(':read')) ? `<p class="small-muted plugin-aviso-tela">${t('As telas de plug-in rodam isoladas e sem rede, mas o navegador não deixa bloquear por completo o envio por WebRTC. Um plug-in que lê seus dados só deve ser ativado se você confia em quem o escreveu.')}</p>` : ''}
+    <p class="small-muted plugin-consentimento-nota">${t('Dá para desligar quando quiser, em Configurações → Plug-ins.')}</p>
+    <div class="form-actions"><button type="button" class="secondary" id="cancel">${t('Cancelar')}</button><button type="button" class="primary" id="confirmar-plugin">${aguardando ? t('Permitir e ativar') : t('Ativar plug-in')}</button></div>`);
   const voltar = () => showSettings('plugins');
   $('#cancel').onclick = voltar;
   $('#confirmar-plugin').onclick = async () => {
@@ -4310,7 +4314,7 @@ function pedirConsentimento(id) {
       await pluginApi.gravarEscolhas(escolhas);
     } catch (erro) {
       botao.disabled = false;
-      return status('Não foi possível ativar o plug-in: ' + erro.message, true);
+      return status(t('Não foi possível ativar o plug-in: {erro}', { erro: erro.message }), true);
     }
     ativarPlugin({ id, manifesto: m, permissoes: m.permissions });
     voltar();
@@ -4325,7 +4329,7 @@ async function desligarPlugin(id) {
   try {
     const escolhas = await pluginApi.escolhas();
     if (escolhas[id]) { escolhas[id] = { ...escolhas[id], enabled: false }; await pluginApi.gravarEscolhas(escolhas); }
-  } catch (erro) { status('Não foi possível guardar a escolha: ' + erro.message, true); }
+  } catch (erro) { status(t('Não foi possível guardar a escolha: {erro}', { erro: erro.message }), true); }
   redesenharAbaPlugins(id);
 }
 
@@ -4349,7 +4353,7 @@ function ligarAbaPlugins(painel) {
     try {
       const estado = await enviar();
       const configurada = !!estado?.[form.dataset.chave];
-      form.querySelector('.plugin-chave-estado').textContent = configurada ? 'Configurada' : 'Não configurada';
+      form.querySelector('.plugin-chave-estado').textContent = configurada ? t('Configurada') : t('Não configurada');
       form.querySelector('[data-remover-chave]').hidden = !configurada;
       msg.classList.remove('erro');
       msg.textContent = sucesso;
@@ -4370,13 +4374,13 @@ function ligarAbaPlugins(painel) {
     const campo = form.querySelector('input');
     const envio = pluginApi.gravarChave(form.dataset.chavePlugin, form.dataset.chave, campo.value);
     campo.value = '';
-    acaoDaChave(form, () => envio, 'Chave salva.');
+    acaoDaChave(form, () => envio, t('Chave salva.'));
   });
   painel.addEventListener('click', async evento => {
     const remover = evento.target.closest('[data-remover-chave]');
     if (remover) {
       const form = remover.closest('[data-chave]');
-      return acaoDaChave(form, () => pluginApi.removerChave(form.dataset.chavePlugin, form.dataset.chave), 'Chave removida.');
+      return acaoDaChave(form, () => pluginApi.removerChave(form.dataset.chavePlugin, form.dataset.chave), t('Chave removida.'));
     }
     const comando = evento.target.closest('[data-comando-plugin]');
     if (comando) return rodarComandoDoPlugin(comando.dataset.comandoPlugin, comando.dataset.comando);
@@ -4384,26 +4388,26 @@ function ligarAbaPlugins(painel) {
     const copiar = evento.target.closest('#cfg-plugins-copiar');
     if (!copiar) return;
     if (await copiarTexto(painel.querySelector('.cfg-caminho').textContent)) {
-      copiar.lastChild.textContent = ' Copiado';
-      setTimeout(() => { if (copiar.isConnected) copiar.lastChild.textContent = ' Copiar caminho'; }, 1500);
+      copiar.lastChild.textContent = ` ${t('Copiado')}`;
+      setTimeout(() => { if (copiar.isConnected) copiar.lastChild.textContent = ` ${t('Copiar caminho')}`; }, 1500);
     }
   });
 }
 // ---- Fim da aba Plug-ins ----
 
 // Aparência aplica na hora; as permissões de agente só no botão Salvar.
-const ABAS_CFG = [['personalizacao', 'Aparência', 'realce'], ['papel', 'Papel de parede', 'imagem'], ['editor', 'Editor', 'notas'], ['hoje', 'Hoje', 'hoje'], ['sistema', 'Sistema', 'pasta-aberta'], ['integracoes', 'Integrações', 'link'], ['plugins', 'Plug-ins', 'plugin'], ['atalhos', 'Atalhos', 'codigo']];
+const ABAS_CFG = [['personalizacao', frase('Aparência'), 'realce'], ['papel', frase('Papel de parede'), 'imagem'], ['editor', frase('Editor'), 'notas'], ['hoje', frase('Hoje'), 'hoje'], ['sistema', frase('Sistema'), 'pasta-aberta'], ['integracoes', frase('Integrações'), 'link'], ['plugins', frase('Plug-ins'), 'plugin'], ['atalhos', frase('Atalhos'), 'codigo']];
 let abaDasConfiguracoes = 'personalizacao';
 // Fixos: fazem parte do editor e dos menus, não dá para trocar.
 const ATALHOS_FIXOS = [
-  ['[[', 'Ligar a outra nota', 'Mostra sugestões de títulos enquanto você digita.'],
-  ['Botão direito', 'Menus rápidos', 'Na árvore de pastas, nas notas, nos hábitos e dentro do texto.'],
-  ['Esc', 'Fechar janela ou menu', ''],
+  ['[[', frase('Ligar a outra nota'), frase('Mostra sugestões de títulos enquanto você digita.')],
+  [frase('Botão direito'), frase('Menus rápidos'), frase('Na árvore de pastas, nas notas, nos hábitos e dentro do texto.')],
+  ['Esc', frase('Fechar janela ou menu'), ''],
 ];
 const atalhosNoPadrao = () => Kiro.ATALHOS_EDITAVEIS.every(([id, , , padrao]) => atalhos[id] === padrao);
 function linhasDeAtalhos(texto) {
-  return Kiro.ATALHOS_EDITAVEIS.map(([id, titulo, detalhe]) => `<div class="cfg-linha atalho-linha" data-atalho="${id}">${texto(titulo, detalhe)}<span class="atalho-controles"><kbd class="atalho">${teclaDe(id)}</kbd><button type="button" class="secondary cfg-pequeno" data-alterar-atalho="${id}" aria-label="Alterar atalho de ${titulo}">Alterar</button></span><span class="atalho-erro" role="status" aria-live="polite"></span></div>`).join('')
-    + `<div class="form-actions atalho-restaurar"${atalhosNoPadrao() ? ' hidden' : ''}><button type="button" class="secondary cfg-pequeno" id="atalhos-padrao">Restaurar padrões</button></div>`;
+  return Kiro.ATALHOS_EDITAVEIS.map(([id, titulo, detalhe]) => `<div class="cfg-linha atalho-linha" data-atalho="${id}">${texto(t(titulo), t(detalhe))}<span class="atalho-controles"><kbd class="atalho">${teclaDe(id)}</kbd><button type="button" class="secondary cfg-pequeno" data-alterar-atalho="${id}" aria-label="${t('Alterar atalho de {titulo}', { titulo: t(titulo) })}">${t('Alterar')}</button></span><span class="atalho-erro" role="status" aria-live="polite"></span></div>`).join('')
+    + `<div class="form-actions atalho-restaurar"${atalhosNoPadrao() ? ' hidden' : ''}><button type="button" class="secondary cfg-pequeno" id="atalhos-padrao">${t('Restaurar padrões')}</button></div>`;
 }
 function gravarAtalhos(novos) {
   atalhos = Kiro.atalhosValidos(novos);
@@ -4447,8 +4451,8 @@ function ligarAbaAtalhos(texto) {
     };
     gravandoAtalho = true;
     linha.classList.add('gravando');
-    kbd.textContent = 'Pressione as teclas…';
-    botao.textContent = 'Cancelar';
+    kbd.textContent = t('Pressione as teclas…');
+    botao.textContent = t('Cancelar');
     erro.textContent = '';
     window.addEventListener('keydown', ouvir, true);
     botao.addEventListener('blur', aoSair);
@@ -4465,48 +4469,48 @@ async function showSettings(aba = abaDasConfiguracoes) {
   const cores = lerAparencia();
   const texto = (titulo, detalhe = '', id = '') => `<span class="cfg-texto"><span class="cfg-titulo"${id ? ` id="${id}"` : ''}>${titulo}</span>${detalhe ? `<span class="small-muted">${detalhe}</span>` : ''}</span>`;
   const chave = (id, titulo, marcado, detalhe = '', extra = '') => `<label class="cfg-linha cfg-chave ${extra}">${texto(titulo, detalhe)}<input type="checkbox" data-perm="${id}" ${marcado ? 'checked' : ''} /><span class="interruptor" aria-hidden="true"></span></label>`;
-  const cor = (id, titulo, valor) => `<div class="cfg-linha">${texto(titulo)}<label class="cor-ponto" title="Escolher cor"><input type="color" data-cor="${id}" value="${valor}" aria-label="${titulo}" /></label></div>`;
+  const cor = (id, titulo, valor) => `<div class="cfg-linha">${texto(titulo)}<label class="cor-ponto" title="${t('Escolher cor')}"><input type="color" data-cor="${id}" value="${valor}" aria-label="${titulo}" /></label></div>`;
   const estiloPersonalizado = a => `--sidebar-bg:${a.sidebar};--content-bg:${a.content};--acento:${a.acento}`;
-  const opcaoTema = ([id, nome]) => `<label class="tema-opcao tema-${id}"${id === 'personalizado' ? ` style="${estiloPersonalizado(cores)}"` : ''}><input type="radio" name="tema" value="${id}" class="sr-only" ${cores.tema === id ? 'checked' : ''} /><span class="tema-amostra" aria-hidden="true"><i class="tema-lateral"></i><span class="tema-tela"><b></b><b></b><em></em></span>${icone(`tema-${id}`, 'tema-icone')}</span><span class="tema-nome">${nome}</span></label>`;
+  const opcaoTema = ([id, nome]) => `<label class="tema-opcao tema-${id}"${id === 'personalizado' ? ` style="${estiloPersonalizado(cores)}"` : ''}><input type="radio" name="tema" value="${id}" class="sr-only" ${cores.tema === id ? 'checked' : ''} /><span class="tema-amostra" aria-hidden="true"><i class="tema-lateral"></i><span class="tema-tela"><b></b><b></b><em></em></span>${icone(`tema-${id}`, 'tema-icone')}</span><span class="tema-nome">${t(nome)}</span></label>`;
   const botao = (id, rotulo, nomeIcone) => `<button type="button" class="secondary cfg-pequeno" id="${id}">${icone(nomeIcone)} ${rotulo}</button>`;
-  const DETALHES = { read: 'Buscar e ler o conteúdo das notas.', create: 'Criar notas e pastas novas.', update: 'Alterar texto, título, etiquetas e pasta.', delete: 'A nota vai para a lixeira e pode ser restaurada.' };
+  const DETALHES = { read: t('Buscar e ler o conteúdo das notas.'), create: t('Criar notas e pastas novas.'), update: t('Alterar texto, título, etiquetas e pasta.'), delete: t('A nota vai para a lixeira e pode ser restaurada.') };
   if (!ABAS_CFG.some(([id]) => id === aba)) aba = 'personalizacao';
   const painel = (id, conteudo) => `<div class="cfg-painel" data-painel="${id}" role="tabpanel" id="painel-${id}" aria-labelledby="aba-${id}" ${id === aba ? '' : 'hidden'}>${conteudo}</div>`;
-  modal('Configurações', `<div class="cfg">
-    <div class="cfg-lateral"><input type="search" class="cfg-busca" id="cfg-busca" placeholder="Buscar configuração" aria-label="Buscar nas configurações" autocomplete="off" />
-    <nav class="cfg-abas" role="tablist" aria-orientation="vertical" aria-label="Seções das configurações">${ABAS_CFG.map(([id, rotulo, nomeIcone]) => `<button type="button" role="tab" class="cfg-aba" id="aba-${id}" data-aba="${id}" aria-controls="painel-${id}" aria-selected="${id === aba}" tabindex="${id === aba ? 0 : -1}">${icone(nomeIcone)}<span>${rotulo}</span></button>`).join('')}</nav></div>
+  modal(t('Configurações'), `<div class="cfg">
+    <div class="cfg-lateral"><input type="search" class="cfg-busca" id="cfg-busca" placeholder="${t('Buscar configuração')}" aria-label="${t('Buscar nas configurações')}" autocomplete="off" />
+    <nav class="cfg-abas" role="tablist" aria-orientation="vertical" aria-label="${t('Seções das configurações')}">${ABAS_CFG.map(([id, rotulo, nomeIcone]) => `<button type="button" role="tab" class="cfg-aba" id="aba-${id}" data-aba="${id}" aria-controls="painel-${id}" aria-selected="${id === aba}" tabindex="${id === aba ? 0 : -1}">${icone(nomeIcone)}<span>${t(rotulo)}</span></button>`).join('')}</nav></div>
     <div class="cfg-conteudo">
-    <p class="cfg-sem-resultado small-muted" hidden>Nenhuma configuração com esse nome.</p>
+    <p class="cfg-sem-resultado small-muted" hidden>${t('Nenhuma configuração com esse nome.')}</p>
     ${painel('personalizacao', `<section class="cfg-grupo cfg-aparencia">
-      <header class="cfg-grupo-topo">${texto('Aparência', 'Muda na hora e vale só para esta instalação.')}<button type="button" class="secondary cfg-pequeno" id="cor-padrao">${icone('recarregar')} Restaurar padrão</button></header>
-      <div class="cfg-linha cfg-linha-coluna">${texto('Tema', '', 'tema-rotulo')}
-        ${[['classicos', 'Clássicos'], ['anime', 'Anime']].map(([grupo, titulo]) => `<div class="temas-grupo"><h4 class="cfg-subtitulo">${titulo}</h4><div class="temas" role="radiogroup" aria-labelledby="tema-rotulo">${TEMAS.filter(t => t[2] === grupo).map(opcaoTema).join('')}</div></div>`).join('')}
-        <div class="temas-grupo"><div class="temas">${opcaoTema(['personalizado', 'Personalizado'])}</div></div>
+      <header class="cfg-grupo-topo">${texto(t('Aparência'), t('Muda na hora e vale só para esta instalação.'))}<button type="button" class="secondary cfg-pequeno" id="cor-padrao">${icone('recarregar')} ${t('Restaurar padrão')}</button></header>
+      <div class="cfg-linha cfg-linha-coluna">${texto(t('Tema'), '', 'tema-rotulo')}
+        ${[['classicos', t('Clássicos')], ['anime', t('Anime')]].map(([grupo, titulo]) => `<div class="temas-grupo"><h4 class="cfg-subtitulo">${titulo}</h4><div class="temas" role="radiogroup" aria-labelledby="tema-rotulo">${TEMAS.filter(tema => tema[2] === grupo).map(opcaoTema).join('')}</div></div>`).join('')}
+        <div class="temas-grupo"><div class="temas">${opcaoTema(['personalizado', frase('Personalizado')])}</div></div>
       </div>
       <div class="cfg-personalizado" id="cfg-personalizado" ${cores.tema === 'personalizado' ? '' : 'hidden'}>
-      ${cor('sidebar', 'Fundo da barra lateral', cores.sidebar)}
-      ${cor('content', 'Fundo da área de texto', cores.content)}
-      <div class="cfg-linha cfg-linha-coluna">${texto('Cor de destaque', 'Botões, ícones, links e o grafo.', 'acento-rotulo')}
-        <div class="amostras" role="radiogroup" aria-labelledby="acento-rotulo">${ACENTOS.map(([hex, nome]) => `<label class="amostra" style="--cor-pasta:${hex}" title="${nome}"><input type="radio" name="acento" value="${hex}" ${hex.toLowerCase() === cores.acento.toLowerCase() ? 'checked' : ''} /><span class="sr-only">${nome}</span></label>`).join('')}<label class="cor-ponto cor-livre" title="Outra cor"><input type="color" data-cor="acento" value="${cores.acento}" aria-label="Outra cor de destaque" /></label></div>
-        <p class="cfg-aviso" id="acento-aviso" hidden>Essa cor tem pouco contraste com o fundo: textos e ícones podem ficar difíceis de ler.</p>
+      ${cor('sidebar', t('Fundo da barra lateral'), cores.sidebar)}
+      ${cor('content', t('Fundo da área de texto'), cores.content)}
+      <div class="cfg-linha cfg-linha-coluna">${texto(t('Cor de destaque'), t('Botões, ícones, links e o grafo.'), 'acento-rotulo')}
+        <div class="amostras" role="radiogroup" aria-labelledby="acento-rotulo">${ACENTOS.map(([hex, nome]) => `<label class="amostra" style="--cor-pasta:${hex}" title="${t(nome)}"><input type="radio" name="acento" value="${hex}" ${hex.toLowerCase() === cores.acento.toLowerCase() ? 'checked' : ''} /><span class="sr-only">${t(nome)}</span></label>`).join('')}<label class="cor-ponto cor-livre" title="${t('Outra cor')}"><input type="color" data-cor="acento" value="${cores.acento}" aria-label="${t('Outra cor de destaque')}" /></label></div>
+        <p class="cfg-aviso" id="acento-aviso" hidden>${t('Essa cor tem pouco contraste com o fundo: textos e ícones podem ficar difíceis de ler.')}</p>
       </div>
       </div>
-      <div class="cfg-linha cfg-linha-coluna">${texto('Skin', '', 'skin-rotulo')}
-        <div class="skins" role="radiogroup" aria-labelledby="skin-rotulo">${SKINS.map(([id, nome, desc]) => `<label class="skin-opcao"><input type="radio" name="skin" value="${id}" class="sr-only" ${cores.skin === id ? 'checked' : ''} /><span class="skin-nome">${nome}</span><span class="skin-desc">${desc}</span></label>`).join('')}</div>
+      <div class="cfg-linha cfg-linha-coluna">${texto(t('Skin'), '', 'skin-rotulo')}
+        <div class="skins" role="radiogroup" aria-labelledby="skin-rotulo">${SKINS.map(([id, nome, desc]) => `<label class="skin-opcao"><input type="radio" name="skin" value="${id}" class="sr-only" ${cores.skin === id ? 'checked' : ''} /><span class="skin-nome">${t(nome)}</span><span class="skin-desc">${t(desc)}</span></label>`).join('')}</div>
       </div>
     </section>`)}
     ${painel('papel', `<section class="cfg-grupo">
-      <header class="cfg-grupo-topo">${texto('Papel de parede', 'Imagem até 4K (3840 × 2160), GIF ou vídeo MP4/WebM animado de até 200 MB. Preenche a janela e aparece atrás de todas as telas, menos a de Pastas. Vale só para esta instalação.')}</header>
-      <div class="cfg-linha cfg-linha-coluna" id="cfg-papel"${document.documentElement.classList.contains('com-papel-de-parede') ? ' data-tem-papel' : ''}>${texto('Imagem ou vídeo')}
-        <div class="papel-controles"><span class="papel-previa" aria-hidden="true"></span><label class="secondary cfg-pequeno papel-escolher">${icone('imagem')} Escolher arquivo<input type="file" accept="image/*,video/mp4,video/webm" id="papel-arquivo" class="sr-only" /></label><button type="button" class="secondary cfg-pequeno papel-so-com" id="papel-remover">${icone('lixeira')} Remover</button></div>
-        <label class="papel-veu papel-so-com"><span class="small-muted">Suavizar a imagem</span><input type="range" id="papel-veu" min="0" max="90" step="5" value="${lerPreferencia('papelDeParedeVeu') ?? VEU_PADRAO}" /></label>
-        <label class="papel-veu papel-so-com"><span class="small-muted">Opacidade dos cartões</span><input type="range" id="papel-opacidade" min="30" max="100" step="5" value="${lerPreferencia('papelOpacidadeCartoes') ?? 100}" /></label>
+      <header class="cfg-grupo-topo">${texto(t('Papel de parede'), t('Imagem até 4K (3840 × 2160), GIF ou vídeo MP4/WebM animado de até 200 MB. Preenche a janela e aparece atrás de todas as telas, menos a de Pastas. Vale só para esta instalação.'))}</header>
+      <div class="cfg-linha cfg-linha-coluna" id="cfg-papel"${document.documentElement.classList.contains('com-papel-de-parede') ? ' data-tem-papel' : ''}>${texto(t('Imagem ou vídeo'))}
+        <div class="papel-controles"><span class="papel-previa" aria-hidden="true"></span><label class="secondary cfg-pequeno papel-escolher">${icone('imagem')} ${t('Escolher arquivo')}<input type="file" accept="image/*,video/mp4,video/webm" id="papel-arquivo" class="sr-only" /></label><button type="button" class="secondary cfg-pequeno papel-so-com" id="papel-remover">${icone('lixeira')} ${t('Remover')}</button></div>
+        <label class="papel-veu papel-so-com"><span class="small-muted">${t('Suavizar a imagem')}</span><input type="range" id="papel-veu" min="0" max="90" step="5" value="${lerPreferencia('papelDeParedeVeu') ?? VEU_PADRAO}" /></label>
+        <label class="papel-veu papel-so-com"><span class="small-muted">${t('Opacidade dos cartões')}</span><input type="range" id="papel-opacidade" min="30" max="100" step="5" value="${lerPreferencia('papelOpacidadeCartoes') ?? 100}" /></label>
         <p class="cfg-aviso" id="papel-erro" role="status" hidden></p>
       </div>
     </section>`)}
     ${painel('editor', `<section class="cfg-grupo">
-      <header class="cfg-grupo-topo">${texto('Notas', 'O que aparece junto do texto da nota aberta.')}</header>
-      <label class="cfg-linha cfg-chave">${texto('Mostrar “Mencionada em”', 'Lista, no fim da nota, as notas que apontam para ela com [[links]].')}<input type="checkbox" id="cfg-mencoes" ${mostrarMencoes ? 'checked' : ''} /><span class="interruptor" aria-hidden="true"></span></label>
+      <header class="cfg-grupo-topo">${texto(t('Notas'), t('O que aparece junto do texto da nota aberta.'))}</header>
+      <label class="cfg-linha cfg-chave">${texto(t('Mostrar “Mencionada em”'), t('Lista, no fim da nota, as notas que apontam para ela com [[links]].'))}<input type="checkbox" id="cfg-mencoes" ${mostrarMencoes ? 'checked' : ''} /><span class="interruptor" aria-hidden="true"></span></label>
       <label class="cfg-linha cfg-chave">${texto(t('Corretor ortográfico'), t('Sublinha palavras erradas em português e em inglês, ao mesmo tempo. Botão direito sobre a palavra mostra as sugestões.'))}<input type="checkbox" id="cfg-corretor" ${corretorLigado ? 'checked' : ''} /><span class="interruptor" aria-hidden="true"></span></label>
     </section>`)}
     ${painel('hoje', `<div id="cfg-hoje">${conteudoDaAbaHoje()}</div>`)}
@@ -4515,32 +4519,32 @@ async function showSettings(aba = abaDasConfiguracoes) {
       <label class="cfg-linha">${texto(t('Idioma da interface'))}<select id="cfg-idioma">${KiroIdiomas.IDIOMAS.map(i => `<option value="${i.codigo}" ${i.codigo === KiroIdiomas.idioma() ? 'selected' : ''}>${escapeHtml(i.nome)}</option>`).join('')}</select></label>
     </section>
     <section class="cfg-grupo">
-      <header class="cfg-grupo-topo">${texto('Cofre', 'A pasta onde suas notas ficam, como arquivos Markdown.')}</header>
-      <div class="cfg-linha cfg-linha-coluna">${texto('Local')}<code class="cfg-caminho">${escapeHtml(state.vaultPath || 'vault/')}</code>
-        <div class="cfg-botoes">${window.cadernoDesktop ? botao('cfg-abrir-pasta', 'Abrir pasta', 'pasta-aberta') + botao('cfg-trocar-cofre', 'Escolher outro cofre', 'pastas') : ''}${botao('cfg-copiar-caminho', 'Copiar caminho', 'copiar')}</div>
+      <header class="cfg-grupo-topo">${texto(t('Cofre'), t('A pasta onde suas notas ficam, como arquivos Markdown.'))}</header>
+      <div class="cfg-linha cfg-linha-coluna">${texto(t('Local'))}<code class="cfg-caminho">${escapeHtml(state.vaultPath || 'vault/')}</code>
+        <div class="cfg-botoes">${window.cadernoDesktop ? botao('cfg-abrir-pasta', t('Abrir pasta'), 'pasta-aberta') + botao('cfg-trocar-cofre', t('Escolher outro cofre'), 'pastas') : ''}${botao('cfg-copiar-caminho', t('Copiar caminho'), 'copiar')}</div>
       </div>
-      <div class="cfg-linha">${texto('Recarregar cofre', 'Lê os arquivos de novo, se você editou algo fora do Kiro.')}${botao('cfg-recarregar', 'Recarregar', 'recarregar')}</div>
+      <div class="cfg-linha">${texto(t('Recarregar cofre'), t('Lê os arquivos de novo, se você editou algo fora do Kiro.'))}${botao('cfg-recarregar', t('Recarregar'), 'recarregar')}</div>
     </section>
     <section class="cfg-grupo">
-      <header class="cfg-grupo-topo">${texto('Dados', 'Backup em um arquivo JSON com notas, pastas, tarefas e hábitos.')}</header>
-      <div class="cfg-linha">${texto('Exportar backup', 'As imagens coladas nas notas não entram no arquivo.')}${botao('cfg-exportar', 'Exportar', 'exportar')}</div>
-      <div class="cfg-linha">${texto('Importar backup', 'Substitui os dados atuais; antes, pede confirmação.')}<label class="secondary cfg-pequeno cfg-arquivo">${icone('importar')} Importar<input type="file" id="cfg-importar" accept="application/json" /></label></div>
-      <div class="cfg-linha">${texto('Lixeira', 'Notas e pastas excluídas, prontas para restaurar.')}${botao('cfg-lixeira', 'Abrir lixeira', 'lixeira')}</div>
+      <header class="cfg-grupo-topo">${texto(t('Dados'), t('Backup em um arquivo JSON com notas, pastas, tarefas e hábitos.'))}</header>
+      <div class="cfg-linha">${texto(t('Exportar backup'), t('As imagens coladas nas notas não entram no arquivo.'))}${botao('cfg-exportar', t('Exportar'), 'exportar')}</div>
+      <div class="cfg-linha">${texto(t('Importar backup'), t('Substitui os dados atuais; antes, pede confirmação.'))}<label class="secondary cfg-pequeno cfg-arquivo">${icone('importar')} ${t('Importar')}<input type="file" id="cfg-importar" accept="application/json" /></label></div>
+      <div class="cfg-linha">${texto(t('Lixeira'), t('Notas e pastas excluídas, prontas para restaurar.'))}${botao('cfg-lixeira', t('Abrir lixeira'), 'lixeira')}</div>
     </section>`)}
     ${painel('integracoes', conf ? `<section class="cfg-grupo">
-      <header class="cfg-grupo-topo">${texto('IA e integrações', 'Agentes externos usam a Agent API, sempre dentro deste cofre. O Kiro não envia nada para a nuvem por conta própria.')}</header>
-      ${chave('enabled', 'Permitir agentes neste cofre', conf.enabled, 'Liga o acesso para programas como o Claude Desktop.')}
-      ${chave('mcp', 'Servidor MCP', conf.mcp.enabled, 'Conexão local pelo stdio, sem abrir porta de rede.', 'cfg-depende')}
-      <h4 class="cfg-subtitulo cfg-depende">O que o agente pode fazer</h4>
-      ${CAIXAS.map(([id, rotulo]) => chave(id, rotulo.replace(/ \(.*\)$/, ''), conf.permissions[id], DETALHES[id], 'cfg-depende')).join('')}
-      ${chave('confirm', 'Confirmar ações destrutivas', conf.requireConfirmationForDestructive, 'Pede confirmação antes de excluir.', 'cfg-depende')}
-      <p class="small-muted cfg-rodape">Guardado em <code>.kiro/agent.json</code>, dentro do cofre. <span id="ai-estado" role="status" aria-live="polite"></span></p>
-    </section>` : `<p class="cfg-aviso">Não foi possível ler a configuração de agentes: ${escapeHtml(erroConf)}</p>`)}
+      <header class="cfg-grupo-topo">${texto(t('IA e integrações'), t('Agentes externos usam a Agent API, sempre dentro deste cofre. O Kiro não envia nada para a nuvem por conta própria.'))}</header>
+      ${chave('enabled', t('Permitir agentes neste cofre'), conf.enabled, t('Liga o acesso para programas como o Claude Desktop.'))}
+      ${chave('mcp', t('Servidor MCP'), conf.mcp.enabled, t('Conexão local pelo stdio, sem abrir porta de rede.'), 'cfg-depende')}
+      <h4 class="cfg-subtitulo cfg-depende">${t('O que o agente pode fazer')}</h4>
+      ${CAIXAS.map(([id, rotulo]) => chave(id, t(rotulo), conf.permissions[id], DETALHES[id], 'cfg-depende')).join('')}
+      ${chave('confirm', t('Confirmar ações destrutivas'), conf.requireConfirmationForDestructive, t('Pede confirmação antes de excluir.'), 'cfg-depende')}
+      <p class="small-muted cfg-rodape">${t('Guardado em {arquivo}, dentro do cofre.', { arquivo: '<code>.kiro/agent.json</code>' })} <span id="ai-estado" role="status" aria-live="polite"></span></p>
+    </section>` : `<p class="cfg-aviso">${t('Não foi possível ler a configuração de agentes: {erro}', { erro: escapeHtml(erroConf) })}</p>`)}
     ${painel('plugins', abaPlugins)}
     ${painel('atalhos', `<section class="cfg-grupo">
-      <header class="cfg-grupo-topo">${texto('Atalhos', 'Para fazer as coisas sem tirar a mão do teclado.')}</header>
+      <header class="cfg-grupo-topo">${texto(t('Atalhos'), t('Para fazer as coisas sem tirar a mão do teclado.'))}</header>
       <div id="atalhos-editaveis">${linhasDeAtalhos(texto)}</div>
-      ${ATALHOS_FIXOS.map(([tecla, titulo, detalhe]) => `<div class="cfg-linha">${texto(titulo, detalhe)}<kbd class="atalho">${tecla}</kbd></div>`).join('')}
+      ${ATALHOS_FIXOS.map(([tecla, titulo, detalhe]) => `<div class="cfg-linha">${texto(t(titulo), t(detalhe))}<kbd class="atalho">${t(tecla)}</kbd></div>`).join('')}
     </section>`)}
     </div>
   </div>`);
@@ -4556,13 +4560,13 @@ async function showSettings(aba = abaDasConfiguracoes) {
     e.target.value = '';
     if (!arquivo) return;
     const animado = arquivo.type.startsWith('video/') || arquivo.type === 'image/gif';
-    if (animado && arquivo.size > LIMITE_DO_PAPEL_ANIMADO) { erroDoPapel.textContent = 'Arquivo grande demais: GIF ou vídeo de até 200 MB.'; erroDoPapel.hidden = false; return; }
+    if (animado && arquivo.size > LIMITE_DO_PAPEL_ANIMADO) { erroDoPapel.textContent = t('Arquivo grande demais: GIF ou vídeo de até 200 MB.'); erroDoPapel.hidden = false; return; }
     let imagem;
     // GIF e vídeo vão como vieram (reduzir tiraria a animação); foto é reduzida até 4K.
     try { imagem = animado ? arquivo : await reduzirImagem(arquivo); }
-    catch { erroDoPapel.textContent = 'Não foi possível abrir essa imagem.'; erroDoPapel.hidden = false; return; }
+    catch { erroDoPapel.textContent = t('Não foi possível abrir essa imagem.'); erroDoPapel.hidden = false; return; }
     try { await papelGuardado('gravar', imagem); }
-    catch { erroDoPapel.textContent = 'Não foi possível guardar a imagem neste navegador (janela privada ou sem espaço).'; erroDoPapel.hidden = false; return; }
+    catch { erroDoPapel.textContent = t('Não foi possível guardar a imagem neste navegador (janela privada ou sem espaço).'); erroDoPapel.hidden = false; return; }
     erroDoPapel.hidden = true;
     await aplicarPapelDeParede();
   });
@@ -4690,7 +4694,7 @@ async function showSettings(aba = abaDasConfiguracoes) {
   // Sistema
   $('#cfg-abrir-pasta')?.addEventListener('click', () => window.cadernoDesktop.openVault());
   $('#cfg-trocar-cofre')?.addEventListener('click', escolherOutroCofre);
-  $('#cfg-copiar-caminho').onclick = async () => { const b = $('#cfg-copiar-caminho'); if (await copiarTexto(state.vaultPath || '')) { b.lastChild.textContent = ' Copiado'; setTimeout(() => { if (b.isConnected) b.lastChild.textContent = ' Copiar caminho'; }, 1500); } };
+  $('#cfg-copiar-caminho').onclick = async () => { const b = $('#cfg-copiar-caminho'); if (await copiarTexto(state.vaultPath || '')) { b.lastChild.textContent = ` ${t('Copiado')}`; setTimeout(() => { if (b.isConnected) b.lastChild.textContent = ` ${t('Copiar caminho')}`; }, 1500); } };
   $('#cfg-recarregar').onclick = () => reload(true);
   $('#cfg-exportar').onclick = exportarDados;
   $('#cfg-importar').onchange = e => { const arquivo = e.target.files[0]; e.target.value = ''; importarDados(arquivo); };
@@ -4711,11 +4715,11 @@ async function showSettings(aba = abaDasConfiguracoes) {
         permissions: Object.fromEntries(CAIXAS.map(([id]) => [id, marcado(id)])),
         requireConfirmationForDestructive: marcado('confirm'),
       });
-      estadoDasPermissoes.textContent = '· Salvo';
+      estadoDasPermissoes.textContent = `· ${t('Salvo')}`;
     } catch (error) {
       c.checked = !c.checked;   // volta a chave: o que está na tela é o que está gravado
       estadoDasPermissoes.textContent = '';
-      status('Não foi possível salvar: ' + error.message, true);
+      status(t('Não foi possível salvar: {erro}', { erro: error.message }), true);
     }
   }));
 }
@@ -4734,9 +4738,9 @@ document.addEventListener('contextmenu',e=>{
   if(linha)return abrirMenuContexto(e,document.body,menuDaArvore(linha));
   // Espaço vazio da árvore: criar na raiz do cofre.
   if(e.target.closest('.cofre-lateral .tree'))return abrirMenuContexto(e,document.body,[
-    {rotulo:'Nova nota',icone:icone('nota'),acao:()=>abrirNota(notaVazia())},
-    {rotulo:'Nova pasta',icone:icone('pasta-nova'),acao:()=>folderModal({title:'',description:'',parentId:''})},
-    {rotulo:'Novo fluxo',icone:icone('fluxo'),acao:()=>novoFluxo('')},
+    {rotulo:t('Nova nota'),icone:icone('nota'),acao:()=>abrirNota(notaVazia())},
+    {rotulo:t('Nova pasta'),icone:icone('pasta-nova'),acao:()=>folderModal({title:'',description:'',parentId:''})},
+    {rotulo:t('Novo fluxo'),icone:icone('fluxo'),acao:()=>novoFluxo('')},
   ]);
   const habito=e.target.closest('[data-habito]');
   if(habito)return abrirMenuContexto(e,document.body,menuDoHabito(habito.dataset.habito));
@@ -4785,7 +4789,7 @@ document.addEventListener('pointermove',e=>{
   const ativo=marcandoComDireito?.moveu&&(e.buttons&2);
   contadorDoGesto.hidden=!ativo;
   if(!ativo)return;
-  contadorDoGesto.textContent=`${selecaoArvore.size} ${selecaoArvore.size===1?'item':'itens'}`;
+  contadorDoGesto.textContent=selecaoArvore.size===1?t('1 item'):t('{n} itens',{n:selecaoArvore.size});
   contadorDoGesto.style.transform=`translate(${e.clientX+14}px, ${e.clientY+14}px)`;
 });
 document.addEventListener('pointerup',()=>{contadorDoGesto.hidden=true;},true);
@@ -4901,7 +4905,7 @@ $('#lixeira-lateral').onclick=()=>{if(loaded&&!busy&&!failed)showTrash();};
 // ---- Ações de sistema: ficam na aba Sistema das Configurações ----
 async function escolherOutroCofre(){
   if(busy||!window.cadernoDesktop)return;closeModal(true);
-  if(failed){status('Exporte suas alterações e recarregue antes de trocar de cofre.',true);return;}
+  if(failed){status(t('Exporte suas alterações e recarregue antes de trocar de cofre.'),true);return;}
   // Uma mudança de fluxo ainda não salva não pode ser descartada pela troca de cofre.
   if(!await gravarFluxoPendente())return;
   setBusy(true);
@@ -4919,9 +4923,10 @@ async function importarDados(arquivo){
   if(!arquivo||busy||failed||!loaded)return;
   let data;
   try{data=Kiro.validateState(JSON.parse(await arquivo.text()));}
-  catch(error){status('Importação cancelada: '+error.message,true);return;}
-  const partes=[`${data.notes.length} nota${data.notes.length===1?'':'s'}`,`${(data.folders||[]).length} pasta${(data.folders||[]).length===1?'':'s'}`,`${(data.habits||data.routine||[]).length} hábito${(data.habits||data.routine||[]).length===1?'':'s'}`];
-  modal('Importar backup',`<p class="confirmar-texto">Importar <strong>${partes.join(', ')}</strong> de <strong>${escapeHtml(arquivo.name)}</strong> e substituir os dados atuais? As notas e os fluxos que saírem vão para a lixeira e uma cópia do cofre atual é preservada.</p><div class="form-actions"><button type="button" class="secondary" id="cancel">Cancelar</button><button type="button" class="primary" id="confirmar-importacao">Importar e substituir</button></div>`);
+  catch(error){status(t('Importação cancelada: {erro}',{erro:error.message}),true);return;}
+  const contar=(n,um,varios)=>n===1?t(um):t(varios,{n});
+  const partes=[contar(data.notes.length,frase('1 nota'),frase('{n} notas')),contar((data.folders||[]).length,frase('1 pasta'),frase('{n} pastas')),contar((data.habits||data.routine||[]).length,frase('1 hábito'),frase('{n} hábitos'))];
+  modal(t('Importar backup'),`<p class="confirmar-texto">${t('Importar {resumo} de {arquivo} e substituir os dados atuais? As notas e os fluxos que saírem vão para a lixeira e uma cópia do cofre atual é preservada.',{resumo:`<strong>${partes.join(', ')}</strong>`,arquivo:`<strong>${escapeHtml(arquivo.name)}</strong>`})}</p><div class="form-actions"><button type="button" class="secondary" id="cancel">${t('Cancelar')}</button><button type="button" class="primary" id="confirmar-importacao">${t('Importar e substituir')}</button></div>`);
   $('#cancel').onclick=()=>closeModal(true);
   $('#confirmar-importacao').onclick=async()=>{
     data.notes=data.notes.map(n=>{const copy={...n};delete copy.file;return copy;});
@@ -4935,14 +4940,14 @@ async function importarDados(arquivo){
 function irParaNota({ escolher = false } = {}){
   if(!loaded||failed||busy||$('#modal-root').firstChild)return Promise.resolve(null);
   return new Promise(resolve=>{
-  modal(escolher?'Adicionar nota ao fluxo':'Ir para nota','<div class="form"><input class="search ir-busca" id="ir-busca" placeholder="Digite o título da nota…" autocomplete="off" aria-label="Buscar nota" /><div class="ir-lista" id="ir-lista" role="listbox"></div></div>');
+  modal(escolher?t('Adicionar nota ao fluxo'):t('Ir para nota'),`<div class="form"><input class="search ir-busca" id="ir-busca" placeholder="${t('Digite o título da nota…')}" autocomplete="off" aria-label="${t('Buscar nota')}" /><div class="ir-lista" id="ir-lista" role="listbox"></div></div>`);
   const campo=$('#ir-busca'), lista=$('#ir-lista'); let achadas=[], marcada=0;
   const desenhar=()=>{
     const q=Kiro.normalize(campo.value.trim());
     const pontos=n=>{const t=Kiro.normalize(n.title||'');return !q?1:t.startsWith(q)?3:t.includes(q)?2:Kiro.normalize(n.body).includes(q)?1:0;};
     achadas=state.notes.map(n=>[pontos(n),n]).filter(([p])=>p).sort((a,b)=>b[0]-a[0]||b[1].updatedAt-a[1].updatedAt).slice(0,12).map(([,n])=>n);
     marcada=Math.min(marcada,Math.max(achadas.length-1,0));
-    lista.innerHTML=achadas.map((n,i)=>{const p=state.folders.find(f=>f.id===n.folderId);return `<button type="button" class="ir-item${i===marcada?' marcada':''}" data-i="${i}" role="option" aria-selected="${i===marcada}"><span>${escapeHtml(n.title||'Sem título')}</span><small>${p?escapeHtml(p.path||p.title):''}</small></button>`;}).join('')||'<div class="empty">Nenhuma nota encontrada.</div>';
+    lista.innerHTML=achadas.map((n,i)=>{const p=state.folders.find(f=>f.id===n.folderId);return `<button type="button" class="ir-item${i===marcada?' marcada':''}" data-i="${i}" role="option" aria-selected="${i===marcada}"><span>${escapeHtml(n.title||t('Sem título'))}</span><small>${p?escapeHtml(p.path||p.title):''}</small></button>`;}).join('')||`<div class="empty">${t('Nenhuma nota encontrada.')}</div>`;
   };
   let respondeu=false;
   const responder=valor=>{if(!respondeu){respondeu=true;resolve(valor);}};
@@ -5021,15 +5026,15 @@ function mostrarBoasVindas(padrao) {
   tela.setAttribute('aria-labelledby', 'bv-titulo');
   tela.innerHTML = `<div class="bv-caixa">
     <img class="bv-logo" src="kiro-logo.png" alt="" />
-    <h1 id="bv-titulo">Boas-vindas ao Kiro</h1>
-    <p class="bv-sub">Suas notas ficam numa pasta do seu computador, em arquivos Markdown que qualquer editor abre. Escolha onde.</p>
+    <h1 id="bv-titulo">${t('Boas-vindas ao Kiro')}</h1>
+    <p class="bv-sub">${t('Suas notas ficam numa pasta do seu computador, em arquivos Markdown que qualquer editor abre. Escolha onde.')}</p>
     <div class="bv-opcoes">
-      ${opcao('criar', 'mais', 'Criar um cofre novo')}
-      ${opcao('abrir', 'pasta-aberta', 'Abrir uma pasta existente')}
-      ${opcao('padrao', 'pastas', 'Usar a pasta padrão', escapeHtml(padrao))}
+      ${opcao('criar', 'mais', t('Criar um cofre novo'))}
+      ${opcao('abrir', 'pasta-aberta', t('Abrir uma pasta existente'))}
+      ${opcao('padrao', 'pastas', t('Usar a pasta padrão'), escapeHtml(padrao))}
     </div>
     <p class="bv-erro" role="alert"></p>
-    <p class="bv-rodape">Dá para trocar depois em Configurações → Sistema.</p>
+    <p class="bv-rodape">${t('Dá para trocar depois em Configurações → Sistema.')}</p>
   </div>`;
   document.body.append(tela);
   $('.app-shell').inert = true;
@@ -5045,7 +5050,7 @@ function mostrarBoasVindas(padrao) {
       aguardandoCofre = false;
       comecar();
     } catch (e) {
-      erro.textContent = 'Não foi possível usar essa pasta: ' + String(e.message).replace(/^Error invoking remote method '[^']+': (Error: )?/, '');
+      erro.textContent = t('Não foi possível usar essa pasta: {erro}', { erro: String(e.message).replace(/^Error invoking remote method '[^']+': (Error: )?/, '') });
       botoes.forEach(b => { b.disabled = false; });
       botao.focus();
     }
