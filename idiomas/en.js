@@ -687,6 +687,7 @@
     'Pontas nos dois lados (↔)': 'Arrowheads on both ends (↔)',
     'Sem pontas (—)': 'No arrowheads (—)',
     'Editar rótulo': 'Edit label',
+    'Grupo': 'Group',
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = frases;
   else root.KiroIdiomas.registrar('en', frases);

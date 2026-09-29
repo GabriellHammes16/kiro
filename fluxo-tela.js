@@ -191,7 +191,7 @@
     function criarGrupo(p) {
       const sel = canvas.nodes.filter(n => s.selecao.has(n.id));
       const caixa = sel.length ? F.caixaDe(sel) : { x: p.x - 200, y: p.y - 150, width: 400, height: 300 };
-      const r = F.adicionarCartao(canvas, { type: 'group', label: 'Grupo', x: encaixar(caixa.x), y: encaixar(caixa.y), width: encaixarPraCima(caixa.width), height: encaixarPraCima(caixa.height) });
+      const r = F.adicionarCartao(canvas, { type: 'group', label: t('Grupo'), x: encaixar(caixa.x), y: encaixar(caixa.y), width: encaixarPraCima(caixa.width), height: encaixarPraCima(caixa.height) });
       // JSON Canvas: a ordem da lista é a ordem de empilhamento. adicionarCartao põe o grupo no
       // fim (topo); um viewer que respeite isso à risca (ao contrário do nosso desenhar()) o
       // desenharia por cima dos cartões (M4). Ele entra no índice 0 (fundo).
