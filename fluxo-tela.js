@@ -4,6 +4,7 @@
 // app (cada salvamento redesenha a tela inteira).
 (function (root) {
   const F = root.KiroFluxo;
+  const t = (frase, valores) => root.KiroIdiomas.t(frase, valores);
   const sessoes = new Map();       // id do fluxo → { vista, selecao, seta, historico, grade }
   const montados = new Set();
   let contador = 0;                // ids únicos de <marker> quando dois fluxos estão abertos
@@ -26,13 +27,13 @@
     // qualquer cofre, então sem a chave do cofre o Ctrl+Z (e a vista) de um vazariam para o outro.
     const { id } = opcoes, s = sessao(opcoes.chaveDaVista + '\n' + id), n = ++contador;
     let canvas = opcoes.canvas, gesto = null, editor = null, espaco = false, timerVista = null;
-    host.innerHTML = `<div class="fluxo" tabindex="0" role="application" aria-label="Fluxo ${esc(opcoes.titulo)}">
+    host.innerHTML = `<div class="fluxo" tabindex="0" role="application" aria-label="${esc(t('Fluxo {titulo}', { titulo: opcoes.titulo }))}">
   <div class="fluxo-mundo">
     <svg class="fluxo-setas" aria-hidden="true"><defs><marker id="fluxo-ponta-${n}" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0 10 5 0 10z" fill="context-stroke"/></marker></defs><g class="fluxo-caminhos"></g><path class="fluxo-seta-previa" d=""/></svg>
     <div class="fluxo-cartoes"></div>
     <div class="fluxo-marca" hidden></div>
   </div>
-  <div class="fluxo-barra"><button type="button" class="icon-button" data-fluxo-acao="cartao" title="Adicionar cartão (ou dois cliques no fundo)" aria-label="Adicionar cartão">${opcoes.icone('mais')}</button><button type="button" class="icon-button" data-fluxo-acao="nota" title="Adicionar nota do cofre" aria-label="Adicionar nota do cofre">${opcoes.icone('nota')}</button><button type="button" class="icon-button" data-fluxo-acao="imagem" title="Adicionar imagem" aria-label="Adicionar imagem">${opcoes.icone('imagem')}</button><button type="button" class="fluxo-zoom" data-fluxo-acao="enquadrar" title="Enquadrar tudo (Shift+1)" aria-label="Enquadrar tudo">100%</button></div>
+  <div class="fluxo-barra"><button type="button" class="icon-button" data-fluxo-acao="cartao" title="${t('Adicionar cartão (ou dois cliques no fundo)')}" aria-label="${t('Adicionar cartão')}">${opcoes.icone('mais')}</button><button type="button" class="icon-button" data-fluxo-acao="nota" title="${t('Adicionar nota do cofre')}" aria-label="${t('Adicionar nota do cofre')}">${opcoes.icone('nota')}</button><button type="button" class="icon-button" data-fluxo-acao="imagem" title="${t('Adicionar imagem')}" aria-label="${t('Adicionar imagem')}">${opcoes.icone('imagem')}</button><button type="button" class="fluxo-zoom" data-fluxo-acao="enquadrar" title="${t('Enquadrar tudo (Shift+1)')}" aria-label="${t('Enquadrar tudo')}">100%</button></div>
 </div>`;
     const raiz = host.firstElementChild;
     const mundo = raiz.querySelector('.fluxo-mundo'), caminhos = raiz.querySelector('.fluxo-caminhos'), cartoes = raiz.querySelector('.fluxo-cartoes');
@@ -54,7 +55,7 @@
           return `<img class="fluxo-imagem" src="${esc(opcoes.urlDoArquivo(c.file))}" alt="${esc(c.file.split('/').pop())}" draggable="false">`;
         }
         const nota = opcoes.nota(c.file);
-        if (!nota) return `<p class="fluxo-ausente">Nota não encontrada<br><small>${esc(c.file)}</small></p>`;
+        if (!nota) return `<p class="fluxo-ausente">${t('Nota não encontrada')}<br><small>${esc(c.file)}</small></p>`;
         return `<div class="fluxo-nota-titulo">${esc(nota.titulo)}</div><div class="fluxo-nota-previa">${nota.html}</div>`;
       }
       if (c.type === 'link') {
@@ -64,7 +65,7 @@
       return '';
     }
     function cartaoHtml(c) {
-      const alcas = F.LADOS.map(l => `<span class="fluxo-alca" data-lado="${l}"></span>`).join('') + '<span class="fluxo-canto" title="Arraste para redimensionar"></span>';
+      const alcas = F.LADOS.map(l => `<span class="fluxo-alca" data-lado="${l}"></span>`).join('') + `<span class="fluxo-canto" title="${t('Arraste para redimensionar')}"></span>`;
       const rotulo = c.type === 'group' ? `<span class="fluxo-grupo-rotulo">${esc(c.label)}</span>` : '';
       // Backup importado só passa por validateState (nodes/edges são listas), não por KiroFluxo.ler:
       // x/y/width/height viram número aqui antes de entrar no atributo style.
@@ -215,7 +216,7 @@
       const area = document.createElement('textarea');
       area.className = 'fluxo-editor';
       area.value = c.text;
-      area.setAttribute('aria-label', 'Texto do cartão');
+      area.setAttribute('aria-label', t('Texto do cartão'));
       el.querySelector('.fluxo-conteudo').replaceChildren(area);
       el.classList.add('editando');
       let feito = false;
@@ -246,7 +247,7 @@
       const campo = document.createElement('input');
       campo.className = 'fluxo-editor fluxo-rotulo-editor';
       campo.value = seta.label || '';
-      campo.setAttribute('aria-label', 'Rótulo da seta');
+      campo.setAttribute('aria-label', t('Rótulo da seta'));
       Object.assign(campo.style, { left: `${g.meio.x}px`, top: `${g.meio.y}px` });
       mundo.appendChild(campo);
       let feito = false;
@@ -272,7 +273,7 @@
       const campo = document.createElement('input');
       campo.className = 'fluxo-editor fluxo-grupo-editor';
       campo.value = c.label || '';
-      campo.setAttribute('aria-label', 'Nome do grupo');
+      campo.setAttribute('aria-label', t('Nome do grupo'));
       Object.assign(campo.style, { left: `${Number(c.x)}px`, top: `${Number(c.y)}px` });
       mundo.appendChild(campo);
       let feito = false;
@@ -304,53 +305,53 @@
       Promise.resolve(opcoes.transformarEmNota(idNo, texto)).then(ok => { if (ok) s.historico = F.empilhar(s.historico, antes); });
     }
     // ---- Menus do botão direito ----
-    const NOMES_DAS_CORES = { '': 'Sem cor', 1: 'Vermelho', 2: 'Laranja', 3: 'Amarelo', 4: 'Verde', 5: 'Ciano', 6: 'Roxo' };
+    const NOMES_DAS_CORES = { '': t('Sem cor'), 1: t('Vermelho'), 2: t('Laranja'), 3: t('Amarelo'), 4: t('Verde'), 5: t('Ciano'), 6: t('Roxo') };
     const bolinha = cor => `<svg class="icone" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="7" class="fluxo-bolinha"${corData(cor)} style="${corCss(cor)}"/></svg>`;
     const itensDaCor = aplicar => ['', ...F.CORES].map(cor => ({ rotulo: NOMES_DAS_CORES[cor], icone: bolinha(cor), acao: () => aplicar(cor || undefined) }));
     function menuDoFundo(p) {
       return [
-        { rotulo: 'Adicionar cartão', icone: opcoes.icone('mais'), acao: () => criarCartao(p) },
-        { rotulo: 'Adicionar nota do cofre', icone: opcoes.icone('nota'), acao: () => adicionarNota(p) },
-        { rotulo: 'Adicionar imagem', icone: opcoes.icone('imagem'), acao: () => adicionarImagem(p) },
-        { rotulo: 'Adicionar link', icone: opcoes.icone('link'), acao: () => adicionarLink(p) },
-        { rotulo: s.selecao.size ? 'Agrupar seleção' : 'Criar grupo', icone: opcoes.icone('pastas'), acao: () => criarGrupo(p) },
+        { rotulo: t('Adicionar cartão'), icone: opcoes.icone('mais'), acao: () => criarCartao(p) },
+        { rotulo: t('Adicionar nota do cofre'), icone: opcoes.icone('nota'), acao: () => adicionarNota(p) },
+        { rotulo: t('Adicionar imagem'), icone: opcoes.icone('imagem'), acao: () => adicionarImagem(p) },
+        { rotulo: t('Adicionar link'), icone: opcoes.icone('link'), acao: () => adicionarLink(p) },
+        { rotulo: s.selecao.size ? t('Agrupar seleção') : t('Criar grupo'), icone: opcoes.icone('pastas'), acao: () => criarGrupo(p) },
         { separador: true },
-        { rotulo: 'Desfazer', icone: opcoes.icone('desfazer'), ativo: () => s.historico.antes.length > 0, acao: desfazer },
-        { rotulo: 'Refazer', icone: opcoes.icone('refazer'), ativo: () => s.historico.depois.length > 0, acao: refazer },
-        { rotulo: 'Colar', icone: opcoes.icone('colar'), acao: () => navigator.clipboard.readText().then(t => colarTexto(t, p), () => opcoes.aviso('Não foi possível ler a área de transferência.', true)) },
+        { rotulo: t('Desfazer'), icone: opcoes.icone('desfazer'), ativo: () => s.historico.antes.length > 0, acao: desfazer },
+        { rotulo: t('Refazer'), icone: opcoes.icone('refazer'), ativo: () => s.historico.depois.length > 0, acao: refazer },
+        { rotulo: t('Colar'), icone: opcoes.icone('colar'), acao: () => navigator.clipboard.readText().then(texto => colarTexto(texto, p), () => opcoes.aviso(t('Não foi possível ler a área de transferência.'), true)) },
         { separador: true },
-        { rotulo: 'Encaixar na grade', icone: s.grade ? opcoes.icone('marcado') : '', acao: () => { s.grade = !s.grade; } },
-        { rotulo: 'Enquadrar tudo', icone: opcoes.icone('expandir'), acao: enquadrarTudo },
+        { rotulo: t('Encaixar na grade'), icone: s.grade ? opcoes.icone('marcado') : '', acao: () => { s.grade = !s.grade; } },
+        { rotulo: t('Enquadrar tudo'), icone: opcoes.icone('expandir'), acao: enquadrarTudo },
       ];
     }
     function menuDoCartao(idNo) {
       if (!s.selecao.has(idNo)) selecionar([idNo]);
       const ids = [...s.selecao];
       return [
-        { rotulo: 'Cor', icone: bolinha(no(idNo)?.color), filhos: itensDaCor(cor => mudar(ids.reduce((c, x) => F.editarCartao(c, x, { color: cor }), canvas))) },
-        { rotulo: 'Duplicar', icone: opcoes.icone('copiar'), acao: () => { const r = F.duplicarCartoes(canvas, ids); s.selecao = new Set(r.ids); mudar(r.canvas); } },
-        ...(ids.length === 1 && no(idNo)?.type === 'text' ? [{ rotulo: 'Editar texto', icone: opcoes.icone('renomear'), acao: () => editar(idNo) }] : []),
-        ...(ids.length === 1 && no(idNo)?.type === 'text' && no(idNo).text.trim() ? [{ rotulo: 'Transformar em nota', icone: opcoes.icone('nota'), acao: () => transformarEmNota(idNo) }] : []),
-        ...(ids.length === 1 && no(idNo)?.type === 'group' ? [{ rotulo: 'Renomear grupo', icone: opcoes.icone('renomear'), acao: () => editarGrupo(idNo) }] : []),
-        ...(ids.length === 1 && no(idNo)?.type === 'file' && !F.ehImagem(no(idNo).file) ? [{ rotulo: 'Abrir nota', icone: opcoes.icone('nota'), acao: () => opcoes.abrirNota(no(idNo).file) }] : []),
-        ...(ids.length === 1 && no(idNo)?.type === 'link' ? [{ rotulo: 'Abrir link', icone: opcoes.icone('link'), acao: () => opcoes.abrirLink(no(idNo).url) }] : []),
+        { rotulo: t('Cor'), icone: bolinha(no(idNo)?.color), filhos: itensDaCor(cor => mudar(ids.reduce((c, x) => F.editarCartao(c, x, { color: cor }), canvas))) },
+        { rotulo: t('Duplicar'), icone: opcoes.icone('copiar'), acao: () => { const r = F.duplicarCartoes(canvas, ids); s.selecao = new Set(r.ids); mudar(r.canvas); } },
+        ...(ids.length === 1 && no(idNo)?.type === 'text' ? [{ rotulo: t('Editar texto'), icone: opcoes.icone('renomear'), acao: () => editar(idNo) }] : []),
+        ...(ids.length === 1 && no(idNo)?.type === 'text' && no(idNo).text.trim() ? [{ rotulo: t('Transformar em nota'), icone: opcoes.icone('nota'), acao: () => transformarEmNota(idNo) }] : []),
+        ...(ids.length === 1 && no(idNo)?.type === 'group' ? [{ rotulo: t('Renomear grupo'), icone: opcoes.icone('renomear'), acao: () => editarGrupo(idNo) }] : []),
+        ...(ids.length === 1 && no(idNo)?.type === 'file' && !F.ehImagem(no(idNo).file) ? [{ rotulo: t('Abrir nota'), icone: opcoes.icone('nota'), acao: () => opcoes.abrirNota(no(idNo).file) }] : []),
+        ...(ids.length === 1 && no(idNo)?.type === 'link' ? [{ rotulo: t('Abrir link'), icone: opcoes.icone('link'), acao: () => opcoes.abrirLink(no(idNo).url) }] : []),
         { separador: true },
-        { rotulo: ids.length > 1 ? `Excluir ${ids.length} cartões` : 'Excluir', icone: opcoes.icone('lixeira'), acao: () => mudar(F.removerCartoes(canvas, ids)) },
+        { rotulo: ids.length > 1 ? t('Excluir {n} cartões', { n: ids.length }) : t('Excluir'), icone: opcoes.icone('lixeira'), acao: () => mudar(F.removerCartoes(canvas, ids)) },
       ];
     }
     function menuDaSeta(idSeta) {
       selecionarSeta(idSeta);
       const muda = campos => mudar(F.editarSeta(canvas, idSeta, campos));
       return [
-        { rotulo: 'Cor', icone: bolinha(canvas.edges.find(x => x.id === idSeta)?.color), filhos: itensDaCor(cor => muda({ color: cor })) },
-        { rotulo: 'Direção', icone: opcoes.icone('direita'), filhos: [
-          { rotulo: 'Ponta no fim (→)', icone: '→', acao: () => muda({ fromEnd: undefined, toEnd: undefined }) },
-          { rotulo: 'Pontas nos dois lados (↔)', icone: '↔', acao: () => muda({ fromEnd: 'arrow', toEnd: undefined }) },
-          { rotulo: 'Sem pontas (—)', icone: '—', acao: () => muda({ fromEnd: undefined, toEnd: 'none' }) },
+        { rotulo: t('Cor'), icone: bolinha(canvas.edges.find(x => x.id === idSeta)?.color), filhos: itensDaCor(cor => muda({ color: cor })) },
+        { rotulo: t('Direção'), icone: opcoes.icone('direita'), filhos: [
+          { rotulo: t('Ponta no fim (→)'), icone: '→', acao: () => muda({ fromEnd: undefined, toEnd: undefined }) },
+          { rotulo: t('Pontas nos dois lados (↔)'), icone: '↔', acao: () => muda({ fromEnd: 'arrow', toEnd: undefined }) },
+          { rotulo: t('Sem pontas (—)'), icone: '—', acao: () => muda({ fromEnd: undefined, toEnd: 'none' }) },
         ] },
-        { rotulo: 'Editar rótulo', icone: opcoes.icone('renomear'), acao: () => editarRotulo(idSeta) },
+        { rotulo: t('Editar rótulo'), icone: opcoes.icone('renomear'), acao: () => editarRotulo(idSeta) },
         { separador: true },
-        { rotulo: 'Excluir', icone: opcoes.icone('lixeira'), acao: () => mudar(F.removerSetas(canvas, [idSeta])) },
+        { rotulo: t('Excluir'), icone: opcoes.icone('lixeira'), acao: () => mudar(F.removerSetas(canvas, [idSeta])) },
       ];
     }
     raiz.addEventListener('contextmenu', e => {
