@@ -1,3 +1,4 @@
+const { t, frase } = KiroIdiomas;
 const today = () => Kiro.localDate();
 const uid = () => crypto.randomUUID();
 let state = { notes: [], tasks: [], habits: [], habitLog: {}, folders: [], fluxos: [] };
@@ -18,8 +19,8 @@ async function save(origem = null) {
   } finally { setBusy(false); }
 }
 function escapeHtml(value = '') { return String(value).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
-function formatDate(date) { return new Intl.DateTimeFormat("pt-BR", { weekday:"long", day:"numeric", month:"long" }).format(new Date(`${date}T12:00:00`)); }
-function dateLabel(date) { return date === today() ? "Hoje" : new Intl.DateTimeFormat("pt-BR", { day:"2-digit", month:"short" }).format(new Date(`${date}T12:00:00`)); }
+function formatDate(date) { return KiroIdiomas.formatarData(new Date(`${date}T12:00:00`), { weekday:"long", day:"numeric", month:"long" }); }
+function dateLabel(date) { return date === today() ? t("Hoje") : KiroIdiomas.formatarData(new Date(`${date}T12:00:00`), { day:"2-digit", month:"short" }); }
 function updateCount() { const open = state.tasks.filter(t => !t.done).length; document.querySelector("#task-count").textContent = open || ""; atualizarSeletorDeCofre(); }
 // Rodapé da barra lateral, como no Obsidian: nome do cofre; a dica mostra o caminho e o tamanho.
 function atualizarSeletorDeCofre() {
@@ -147,7 +148,7 @@ function cardContinuar(nota) {
 }
 // ---- Hábitos no Hoje: só os do dia, com a semana clicável e a sequência. ----
 const DIAS_LETRA = ['D','S','T','Q','Q','S','S'], DIAS_CURTO = ['dom','seg','ter','qua','qui','sex','sáb'];
-const rotuloDoDia = dia => new Intl.DateTimeFormat('pt-BR', { weekday:'long', day:'numeric', month:'short' }).format(new Date(`${dia}T12:00`));
+const rotuloDoDia = dia => KiroIdiomas.formatarData(new Date(`${dia}T12:00`), { weekday:'long', day:'numeric', month:'short' });
 function rotuloFrequencia(f) {
   if (f.type === 'weekly') return `${f.times}x por semana`;
   if (f.type !== 'days') return 'Todo dia';
@@ -278,7 +279,7 @@ function notesMarkup(notes) { return notes.length ? [...notes].sort((a,b)=>b.upd
     Kiro.tags(n).map(t=>`#${escapeHtml(t)}`).join(" "),
     ligacoes && `${ligacoes} ${ligacoes===1?"ligação":"ligações"}`,
     n.links.length && `${n.links.length} link${n.links.length===1?"":"s"} externo${n.links.length===1?"":"s"}`,
-    ...(()=>{const dia=d=>new Intl.DateTimeFormat("pt-BR",{day:"numeric",month:"short"}).format(d);
+    ...(()=>{const dia=d=>KiroIdiomas.formatarData(d,{day:"numeric",month:"short"});
       if(!n.createdAt)return [`atualizado ${dia(n.updatedAt)}`];
       return [`criada ${dia(n.createdAt)}`,new Date(n.createdAt).toDateString()!==new Date(n.updatedAt).toDateString()&&`atualizada ${dia(n.updatedAt)}`];})()
   ].filter(Boolean).join(" · ");
@@ -308,7 +309,7 @@ function marcarTarefaDaNota(chave) {
   save(); render();
 }
 function renderTasks() { const open = state.tasks.filter(t=>!t.done).sort((a,b)=>a.due.localeCompare(b.due)); const done = state.tasks.filter(t=>t.done); const dasNotas = tarefasDasNotas().filter(t=>!t.feita); return `${head("Organização", "Tarefas", "Concentre-se no que realmente importa hoje.", `<button class="primary" id="add-task">${icone('mais')} Nova tarefa</button>`)}<div class="task-layout"><section class="card"><div class="task-group"><h2>Em aberto</h2>${open.map(taskRow).join("") || '<div class="empty">Tudo concluído por aqui.</div>'}</div>${dasNotas.length ? `<div class="task-group"><h2>Nas notas</h2>${dasNotas.map(t=>`<div class="task-item">${check(false,"toggle-note-task",`${t.nota.id}:${t.pos}`)}<div class="task-title">${escapeHtml(t.texto)}<div class="task-info">${linkDaNota(t.nota)}</div></div></div>`).join("")}</div>` : ""}<div class="task-group"><h2>Concluídas</h2>${done.map(taskRow).join("") || '<div class="empty">As tarefas concluídas aparecerão aqui.</div>'}</div></section><aside class="card"><h2>Seu foco</h2><p class="subhead">Você tem <strong>${open.length}</strong> tarefa${open.length===1?"":"s"} em aberto.</p><div class="progress"><div style="width:${state.tasks.length ? done.length/state.tasks.length*100 : 0}%"></div></div><p class="small-muted">${done.length} de ${state.tasks.length} concluídas</p></aside></div>`; }
-const byTitle = (a,b) => a.title.localeCompare(b.title,'pt-BR',{numeric:true});
+const byTitle = (a,b) => KiroIdiomas.comparar(a.title, b.title);
 const childFolders = id => state.folders.filter(f=>(f.parentId||"")===id).sort(byTitle);
 const folderNotes = id => state.notes.filter(n=>(n.folderId||"")===id).sort(byTitle);
 const folderFluxos = id => (state.fluxos || []).filter(f => (f.folderId || "") === id).sort(byTitle);
@@ -1316,7 +1317,7 @@ async function moverNota(id, folderId) {
 const bolinha = cor => `<svg class="icone" viewBox="0 0 24 24"><circle cx="12" cy="12" r="7" style="fill:${cor ? `var(--cor-pasta)` : 'none'};stroke:var(--muted)" data-cor-pasta="${cor}"/></svg>`;
 // As ações buscam a nota ou a pasta na hora do clique: a releitura do cofre a cada 5 s troca
 // os objetos de state, e alterar a cópia de quando o menu abriu não seria gravado.
-const destinosDePasta = () => [{ id: '', rotulo: 'Raiz do cofre' }, ...state.folders.slice().sort((a, b) => (a.path || a.title).localeCompare(b.path || b.title, 'pt-BR')).map(f => ({ id: f.id, rotulo: f.path || f.title }))];
+const destinosDePasta = () => [{ id: '', rotulo: 'Raiz do cofre' }, ...state.folders.slice().sort((a, b) => KiroIdiomas.comparar(a.path || a.title, b.path || b.title)).map(f => ({ id: f.id, rotulo: f.path || f.title }))];
 function menuDaSelecao() {
   const n = selecaoArvore.size, itens = `${n} ${n === 1 ? 'item' : 'itens'}`;
   return [
@@ -1445,6 +1446,49 @@ function fecharAbertura(){
 }
 // Cofre lento ou com erro: a abertura sai de qualquer jeito, nunca prende a tela.
 setTimeout(fecharAbertura,4000);
+// Textos do index.html (barra lateral e status): o original em português fica guardado para a
+// próxima troca de idioma. O que o app redesenha depois (contagem, rótulo da lateral) é dele.
+const originaisDoIndex = new WeakMap();
+function traduzirFixos() {
+  for (const raiz of document.querySelectorAll('.sidebar, #save-status')) {
+    const passo = document.createTreeWalker(raiz, NodeFilter.SHOW_TEXT);
+    for (let no = passo.nextNode(); no; no = passo.nextNode()) {
+      const original = originaisDoIndex.get(no) ?? no.nodeValue;
+      const limpo = original.trim();
+      if (!limpo) continue;
+      originaisDoIndex.set(no, original);
+      no.nodeValue = original.replace(limpo, t(limpo));
+    }
+    for (const el of raiz.querySelectorAll('[title], [aria-label]')) for (const [atributo, chave] of [['title', 'ptTitle'], ['aria-label', 'ptAria']]) {
+      if (!el.hasAttribute(atributo)) continue;
+      el.dataset[chave] ??= el.getAttribute(atributo);
+      el.setAttribute(atributo, t(el.dataset[chave]));
+    }
+  }
+  document.documentElement.lang = KiroIdiomas.locale();
+}
+// Idioma salvo, ou o do sistema. Falhou o arquivo: segue em português e avisa.
+async function prepararIdioma() {
+  let salvo = null;
+  try { salvo = localStorage.getItem('kiro.idioma'); } catch { /* janela privada: segue o sistema */ }
+  const codigo = KiroIdiomas.escolherIdioma(salvo, navigator.language);
+  try { await KiroIdiomas.carregar(codigo); KiroIdiomas.definirIdioma(codigo); }
+  catch { status(t('Não foi possível carregar o idioma'), true); }
+  aplicarIdiomaNaPagina();
+}
+function aplicarIdiomaNaPagina() {
+  traduzirFixos();
+  aplicarLateralCompacta();   // o rótulo do botão da lateral é dele
+  window.cadernoDesktop?.definirIdioma?.(KiroIdiomas.idioma());
+}
+async function trocarIdioma(codigo) {
+  try { await KiroIdiomas.carregar(codigo); }
+  catch { status(t('Não foi possível carregar o idioma'), true); return; }
+  KiroIdiomas.definirIdioma(codigo);
+  try { localStorage.setItem('kiro.idioma', KiroIdiomas.idioma()); } catch { /* janela privada: vale só nesta sessão */ }
+  aplicarIdiomaNaPagina();
+  if (loaded) { updateCount(); render(); }
+}
 function status(message,error=false){$('#save-status').textContent=message;$('#save-status').classList.toggle('error',error);}
 let focoAntesDoBusy=null;   // inert tira o foco de qualquer coisa focada; ao sair do "ocupado" ele volta pra onde estava
 function setBusy(value){
@@ -3137,7 +3181,7 @@ async function extraAction(type,id){
   if(type==='inbox-arquivar')tirarDaCaixa(id);
   if(type==='inbox-mover'){
     const r=document.querySelector(`[data-extra="inbox-mover"][data-id="${CSS.escape(id)}"]`).getBoundingClientRect();
-    const pastas=state.folders.slice().sort((a,b)=>(a.path||a.title).localeCompare(b.path||b.title,'pt-BR'));
+    const pastas=state.folders.slice().sort((a,b)=>KiroIdiomas.comparar(a.path || a.title, b.path || b.title));
     abrirMenuContexto({preventDefault(){},clientX:r.left,clientY:r.bottom},document.body,pastas.length?pastas.map(f=>({rotulo:f.path||f.title,icone:icone('pastas'),acao:()=>tirarDaCaixa(id,f.id)})):[{rotulo:'Nenhuma pasta ainda',icone:icone('pastas'),ativo:()=>false,acao:()=>{}}]);
   }
   if(type==='daily')abrirNota(state.notes.find(n=>n.title===today())||notaVazia({title:today(),body:templates.daily.body,tags:['diario']}));
@@ -3153,7 +3197,7 @@ async function showTrash(){
   if(!loaded||failed||busy)return;
   try{
     const itens=window.cadernoDesktop?await window.cadernoDesktop.trash():await api('trash');
-    const quando=ms=>new Intl.DateTimeFormat('pt-BR',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}).format(new Date(ms));
+    const quando=ms=>KiroIdiomas.formatarData(new Date(ms),{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'});
     const detalhe=i=>i.kind==='folder'
       ? `pasta · ${i.noteCount} nota${i.noteCount===1?'':'s'}${i.folderCount>1?` · ${i.folderCount-1} subpasta${i.folderCount===2?'':'s'}`:''}`
       : i.kind==='fluxo'?'fluxo':'nota';
@@ -4113,7 +4157,7 @@ function itemDaChave(id, s, configurada, nova) {
 const tamanhoLegivel = b => !(b > 0) ? '—' : b < 1024 ? `${b} B` : b < 1048576 ? `${(b / 1024).toFixed(1)} KB` : `${(b / 1048576).toFixed(1)} MB`;
 function ultimasChamadas(id) {
   const lista = chamadasDeRede.get(id) || [];
-  const linhas = lista.map(c => `<tr><td>${new Date(c.quando).toLocaleTimeString('pt-BR')}</td><td>${escapeHtml(c.metodo)}</td><td>${escapeHtml(c.host || '?')}</td><td>${escapeHtml(c.status ?? '')}</td><td>${tamanhoLegivel(c.bytes)}</td></tr>`).join('');
+  const linhas = lista.map(c => `<tr><td>${KiroIdiomas.formatarData(new Date(c.quando), { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</td><td>${escapeHtml(c.metodo)}</td><td>${escapeHtml(c.host || '?')}</td><td>${escapeHtml(c.status ?? '')}</td><td>${tamanhoLegivel(c.bytes)}</td></tr>`).join('');
   return `<div class="plugin-chamadas"><span class="plugin-chave-rotulo">Últimas chamadas</span>${lista.length
     ? `<div class="plugin-tabela-rolagem"><table class="plugin-tabela"><thead><tr><th scope="col">Hora</th><th scope="col">Método</th><th scope="col">Site</th><th scope="col">Status</th><th scope="col">Tamanho</th></tr></thead><tbody>${linhas}</tbody></table></div>`
     : '<span class="small-muted">Nenhuma chamada nesta sessão.</span>'}</div>`;
@@ -4425,6 +4469,10 @@ async function showSettings(aba = abaDasConfiguracoes) {
     </section>`)}
     ${painel('hoje', `<div id="cfg-hoje">${conteudoDaAbaHoje()}</div>`)}
     ${painel('sistema', `<section class="cfg-grupo">
+      <header class="cfg-grupo-topo">${texto(t('Idioma'), t('Idioma dos menus, botões e avisos. Suas notas não mudam.'))}</header>
+      <label class="cfg-linha">${texto(t('Idioma da interface'))}<select id="cfg-idioma">${KiroIdiomas.IDIOMAS.map(i => `<option value="${i.codigo}" ${i.codigo === KiroIdiomas.idioma() ? 'selected' : ''}>${escapeHtml(i.nome)}</option>`).join('')}</select></label>
+    </section>
+    <section class="cfg-grupo">
       <header class="cfg-grupo-topo">${texto('Cofre', 'A pasta onde suas notas ficam, como arquivos Markdown.')}</header>
       <div class="cfg-linha cfg-linha-coluna">${texto('Local')}<code class="cfg-caminho">${escapeHtml(state.vaultPath || 'vault/')}</code>
         <div class="cfg-botoes">${window.cadernoDesktop ? botao('cfg-abrir-pasta', 'Abrir pasta', 'pasta-aberta') + botao('cfg-trocar-cofre', 'Escolher outro cofre', 'pastas') : ''}${botao('cfg-copiar-caminho', 'Copiar caminho', 'copiar')}</div>
@@ -4492,6 +4540,13 @@ async function showSettings(aba = abaDasConfiguracoes) {
   });
   $('#papel-veu')?.addEventListener('change', e => e.stopPropagation());
   $('#papel-opacidade')?.addEventListener('change', e => e.stopPropagation());
+  $('#cfg-idioma')?.addEventListener('change', async e => {
+    e.stopPropagation();   // senão o "change" marca a janela como alterada
+    modalDirty = false;
+    await trocarIdioma(e.target.value);
+    closeModal(true);
+    showSettings('sistema');   // a janela reabre já no idioma novo
+  });
   $('#cfg-mencoes')?.addEventListener('change', e => {
     mostrarMencoes = e.target.checked;
     try { localStorage.setItem('kiro.mostrarMencoes', mostrarMencoes ? '1' : '0'); } catch { /* janela privada: vale só nesta sessão */ }
@@ -4890,6 +4945,7 @@ iniciar();
 // No aplicativo, a primeira abertura (sem cofre escolhido) mostra as boas-vindas antes
 // de ler qualquer coisa; nos outros casos o cofre abre direto, como sempre.
 async function iniciar() {
+  await prepararIdioma();
   const inicio = window.cadernoDesktop ? await window.cadernoDesktop.firstRun().catch(() => null) : null;
   if (inicio?.primeiraVez) { aguardandoCofre = true; return mostrarBoasVindas(inicio.padrao); }
   comecar();
