@@ -1032,8 +1032,8 @@ function bindAbas(painel) {
   barra.addEventListener('contextmenu', e => {
     if (!e.target.closest('[data-nova-aba]')) return;
     abrirMenuContexto(e, document.body, [
-      { rotulo: 'Nova nota', icone: icone('nota'), acao: () => abrirNota(notaVazia(), { novaAba: true, painel }) },
-      { rotulo: 'Novo fluxo', icone: icone('fluxo'), acao: () => novoFluxo('', { novaAba: true, painel }) },
+      { rotulo: t('Nova nota'), icone: icone('nota'), acao: () => abrirNota(notaVazia(), { novaAba: true, painel }) },
+      { rotulo: t('Novo fluxo'), icone: icone('fluxo'), acao: () => novoFluxo('', { novaAba: true, painel }) },
     ], { compacto: true });
   });
   barra.addEventListener('auxclick', e => {
@@ -1123,7 +1123,7 @@ function bindDragDeAbas() {
 // coluna (é o split da mesma nota), ao contrário do clique na árvore, que salta para onde ela está.
 async function abrirNotaArrastada(id, alvo) {
   if (!getNote(id)) return;
-  if (alvo.nova && !cabeOutraColuna()) return status('Não cabe outra coluna nesta largura. Feche uma coluna ou aumente a janela.', true);
+  if (alvo.nova && !cabeOutraColuna()) return status(t('Não cabe outra coluna nesta largura. Feche uma coluna ou aumente a janela.'), true);
   await abrirPorId(id, alvo.nova
     ? { colunaNova: true, painel: alvo.painel, duplicar: true }
     : { novaAba: true, painel: alvo.painel, duplicar: true });
@@ -1246,15 +1246,15 @@ function deleteFolder(id) {
   // não o move para a raiz, ele vai para a lixeira junto com o arquivo da pasta.
   const fluxosMovendo=fluxosDaPasta.filter(f=>!f.erro);
   const fluxosComErro=fluxosDaPasta.filter(f=>f.erro);
-  const avisoErro=fluxosComErro.length?` ${fluxosComErro.length} fluxo${fluxosComErro.length===1?"":"s"} não p${fluxosComErro.length===1?"ôde":"uderam"} ser lido${fluxosComErro.length===1?"":"s"} e ${fluxosComErro.length===1?"vai":"vão"} para a lixeira com a pasta.`:"";
-  if((ids.size>1||notes.length||fluxosMovendo.length||fluxosComErro.length)&&!confirm(`Esta pasta contém ${ids.size-1} subpasta${ids.size===2?"":"s"}, ${notes.length} nota${notes.length===1?"":"s"} e ${fluxosMovendo.length} fluxo${fluxosMovendo.length===1?"":"s"}. As subpastas serão excluídas, e as notas e os fluxos irão para a raiz do cofre.${avisoErro} Continuar?`))return;
+  const avisoErro=fluxosComErro.length?' '+(fluxosComErro.length===1?t('1 fluxo não pôde ser lido e vai para a lixeira com a pasta.'):t('{n} fluxos não puderam ser lidos e vão para a lixeira com a pasta.',{n:fluxosComErro.length})):"";
+  if((ids.size>1||notes.length||fluxosMovendo.length||fluxosComErro.length)&&!confirm(t('Esta pasta contém {subpastas}, {notas} e {fluxos}. As subpastas serão excluídas, e as notas e os fluxos irão para a raiz do cofre.{aviso} Continuar?',{subpastas:ids.size===2?t('1 subpasta'):t('{n} subpastas',{n:ids.size-1}),notas:notes.length===1?t('1 nota'):t('{n} notas',{n:notes.length}),fluxos:fluxosMovendo.length===1?t('1 fluxo'):t('{n} fluxos',{n:fluxosMovendo.length}),aviso:avisoErro})))return;
   // Um fluxo movido para a raiz pode colidir de nome (sem diferenciar maiúsculas) com um fluxo já
   // existente lá, ou com outro fluxo desta mesma leva: recusa tudo antes de mexer no estado.
   const nomesNaRaiz=new Set((state.fluxos||[]).filter(f=>!ids.has(f.folderId)&&(f.folderId||"")==="").map(f=>Kiro.pathKey(f.title)));
   const vistos=new Set();
   for(const f of fluxosMovendo){
     const chave=Kiro.pathKey(f.title);
-    if(nomesNaRaiz.has(chave)||vistos.has(chave))return status('Um fluxo desta pasta tem o mesmo nome de um fluxo que já existe na raiz do cofre.',true);
+    if(nomesNaRaiz.has(chave)||vistos.has(chave))return status(t('Um fluxo desta pasta tem o mesmo nome de um fluxo que já existe na raiz do cofre.'),true);
     vistos.add(chave);
   }
   state.notes=state.notes.map(n=>ids.has(n.folderId)?{...n,folderId:""}:n);
@@ -1271,11 +1271,11 @@ function marcarSelecaoArvore() {
 // Com itens selecionados, o pé da árvore vira uma barra de ações: quantos, mover, excluir e sair.
 function rodapeDaArvore() {
   const n = selecaoArvore.size;
-  if (!n) return `<span class="small-muted">${state.folders.length} pasta${state.folders.length === 1 ? '' : 's'} · ${state.notes.length} nota${state.notes.length === 1 ? '' : 's'}</span>`;
-  return `<div class="selecao-barra" role="status" aria-live="polite"><span class="selecao-total">${n} selecionado${n === 1 ? '' : 's'}</span>`
-    + `<button type="button" class="icon-button" data-selecao="mover" title="Mover para…" aria-label="Mover para">${icone('pastas')}</button>`
-    + `<button type="button" class="icon-button" data-selecao="excluir" title="Excluir" aria-label="Excluir">${icone('lixeira')}</button>`
-    + `<button type="button" class="icon-button" data-selecao="limpar" title="Sair da seleção (Esc)" aria-label="Sair da seleção">${icone('fechar')}</button></div>`;
+  if (!n) return `<span class="small-muted">${state.folders.length === 1 ? t('1 pasta') : t('{n} pastas', { n: state.folders.length })} · ${state.notes.length === 1 ? t('1 nota') : t('{n} notas', { n: state.notes.length })}</span>`;
+  return `<div class="selecao-barra" role="status" aria-live="polite"><span class="selecao-total">${n === 1 ? t('1 selecionado') : t('{n} selecionados', { n })}</span>`
+    + `<button type="button" class="icon-button" data-selecao="mover" title="${t('Mover para…')}" aria-label="${t('Mover para')}">${icone('pastas')}</button>`
+    + `<button type="button" class="icon-button" data-selecao="excluir" title="${t('Excluir')}" aria-label="${t('Excluir')}">${icone('lixeira')}</button>`
+    + `<button type="button" class="icon-button" data-selecao="limpar" title="${t('Sair da seleção (Esc)')}" aria-label="${t('Sair da seleção')}">${icone('fechar')}</button></div>`;
 }
 function limparSelecaoArvore() { if (!selecaoArvore.size) return; selecaoArvore.clear(); marcarSelecaoArvore(); }
 // Mover e excluir vários de uma vez: uma gravação só (cada gravação vira um snapshot em .history).
@@ -1298,18 +1298,19 @@ async function moverSelecao(folderId) {
   if (folderId && expanded) expanded.add(folderId);
   selecaoArvore.clear();
   await save();
-  if (repetidos.length) status(`Não movidos, já existe um fluxo com o mesmo nome no destino: ${repetidos.join(', ')}.`, true);
+  if (repetidos.length) status(t('Não movidos, já existe um fluxo com o mesmo nome no destino: {nomes}.', { nomes: repetidos.join(', ') }), true);
 }
 const excluirSelecao = () => excluirItens(new Set(selecaoArvore));
 // Notas e fluxos para a lixeira, numa gravação só. Uma nota sozinha é chamada pelo título.
 async function excluirItens(ids) {
-  if (busy) { status('Salvando… tente de novo em um instante.', true); return; }
+  if (busy) { status(t('Salvando… tente de novo em um instante.'), true); return; }
   if (failed || !loaded) return;
   const notas = state.notes.filter(n => ids.has(n.id)), fluxos = (state.fluxos || []).filter(f => ids.has(f.id));
   if (!notas.length && !fluxos.length) return;
-  const partes = notas.length === 1 && !fluxos.length ? `a nota "${notas[0].title || 'Sem título'}"`
-    : [notas.length && `${notas.length} nota${notas.length === 1 ? '' : 's'}`, fluxos.length && `${fluxos.length} fluxo${fluxos.length === 1 ? '' : 's'}`].filter(Boolean).join(' e ');
-  if (!confirm(`Excluir ${partes}? Vai para a lixeira e pode ser restaurado.`)) return;
+  const contagens = [notas.length && (notas.length === 1 ? t('1 nota') : t('{n} notas', { n: notas.length })), fluxos.length && (fluxos.length === 1 ? t('1 fluxo') : t('{n} fluxos', { n: fluxos.length }))].filter(Boolean);
+  const partes = notas.length === 1 && !fluxos.length ? t('a nota "{titulo}"', { titulo: notas[0].title || t('Sem título') })
+    : contagens.length > 1 ? t('{a} e {b}', { a: contagens[0], b: contagens[1] }) : contagens[0];
+  if (!confirm(t('Excluir {partes}? Vai para a lixeira e pode ser restaurado.', { partes }))) return;
   if (!await gravarFluxoPendente()) return;
   state.notes = state.notes.filter(n => !ids.has(n.id));
   state.fluxos = (state.fluxos || []).filter(f => !ids.has(f.id));
@@ -1330,13 +1331,13 @@ async function moverNota(id, folderId) {
 const bolinha = cor => `<svg class="icone" viewBox="0 0 24 24"><circle cx="12" cy="12" r="7" style="fill:${cor ? `var(--cor-pasta)` : 'none'};stroke:var(--muted)" data-cor-pasta="${cor}"/></svg>`;
 // As ações buscam a nota ou a pasta na hora do clique: a releitura do cofre a cada 5 s troca
 // os objetos de state, e alterar a cópia de quando o menu abriu não seria gravado.
-const destinosDePasta = () => [{ id: '', rotulo: 'Raiz do cofre' }, ...state.folders.slice().sort((a, b) => KiroIdiomas.comparar(a.path || a.title, b.path || b.title)).map(f => ({ id: f.id, rotulo: f.path || f.title }))];
+const destinosDePasta = () => [{ id: '', rotulo: t('Raiz do cofre') }, ...state.folders.slice().sort((a, b) => KiroIdiomas.comparar(a.path || a.title, b.path || b.title)).map(f => ({ id: f.id, rotulo: f.path || f.title }))];
 function menuDaSelecao() {
-  const n = selecaoArvore.size, itens = `${n} ${n === 1 ? 'item' : 'itens'}`;
+  const n = selecaoArvore.size, itens = n === 1 ? t('1 item') : t('{n} itens', { n });
   return [
-    { rotulo: `Mover ${itens} para`, icone: icone('pastas'), filhos: destinosDePasta().map(d => ({ rotulo: d.rotulo, icone: icone(d.id ? 'pastas' : 'casa'), acao: () => moverSelecao(d.id) })) },
+    { rotulo: t('Mover {itens} para', { itens }), icone: icone('pastas'), filhos: destinosDePasta().map(d => ({ rotulo: d.rotulo, icone: icone(d.id ? 'pastas' : 'casa'), acao: () => moverSelecao(d.id) })) },
     { separador: true },
-    { rotulo: `Excluir ${itens}`, icone: icone('lixeira'), acao: () => excluirSelecao() },
+    { rotulo: t('Excluir {itens}', { itens }), icone: icone('lixeira'), acao: () => excluirSelecao() },
   ];
 }
 function menuDaArvore(linha) {
@@ -1345,46 +1346,46 @@ function menuDaArvore(linha) {
     const fluxo = getFluxo(id);
     const destinos = destinosDePasta();
     return [
-      { rotulo: 'Abrir', icone: icone('fluxo'), acao: () => getFluxo(id) && abrirFluxo(getFluxo(id)) },
+      { rotulo: t('Abrir'), icone: icone('fluxo'), acao: () => getFluxo(id) && abrirFluxo(getFluxo(id)) },
       // Fluxo com erro não é regravado pelo cofre: renomear ou mover não teriam efeito.
       ...(fluxo && !fluxo.erro ? [
-        { rotulo: 'Renomear', icone: icone('renomear'), acao: () => getFluxo(id) && fluxoModal(getFluxo(id)) },
-        { rotulo: 'Mover para', icone: icone('pastas'), filhos: destinos.map(d => ({ rotulo: d.rotulo, icone: icone(d.id ? 'pastas' : 'casa'), ativo: () => (getFluxo(id)?.folderId || '') !== d.id, acao: () => moverFluxo(id, d.id) })) },
+        { rotulo: t('Renomear'), icone: icone('renomear'), acao: () => getFluxo(id) && fluxoModal(getFluxo(id)) },
+        { rotulo: t('Mover para'), icone: icone('pastas'), filhos: destinos.map(d => ({ rotulo: d.rotulo, icone: icone(d.id ? 'pastas' : 'casa'), ativo: () => (getFluxo(id)?.folderId || '') !== d.id, acao: () => moverFluxo(id, d.id) })) },
       ] : []),
       { separador: true },
-      { rotulo: 'Excluir', icone: icone('lixeira'), acao: () => excluirFluxo(id) },
+      { rotulo: t('Excluir'), icone: icone('lixeira'), acao: () => excluirFluxo(id) },
     ];
   }
   if (linha.classList.contains('tree-note')) {
     const destinos = destinosDePasta();
     return [
-      { rotulo: 'Abrir', icone: icone('nota'), acao: () => getNote(id) && abrirNota(getNote(id)) },
-      { rotulo: 'Mover para', icone: icone('pastas'), filhos: destinos.map(d => ({ rotulo: d.rotulo, icone: icone(d.id ? 'pastas' : 'casa'), ativo: () => (getNote(id)?.folderId || '') !== d.id, acao: () => moverNota(id, d.id) })) },
+      { rotulo: t('Abrir'), icone: icone('nota'), acao: () => getNote(id) && abrirNota(getNote(id)) },
+      { rotulo: t('Mover para'), icone: icone('pastas'), filhos: destinos.map(d => ({ rotulo: d.rotulo, icone: icone(d.id ? 'pastas' : 'casa'), ativo: () => (getNote(id)?.folderId || '') !== d.id, acao: () => moverNota(id, d.id) })) },
       { separador: true },
-      { rotulo: 'Excluir', icone: icone('lixeira'), acao: () => excluirItens(new Set([id])) },
+      { rotulo: t('Excluir'), icone: icone('lixeira'), acao: () => excluirItens(new Set([id])) },
     ];
   }
   return [
-    { rotulo: 'Nova nota aqui', icone: icone('mais'), acao: () => abrirNota(notaVazia({ folderId: id })) },
-    { rotulo: 'Novo fluxo aqui', icone: icone('fluxo'), acao: () => novoFluxo(id) },
-    { rotulo: 'Nova subpasta', icone: icone('pasta-nova'), acao: () => folderModal({ title: '', description: '', parentId: id }) },
+    { rotulo: t('Nova nota aqui'), icone: icone('mais'), acao: () => abrirNota(notaVazia({ folderId: id })) },
+    { rotulo: t('Novo fluxo aqui'), icone: icone('fluxo'), acao: () => novoFluxo(id) },
+    { rotulo: t('Nova subpasta'), icone: icone('pasta-nova'), acao: () => folderModal({ title: '', description: '', parentId: id }) },
     { separador: true },
-    { rotulo: 'Renomear ou mover', icone: icone('renomear'), acao: () => pastaAtual() && folderModal(pastaAtual()) },
-    { rotulo: 'Cor', icone: icone('realce'), filhos: ['', ...Kiro.FOLDER_COLORS].map(cor => ({ rotulo: NOMES_DE_COR[cor], icone: bolinha(cor), ativo: () => (pastaAtual()?.color || '') !== cor, acao: () => { const pasta = pastaAtual(); if (pasta) { pasta.color = cor; save(); } } })) },
+    { rotulo: t('Renomear ou mover'), icone: icone('renomear'), acao: () => pastaAtual() && folderModal(pastaAtual()) },
+    { rotulo: t('Cor'), icone: icone('realce'), filhos: ['', ...Kiro.FOLDER_COLORS].map(cor => ({ rotulo: t(NOMES_DE_COR[cor]), icone: bolinha(cor), ativo: () => (pastaAtual()?.color || '') !== cor, acao: () => { const pasta = pastaAtual(); if (pasta) { pasta.color = cor; save(); } } })) },
     { separador: true },
-    { rotulo: 'Excluir pasta', icone: icone('lixeira'), acao: () => deleteFolder(id) },
+    { rotulo: t('Excluir pasta'), icone: icone('lixeira'), acao: () => deleteFolder(id) },
   ];
 }
-function modal(title, body) { modalDirty=false; document.querySelector("#modal-root").innerHTML=`<div class="modal-backdrop"><section class="modal" role="dialog" aria-modal="true"><header class="modal-head"><h2>${title}</h2><button class="icon-button" id="close-modal" title="Fechar" aria-label="Fechar">${icone('fechar')}</button></header>${body}</section></div>`; document.querySelector(".modal").addEventListener("input",()=>modalDirty=true); document.querySelector(".modal").addEventListener("change",()=>modalDirty=true); document.querySelector("#close-modal").onclick=()=>closeModal(); document.querySelector(".modal-backdrop").onclick=e=>{if(e.target===e.currentTarget)closeModal();}; }
-function closeModal(force=false){ if(!force && (busy || (modalDirty && !confirm('Descartar as alterações deste formulário?'))))return false; document.querySelector('#modal-root').innerHTML='';modalDirty=false;return true; }
-function taskModal(task={title:"",due:today(),priority:"Média",noteId:""}) { modal(task.id?"Editar tarefa":"Nova tarefa", `<form class="form" id="task-form"><div class="field"><label>Tarefa</label><input name="title" required value="${escapeHtml(task.title)}" placeholder="O que precisa ser feito?" /></div><div class="two-cols"><div class="field"><label>Data</label><input name="due" type="date" value="${task.due}" required /></div><div class="field"><label>Prioridade</label><select name="priority">${["Baixa","Média","Alta"].map(p=>`<option ${p===task.priority?"selected":""}>${p}</option>`).join("")}</select></div></div><div class="field"><label>Nota associada (opcional)</label><select name="noteId"><option value="">Nenhuma</option>${state.notes.map(n=>`<option value="${n.id}" ${n.id===task.noteId?"selected":""}>${escapeHtml(n.title)}</option>`).join("")}</select></div><div class="form-actions"><button type="button" class="secondary" id="cancel">Cancelar</button><button class="primary">Salvar tarefa</button></div></form>`);document.querySelector("#cancel").onclick=()=>closeModal();document.querySelector("#task-form").onsubmit=e=>{e.preventDefault();const f=new FormData(e.currentTarget);const saved={...task,id:task.id||uid(),title:f.get("title"),due:f.get("due"),priority:f.get("priority"),noteId:f.get("noteId"),done:task.done||false};state.tasks=task.id?state.tasks.map(t=>t.id===task.id?saved:t):[saved,...state.tasks];save();closeModal(true);render();}; }
-const NOMES_DE_COR = { "":"Sem cor", azul:"Azul", verde:"Verde", amarelo:"Amarelo", laranja:"Laranja", vermelho:"Vermelho", rosa:"Rosa", roxo:"Roxo", cinza:"Cinza" };
-function folderModal(folder={title:"",description:"",parentId:""}) { modal(folder.id?"Editar pasta":"Nova pasta de estudo", `<form class="form" id="folder-form"><div class="field"><label>Nome da pasta</label><input name="title" required value="${escapeHtml(folder.title)}" placeholder="Ex.: JAVA, Inglês, programação" /><small class="small-muted">Vira uma pasta de verdade no cofre: sem &lt; &gt; : " / \\ | ? * e sem ponto ou espaço no início ou no final.</small></div><div class="field"><label>Dentro de</label><select name="parentId"><option value="">Raiz do cofre</option>${state.folders.filter(f=>!(folder.id?Kiro.descendants(state.folders,folder.id):new Set()).has(f.id)).sort(byTitle).map(f=>`<option value="${f.id}" ${f.id===(folder.parentId||"")?"selected":""}>${escapeHtml(f.path||f.title)}</option>`).join("")}</select></div><div class="field"><span class="rotulo-campo" id="cor-pasta-rotulo">Cor</span><div class="amostras" role="radiogroup" aria-labelledby="cor-pasta-rotulo">${["",...Kiro.FOLDER_COLORS].map(cor=>`<label class="amostra" data-cor-pasta="${cor}" title="${NOMES_DE_COR[cor]}"><input type="radio" name="color" value="${cor}" ${cor===(folder.color||"")?"checked":""} /><span class="sr-only">${NOMES_DE_COR[cor]}</span></label>`).join("")}</div></div><div class="field"><label>Descrição</label><textarea name="description" placeholder="Qual é seu objetivo com esta pasta?">${escapeHtml(folder.description||"")}</textarea></div><div class="form-actions"><button type="button" class="secondary" id="cancel">Cancelar</button><button class="primary">Salvar pasta</button></div></form>`);document.querySelector("#cancel").onclick=()=>closeModal();document.querySelector("#folder-form").onsubmit=e=>{e.preventDefault();const f=new FormData(e.currentTarget);const title=f.get("title").trim();
+function modal(title, body) { modalDirty=false; document.querySelector("#modal-root").innerHTML=`<div class="modal-backdrop"><section class="modal" role="dialog" aria-modal="true"><header class="modal-head"><h2>${title}</h2><button class="icon-button" id="close-modal" title="${t('Fechar')}" aria-label="${t('Fechar')}">${icone('fechar')}</button></header>${body}</section></div>`; document.querySelector(".modal").addEventListener("input",()=>modalDirty=true); document.querySelector(".modal").addEventListener("change",()=>modalDirty=true); document.querySelector("#close-modal").onclick=()=>closeModal(); document.querySelector(".modal-backdrop").onclick=e=>{if(e.target===e.currentTarget)closeModal();}; }
+function closeModal(force=false){ if(!force && (busy || (modalDirty && !confirm(t('Descartar as alterações deste formulário?')))))return false; document.querySelector('#modal-root').innerHTML='';modalDirty=false;return true; }
+function taskModal(task={title:"",due:today(),priority:"Média",noteId:""}) { modal(task.id?t("Editar tarefa"):t("Nova tarefa"), `<form class="form" id="task-form"><div class="field"><label>${t('Tarefa')}</label><input name="title" required value="${escapeHtml(task.title)}" placeholder="${t('O que precisa ser feito?')}" /></div><div class="two-cols"><div class="field"><label>${t('Data')}</label><input name="due" type="date" value="${task.due}" required /></div><div class="field"><label>${t('Prioridade')}</label><select name="priority">${[frase("Baixa"),frase("Média"),frase("Alta")].map(p=>`<option value="${p}" ${p===task.priority?"selected":""}>${t(p)}</option>`).join("")}</select></div></div><div class="field"><label>${t('Nota associada (opcional)')}</label><select name="noteId"><option value="">${t('Nenhuma')}</option>${state.notes.map(n=>`<option value="${n.id}" ${n.id===task.noteId?"selected":""}>${escapeHtml(n.title)}</option>`).join("")}</select></div><div class="form-actions"><button type="button" class="secondary" id="cancel">${t('Cancelar')}</button><button class="primary">${t('Salvar tarefa')}</button></div></form>`);document.querySelector("#cancel").onclick=()=>closeModal();document.querySelector("#task-form").onsubmit=e=>{e.preventDefault();const f=new FormData(e.currentTarget);const saved={...task,id:task.id||uid(),title:f.get("title"),due:f.get("due"),priority:f.get("priority"),noteId:f.get("noteId"),done:task.done||false};state.tasks=task.id?state.tasks.map(t=>t.id===task.id?saved:t):[saved,...state.tasks];save();closeModal(true);render();}; }
+const NOMES_DE_COR = { "":frase("Sem cor"), azul:frase("Azul"), verde:frase("Verde"), amarelo:frase("Amarelo"), laranja:frase("Laranja"), vermelho:frase("Vermelho"), rosa:frase("Rosa"), roxo:frase("Roxo"), cinza:frase("Cinza") };
+function folderModal(folder={title:"",description:"",parentId:""}) { modal(folder.id?t("Editar pasta"):t("Nova pasta de estudo"), `<form class="form" id="folder-form"><div class="field"><label>${t('Nome da pasta')}</label><input name="title" required value="${escapeHtml(folder.title)}" placeholder="${t('Ex.: JAVA, Inglês, programação')}" /><small class="small-muted">${t('Vira uma pasta de verdade no cofre: sem &lt; &gt; : " / \\ | ? * e sem ponto ou espaço no início ou no final.')}</small></div><div class="field"><label>${t('Dentro de')}</label><select name="parentId"><option value="">${t('Raiz do cofre')}</option>${state.folders.filter(f=>!(folder.id?Kiro.descendants(state.folders,folder.id):new Set()).has(f.id)).sort(byTitle).map(f=>`<option value="${f.id}" ${f.id===(folder.parentId||"")?"selected":""}>${escapeHtml(f.path||f.title)}</option>`).join("")}</select></div><div class="field"><span class="rotulo-campo" id="cor-pasta-rotulo">${t('Cor')}</span><div class="amostras" role="radiogroup" aria-labelledby="cor-pasta-rotulo">${["",...Kiro.FOLDER_COLORS].map(cor=>`<label class="amostra" data-cor-pasta="${cor}" title="${t(NOMES_DE_COR[cor])}"><input type="radio" name="color" value="${cor}" ${cor===(folder.color||"")?"checked":""} /><span class="sr-only">${t(NOMES_DE_COR[cor])}</span></label>`).join("")}</div></div><div class="field"><label>${t('Descrição')}</label><textarea name="description" placeholder="${t('Qual é seu objetivo com esta pasta?')}">${escapeHtml(folder.description||"")}</textarea></div><div class="form-actions"><button type="button" class="secondary" id="cancel">${t('Cancelar')}</button><button class="primary">${t('Salvar pasta')}</button></div></form>`);document.querySelector("#cancel").onclick=()=>closeModal();document.querySelector("#folder-form").onsubmit=e=>{e.preventDefault();const f=new FormData(e.currentTarget);const title=f.get("title").trim();
   // Validar aqui evita que um nome inválido bloqueie a janela no salvamento.
-  if(!Kiro.validFolderName(title)){alert('Nome de pasta inválido. Evite < > : " / \\ | ? * , nomes reservados do Windows e ponto ou espaço no início ou no final.');return;}
+  if(!Kiro.validFolderName(title)){alert(t('Nome de pasta inválido. Evite < > : " / \\ | ? * , nomes reservados do Windows e ponto ou espaço no início ou no final.'));return;}
   const parentId=f.get("parentId")||"";
   const saved={...folder,id:folder.id||uid(),title,parentId,description:f.get("description"),color:Kiro.folderColor(f.get("color"))};
-  if(state.folders.some(x=>x.id!==saved.id&&(x.parentId||"")===parentId&&Kiro.pathKey(x.title)===Kiro.pathKey(title))){alert("Já existe uma pasta com esse nome neste local.");return;}
+  if(state.folders.some(x=>x.id!==saved.id&&(x.parentId||"")===parentId&&Kiro.pathKey(x.title)===Kiro.pathKey(title))){alert(t("Já existe uma pasta com esse nome neste local."));return;}
   state.folders=folder.id?state.folders.map(x=>x.id===folder.id?saved:x):[saved,...state.folders];
   // Deixar visível o que acabou de ser criado ou movido.
   if(expanded){expanded.add(saved.id);if(parentId)expanded.add(parentId);}
@@ -1398,7 +1399,7 @@ let expanded=null, renderedView=null, editing=null, editorDirty=false, grafoRaf=
 let fluxoPendente=false, timerDoFluxo=null;
 function mudarFluxo(id,canvas){
   state.fluxos=(state.fluxos||[]).map(f=>f.id===id?{...f,canvas}:f);
-  fluxoPendente=true;status('Alterações não salvas');
+  fluxoPendente=true;status(t('Alterações não salvas'));
   agendarFluxo();
 }
 // Cada salvamento de fluxo copia o cofre inteiro para .history (limite 30): uma espera maior
@@ -1443,13 +1444,13 @@ function gravarAbas() { garantirAbasDoCofre(); try { localStorage.setItem('kiro.
 const idDaAba = nota => nota.id || KiroAbas.RASCUNHO;
 const $ = selector => document.querySelector(selector);
 const templates={
-  study:{title:'Resumo de estudo',body:'# Objetivo\n\n## Ideias principais\n\n## Exemplos\n\n## Perguntas\n\n## Próximos passos\n- [ ] Revisar\n'},
-  meeting:{title:'Reunião',body:'# Contexto\n\n## Anotações\n\n## Decisões\n\n## Ações\n- [ ] \n'},
-  daily:{title:'Nota diária',body:'# Foco do dia\n\n## Capturas\n\n## O que aprendi\n\n## Amanhã\n'}
+  study:{title:frase('Resumo de estudo'),body:'# Objetivo\n\n## Ideias principais\n\n## Exemplos\n\n## Perguntas\n\n## Próximos passos\n- [ ] Revisar\n'},
+  meeting:{title:frase('Reunião'),body:'# Contexto\n\n## Anotações\n\n## Decisões\n\n## Ações\n- [ ] \n'},
+  daily:{title:frase('Nota diária'),body:'# Foco do dia\n\n## Capturas\n\n## O que aprendi\n\n## Amanhã\n'}
 };
 async function api(endpoint,data){
   const response=await fetch(`/api/${endpoint}`,data===undefined?{}:{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
-  const result=await response.json();if(!response.ok)throw new Error(result.error||'Não foi possível acessar o cofre.');return result;
+  const result=await response.json();if(!response.ok)throw new Error(result.error||t('Não foi possível acessar o cofre.'));return result;
 }
 // Abertura: some assim que o cofre carrega, mas fica tempo suficiente para a marca ser vista.
 const abertura=document.getElementById('abertura');
@@ -1516,7 +1517,7 @@ function setBusy(value){
 }
 async function reload(manual=false){
   if(aguardandoCofre||busy||(!manual&&(failed||editorDirty||fluxoPendente||KiroFluxoTela.ocupado()||$('#modal-root').firstChild)))return;
-  if(manual&&(failed||modalDirty||editorDirty||fluxoPendente)&&!confirm('Recarregar descarta alterações ainda não salvas nesta janela. Exporte seus dados ou copie o texto antes de continuar. Recarregar?'))return;
+  if(manual&&(failed||modalDirty||editorDirty||fluxoPendente)&&!confirm(t('Recarregar descarta alterações ainda não salvas nesta janela. Exporte seus dados ou copie o texto antes de continuar. Recarregar?')))return;
   setBusy(true);
   try{
     const saved=await loadFromVault();Kiro.validateState(saved);
@@ -1526,20 +1527,20 @@ async function reload(manual=false){
     if(manual){fluxoPendente=false;clearTimeout(timerDoFluxo);}
     // Recarregar de propósito descarta a edição: a nota aberta volta ao que está no cofre.
     if(manual&&editing){const n=editing.id&&getNote(editing.id);editing=n?{...n,tags:[...(n.tags||[])],links:[...(n.links||[])]}:null;editorDirty=false;if(!editing)currentView='today';}
-    if(manual)closeModal(true);if(changed||manual)render();status('Cofre atualizado');
-  }catch(error){status('Não foi possível ler o cofre: '+error.message,true);}
+    if(manual)closeModal(true);if(changed||manual)render();status(t('Cofre atualizado'));
+  }catch(error){status(t('Não foi possível ler o cofre: {erro}',{erro:error.message}),true);}
   finally{setBusy(false);fecharAbertura();}
 }
-const itemQueAbre=n=>`<div class="routine-item"><span class="brand-mark">${icone('nota')}</span><a class="routine-title" data-action="edit-note" data-id="${n.id}">${escapeHtml(n.title||'Sem título')}</a></div>`;
+const itemQueAbre=n=>`<div class="routine-item"><span class="brand-mark">${icone('nota')}</span><a class="routine-title" data-action="edit-note" data-id="${n.id}">${escapeHtml(n.title||t('Sem título'))}</a></div>`;
 function cardCaixaDeEntrada({limite=0}={}){
   const notas=state.notes.filter(Kiro.inInbox).sort((a,b)=>(b.createdAt??b.updatedAt)-(a.createdAt??a.updatedAt));
-  return `<section class="card caixa-entrada"><div class="card-head"><h2>Caixa de entrada</h2><span class="small-muted">${notas.length}</span></div>${cortar(notas,limite).map(n=>`<div class="routine-item"><span class="brand-mark">${icone('nota')}</span><a class="routine-title" data-action="edit-note" data-id="${n.id}">${escapeHtml(n.title||'Sem título')}</a><span class="caixa-acoes">${extraButton('inbox-mover',icone('pastas'),n.id,'icon-button','Mover para pasta')}${extraButton('inbox-arquivar',icone('arquivar'),n.id,'icon-button','Arquivar (tirar da caixa)')}</span></div>`).join('')||'<div class="empty">Nada pendente. Tudo organizado.</div>'}</section>`;
+  return `<section class="card caixa-entrada"><div class="card-head"><h2>${t('Caixa de entrada')}</h2><span class="small-muted">${notas.length}</span></div>${cortar(notas,limite).map(n=>`<div class="routine-item"><span class="brand-mark">${icone('nota')}</span><a class="routine-title" data-action="edit-note" data-id="${n.id}">${escapeHtml(n.title||t('Sem título'))}</a><span class="caixa-acoes">${extraButton('inbox-mover',icone('pastas'),n.id,'icon-button',t('Mover para pasta'))}${extraButton('inbox-arquivar',icone('arquivar'),n.id,'icon-button',t('Arquivar (tirar da caixa)'))}</span></div>`).join('')||`<div class="empty">${t('Nada pendente. Tudo organizado.')}</div>`}</section>`;
 }
 function cardParaRevisar({limite=0}={}){
   const {loose,forgotten}=Kiro.toReview(state.notes);
   if(!loose.length&&!forgotten.length)return '';
   const lista=(titulo,notas)=>notas.length?`<h3 class="revisar-titulo">${titulo}</h3>${notas.map(itemQueAbre).join('')}`:'';
-  return `<section class="card para-revisar"><div class="card-head"><h2>Para revisar</h2></div>${lista('Soltas',cortar(loose,limite))}${lista('Esquecidas',cortar(forgotten,limite))}</section>`;
+  return `<section class="card para-revisar"><div class="card-head"><h2>${t('Para revisar')}</h2></div>${lista(t('Soltas'),cortar(loose,limite))}${lista(t('Esquecidas'),cortar(forgotten,limite))}</section>`;
 }
 // Tirar da caixa de entrada (e, se vier uma pasta, mover para ela) numa gravação só.
 async function tirarDaCaixa(id,folderId){
@@ -1552,7 +1553,7 @@ const extraButton=(action,label,id='',cls='secondary',nome='')=>`<button type="b
 function enhanceView(){
   if(currentView!=='today')return;
   // Captura numa faixa própria logo abaixo da frase, na largura dos cards: não depende de quantas linhas a frase ocupa.
-  $('.page-head').insertAdjacentHTML('afterend',`<div class="hoje-acoes"><form id="capture-form" class="capture add-link"><label for="capture-text" class="sr-only">Captura rápida</label>${icone('mais')}<input id="capture-text" required autocomplete="off" placeholder="Capturar uma ideia, pergunta ou lembrete…" /><kbd class="atalho" title="De qualquer tela">${teclaDe('captura')}</kbd><button class="primary">Guardar</button></form>${extraButton('daily',`${icone('calendario')} Nota diária`,'','secondary')}</div>`);
+  $('.page-head').insertAdjacentHTML('afterend',`<div class="hoje-acoes"><form id="capture-form" class="capture add-link"><label for="capture-text" class="sr-only">${t('Captura rápida')}</label>${icone('mais')}<input id="capture-text" required autocomplete="off" placeholder="${t('Capturar uma ideia, pergunta ou lembrete…')}" /><kbd class="atalho" title="${t('De qualquer tela')}">${teclaDe('captura')}</kbd><button class="primary">${t('Guardar')}</button></form>${extraButton('daily',`${icone('calendario')} ${t('Nota diária')}`,'','secondary')}</div>`);
   $('#capture-form').onsubmit=async e=>{e.preventDefault();if(await capturar($('#capture-text').value))$('#capture-text')?.focus();};
   desenharPaineisDosPlugins();
 }
@@ -1569,7 +1570,7 @@ function capturaRapida(){
   if(!loaded||failed||busy)return;
   if(currentView==='today'&&$('#capture-text')&&!$('#modal-root').firstChild){$('#capture-text').focus();return;}
   if($('#modal-root').firstChild)return;
-  modal('Captura rápida',`<form class="form" id="captura-janela"><input class="search captura-janela" id="captura-janela-texto" required autocomplete="off" placeholder="Capturar uma ideia, pergunta ou lembrete…" aria-label="Captura rápida" /><p class="small-muted">Vai para a caixa de entrada do Hoje. Enter guarda, Esc fecha.</p></form>`);
+  modal(t('Captura rápida'),`<form class="form" id="captura-janela"><input class="search captura-janela" id="captura-janela-texto" required autocomplete="off" placeholder="${t('Capturar uma ideia, pergunta ou lembrete…')}" aria-label="${t('Captura rápida')}" /><p class="small-muted">${t('Vai para a caixa de entrada do Hoje. Enter guarda, Esc fecha.')}</p></form>`);
   const campo=$('#captura-janela-texto');
   campo.addEventListener('input',e=>e.stopPropagation()); // digitar não pede "descartar" ao fechar com Esc
   $('#captura-janela').onsubmit=async e=>{e.preventDefault();if(await capturar(campo.value))closeModal(true);};
@@ -1615,22 +1616,22 @@ async function abrirFluxo(fluxo,{novaAba=false,painel,duplicar=false,colunaNova=
 async function novoFluxo(folderId='',abrirComo={}){
   if(busy||failed||!loaded)return;
   const usados=new Set((state.fluxos||[]).filter(f=>(f.folderId||'')===folderId).map(f=>Kiro.pathKey(f.title)));
-  let title='Sem título',i=1;
-  while(usados.has(Kiro.pathKey(title)))title=`Sem título ${i++}`;
+  let title=t('Sem título'),i=1;
+  while(usados.has(Kiro.pathKey(title)))title=`${t('Sem título')} ${i++}`;
   const fluxo={id:uid(),title,folderId,canvas:{nodes:[],edges:[]}};
   state.fluxos=[...(state.fluxos||[]),fluxo];
   if(folderId&&expanded)expanded.add(folderId);
   if(await save())await abrirFluxo(getFluxo(fluxo.id)||fluxo,abrirComo);
 }
 function fluxoModal(fluxo){
-  modal('Renomear fluxo',`<form class="form" id="fluxo-form"><div class="field"><label for="fluxo-nome">Nome</label><input id="fluxo-nome" name="title" required value="${escapeHtml(fluxo.title)}" /><small class="small-muted">Vira o nome do arquivo .canvas: sem &lt; &gt; : " / \\ | ? * e sem ponto ou espaço no início ou no final.</small></div><div class="form-actions"><button type="button" class="secondary" id="cancel">Cancelar</button><button class="primary">Salvar</button></div></form>`);
+  modal(t('Renomear fluxo'),`<form class="form" id="fluxo-form"><div class="field"><label for="fluxo-nome">${t('Nome')}</label><input id="fluxo-nome" name="title" required value="${escapeHtml(fluxo.title)}" /><small class="small-muted">${t('Vira o nome do arquivo .canvas: sem &lt; &gt; : " / \\ | ? * e sem ponto ou espaço no início ou no final.')}</small></div><div class="form-actions"><button type="button" class="secondary" id="cancel">${t('Cancelar')}</button><button class="primary">${t('Salvar')}</button></div></form>`);
   $('#cancel').onclick=()=>closeModal();
   $('#fluxo-form').onsubmit=e=>{
     e.preventDefault();
     const title=new FormData(e.currentTarget).get('title').trim();
-    if(!Kiro.validFolderName(title)){alert('Nome inválido. Evite < > : " / \\ | ? * , nomes reservados do Windows e ponto ou espaço no início ou no final.');return;}
+    if(!Kiro.validFolderName(title)){alert(t('Nome inválido. Evite < > : " / \\ | ? * , nomes reservados do Windows e ponto ou espaço no início ou no final.'));return;}
     const atual=getFluxo(fluxo.id);if(!atual)return void closeModal(true);
-    if((state.fluxos||[]).some(f=>f.id!==atual.id&&(f.folderId||'')===(atual.folderId||'')&&Kiro.pathKey(f.title)===Kiro.pathKey(title))){alert('Já existe um fluxo com esse nome nesta pasta.');return;}
+    if((state.fluxos||[]).some(f=>f.id!==atual.id&&(f.folderId||'')===(atual.folderId||'')&&Kiro.pathKey(f.title)===Kiro.pathKey(title))){alert(t('Já existe um fluxo com esse nome nesta pasta.'));return;}
     state.fluxos=state.fluxos.map(f=>f.id===atual.id?{...f,title}:f);
     save();closeModal(true);
   };
@@ -1638,25 +1639,25 @@ function fluxoModal(fluxo){
 // Cartão de texto → nota na pasta do fluxo, e o cartão vira o cartão dessa nota, no mesmo lugar e
 // tamanho. Duas gravações: a nota precisa existir para ter caminho no cofre.
 async function transformarCartaoEmNota(fluxoId,idNo,texto){
-  if(busy){status('Salvando… tente de novo em um instante.',true);return false;}
+  if(busy){status(t('Salvando… tente de novo em um instante.'),true);return false;}
   if(failed||!loaded||!getFluxo(fluxoId)?.canvas)return false;
   if(!await gravarFluxoPendente())return false;
   const corpo=String(texto).trim(),id=uid(),agora=Date.now();
   state.notes.unshift({id,title:tituloDoTexto(corpo),body:corpo,links:[],tags:[],createdAt:agora,updatedAt:agora,folderId:getFluxo(fluxoId).folderId||''});
   if(!await save())return false;
   const nota=getNote(id),fluxo=getFluxo(fluxoId);
-  if(!nota?.file||!fluxo?.canvas||!fluxo.canvas.nodes.some(n=>n.id===idNo)){status('A nota foi criada, mas o cartão não existe mais no fluxo.',true);return false;}
+  if(!nota?.file||!fluxo?.canvas||!fluxo.canvas.nodes.some(n=>n.id===idNo)){status(t('A nota foi criada, mas o cartão não existe mais no fluxo.'),true);return false;}
   state.fluxos=state.fluxos.map(f=>f.id===fluxoId?{...f,canvas:KiroFluxo.editarCartao(f.canvas,idNo,{type:'file',text:undefined,file:nota.file})}:f);
   if(!await save())return false;
-  status('Cartão transformado em nota');
+  status(t('Cartão transformado em nota'));
   return true;
 }
 // Excluir: o arquivo vai para a lixeira (Configurações → Sistema → Lixeira) e pode voltar.
 async function excluirFluxo(id){
-  if(busy){status('Salvando… tente de novo em um instante.',true);return;}
+  if(busy){status(t('Salvando… tente de novo em um instante.'),true);return;}
   if(failed||!loaded)return;
   const fluxo=getFluxo(id);
-  if(!fluxo||!confirm(`Excluir o fluxo "${fluxo.title}"? Ele vai para a lixeira e pode ser restaurado.`))return;
+  if(!fluxo||!confirm(t('Excluir o fluxo "{titulo}"? Ele vai para a lixeira e pode ser restaurado.',{titulo:fluxo.title})))return;
   if(!await gravarFluxoPendente())return;
   state.fluxos=(state.fluxos||[]).filter(f=>f.id!==id);
   await save();
@@ -1665,7 +1666,7 @@ async function moverFluxo(id,folderId){
   if(busy||failed||!loaded)return;
   const fluxo=getFluxo(id);
   if(!fluxo||fluxo.erro||(fluxo.folderId||'')===folderId)return;
-  if((state.fluxos||[]).some(f=>f.id!==id&&(f.folderId||'')===folderId&&Kiro.pathKey(f.title)===Kiro.pathKey(fluxo.title)))return status('Já existe um fluxo com esse nome na pasta de destino.',true);
+  if((state.fluxos||[]).some(f=>f.id!==id&&(f.folderId||'')===folderId&&Kiro.pathKey(f.title)===Kiro.pathKey(fluxo.title)))return status(t('Já existe um fluxo com esse nome na pasta de destino.'),true);
   if(folderId&&expanded)expanded.add(folderId);
   state.fluxos=state.fluxos.map(f=>f.id===id?{...f,folderId}:f);
   await save();
@@ -1683,7 +1684,7 @@ async function salvarAntesDeTrocar(){ return !(editing&&editorDirty)||await salv
 // resolvido assim: um rascunho inativo (existe na aba mas não é quem está sendo editado agora) não
 // tem relação com `editing`, então mover ele não deve tocar no id de uma nota diferente e suja.
 async function moverAba(painel,id,destino,{nova=false}={}){
-  if(nova&&!cabeOutraColuna())return status('Não cabe outra coluna nesta largura. Feche uma coluna ou aumente a janela.',true);
+  if(nova&&!cabeOutraColuna())return status(t('Não cabe outra coluna nesta largura. Feche uma coluna ou aumente a janela.'),true);
   const draftEmEdicao=id===KiroAbas.RASCUNHO&&editing&&!editing.id;
   if(!await salvarAntesDeTrocar())return;
   if(draftEmEdicao&&editing?.id)id=editing.id;
@@ -1737,12 +1738,12 @@ async function sairDoEditor(destino){
 }
 function renderEditor(){
   const nota=editing, pasta=state.folders.find(f=>f.id===nota.folderId);
-  const opcoes=`<option value="">Raiz do cofre</option>`+state.folders.slice().sort(byTitle).map(f=>`<option value="${f.id}" ${f.id===nota.folderId?'selected':''}>${escapeHtml(f.path||f.title)}</option>`).join('');
-  const modelos=Object.entries(templates).map(([k,t])=>`<option value="${k}">${escapeHtml(t.title)}</option>`).join('');
-  return `<header class="doc-bar"><div class="crumbs"><span>${pasta?escapeHtml(pasta.path||pasta.title):'Raiz do cofre'}</span><span>/</span><span class="crumb-atual">${escapeHtml(nota.title||'Sem título')}</span></div><span class="doc-ponto" id="doc-state" title="Alterações não salvas"></span></header>
-<input class="doc-title" id="doc-title" value="${escapeHtml(nota.title)}" placeholder="Sem título" aria-label="Título da nota" />
-<section class="doc-details" id="doc-details" hidden><div class="two-cols"><div class="field"><label for="doc-folder">Pasta</label><select id="doc-folder">${opcoes}</select></div><div class="field"><label for="doc-tags">Tags (separadas por vírgulas)</label><input id="doc-tags" value="${escapeHtml(nota.tags.join(', '))}" placeholder="ideias, estudos" /></div></div><div class="two-cols"><div class="field"><label for="doc-template">Modelo</label><select id="doc-template"><option value="">Escolher modelo…</option>${modelos}</select></div><div class="field"><label for="doc-link">Anexar link</label><div class="add-link"><input id="doc-link" placeholder="Cole um link de aula ou vídeo" /><button type="button" class="secondary" id="doc-link-add">Anexar</button></div></div></div><div class="links-list" id="doc-links"></div></section>
-<div class="doc-corpo" id="doc-corpo" data-vazio="Clique para escrever. [[Nome da nota]] conecta ideias e #tag marca a nota.">${renderizarMarkdown(nota.body)}</div>${renderMencoes(nota)}`;
+  const opcoes=`<option value="">${t('Raiz do cofre')}</option>`+state.folders.slice().sort(byTitle).map(f=>`<option value="${f.id}" ${f.id===nota.folderId?'selected':''}>${escapeHtml(f.path||f.title)}</option>`).join('');
+  const modelos=Object.entries(templates).map(([k,modelo])=>`<option value="${k}">${escapeHtml(t(modelo.title))}</option>`).join('');
+  return `<header class="doc-bar"><div class="crumbs"><span>${pasta?escapeHtml(pasta.path||pasta.title):t('Raiz do cofre')}</span><span>/</span><span class="crumb-atual">${escapeHtml(nota.title||t('Sem título'))}</span></div><span class="doc-ponto" id="doc-state" title="${t('Alterações não salvas')}"></span></header>
+<input class="doc-title" id="doc-title" value="${escapeHtml(nota.title)}" placeholder="${t('Sem título')}" aria-label="${t('Título da nota')}" />
+<section class="doc-details" id="doc-details" hidden><div class="two-cols"><div class="field"><label for="doc-folder">${t('Pasta')}</label><select id="doc-folder">${opcoes}</select></div><div class="field"><label for="doc-tags">${t('Tags (separadas por vírgulas)')}</label><input id="doc-tags" value="${escapeHtml(nota.tags.join(', '))}" placeholder="${t('ideias, estudos')}" /></div></div><div class="two-cols"><div class="field"><label for="doc-template">${t('Modelo')}</label><select id="doc-template"><option value="">${t('Escolher modelo…')}</option>${modelos}</select></div><div class="field"><label for="doc-link">${t('Anexar link')}</label><div class="add-link"><input id="doc-link" placeholder="${t('Cole um link de aula ou vídeo')}" /><button type="button" class="secondary" id="doc-link-add">${t('Anexar')}</button></div></div></div><div class="links-list" id="doc-links"></div></section>
+<div class="doc-corpo" id="doc-corpo" data-vazio="${t('Clique para escrever. [[Nome da nota]] conecta ideias e #tag marca a nota.')}">${renderizarMarkdown(nota.body)}</div>${renderMencoes(nota)}`;
 }
 // Quem cita esta nota, com a linha do [[link]] como trecho. Nota ainda não salva não tem quem a cite.
 // "Mencionada em" no pé da nota: opcional, desligado por padrão (Configurações → Personalização).
@@ -1755,12 +1756,12 @@ function renderMencoes(nota){
     const linha=n.body.split('\n').find(l=>Kiro.wikiLinks(l).some(resolve))||'';
     return `<div class="mencao">${linkDaNota(n)}<span class="small-muted">${escapeHtml(textoPlano(linha).slice(0,160))}</span></div>`;
   }).join('');
-  return `<section class="doc-mencoes"><h2 class="small-muted">Mencionada em (${citam.length})</h2>${itens}</section>`;
+  return `<section class="doc-mencoes"><h2 class="small-muted">${t('Mencionada em ({n})',{n:citam.length})}</h2>${itens}</section>`;
 }
 function estadoDoc(){ $('#doc-state')?.classList.toggle('sujo', editorDirty); }
 function desenharLinksDoc(){
   const caixa=$('#doc-links'); if(!caixa) return;
-  caixa.innerHTML=editing.links.map((l,i)=>`<div class="link-row"><a href="${escapeHtml(Kiro.safeUrl(l)||'#')}" target="_blank" rel="noopener noreferrer">${escapeHtml(l)}</a><button class="icon-button" type="button" data-remove-link="${i}" title="Remover link" aria-label="Remover link">${icone('fechar')}</button></div>`).join('');
+  caixa.innerHTML=editing.links.map((l,i)=>`<div class="link-row"><a href="${escapeHtml(Kiro.safeUrl(l)||'#')}" target="_blank" rel="noopener noreferrer">${escapeHtml(l)}</a><button class="icon-button" type="button" data-remove-link="${i}" title="${t('Remover link')}" aria-label="${t('Remover link')}">${icone('fechar')}</button></div>`).join('');
   caixa.querySelectorAll('[data-remove-link]').forEach(b=>b.onclick=()=>{editing.links.splice(+b.dataset.removeLink,1);editorDirty=true;estadoDoc();desenharLinksDoc();});
 }
 function bindEditor(){
@@ -1779,13 +1780,13 @@ function bindEditor(){
   $('#doc-tags').oninput=e=>{editing.tags=e.target.value.split(',').map(t=>t.trim().replace(/^#/,'')).filter(Boolean);sujar();};
   $('#doc-template').onchange=e=>{
     if(!e.target.value)return;
-    if(editing.body.trim()&&!confirm('Substituir o texto desta nota pelo modelo?')){e.target.value='';return;}
+    if(editing.body.trim()&&!confirm(t('Substituir o texto desta nota pelo modelo?'))){e.target.value='';return;}
     blocoAberto=null;
     editing.body=templates[e.target.value].body;corpo.innerHTML=renderizarMarkdown(editing.body);sujar();
   };
   $('#doc-link-add').onclick=()=>{
     const campo=$('#doc-link'), valor=campo.value.trim();
-    if(!Kiro.safeUrl(valor)){alert('Informe um endereço http:// ou https:// válido.');return;}
+    if(!Kiro.safeUrl(valor)){alert(t('Informe um endereço http:// ou https:// válido.'));return;}
     editing.links.push(valor);campo.value='';sujar();desenharLinksDoc();
   };
   bindCorpo(corpo);
@@ -1828,7 +1829,7 @@ function corDaPasta(id) {
 function grafoDados(op = grafoOpcoes) {
   const nos = new Map(), arestas = [];
   const ligar = (de, para) => { arestas.push({ de, para }); nos.get(de).grau++; nos.get(para).grau++; nos.get(para).entradas++; };
-  for (const nota of state.notes) nos.set(nota.id, { id: nota.id, rotulo: nota.title || 'Sem título', tipo: 'nota', pasta: corDaPasta(nota.folderId), grau: 0, entradas: 0, procura: `${nota.title || ''} ${Kiro.tags(nota).join(' ')}` });
+  for (const nota of state.notes) nos.set(nota.id, { id: nota.id, rotulo: nota.title || t('Sem título'), tipo: 'nota', pasta: corDaPasta(nota.folderId), grau: 0, entradas: 0, procura: `${nota.title || ''} ${Kiro.tags(nota).join(' ')}` });
   for (const nota of state.notes) {
     const vistos = new Set();
     for (const link of Kiro.wikiLinks(nota.body)) {
@@ -1894,9 +1895,9 @@ function textoDoResumo(nos, ligacoes) {
   const notas = nos.filter(no => no.tipo === 'nota').length;
   const centro = grafoOpcoes.local ? state.notes.find(nota => nota.id === ultimaNota) : null;
   const volta = grafoOpcoes.local
-    ? (centro ? `ao redor de “${centro.title}” · ` : 'abra uma nota para centrar o grafo · ')
+    ? (centro ? t('ao redor de “{titulo}”', { titulo: centro.title }) : t('abra uma nota para centrar o grafo')) + ' · '
     : '';
-  return `${volta}${notas} nota${notas === 1 ? '' : 's'} · ${ligacoes.length} ligaç${ligacoes.length === 1 ? 'ão' : 'ões'}`;
+  return `${volta}${notas === 1 ? t('1 nota') : t('{n} notas', { n: notas })} · ${ligacoes.length === 1 ? t('1 ligação') : t('{n} ligações', { n: ligacoes.length })}`;
 }
 
 function renderGraph() {
@@ -1904,40 +1905,40 @@ function renderGraph() {
   const resumo = escapeHtml(textoDoResumo(nos, arestas));
   const vazio = state.notes.length
     ? ''
-    : '<div class="grafo-vazio">Escreva [[Nome da nota]] em alguma nota para as ligações aparecerem aqui.</div>';
+    : `<div class="grafo-vazio">${t('Escreva [[Nome da nota]] em alguma nota para as ligações aparecerem aqui.')}</div>`;
   return `<div class="grafo-tela${grafoOpcoes.painel ? '' : ' sem-painel'}" id="grafo-tela">
-  <svg id="graph-svg" role="img" aria-label="Grafo de conexões entre as notas"></svg>
+  <svg id="graph-svg" role="img" aria-label="${t('Grafo de conexões entre as notas')}"></svg>
   ${vazio}
   <span class="grafo-resumo small-muted">${resumo}</span>
-  <button class="icon-button grafo-abrir" id="grafo-abrir" title="Mostrar opções" aria-label="Mostrar opções">${icone('detalhes')}</button>
-  <aside class="grafo-painel" id="grafo-painel" aria-label="Opções do grafo">
-    ${grafoSecao('filtros', 'Filtros', `
-      <input class="grafo-busca" type="search" data-opcao="busca" value="${escapeHtml(grafoOpcoes.busca)}" placeholder="Procurar notas…" aria-label="Procurar notas" />
-      ${grafoChave('etiquetas', 'Etiquetas')}
-      ${grafoChave('anexos', 'Anexos')}
-      ${grafoChave('somenteExistentes', 'Apenas notas existentes')}
-      ${grafoChave('orfaos', 'Órfãs')}
-      ${grafoChave('local', 'Somente ao redor da nota aberta')}
-      ${grafoFaixa('profundidade', 'Passos a partir dela', 1, 3, 1)}`,
+  <button class="icon-button grafo-abrir" id="grafo-abrir" title="${t('Mostrar opções')}" aria-label="${t('Mostrar opções')}">${icone('detalhes')}</button>
+  <aside class="grafo-painel" id="grafo-painel" aria-label="${t('Opções do grafo')}">
+    ${grafoSecao('filtros', t('Filtros'), `
+      <input class="grafo-busca" type="search" data-opcao="busca" value="${escapeHtml(grafoOpcoes.busca)}" placeholder="${t('Procurar notas…')}" aria-label="${t('Procurar notas')}" />
+      ${grafoChave('etiquetas', t('Etiquetas'))}
+      ${grafoChave('anexos', t('Anexos'))}
+      ${grafoChave('somenteExistentes', t('Apenas notas existentes'))}
+      ${grafoChave('orfaos', t('Órfãs'))}
+      ${grafoChave('local', t('Somente ao redor da nota aberta'))}
+      ${grafoFaixa('profundidade', t('Passos a partir dela'), 1, 3, 1)}`,
       `<span class="grafo-topo-acoes">
-        <button class="icon-button" id="grafo-restaurar" title="Voltar ao padrão" aria-label="Voltar ao padrão">${icone('recarregar')}</button>
-        <button class="icon-button" id="grafo-fechar" title="Esconder opções" aria-label="Esconder opções">${icone('fechar')}</button>
+        <button class="icon-button" id="grafo-restaurar" title="${t('Voltar ao padrão')}" aria-label="${t('Voltar ao padrão')}">${icone('recarregar')}</button>
+        <button class="icon-button" id="grafo-fechar" title="${t('Esconder opções')}" aria-label="${t('Esconder opções')}">${icone('fechar')}</button>
       </span>`)}
-    ${grafoSecao('grupos', 'Grupos', `
+    ${grafoSecao('grupos', t('Grupos'), `
       <div id="grafo-grupos"></div>
-      <button class="secondary" id="grafo-novo-grupo">Criar novo grupo</button>`)}
-    ${grafoSecao('tela', 'Tela', `
-      ${grafoChave('setas', 'Setas')}
-      ${grafoFaixa('rotulos', 'Limite dos rótulos', 0, 2, 0.05)}
-      ${grafoFaixa('tamanho', 'Tamanho dos pontos', 0.4, 2.5, 0.05)}
-      ${grafoFaixa('grossura', 'Grossura dos links', 0.3, 3, 0.05)}
-      <label class="grafo-linha"><span>Notas sem cor de pasta</span><input type="color" class="grafo-cor-solta" data-opcao="corSolta" value="${corValida(grafoOpcoes.corSolta) ? grafoOpcoes.corSolta : GRAFO_PADRAO.corSolta}" aria-label="Cor das notas sem cor de pasta" /></label>
-      <button class="secondary" id="grafo-animar">Animar</button>`)}
-    ${grafoSecao('forcas', 'Forças', `
-      ${grafoFaixa('centripeta', 'Força centrípeta', 0, 2, 0.02)}
-      ${grafoFaixa('repulsao', 'Força de repulsão', 0.1, 4, 0.05)}
-      ${grafoFaixa('forcaLinks', 'Força dos links', 0, 3, 0.05)}
-      ${grafoFaixa('distancia', 'Distância dos links', 40, 400, 5)}`)}
+      <button class="secondary" id="grafo-novo-grupo">${t('Criar novo grupo')}</button>`)}
+    ${grafoSecao('tela', t('Tela'), `
+      ${grafoChave('setas', t('Setas'))}
+      ${grafoFaixa('rotulos', t('Limite dos rótulos'), 0, 2, 0.05)}
+      ${grafoFaixa('tamanho', t('Tamanho dos pontos'), 0.4, 2.5, 0.05)}
+      ${grafoFaixa('grossura', t('Grossura dos links'), 0.3, 3, 0.05)}
+      <label class="grafo-linha"><span>${t('Notas sem cor de pasta')}</span><input type="color" class="grafo-cor-solta" data-opcao="corSolta" value="${corValida(grafoOpcoes.corSolta) ? grafoOpcoes.corSolta : GRAFO_PADRAO.corSolta}" aria-label="${t('Cor das notas sem cor de pasta')}" /></label>
+      <button class="secondary" id="grafo-animar">${t('Animar')}</button>`)}
+    ${grafoSecao('forcas', t('Forças'), `
+      ${grafoFaixa('centripeta', t('Força centrípeta'), 0, 2, 0.02)}
+      ${grafoFaixa('repulsao', t('Força de repulsão'), 0.1, 4, 0.05)}
+      ${grafoFaixa('forcaLinks', t('Força dos links'), 0, 3, 0.05)}
+      ${grafoFaixa('distancia', t('Distância dos links'), 40, 400, 5)}`)}
   </aside>
 </div>`;
 }
@@ -2190,9 +2191,9 @@ function bindGraph() {
   function desenharGrupos() {
     const caixa = $('#grafo-grupos');
     caixa.innerHTML = grafoOpcoes.grupos.map((grupo, i) =>
-      `<div class="grafo-grupo"><button class="grafo-cor" data-cor="${i}" style="background:${grupo.cor}" title="Trocar a cor" aria-label="Trocar a cor"></button>` +
-      `<input data-grupo="${i}" value="${escapeHtml(grupo.consulta)}" placeholder="palavra do título" aria-label="Palavra do grupo" />` +
-      `<button class="icon-button" data-remover="${i}" title="Remover grupo" aria-label="Remover grupo">${icone('fechar')}</button></div>`).join('');
+      `<div class="grafo-grupo"><button class="grafo-cor" data-cor="${i}" style="background:${grupo.cor}" title="${t('Trocar a cor')}" aria-label="${t('Trocar a cor')}"></button>` +
+      `<input data-grupo="${i}" value="${escapeHtml(grupo.consulta)}" placeholder="${t('palavra do título')}" aria-label="${t('Palavra do grupo')}" />` +
+      `<button class="icon-button" data-remover="${i}" title="${t('Remover grupo')}" aria-label="${t('Remover grupo')}">${icone('fechar')}</button></div>`).join('');
     for (const campo of caixa.querySelectorAll('[data-grupo]')) campo.addEventListener('input', () => {
       grafoOpcoes.grupos[+campo.dataset.grupo].consulta = campo.value; gravarGrafoOpcoes(); pintar();
     });
