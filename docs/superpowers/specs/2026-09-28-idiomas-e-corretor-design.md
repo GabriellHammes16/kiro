@@ -97,8 +97,9 @@ nova sem título ganha "Sem título" no idioma atual.
 
 - O idioma do corretor é o do navegador; a página não escolhe.
 - O interruptor põe `spellcheck="false"` nos campos de texto.
-- Em campo com palavra errada, o menu do Kiro não abre: vale o menu nativo, com as sugestões
-  do navegador.
+- A página não tem como saber se a palavra sob o clique está errada, então o botão direito
+  continua abrindo o menu do Kiro; **Shift + botão direito** abre o menu nativo do navegador,
+  com as sugestões dele.
 
 ### Chinês
 
