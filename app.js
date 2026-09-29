@@ -679,7 +679,7 @@ function aplicarLateralCompacta() {
     if (!rotulo) continue;
     if (item.id === 'go-note') item.dataset.dica = t('Ir para nota ({tecla})', { tecla: teclaDe('irPara') });
     item.dataset.dica ??= item.getAttribute('title') || '';   // a dica original, se houver
-    const original = item.dataset.dica;
+    const original = item.dataset.dica ? t(item.dataset.dica) : '';
     if (lateralCompacta) item.title = original ? `${rotulo} (${original})` : rotulo;
     else if (original) item.title = original;
     else item.removeAttribute('title');
