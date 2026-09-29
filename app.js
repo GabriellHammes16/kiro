@@ -2255,7 +2255,7 @@ function urlDoAnexo(caminho) {
 }
 function htmlDaImagem({ caminho, largura }) {
   const nome = escapeHtml(caminho.split('/').pop());
-  return `<span class="md-imagem" data-nome="${nome}"><img src="${escapeHtml(urlDoAnexo(caminho))}" alt="${nome}" draggable="false"${largura ? ` style="width:${largura}px"` : ''} /><span class="md-alca" title="Arraste para redimensionar" aria-hidden="true"></span></span>`;
+  return `<span class="md-imagem" data-nome="${nome}"><img src="${escapeHtml(urlDoAnexo(caminho))}" alt="${nome}" draggable="false"${largura ? ` style="width:${largura}px"` : ''} /><span class="md-alca" title="${t('Arraste para redimensionar')}" aria-hidden="true"></span></span>`;
 }
 // As imagens de um trecho da fonte, na mesma ordem em que mdInline as desenha: as
 // crases são mascaradas antes, porque o que está em código não vira imagem.
@@ -2300,7 +2300,7 @@ function mdInline(texto) {
       const alvo = alvoBruto.split('#')[0].trim();
       const rotulo = (rotuloBruto || alvoBruto).trim();
       const nota = Kiro.findLinkedNote(state.notes, desescapar(alvo));
-      return reservar(`<a class="wikilink${nota ? '' : ' ausente'}" data-alvo="${alvo}"${nota ? ` data-id="${nota.id}"` : ''} title="${nota ? 'Abrir nota' : 'Nota ainda não criada'}">${rotulo}</a>`);
+      return reservar(`<a class="wikilink${nota ? '' : ' ausente'}" data-alvo="${alvo}"${nota ? ` data-id="${nota.id}"` : ''} title="${nota ? t('Abrir nota') : t('Nota ainda não criada')}">${rotulo}</a>`);
     })
     .replace(/\[([^\][\n]*)\]\(([^)\s]+)\)/g, (inteiro, rotulo, url) => {
       const limpa = Kiro.safeUrl(desescapar(url));
@@ -2334,7 +2334,7 @@ function renderizarMarkdown(fonte, base = 0) {
       let j = i + 1;
       while (j < linhas.length && !/^```\s*$/.test(linhas[j])) corpo.push(linhas[j++]);
       const codigo = escapeHtml(corpo.join('\n'));
-      const linguagem = escapeHtml(cerca[1].trim() || 'texto');
+      const linguagem = escapeHtml(cerca[1].trim() || t('texto'));
       const ate = Math.min(j + 1, linhas.length);
       // ```kiro:<id>: o plug-in desenha depois; a fonte fica na nota, intacta.
       const doPlugin = cerca[1].trim().match(/^kiro:([a-z0-9][a-z0-9-]{1,39})$/);
@@ -2346,7 +2346,7 @@ function renderizarMarkdown(fonte, base = 0) {
         i = j + 1;
         continue;
       }
-      saida.push(`<figure class="code-area" ${abrir(inicio, ate)}><figcaption><span class="code-lang">${linguagem}</span><button type="button" class="secondary code-copy">Copiar</button></figcaption><pre><code>${codigo}</code></pre></figure>`);
+      saida.push(`<figure class="code-area" ${abrir(inicio, ate)}><figcaption><span class="code-lang">${linguagem}</span><button type="button" class="secondary code-copy">${t('Copiar')}</button></figcaption><pre><code>${codigo}</code></pre></figure>`);
       avancar(ate - i);
       i = j + 1;
       continue;
@@ -2397,7 +2397,7 @@ function renderizarMarkdown(fonte, base = 0) {
         const marca = `data-pos="${base + linhaDoItem}" data-fim="${base + linhaDoItem + linhas[j].length}"`;
         const tarefa = atual[3].match(/^\[([ xX])\]\s*(.*)$/);
         itens.push(tarefa
-          ? `<li class="md-tarefa" ${marca}><input type="checkbox" ${/[xX]/.test(tarefa[1]) ? 'checked' : ''} aria-label="Concluída" />${mdInline(escapeHtml(tarefa[2]))}</li>`
+          ? `<li class="md-tarefa" ${marca}><input type="checkbox" ${/[xX]/.test(tarefa[1]) ? 'checked' : ''} aria-label="${t('Concluída')}" />${mdInline(escapeHtml(tarefa[2]))}</li>`
           : `<li ${marca}>${mdInline(escapeHtml(atual[3]))}</li>`);
         linhaDoItem += linhas[j].length + 1;
         j++;
@@ -2447,10 +2447,10 @@ async function copiarTexto(texto) {
 }
 async function copiarBloco(botao) {
   const codigo = botao.closest('.code-area').querySelector('code').textContent;
-  if (!await copiarTexto(codigo)) return void status('O navegador não liberou a área de transferência.', true);
-  botao.textContent = 'Copiado';
+  if (!await copiarTexto(codigo)) return void status(t('O navegador não liberou a área de transferência.'), true);
+  botao.textContent = t('Copiado');
   botao.classList.add('copiado');
-  setTimeout(() => { botao.textContent = 'Copiar'; botao.classList.remove('copiado'); }, 1400);
+  setTimeout(() => { botao.textContent = t('Copiar'); botao.classList.remove('copiado'); }, 1400);
 }
 // ---- Edição no lugar ----
 // A nota fica sempre desenhada e não há modos para alternar. Clicar num bloco
@@ -2489,7 +2489,7 @@ function montarCampo(valor) {
   campo.className = 'bloco-editor';
   campo.value = valor;
   campo.rows = 1;
-  campo.setAttribute('aria-label', 'Conteúdo da nota');
+  campo.setAttribute('aria-label', t('Conteúdo da nota'));
   campo.addEventListener('input', () => { aoDigitar(campo); atualizarSugestoes(campo); });
   campo.addEventListener('keydown', teclaNoBloco);
   campo.addEventListener('click', () => atualizarSugestoes(campo));
@@ -2722,7 +2722,7 @@ async function guardarImagem(arquivo) {
   if (window.cadernoDesktop) return window.cadernoDesktop.saveAttachment({ nome: arquivo.name || '', dados: new Uint8Array(await arquivo.arrayBuffer()) });
   const resposta = await fetch('/api/anexo', { method: 'POST', headers: { 'Content-Type': arquivo.type, 'X-Kiro-Nome': encodeURIComponent(arquivo.name || '') }, body: arquivo });
   const resultado = await resposta.json();
-  if (!resposta.ok) throw new Error(resultado.error || 'Não foi possível guardar a imagem.');
+  if (!resposta.ok) throw new Error(resultado.error || t('Não foi possível guardar a imagem.'));
   return resultado;
 }
 // Seletor de arquivos do sistema → anexo do cofre (mesmo caminho da imagem colada). Devolve o caminho.
@@ -2741,16 +2741,16 @@ function escolherImagemDoSistema() {
 }
 // Mesmo limite e mesmo aviso da imagem colada numa nota; devolve o caminho ou null.
 async function guardarImagemDoFluxo(arquivo) {
-  if (arquivo.size > LIMITE_DE_IMAGEM) { status(`${arquivo.name || 'A imagem'} passa de 20 MB.`, true); return null; }
+  if (arquivo.size > LIMITE_DE_IMAGEM) { status(t('{nome} passa de 20 MB.', { nome: arquivo.name || t('A imagem') }), true); return null; }
   try { return (await guardarImagem(arquivo)).path; }
-  catch (erro) { status('Não foi possível guardar a imagem: ' + erro.message, true); return null; }
+  catch (erro) { status(t('Não foi possível guardar a imagem: {erro}', { erro: erro.message }), true); return null; }
 }
 function pedirLinkDoFluxo() {
   if ($('#modal-root').firstChild) return Promise.resolve(null);
   return new Promise(resolve => {
     let respondeu = false;
     const responder = v => { if (!respondeu) { respondeu = true; resolve(v); } };
-    modal('Adicionar link', `<form class="form" id="fluxo-link-form"><div class="field"><label for="fluxo-link-url">Endereço</label><input id="fluxo-link-url" required placeholder="https://…" autocomplete="off" /></div><div class="form-actions"><button type="button" class="secondary" id="cancel">Cancelar</button><button class="primary">Adicionar</button></div></form>`);
+    modal(t('Adicionar link'), `<form class="form" id="fluxo-link-form"><div class="field"><label for="fluxo-link-url">${t('Endereço')}</label><input id="fluxo-link-url" required placeholder="https://…" autocomplete="off" /></div><div class="form-actions"><button type="button" class="secondary" id="cancel">${t('Cancelar')}</button><button class="primary">${t('Adicionar')}</button></div></form>`);
     const campo = $('#fluxo-link-url');
     campo.addEventListener('input', e => e.stopPropagation());
     new MutationObserver((_, obs) => { if (!$('#modal-root').firstChild) { obs.disconnect(); responder(null); } }).observe($('#modal-root'), { childList: true });
@@ -2758,7 +2758,7 @@ function pedirLinkDoFluxo() {
     $('#fluxo-link-form').onsubmit = e => {
       e.preventDefault();
       const url = Kiro.safeUrl(campo.value.trim());
-      if (!url) return status('Use um endereço que comece com http:// ou https://.', true);
+      if (!url) return status(t('Use um endereço que comece com http:// ou https://.'), true);
       responder(url); closeModal(true);
     };
     campo.focus();
@@ -2766,12 +2766,12 @@ function pedirLinkDoFluxo() {
 }
 // A imagem vai para o cofre primeiro; só depois o ![[...]] entra no texto, onde está o cursor.
 async function colarImagens(campo, arquivos) {
-  status(arquivos.length > 1 ? `Guardando ${arquivos.length} imagens…` : 'Guardando imagem…');
+  status(arquivos.length > 1 ? t('Guardando {n} imagens…', { n: arquivos.length }) : t('Guardando imagem…'));
   const trechos = [];
   for (const arquivo of arquivos) {
-    if (arquivo.size > LIMITE_DE_IMAGEM) { status(`${arquivo.name || 'A imagem'} passa de 20 MB.`, true); continue; }
+    if (arquivo.size > LIMITE_DE_IMAGEM) { status(t('{nome} passa de 20 MB.', { nome: arquivo.name || t('A imagem') }), true); continue; }
     try { trechos.push(`![[${(await guardarImagem(arquivo)).path}]]`); }
-    catch (erro) { status('Não foi possível guardar a imagem: ' + erro.message, true); }
+    catch (erro) { status(t('Não foi possível guardar a imagem: {erro}', { erro: erro.message }), true); }
   }
   if (!trechos.length || !editing) return;
   // Se o bloco fechou enquanto a imagem era gravada, ela entra no fim da nota.
@@ -2783,7 +2783,7 @@ async function colarImagens(campo, arquivos) {
   inserirTexto(destino, antes + trechos.join('\n\n') + depois);
   // Fecha o bloco para a imagem aparecer na hora, em vez do ![[...]] cru.
   fecharBloco();
-  status(trechos.length > 1 ? `${trechos.length} imagens coladas` : 'Imagem colada');
+  status(trechos.length > 1 ? t('{n} imagens coladas', { n: trechos.length }) : t('Imagem colada'));
 }
 function aoColarOuSoltar(evento) {
   const arquivos = imagensDoEvento(evento.clipboardData || evento.dataTransfer);
@@ -2860,7 +2860,7 @@ function abrirImagemInteira(fonte, nome) {
   telaDeImagem = document.createElement('div');
   telaDeImagem.className = 'tela-imagem';
   telaDeImagem.tabIndex = -1;
-  telaDeImagem.innerHTML = `<img src="${escapeHtml(fonte)}" alt="${escapeHtml(nome || '')}" /><span class="tela-dica">Esc para fechar</span>`;
+  telaDeImagem.innerHTML = `<img src="${escapeHtml(fonte)}" alt="${escapeHtml(nome || '')}" /><span class="tela-dica">${t('Esc para fechar')}</span>`;
   telaDeImagem.addEventListener('click', fecharImagemInteira);
   document.body.appendChild(telaDeImagem);
   document.body.classList.add('com-imagem-inteira');
@@ -2987,10 +2987,10 @@ function inserirBloco(area, texto) {
 }
 function linkExterno(area) {
   const sel = area.value.slice(area.selectionStart, area.selectionEnd);
-  const url = prompt('Endereço do link:', 'https://');
+  const url = prompt(t('Endereço do link:'), 'https://');
   if (url === null) return;
   const limpo = Kiro.safeUrl(url.trim());
-  if (!limpo) { alert('Informe um endereço http:// ou https:// válido.'); return; }
+  if (!limpo) { alert(t('Informe um endereço http:// ou https:// válido.')); return; }
   const i = area.selectionStart;
   inserirTexto(area, '[' + sel + '](' + limpo + ')');
   if (!sel) area.setSelectionRange(i + 1, i + 1);
@@ -3000,13 +3000,13 @@ async function colar(area) {
     const texto = await navigator.clipboard.readText();
     if (texto) inserirTexto(area, texto);
   } catch {
-    status('O navegador não liberou a área de transferência. Use Ctrl+V.', true);
+    status(t('O navegador não liberou a área de transferência. Use Ctrl+V.'), true);
   }
 }
 async function copiarSelecao(area, recortar) {
   const sel = area.value.slice(area.selectionStart, area.selectionEnd);
   if (!sel) return;
-  if (!await copiarTexto(sel)) return void status('Não foi possível copiar.', true);
+  if (!await copiarTexto(sel)) return void status(t('Não foi possível copiar.'), true);
   if (recortar) inserirTexto(area, '');
 }
 const TABELA = '| Coluna | Coluna |\n| --- | --- |\n|  |  |\n';
@@ -3029,24 +3029,24 @@ function menuDaNota() {
   const destino = wikilinkNoCursor(blocoAberto?.campo);
   return [
     ...(destino ? [
-      { rotulo: `Ir para "${destino.alvo}"`, icone: icone('ir-para'), acao: () => abrirNota(destino.nota || notaVazia({ title: destino.alvo })) },
+      { rotulo: t('Ir para "{alvo}"', { alvo: destino.alvo }), icone: icone('ir-para'), acao: () => abrirNota(destino.nota || notaVazia({ title: destino.alvo })) },
       { separador: true },
     ] : []),
-    { rotulo: 'Adicionar link', icone: icone('link'), acao: a => envolver(a, '[[', ']]') },
-    { rotulo: 'Adicionar link externo', icone: icone('link-externo'), acao: linkExterno },
+    { rotulo: t('Adicionar link'), icone: icone('link'), acao: a => envolver(a, '[[', ']]') },
+    { rotulo: t('Adicionar link externo'), icone: icone('link-externo'), acao: linkExterno },
     { separador: true },
-    { rotulo: 'Formatar', icone: icone('renomear'), filhos: [
-      { rotulo: 'Negrito', icone: 'B', acao: a => envolver(a, '**') },
-      { rotulo: 'Itálico', icone: 'I', acao: a => envolver(a, '*') },
-      { rotulo: 'Riscado', icone: 'S', acao: a => envolver(a, '~~') },
-      { rotulo: 'Realce', icone: icone('realce'), acao: a => envolver(a, '==') },
+    { rotulo: t('Formatar'), icone: icone('renomear'), filhos: [
+      { rotulo: t('Negrito'), icone: 'B', acao: a => envolver(a, '**') },
+      { rotulo: t('Itálico'), icone: 'I', acao: a => envolver(a, '*') },
+      { rotulo: t('Riscado'), icone: 'S', acao: a => envolver(a, '~~') },
+      { rotulo: t('Realce'), icone: icone('realce'), acao: a => envolver(a, '==') },
       { separador: true },
-      { rotulo: 'Código', icone: icone('codigo'), acao: a => envolver(a, '`') },
-      { rotulo: 'Área de código', icone: icone('codigo-bloco'), acao: areaDeCodigo },
-      { rotulo: 'Equação', icone: 'Σ', acao: a => envolver(a, '$') },
-      { rotulo: 'Comentário', icone: icone('comentario'), acao: a => envolver(a, '%%') },
+      { rotulo: t('Código'), icone: icone('codigo'), acao: a => envolver(a, '`') },
+      { rotulo: t('Área de código'), icone: icone('codigo-bloco'), acao: areaDeCodigo },
+      { rotulo: t('Equação'), icone: 'Σ', acao: a => envolver(a, '$') },
+      { rotulo: t('Comentário'), icone: icone('comentario'), acao: a => envolver(a, '%%') },
       { separador: true },
-      { rotulo: 'Limpar formatação', icone: icone('limpar'), acao: a => {
+      { rotulo: t('Limpar formatação'), icone: icone('limpar'), acao: a => {
         const i = a.selectionStart, sel = a.value.slice(i, a.selectionEnd);
         if (!sel) return;
         const limpo = sel.replace(/\*\*|~~|==|%%|[*`$]/g, '');
@@ -3054,20 +3054,20 @@ function menuDaNota() {
         a.setSelectionRange(i, i + limpo.length);
       } },
     ] },
-    { rotulo: 'Parágrafo', icone: icone('paragrafo'), filhos: [
-      { rotulo: 'Texto normal', icone: icone('texto'), acao: a => porLinha(a, semPrefixo) },
+    { rotulo: t('Parágrafo'), icone: icone('paragrafo'), filhos: [
+      { rotulo: t('Texto normal'), icone: icone('texto'), acao: a => porLinha(a, semPrefixo) },
       { separador: true },
-      { rotulo: 'Título 1', icone: icone('titulo'), acao: a => prefixar(a, '# ') },
-      { rotulo: 'Título 2', icone: icone('titulo'), acao: a => prefixar(a, '## ') },
-      { rotulo: 'Título 3', icone: icone('titulo'), acao: a => prefixar(a, '### ') },
+      { rotulo: t('Título 1'), icone: icone('titulo'), acao: a => prefixar(a, '# ') },
+      { rotulo: t('Título 2'), icone: icone('titulo'), acao: a => prefixar(a, '## ') },
+      { rotulo: t('Título 3'), icone: icone('titulo'), acao: a => prefixar(a, '### ') },
       { separador: true },
-      { rotulo: 'Lista com marcadores', icone: icone('lista-marcadores'), acao: a => prefixar(a, '- ') },
-      { rotulo: 'Lista numerada', icone: icone('lista-numerada'), acao: a => { let n = 0; porLinha(a, l => (++n) + '. ' + semPrefixo(l)); } },
-      { rotulo: 'Lista de tarefas', icone: icone('lista-tarefas'), acao: a => prefixar(a, '- [ ] ') },
-      { rotulo: 'Citação', icone: icone('destaque'), acao: a => prefixar(a, '> ') },
+      { rotulo: t('Lista com marcadores'), icone: icone('lista-marcadores'), acao: a => prefixar(a, '- ') },
+      { rotulo: t('Lista numerada'), icone: icone('lista-numerada'), acao: a => { let n = 0; porLinha(a, l => (++n) + '. ' + semPrefixo(l)); } },
+      { rotulo: t('Lista de tarefas'), icone: icone('lista-tarefas'), acao: a => prefixar(a, '- [ ] ') },
+      { rotulo: t('Citação'), icone: icone('destaque'), acao: a => prefixar(a, '> ') },
     ] },
-    { rotulo: 'Inserir', icone: icone('mais'), filhos: [
-      { rotulo: 'Nota de rodapé', icone: icone('rodape'), acao: a => {
+    { rotulo: t('Inserir'), icone: icone('mais'), filhos: [
+      { rotulo: t('Nota de rodapé'), icone: icone('rodape'), acao: a => {
         const n = (a.value.match(/\[\^(\d+)\]/g) || []).length + 1;
         inserirTexto(a, '[^' + n + ']');
         const fim = a.selectionStart;
@@ -3076,24 +3076,24 @@ function menuDaNota() {
         inserirTexto(a, rodape);
         a.setSelectionRange(fim, fim);
       } },
-      { rotulo: 'Tabela', icone: icone('tabela'), acao: a => inserirBloco(a, TABELA) },
-      { rotulo: 'Destaque', icone: icone('destaque'), acao: a => inserirBloco(a, '> [!note]\n> ') },
-      { rotulo: 'Régua horizontal', icone: icone('regua'), acao: a => inserirBloco(a, '---\n') },
+      { rotulo: t('Tabela'), icone: icone('tabela'), acao: a => inserirBloco(a, TABELA) },
+      { rotulo: t('Destaque'), icone: icone('destaque'), acao: a => inserirBloco(a, '> [!note]\n> ') },
+      { rotulo: t('Régua horizontal'), icone: icone('regua'), acao: a => inserirBloco(a, '---\n') },
       { separador: true },
-      { rotulo: 'Bloco de código', icone: icone('codigo-bloco'), acao: a => { inserirBloco(a, '```\n\n```\n'); const p = a.selectionStart - 5; a.setSelectionRange(p, p); } },
-      { rotulo: 'Equação em bloco', icone: 'Σ', acao: a => { inserirBloco(a, '$$\n\n$$\n'); const p = a.selectionStart - 4; a.setSelectionRange(p, p); } },
+      { rotulo: t('Bloco de código'), icone: icone('codigo-bloco'), acao: a => { inserirBloco(a, '```\n\n```\n'); const p = a.selectionStart - 5; a.setSelectionRange(p, p); } },
+      { rotulo: t('Equação em bloco'), icone: 'Σ', acao: a => { inserirBloco(a, '$$\n\n$$\n'); const p = a.selectionStart - 4; a.setSelectionRange(p, p); } },
     ] },
     { separador: true },
-    { rotulo: 'Cortar', icone: icone('cortar'), ativo: temSelecao, acao: a => copiarSelecao(a, true) },
-    { rotulo: 'Copiar', icone: icone('copiar'), ativo: temSelecao, acao: a => copiarSelecao(a, false) },
-    { rotulo: 'Colar', icone: icone('colar'), acao: colar },
+    { rotulo: t('Cortar'), icone: icone('cortar'), ativo: temSelecao, acao: a => copiarSelecao(a, true) },
+    { rotulo: t('Copiar'), icone: icone('copiar'), ativo: temSelecao, acao: a => copiarSelecao(a, false) },
+    { rotulo: t('Colar'), icone: icone('colar'), acao: colar },
     { separador: true },
-    { rotulo: 'Selecionar tudo', icone: icone('selecionar'), acao: a => a.select() },
+    { rotulo: t('Selecionar tudo'), icone: icone('selecionar'), acao: a => a.select() },
     { separador: true },
-    { rotulo: 'Salvar', icone: icone('salvar'), acao: () => salvarNota() },
-    { rotulo: 'Detalhes', icone: icone('detalhes'), acao: () => acaoEditor('detalhes') },
-    { rotulo: 'Fechar nota', icone: icone('fechar'), acao: () => acaoEditor('fechar') },
-    { rotulo: 'Mover para lixeira', icone: icone('lixeira'), ativo: () => Boolean(editing?.id), acao: () => acaoEditor('lixeira') },
+    { rotulo: t('Salvar'), icone: icone('salvar'), acao: () => salvarNota() },
+    { rotulo: t('Detalhes'), icone: icone('detalhes'), acao: () => acaoEditor('detalhes') },
+    { rotulo: t('Fechar nota'), icone: icone('fechar'), acao: () => acaoEditor('fechar') },
+    { rotulo: t('Mover para lixeira'), icone: icone('lixeira'), ativo: () => Boolean(editing?.id), acao: () => acaoEditor('lixeira') },
   ];
 }
 let menuAberto = null;
