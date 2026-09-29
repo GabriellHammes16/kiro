@@ -3197,14 +3197,14 @@ async function acaoEditor(tipo){
   if(tipo==='fechar'){ if(editing) await fecharAba(abas.ativo,idDaAba(editing)); return; }
   if(tipo==='detalhes'){const d=$('#doc-details');d.hidden=!d.hidden;return;}
   if(tipo==='lixeira'){
-    if(busy||failed||!loaded||!confirm(`Mover "${editing.title}" para a lixeira?`))return;
+    if(busy||failed||!loaded||!confirm(t('Mover "{titulo}" para a lixeira?', { titulo: editing.title })))return;
     state.notes=state.notes.filter(n=>n.id!==editing.id);
     editing=null;editorDirty=false;currentView='studies';await save();render();
   }
 }
 async function salvarNota(){
   if(busy||failed||!loaded)return false;
-  if(!editing.title.trim()){status('Dê um título à nota antes de salvar.',true);$('#doc-title')?.focus();return false;}
+  if(!editing.title.trim()){status(t('Dê um título à nota antes de salvar.'),true);$('#doc-title')?.focus();return false;}
   // Salvar redesenha a nota; quem estava digitando volta para o mesmo ponto.
   const retomar=blocoAberto&&document.activeElement===blocoAberto.campo?{inicio:blocoAberto.inicio,cursor:blocoAberto.campo.selectionStart}:null;
   const eraNova=!editing.id;
@@ -3223,7 +3223,7 @@ async function extraAction(type,id){
   if(type==='inbox-mover'){
     const r=document.querySelector(`[data-extra="inbox-mover"][data-id="${CSS.escape(id)}"]`).getBoundingClientRect();
     const pastas=state.folders.slice().sort((a,b)=>KiroIdiomas.comparar(a.path || a.title, b.path || b.title));
-    abrirMenuContexto({preventDefault(){},clientX:r.left,clientY:r.bottom},document.body,pastas.length?pastas.map(f=>({rotulo:f.path||f.title,icone:icone('pastas'),acao:()=>tirarDaCaixa(id,f.id)})):[{rotulo:'Nenhuma pasta ainda',icone:icone('pastas'),ativo:()=>false,acao:()=>{}}]);
+    abrirMenuContexto({preventDefault(){},clientX:r.left,clientY:r.bottom},document.body,pastas.length?pastas.map(f=>({rotulo:f.path||f.title,icone:icone('pastas'),acao:()=>tirarDaCaixa(id,f.id)})):[{rotulo:t('Nenhuma pasta ainda'),icone:icone('pastas'),ativo:()=>false,acao:()=>{}}]);
   }
   if(type==='daily')abrirNota(state.notes.find(n=>n.title===today())||notaVazia({title:today(),body:templates.daily.body,tags:['diario']}));
   if(type==='add-habit') habitoModal();
@@ -3240,21 +3240,21 @@ async function showTrash(){
     const itens=window.cadernoDesktop?await window.cadernoDesktop.trash():await api('trash');
     const quando=ms=>KiroIdiomas.formatarData(new Date(ms),{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'});
     const detalhe=i=>i.kind==='folder'
-      ? `pasta · ${i.noteCount} nota${i.noteCount===1?'':'s'}${i.folderCount>1?` · ${i.folderCount-1} subpasta${i.folderCount===2?'':'s'}`:''}`
-      : i.kind==='fluxo'?'fluxo':'nota';
-    modal('Lixeira', itens.length ? itens.map(i=>`<div class="routine-item"><span class="brand-mark">${icone(i.kind==='folder'?'pastas':i.kind==='fluxo'?'fluxo':'nota')}</span><span class="routine-title">${escapeHtml(i.title)}<div class="task-info">${detalhe(i)} · removido em ${quando(i.deletedAt)}</div></span><button class="secondary" data-restore="${escapeHtml(i.entryId)}">Restaurar</button></div>`).join('') : '<p>A lixeira está vazia.</p>');
+      ? `${t('pasta')} · ${i.noteCount===1?t('1 nota'):t('{n} notas',{n:i.noteCount})}${i.folderCount>1?` · ${i.folderCount===2?t('1 subpasta'):t('{n} subpastas',{n:i.folderCount-1})}`:''}`
+      : i.kind==='fluxo'?t('fluxo'):t('nota');
+    modal(t('Lixeira'), itens.length ? itens.map(i=>`<div class="routine-item"><span class="brand-mark">${icone(i.kind==='folder'?'pastas':i.kind==='fluxo'?'fluxo':'nota')}</span><span class="routine-title">${escapeHtml(i.title)}<div class="task-info">${detalhe(i)} · ${t('removido em {quando}',{quando:quando(i.deletedAt)})}</div></span><button class="secondary" data-restore="${escapeHtml(i.entryId)}">${t('Restaurar')}</button></div>`).join('') : `<p>${t('A lixeira está vazia.')}</p>`);
     document.querySelectorAll('[data-restore]').forEach(b=>b.onclick=async()=>{
       if(busy||failed)return;
       // Uma mudança de fluxo ainda não salva não pode ser descartada pela restauração.
       if(!await gravarFluxoPendente())return;
-      setBusy(true);status('Restaurando…');
+      setBusy(true);status(t('Restaurando…'));
       try{
         state=await restaurarDoCofre({entryId:b.dataset.restore,revision:state.revision});
         fluxoPendente=false;clearTimeout(timerDoFluxo);
-        expanded=null;closeModal(true);render();status('Restaurado do cofre');
+        expanded=null;closeModal(true);render();status(t('Restaurado do cofre'));
       }catch(erro){
         // Falha ao restaurar não põe em risco o que está na janela: não trava a interface.
-        status('Não foi possível restaurar: '+erro.message,true);
+        status(t('Não foi possível restaurar: {erro}',{erro:erro.message}),true);
       }finally{setBusy(false);}
     });
   }catch(error){status(error.message,true);}
@@ -3280,13 +3280,13 @@ let personalizandoHoje = false;
 async function carregarHoje() {
   clearTimeout(hojeTimer); hojeGravavel = false;
   try { hojeLayout = KiroHoje.limpar(await hojeApi.ler()); hojeGravavel = true; }
-  catch (erro) { hojeLayout = null; hojeGravavel = false; status(`Não foi possível ler o layout da Hoje: ${erro.message}`, true); }
+  catch (erro) { hojeLayout = null; hojeGravavel = false; status(t('Não foi possível ler o layout da Hoje: {erro}', { erro: erro.message }), true); }
 }
 function gravarHojeDepois() {
   if (!hojeGravavel) return;
   clearTimeout(hojeTimer);
   const alvo = hojeLayout;
-  hojeTimer = setTimeout(() => hojeApi.gravar(alvo).catch(erro => status(`Não foi possível gravar o layout da Hoje: ${erro.message}`, true)), 400);
+  hojeTimer = setTimeout(() => hojeApi.gravar(alvo).catch(erro => status(t('Não foi possível gravar o layout da Hoje: {erro}', { erro: erro.message }), true)), 400);
 }
 // Toda mudança de layout passa por aqui, venha da Hoje ou das Configurações.
 function mudarHoje(fn) {
@@ -3316,25 +3316,25 @@ function popoverDeOpcoes(c, l, prefixo, indice, comTexto = false) {
   if (!c.opcoes.length) return '';
   const alvo = `hoje-op-${prefixo}-${indice}`;
   const botao = comTexto
-    ? `<button type="button" class="secondary cfg-pequeno" popovertarget="${alvo}" aria-label="Opções de ${escapeHtml(c.titulo)}">${icone('detalhes')} Opções</button>`
-    : `<button type="button" class="icon-button" popovertarget="${alvo}" aria-label="Opções de ${escapeHtml(c.titulo)}" title="Opções">${icone('detalhes')}</button>`;
+    ? `<button type="button" class="secondary cfg-pequeno" popovertarget="${alvo}" aria-label="${t('Opções de {titulo}', { titulo: escapeHtml(c.titulo) })}">${icone('detalhes')} ${t('Opções')}</button>`
+    : `<button type="button" class="icon-button" popovertarget="${alvo}" aria-label="${t('Opções de {titulo}', { titulo: escapeHtml(c.titulo) })}" title="${t('Opções')}">${icone('detalhes')}</button>`;
   return `${botao}<div popover id="${alvo}" class="hoje-opcoes" data-hoje-id="${escapeHtml(c.id)}"><h3>${escapeHtml(c.titulo)}</h3>${camposDeOpcoes(c.id, c.opcoes, KiroHoje.opcoesEfetivas(l, c.id, c.opcoes))}</div>`;
 }
 // No modo Personalizar o corpo do cartão fica inerte: dá para arrumar sem marcar hábito sem querer.
 function cartaoEmEdicao(c, l, html) {
   const cartao = l.cartoes.find(x => x.id === c.id);
   const indice = catalogoDaHoje().findIndex(x => x.id === c.id);
-  const corpo = html || `<section class="card"><div class="card-head"><h2>${escapeHtml(c.titulo)}</h2></div><div class="empty">Nada agora.</div></section>`;
+  const corpo = html || `<section class="card"><div class="card-head"><h2>${escapeHtml(c.titulo)}</h2></div><div class="empty">${t('Nada agora.')}</div></section>`;
   const lateral = cartao.largura === 'normal'
-    ? `${botaoDaHoje('esquerda', '←', 'Coluna à esquerda', cartao.coluna === 0 ? ' disabled' : '')}${botaoDaHoje('direita', '→', 'Coluna à direita', cartao.coluna >= l.colunas - 1 ? ' disabled' : '')}`
+    ? `${botaoDaHoje('esquerda', '←', t('Coluna à esquerda'), cartao.coluna === 0 ? ' disabled' : '')}${botaoDaHoje('direita', '→', t('Coluna à direita'), cartao.coluna >= l.colunas - 1 ? ' disabled' : '')}`
     : '';
   return `<div class="hoje-cartao" data-hoje-id="${escapeHtml(c.id)}" draggable="true">
     <div class="hoje-ferramentas" role="toolbar" aria-label="${escapeHtml(c.titulo)}">
       <span class="hoje-alca" aria-hidden="true">⠿</span><span class="hoje-nome">${escapeHtml(c.titulo)}</span>
-      ${botaoDaHoje('subir', '↑', 'Subir')}${botaoDaHoje('descer', '↓', 'Descer')}${lateral}
-      ${botaoDaHoje('largura', cartao.largura === 'inteira' ? '⇥⇤' : '⇤⇥', cartao.largura === 'inteira' ? 'Largura normal' : 'Largura inteira')}
+      ${botaoDaHoje('subir', '↑', t('Subir'))}${botaoDaHoje('descer', '↓', t('Descer'))}${lateral}
+      ${botaoDaHoje('largura', cartao.largura === 'inteira' ? '⇥⇤' : '⇤⇥', cartao.largura === 'inteira' ? t('Largura normal') : t('Largura inteira'))}
       ${popoverDeOpcoes(c, l, 'tela', indice)}
-      ${botaoDaHoje('esconder', '×', `Esconder ${escapeHtml(c.titulo)}`)}
+      ${botaoDaHoje('esconder', '×', t('Esconder {titulo}', { titulo: escapeHtml(c.titulo) }))}
     </div>
     <div class="hoje-cartao-corpo" inert>${corpo}</div>
   </div>`;
@@ -3342,9 +3342,9 @@ function cartaoEmEdicao(c, l, html) {
 function rodapeDaPersonalizacao(catalogo, l) {
   const escondidos = catalogo.filter(c => l.ocultos.includes(c.id));
   return `<div class="hoje-rodape">
-    <div class="hoje-escondidos"><span class="small-muted">Cartões escondidos:</span>${escondidos.map(c => `<button type="button" class="chip" data-hoje-acao="mostrar" data-hoje-id="${escapeHtml(c.id)}">${icone('mais')} ${escapeHtml(c.titulo)}</button>`).join('') || '<span class="small-muted">nenhum</span>'}</div>
-    <div class="hoje-colunas-escolha" role="group" aria-label="Colunas"><span class="small-muted">Colunas:</span>${[1, 2, 3].map(n => `<button type="button" class="chip" data-hoje-acao="colunas" data-valor="${n}" aria-pressed="${n === l.colunas}" aria-label="${n} coluna${n > 1 ? 's' : ''}">${n}</button>`).join('')}</div>
-    <button type="button" class="secondary cfg-pequeno" data-hoje-acao="restaurar">${icone('recarregar')} Restaurar padrão</button>
+    <div class="hoje-escondidos"><span class="small-muted">${t('Cartões escondidos:')}</span>${escondidos.map(c => `<button type="button" class="chip" data-hoje-acao="mostrar" data-hoje-id="${escapeHtml(c.id)}">${icone('mais')} ${escapeHtml(c.titulo)}</button>`).join('') || `<span class="small-muted">${t('nenhum')}</span>`}</div>
+    <div class="hoje-colunas-escolha" role="group" aria-label="${t('Colunas')}"><span class="small-muted">${t('Colunas:')}</span>${[1, 2, 3].map(n => `<button type="button" class="chip" data-hoje-acao="colunas" data-valor="${n}" aria-pressed="${n === l.colunas}" aria-label="${n > 1 ? t('{n} colunas', { n }) : t('{n} coluna', { n })}">${n}</button>`).join('')}</div>
+    <button type="button" class="secondary cfg-pequeno" data-hoje-acao="restaurar">${icone('recarregar')} ${t('Restaurar padrão')}</button>
   </div>`;
 }
 // Um tratador para a Hoje e para as Configurações. Depois de redesenhar, o foco volta ao mesmo
@@ -3354,7 +3354,7 @@ function acaoDaHoje(acao, id, valor, botao) {
   if (acao === 'personalizar') { personalizandoHoje = !personalizandoHoje; render(); $('[data-hoje-acao="personalizar"]')?.focus(); return; }
   if (acao === 'restaurar') {
     // Dois cliques no mesmo botão: o primeiro só pede confirmação (funciona até dentro das Configurações).
-    if (botao && !botao.dataset.confirmando) { botao.dataset.confirmando = '1'; botao.textContent = 'Confirmar restauração'; return; }
+    if (botao && !botao.dataset.confirmando) { botao.dataset.confirmando = '1'; botao.textContent = t('Confirmar restauração'); return; }
     return mudarHoje(() => KiroHoje.padrao(catalogoDaHoje()));
   }
   const l = layoutDaHoje(), catalogo = catalogoDaHoje(), cartao = l.cartoes.find(c => c.id === id);
@@ -3427,20 +3427,20 @@ function conteudoDaAbaHoje() {
     // Coluna e largura numa escolha só: onde o cartão fica na Hoje.
     const atual = cartao.largura === 'inteira' ? 'inteira' : String(Math.min(cartao.coluna, l.colunas - 1));
     const segmento = (valor, rotulo, dica) => `<button type="button" class="hoje-seg" data-hoje-acao="posicao" data-valor="${valor}" aria-pressed="${atual === valor}" title="${dica}">${rotulo}</button>`;
-    const posicao = [...Array.from({ length: l.colunas }, (_, n) => segmento(String(n), `Coluna ${n + 1}`, `Na coluna ${n + 1}`)), segmento('inteira', 'Largura toda', 'Ocupa a largura inteira, acima e abaixo das colunas')].join('');
+    const posicao = [...Array.from({ length: l.colunas }, (_, n) => segmento(String(n), t('Coluna {n}', { n: n + 1 }), t('Na coluna {n}', { n: n + 1 }))), segmento('inteira', t('Largura toda'), t('Ocupa a largura inteira, acima e abaixo das colunas'))].join('');
     return `<div class="cfg-linha hoje-cfg-linha${visivel ? '' : ' escondido'}" data-hoje-id="${id}">
-      <label class="cfg-chave hoje-cfg-mostrar" title="${visivel ? 'Esconder da Hoje' : 'Mostrar na Hoje'}"><input type="checkbox" data-hoje-visivel ${visivel ? 'checked' : ''} aria-label="Mostrar ${titulo} na Hoje" /><span class="interruptor" aria-hidden="true"></span></label>
-      <span class="cfg-texto hoje-cfg-nome"><span class="cfg-titulo">${titulo}</span><span class="small-muted">${visivel ? escapeHtml(c.origem) : 'Escondido — não aparece na Hoje'}</span></span>
-      <span class="hoje-segmentos" role="group" aria-label="Posição de ${titulo}">${posicao}</span>
-      <span class="hoje-cfg-ordem" role="group" aria-label="Ordem de ${titulo}">${botaoDaHoje('subir', '↑', `Mover ${titulo} para cima`, i === 0 ? ' disabled' : '')}${botaoDaHoje('descer', '↓', `Mover ${titulo} para baixo`, i === lista.length - 1 ? ' disabled' : '')}</span>
+      <label class="cfg-chave hoje-cfg-mostrar" title="${visivel ? t('Esconder da Hoje') : t('Mostrar na Hoje')}"><input type="checkbox" data-hoje-visivel ${visivel ? 'checked' : ''} aria-label="${t('Mostrar {titulo} na Hoje', { titulo })}" /><span class="interruptor" aria-hidden="true"></span></label>
+      <span class="cfg-texto hoje-cfg-nome"><span class="cfg-titulo">${titulo}</span><span class="small-muted">${visivel ? escapeHtml(c.origem) : t('Escondido — não aparece na Hoje')}</span></span>
+      <span class="hoje-segmentos" role="group" aria-label="${t('Posição de {titulo}', { titulo })}">${posicao}</span>
+      <span class="hoje-cfg-ordem" role="group" aria-label="${t('Ordem de {titulo}', { titulo })}">${botaoDaHoje('subir', '↑', t('Mover {titulo} para cima', { titulo }), i === 0 ? ' disabled' : '')}${botaoDaHoje('descer', '↓', t('Mover {titulo} para baixo', { titulo }), i === lista.length - 1 ? ' disabled' : '')}</span>
       <span class="hoje-cfg-opcoes">${popoverDeOpcoes(c, l, 'cfg', catalogo.indexOf(c), true)}</span>
     </div>`;
   }).join('');
   return `<section class="cfg-grupo">
-    <header class="cfg-grupo-topo"><span class="cfg-texto"><span class="cfg-titulo">Tela Hoje</span><span class="small-muted">Escolha quais cartões aparecem, onde ficam e em que ordem. Também dá para arrumar direto na Hoje, em Personalizar.</span></span><button type="button" class="secondary cfg-pequeno" data-hoje-acao="restaurar">${icone('recarregar')} Restaurar padrão</button></header>
-    <div class="cfg-linha"><span class="cfg-texto"><span class="cfg-titulo">Colunas na Hoje</span><span class="small-muted">Quantas colunas os cartões dividem.</span></span><span class="hoje-segmentos" role="group" aria-label="Colunas">${[1, 2, 3].map(n => `<button type="button" class="hoje-seg" data-hoje-acao="colunas" data-valor="${n}" aria-pressed="${n === l.colunas}" aria-label="${n} coluna${n > 1 ? 's' : ''}">${n}</button>`).join('')}</span></div>
+    <header class="cfg-grupo-topo"><span class="cfg-texto"><span class="cfg-titulo">${t('Tela Hoje')}</span><span class="small-muted">${t('Escolha quais cartões aparecem, onde ficam e em que ordem. Também dá para arrumar direto na Hoje, em Personalizar.')}</span></span><button type="button" class="secondary cfg-pequeno" data-hoje-acao="restaurar">${icone('recarregar')} ${t('Restaurar padrão')}</button></header>
+    <div class="cfg-linha"><span class="cfg-texto"><span class="cfg-titulo">${t('Colunas na Hoje')}</span><span class="small-muted">${t('Quantas colunas os cartões dividem.')}</span></span><span class="hoje-segmentos" role="group" aria-label="${t('Colunas')}">${[1, 2, 3].map(n => `<button type="button" class="hoje-seg" data-hoje-acao="colunas" data-valor="${n}" aria-pressed="${n === l.colunas}" aria-label="${n > 1 ? t('{n} colunas', { n }) : t('{n} coluna', { n })}">${n}</button>`).join('')}</span></div>
     ${linhas}
-    <p class="small-muted cfg-rodape">Guardado em <code>.kiro/hoje.json</code>, dentro do cofre.</p>
+    <p class="small-muted cfg-rodape">${t('Guardado em {arquivo}, dentro do cofre.', { arquivo: '<code>.kiro/hoje.json</code>' })}</p>
   </section>`;
 }
 
@@ -3459,7 +3459,7 @@ const pluginApi = {
     if (window.cadernoDesktop) return window.cadernoDesktop.removePluginSecret(id, nome);
     const r = await fetch(`/api/plugin-secrets/${encodeURIComponent(id)}`, { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: nome }) });
     const dados = await r.json();
-    if (!r.ok) throw new Error(dados.error || 'Não foi possível remover a chave.');
+    if (!r.ok) throw new Error(dados.error || t('Não foi possível remover a chave.'));
     return dados;
   },
 };
@@ -3474,7 +3474,7 @@ async function carregarPlugins() {
     planoDosPlugins = KiroPlugins.planoDeCarga(achados, escolhas, { versaoDoKiro: VERSAO });
   } catch (erro) {
     planoDosPlugins = { carregar: [], pendentes: [], problemas: [] };
-    return status('Não foi possível ler os plug-ins: ' + erro.message, true);
+    return status(t('Não foi possível ler os plug-ins: {erro}', { erro: erro.message }), true);
   }
   for (const { id, erro } of planoDosPlugins.problemas) problemasDosPlugins.set(id, erro);
   for (const alvo of planoDosPlugins.carregar) ativarPlugin(alvo);
@@ -3491,16 +3491,16 @@ function ativarPlugin({ id, manifesto, permissoes }) {
   catch (erro) { problemasDosPlugins.set(id, erro.message); return; }
   pluginsAtivos.set(id, estado);
   estado.worker.onmessage = ({ data }) => atenderPlugin(id, data || {});
-  estado.worker.onerror = evento => { evento.preventDefault?.(); falharPlugin(id, evento.message || 'Erro no código do plug-in.'); };
+  estado.worker.onerror = evento => { evento.preventDefault?.(); falharPlugin(id, evento.message || t('Erro no código do plug-in.')); };
   estado.worker.postMessage({ tipo: 'ativar', id, url: urlDoPlugin(id), permissoes: estado.permissoes });
-  estado.prazo = setTimeout(() => falharPlugin(id, 'O plug-in não respondeu na ativação.'), LIMITE_ATIVACAO);
+  estado.prazo = setTimeout(() => falharPlugin(id, t('O plug-in não respondeu na ativação.')), LIMITE_ATIVACAO);
 }
 
 function desativarPlugin(id) {
   const estado = pluginsAtivos.get(id);
   if (!estado) return;
   clearTimeout(estado.prazo);
-  for (const { rejeitar } of estado.pendentes.values()) rejeitar(new Error('O plug-in foi desativado.'));
+  for (const { rejeitar } of estado.pendentes.values()) rejeitar(new Error(t('O plug-in foi desativado.')));
   estado.pendentes.clear();
   estado.worker.terminate();
   pluginsAtivos.delete(id);
@@ -3519,7 +3519,7 @@ function falharPlugin(id, mensagem) {
   const nome = estado?.manifesto?.name || id;
   desativarPlugin(id);
   problemasDosPlugins.set(id, mensagem);
-  status(`Plug-in ${nome}: ${mensagem}`, true);
+  status(t('Plug-in {nome}: {erro}', { nome, erro: mensagem }), true);
   if (currentView === 'today' && loaded) render();
 }
 
@@ -3531,7 +3531,7 @@ async function atenderPlugin(id, data) {
     estado.comandos = (data.registros?.command || []).map(r => ({ id: String(r.id), label: String(r.label || r.id) }));
     estado.paineis = (data.registros?.panel || []).map(r => {
       const v = KiroPlugins.validarOpcoesDoPainel(r.options, r.width);
-      return { id: String(r.id), label: String(r.label || r.id), opcoes: v.ok ? v.opcoes : [], largura: v.ok ? v.largura : 'normal', erro: v.ok ? '' : `Opções do painel inválidas: ${v.erro}` };
+      return { id: String(r.id), label: String(r.label || r.id), opcoes: v.ok ? v.opcoes : [], largura: v.ok ? v.largura : 'normal', erro: v.ok ? '' : t('Opções do painel inválidas: {erro}', { erro: v.erro }) };
     });
     estado.eventos = (data.registros?.event || []).map(String);
     estado.desenhaBlocos = (data.registros?.block || []).includes('render');
@@ -3542,7 +3542,7 @@ async function atenderPlugin(id, data) {
     if (currentView === 'today' && loaded) render();
     return;
   }
-  if (data.tipo === 'erro') return falharPlugin(id, data.mensagem || 'Erro no plug-in.');
+  if (data.tipo === 'erro') return falharPlugin(id, data.mensagem || t('Erro no plug-in.'));
   // Resposta a uma ação que nós pedimos (clique num painel, comando).
   if (data.tipo === 'resposta') {
     const pendente = estado.pendentes.get(data.chamada);
@@ -3557,9 +3557,9 @@ async function atenderPlugin(id, data) {
 // Worker e moldura passam pela mesma porta: permissão conferida de novo, mesmos limites.
 async function responderChamada(id, estado, data, enviar) {
   try {
-    if (!KiroPlugins.podeChamar(estado.permissoes, data.metodo)) throw new Error(`Sem permissão para ${data.metodo}.`);
+    if (!KiroPlugins.podeChamar(estado.permissoes, data.metodo)) throw new Error(t('Sem permissão para {metodo}.', { metodo: data.metodo }));
     const valor = await executarMetodo(id, data.metodo, Array.isArray(data.args) ? data.args : []);
-    if (JSON.stringify(valor ?? null).length > LIMITE_MENSAGEM) throw new Error('A resposta passou de 2 MB.');
+    if (JSON.stringify(valor ?? null).length > LIMITE_MENSAGEM) throw new Error(t('A resposta passou de 2 MB.'));
     if (pluginsAtivos.get(id) === estado) enviar({ tipo: 'resposta', chamada: data.chamada, valor: valor ?? null });
   } catch (erro) {
     if (pluginsAtivos.get(id) === estado) enviar({ tipo: 'resposta', chamada: data.chamada, erro: erro.message });
@@ -3583,7 +3583,7 @@ function desenharNavDosPlugins() {
   if (!nav) return;
   const comPagina = [...pluginsAtivos].filter(([, e]) => e.manifesto?.page);
   nav.hidden = !comPagina.length;
-  nav.innerHTML = comPagina.length ? `<p class="nav-grupo">Plug-ins</p>${comPagina.map(([id, e]) =>
+  nav.innerHTML = comPagina.length ? `<p class="nav-grupo">${t('Plug-ins')}</p>${comPagina.map(([id, e]) =>
     `<button class="nav-item${currentView === `plugin:${id}` ? ' active' : ''}" data-view="plugin:${escapeHtml(id)}"><span class="rotulo-icone" data-icone="plugin"></span><span class="rotulo">${escapeHtml(e.manifesto.page.title)}</span></button>`).join('')}` : '';
   for (const b of nav.querySelectorAll('.nav-item')) b.onclick = () => { if (loaded) irPara(b.dataset.view); };
   desenharIconesFixos();
@@ -3591,7 +3591,7 @@ function desenharNavDosPlugins() {
 }
 function renderPaginaDoPlugin(id) {
   const estado = pluginsAtivos.get(id), page = estado?.manifesto?.page;
-  if (!page) return `<div class="empty">Este plug-in não está ativo.</div>`;
+  if (!page) return `<div class="empty">${t('Este plug-in não está ativo.')}</div>`;
   // Prefixo "pagina:" evita colidir com a chave de um painel ou bloco de mesmo nome.
   const chave = `${id}\npagina:`;
   dadosDasMolduras.set(chave, null);
@@ -3627,12 +3627,12 @@ function avisarTemaAsMolduras() {
 // Evento que estoura o prazo só é recusado: o plug-in continua ativo.
 function chamarPlugin(id, registro, dados) {
   const estado = pluginsAtivos.get(id);
-  if (!estado) return Promise.reject(new Error('Esse plug-in não está ativo.'));
+  if (!estado) return Promise.reject(new Error(t('Esse plug-in não está ativo.')));
   const chamada = estado.proxima++;
   return new Promise((resolver, rejeitar) => {
     const estourou = registro.tipo === 'event' || registro.tipo === 'block'
-      ? () => { estado.pendentes.delete(chamada); rejeitar(new Error(`O ${registro.tipo === 'block' ? 'bloco' : 'evento'} demorou demais para responder.`)); }
-      : () => falharPlugin(id, 'O plug-in demorou demais para responder.');
+      ? () => { estado.pendentes.delete(chamada); rejeitar(new Error(registro.tipo === 'block' ? t('O bloco demorou demais para responder.') : t('O evento demorou demais para responder.'))); }
+      : () => falharPlugin(id, t('O plug-in demorou demais para responder.'));
     const prazo = setTimeout(estourou, LIMITE_CHAMADA);
     estado.pendentes.set(chamada, { resolver, rejeitar, prazo });
     estado.worker.postMessage({ tipo: 'acao', chamada, registro, dados });
@@ -3687,7 +3687,7 @@ function entregarEvento(id, evento, dados, nivel) {
   estado.nivelDoEvento = estado.emEvento ? Math.max(estado.nivelDoEvento, nivel) : nivel;
   estado.emEvento++;
   chamarPlugin(id, { tipo: 'event', id: evento }, dados)
-    .catch(erro => avisoDePlugin(id, `evento ${evento}: ${erro.message}`, true))
+    .catch(erro => avisoDePlugin(id, t('evento {evento}: {erro}', { evento, erro: erro.message }), true))
     .finally(() => { estado.emEvento--; });
 }
 
@@ -3702,7 +3702,7 @@ async function entregarDia(id) {
     if (dados[CHAVE_DO_DIA] === hoje) return;
     // Marca antes de entregar: se o handler falhar, o dia não se repete a cada 5 s.
     await pluginApi.gravarDados(id, { ...dados, [CHAVE_DO_DIA]: hoje });
-  } catch (erro) { return avisoDePlugin(id, `evento day: ${erro.message}`, true); }
+  } catch (erro) { return avisoDePlugin(id, t('evento {evento}: {erro}', { evento: 'day', erro: erro.message }), true); }
   if (pluginsAtivos.get(id) === estado) entregarEvento(id, 'day', { date: hoje }, 1);
 }
 
@@ -3734,7 +3734,7 @@ const seletorDoPainel = (id, painel) => `.plugin-painel[data-plugin="${CSS.escap
 // Um card por painel registrado; o cabeçalho traz o rótulo do painel e o nome do plug-in.
 function cartaoDoPainel(id, painel) {
   const nome = escapeHtml(pluginsAtivos.get(id)?.manifesto?.name || id);
-  return `<section class="card plugin-painel" data-plugin="${escapeHtml(id)}" data-painel="${escapeHtml(painel.id)}"><div class="card-head"><h2>${escapeHtml(painel.label)}</h2><span class="plugin-fonte">${nome}</span></div><div class="plugin-conteudo">${conteudoDosPaineis.get(chaveDoPainel(id, painel.id)) || '<div class="empty">Carregando…</div>'}</div></section>`;
+  return `<section class="card plugin-painel" data-plugin="${escapeHtml(id)}" data-painel="${escapeHtml(painel.id)}"><div class="card-head"><h2>${escapeHtml(painel.label)}</h2><span class="plugin-fonte">${nome}</span></div><div class="plugin-conteudo">${conteudoDosPaineis.get(chaveDoPainel(id, painel.id)) || `<div class="empty">${t('Carregando…')}</div>`}</div></section>`;
 }
 const painelDoPlugin = (id, painelId) => pluginsAtivos.get(id)?.paineis?.find(p => p.id === painelId);
 const opcoesDoPainel = (id, painel) => KiroHoje.opcoesEfetivas(hojeLayout || { cartoes: [] }, `plugin:${id}:${painel.id}`, painel.opcoes);
@@ -3776,19 +3776,19 @@ function acaoDoPainel(id, painel, acao, values) {
   if (!pluginsAtivos.has(id)) return;
   if (acao.startsWith('open:')) {
     const nota = getNote(acao.slice(5));
-    return nota ? abrirNota(nota) : status('A nota indicada pelo plug-in não existe mais.', true);
+    return nota ? abrirNota(nota) : status(t('A nota indicada pelo plug-in não existe mais.'), true);
   }
   const registro = painelDoPlugin(id, painel);
   if (!registro || registro.erro) return;
   chamarPlugin(id, { tipo: 'panel', id: painel }, { action: acao, values: values || {}, options: opcoesDoPainel(id, registro) })
     .then(dados => { if (dados) guardarPainel(id, painel, dados); })
-    .catch(erro => status(`Plug-in ${pluginsAtivos.get(id)?.manifesto?.name || id}: ${erro.message}`, true));
+    .catch(erro => status(t('Plug-in {nome}: {erro}', { nome: pluginsAtivos.get(id)?.manifesto?.name || id, erro: erro.message }), true));
 }
 
 function rodarComandoDoPlugin(id, comando) {
   chamarPlugin(id, { tipo: 'command', id: comando }, {})
     .then(() => desenharPaineisDosPlugins())   // o comando pode ter mudado o que o painel mostra
-    .catch(erro => status(`Plug-in ${pluginsAtivos.get(id)?.manifesto?.name || id}: ${erro.message}`, true));
+    .catch(erro => status(t('Plug-in {nome}: {erro}', { nome: pluginsAtivos.get(id)?.manifesto?.name || id, erro: erro.message }), true));
 }
 
 // ---- Blocos ```kiro:<id> nas notas ----
@@ -3805,12 +3805,12 @@ const avisoDeBloco = texto => `<div class="empty plugin-bloco-aviso">${escapeHtm
 
 function conteudoDoBloco(id, fonte) {
   const estado = pluginsAtivos.get(id);
-  if (!estado) return avisoDeBloco(`Plug-in ${id} não está ativo.`);
+  if (!estado) return avisoDeBloco(t('Plug-in {id} não está ativo.', { id }));
   const guardado = conteudoDosBlocos.get(`${id}\n${fonte}`);
   if (guardado !== undefined) return guardado;
   // Sem `pronto` ainda não se sabe se ele desenha blocos.
-  if (estado.desenhaBlocos === false) return avisoDeBloco(`Plug-in ${estado.manifesto?.name || id} não desenha blocos.`);
-  return avisoDeBloco('Carregando…');
+  if (estado.desenhaBlocos === false) return avisoDeBloco(t('Plug-in {nome} não desenha blocos.', { nome: estado.manifesto?.name || id }));
+  return avisoDeBloco(t('Carregando…'));
 }
 
 let blocosAgendados = false;
@@ -3851,7 +3851,7 @@ function desenharBlocosDosPlugins() {
       for (const outro of document.querySelectorAll('.plugin-bloco[data-plugin]')) {
         if (outro.dataset.plugin !== id || outro.dataset.fonte !== fonte) continue;
         const caixa = outro.querySelector(':scope > .plugin-bloco-conteudo');
-        if (caixa) caixa.innerHTML = avisoDeBloco(`Erro no bloco: ${erro.message}`);
+        if (caixa) caixa.innerHTML = avisoDeBloco(t('Erro no bloco: {erro}', { erro: erro.message }));
       }
     });
   }
@@ -3868,7 +3868,7 @@ function htmlDoBloco(valor, id, chave) {
   }
   if (valor && typeof valor.html === 'string') return KiroPlugins.higienizarHtml(valor.html);
   if (valor && typeof valor.type === 'string') return KiroPlugins.painelParaHtml(valor);
-  return avisoDeBloco('O plug-in não devolveu nada para desenhar.');
+  return avisoDeBloco(t('O plug-in não devolveu nada para desenhar.'));
 }
 
 const itemDePainel = alvo => alvo?.closest('[data-acao][data-plugin]');
@@ -3904,17 +3904,17 @@ const pastaPorNome = valor => {
   const alvo = String(valor || '').trim();
   if (!alvo) return '';
   const p = state.folders.find(f => f.id === alvo || Kiro.pathKey(f.path || f.title) === Kiro.pathKey(alvo) || Kiro.pathKey(f.title) === Kiro.pathKey(alvo));
-  if (!p) throw new Error(`Pasta não encontrada: ${alvo}.`);
+  if (!p) throw new Error(t('Pasta não encontrada: {alvo}.', { alvo }));
   return p.id;
 };
 const notaParaPlugin = n => ({ id: n.id, title: n.title || '', body: n.body || '', tags: [...(n.tags || [])], folder: caminhoDaPasta(n.folderId), createdAt: n.createdAt || null, updatedAt: n.updatedAt || null });
 const tarefaParaPlugin = t => ({ id: t.id, title: t.title, due: t.due, priority: t.priority, done: !!t.done, noteId: t.noteId || '' });
 const etiquetas = v => Array.isArray(v) ? v.map(t => String(t).trim()).filter(Boolean).slice(0, 30) : [];
-const notaDoPlugin = id => { const n = getNote(String(id || '')); if (!n) throw new Error('Nota não encontrada.'); return n; };
+const notaDoPlugin = id => { const n = getNote(String(id || '')); if (!n) throw new Error(t('Nota não encontrada.')); return n; };
 // Gravar pelo mesmo caminho da interface: se o cofre recusar, o plug-in recebe o motivo.
 async function gravar(origem) {
-  if (busy || failed || !loaded) throw new Error('O cofre está ocupado ou não pôde ser lido.');
-  if (!await save(origem)) throw new Error('Não foi possível gravar no cofre.');
+  if (busy || failed || !loaded) throw new Error(t('O cofre está ocupado ou não pôde ser lido.'));
+  if (!await save(origem)) throw new Error(t('Não foi possível gravar no cofre.'));
 }
 
 // kiro.fetch: a página só repassa. Quem valida, injeta a chave e faz a chamada é o
@@ -3962,7 +3962,7 @@ async function executarMetodo(id, metodo, args) {
     }
     case 'notes.create': {
       const { title, folder, body, tags } = a || {};
-      if (!String(title || '').trim()) throw new Error('A nota precisa de um título.');
+      if (!String(title || '').trim()) throw new Error(t('A nota precisa de um título.'));
       const nota = { id: uid(), title: String(title).trim().slice(0, 200), body: String(body || ''), links: [], tags: etiquetas(tags), folderId: pastaPorNome(folder), createdAt: Date.now(), updatedAt: Date.now() };
       state.notes = [nota, ...state.notes];
       await gravar(id);
@@ -3973,13 +3973,13 @@ async function executarMetodo(id, metodo, args) {
       // A nota está aberta com alterações não salvas: escrever por cima descartaria esse texto em
       // silêncio (a mesma nota "voltaria" ao que estava salvo). Recusa; quem chamou tenta de novo
       // depois que a pessoa salvar.
-      if (editing?.id === nota.id && editorDirty) throw new Error('A nota está aberta com alterações não salvas; tente de novo depois de salvar.');
+      if (editing?.id === nota.id && editorDirty) throw new Error(t('A nota está aberta com alterações não salvas; tente de novo depois de salvar.'));
       const nova = { ...nota, updatedAt: Date.now() };
       if (campos.title !== undefined) nova.title = String(campos.title).trim().slice(0, 200);
       if (campos.body !== undefined) nova.body = String(campos.body);
       if (campos.tags !== undefined) nova.tags = etiquetas(campos.tags);
       if (campos.folder !== undefined) nova.folderId = pastaPorNome(campos.folder);
-      if (!nova.title) throw new Error('A nota precisa de um título.');
+      if (!nova.title) throw new Error(t('A nota precisa de um título.'));
       state.notes = state.notes.map(n => n.id === nota.id ? nova : n);
       // A nota aberta no editor acompanha a mudança, como no arrastar da árvore.
       if (editing?.id === nota.id) { editing = { ...nova, tags: [...nova.tags], links: [...(nova.links || [])] }; editorDirty = false; }
@@ -3988,7 +3988,7 @@ async function executarMetodo(id, metodo, args) {
     }
     case 'notes.trash': {
       const nota = notaDoPlugin(a);
-      if (editing?.id === nota.id && editorDirty) throw new Error('A nota está aberta com alterações não salvas; tente de novo depois de salvar.');
+      if (editing?.id === nota.id && editorDirty) throw new Error(t('A nota está aberta com alterações não salvas; tente de novo depois de salvar.'));
       state.notes = state.notes.filter(n => n.id !== nota.id);
       if (editing?.id === nota.id) { editing = null; editorDirty = false; currentView = 'today'; }
       await gravar(id);
@@ -4004,7 +4004,7 @@ async function executarMetodo(id, metodo, args) {
     case 'tasks.list': return state.tasks.map(tarefaParaPlugin);
     case 'tasks.create': {
       const { title, due, priority, noteId } = a || {};
-      if (!String(title || '').trim()) throw new Error('A tarefa precisa de um título.');
+      if (!String(title || '').trim()) throw new Error(t('A tarefa precisa de um título.'));
       const tarefa = { id: uid(), title: String(title).trim().slice(0, 200), due: /^\d{4}-\d{2}-\d{2}$/.test(due || '') ? due : today(), priority: ['Baixa', 'Média', 'Alta'].includes(priority) ? priority : 'Média', noteId: noteId && getNote(noteId) ? noteId : '', done: false };
       state.tasks = [tarefa, ...state.tasks];
       await gravar(id);
@@ -4012,13 +4012,13 @@ async function executarMetodo(id, metodo, args) {
     }
     case 'tasks.update': {
       const tarefa = state.tasks.find(t => t.id === String(a || ''));
-      if (!tarefa) throw new Error('Tarefa não encontrada.');
+      if (!tarefa) throw new Error(t('Tarefa não encontrada.'));
       const campos = b || {}, nova = { ...tarefa };
       if (campos.title !== undefined) nova.title = String(campos.title).trim().slice(0, 200);
       if (campos.due !== undefined && /^\d{4}-\d{2}-\d{2}$/.test(campos.due)) nova.due = campos.due;
       if (campos.priority !== undefined && ['Baixa', 'Média', 'Alta'].includes(campos.priority)) nova.priority = campos.priority;
       if (campos.done !== undefined) nova.done = !!campos.done;
-      if (!nova.title) throw new Error('A tarefa precisa de um título.');
+      if (!nova.title) throw new Error(t('A tarefa precisa de um título.'));
       state.tasks = state.tasks.map(t => t.id === tarefa.id ? nova : t);
       await gravar(id);
       return tarefaParaPlugin(nova);
@@ -4026,19 +4026,19 @@ async function executarMetodo(id, metodo, args) {
     case 'habits.list': return state.habits.map(h => ({ id: h.id, title: h.title, frequency: h.frequency, days: [...(state.habitLog[h.id] || [])] }));
     case 'habits.mark': {
       const habito = state.habits.find(h => h.id === String(a || ''));
-      if (!habito) throw new Error('Hábito não encontrado.');
+      if (!habito) throw new Error(t('Hábito não encontrado.'));
       const dia = /^\d{4}-\d{2}-\d{2}$/.test(b || '') ? b : today();
-      if (dia > today()) throw new Error('Não dá para marcar um dia que ainda não chegou.');
+      if (dia > today()) throw new Error(t('Não dá para marcar um dia que ainda não chegou.'));
       // marcarHabito alterna; marcar de novo o que já está feito não deve desmarcar.
-      if (!(state.habitLog[habito.id] || []).includes(dia)) { if (busy || failed || !loaded) throw new Error('O cofre está ocupado.'); marcarHabito(habito.id, dia); }
+      if (!(state.habitLog[habito.id] || []).includes(dia)) { if (busy || failed || !loaded) throw new Error(t('O cofre está ocupado.')); marcarHabito(habito.id, dia); }
       return true;
     }
     case 'folders.create': {
       const { title, parent } = a || {};
       const nome = String(title || '').trim();
-      if (!Kiro.validFolderName(nome)) throw new Error('Nome de pasta inválido.');
+      if (!Kiro.validFolderName(nome)) throw new Error(t('Nome de pasta inválido.'));
       const parentId = pastaPorNome(parent);
-      if (state.folders.some(f => (f.parentId || '') === parentId && Kiro.pathKey(f.title) === Kiro.pathKey(nome))) throw new Error('Já existe uma pasta com esse nome neste local.');
+      if (state.folders.some(f => (f.parentId || '') === parentId && Kiro.pathKey(f.title) === Kiro.pathKey(nome))) throw new Error(t('Já existe uma pasta com esse nome neste local.'));
       const pasta = { id: uid(), title: nome, parentId, description: '', color: Kiro.folderColor('') };
       state.folders = [pasta, ...state.folders];
       await gravar(id);
@@ -4050,7 +4050,7 @@ async function executarMetodo(id, metodo, args) {
     case 'storage.get': { const { [CHAVE_DO_DIA]: _dia, [CHAVE_DAS_CONFIGURACOES]: _cfg, ...dados } = await pluginApi.dados(id); return a === undefined ? dados : (dados[String(a)] ?? null); }
     case 'settings.get': { const valores = await configuracoesDoPlugin(id); return a === undefined ? valores : (valores[String(a)] ?? null); }
     case 'storage.set': {
-      if (String(a) === CHAVE_DO_DIA || String(a) === CHAVE_DAS_CONFIGURACOES) throw new Error('Essa chave é reservada pelo Kiro.');
+      if (String(a) === CHAVE_DO_DIA || String(a) === CHAVE_DAS_CONFIGURACOES) throw new Error(t('Essa chave é reservada pelo Kiro.'));
       const dados = await pluginApi.dados(id);
       if (b === undefined || b === null) delete dados[String(a)]; else dados[String(a)] = b;
       await pluginApi.gravarDados(id, dados);
@@ -4058,7 +4058,7 @@ async function executarMetodo(id, metodo, args) {
     }
     case 'notify': { avisoDePlugin(id, String(a ?? ''), !!(b && b.error)); return true; }
     case 'fetch': return fetchDoPlugin(id, a, b);
-    default: throw new Error(`Método desconhecido: ${metodo}.`);
+    default: throw new Error(t('Método desconhecido: {metodo}.', { metodo }));
   }
 }
 
@@ -4066,7 +4066,7 @@ async function executarMetodo(id, metodo, args) {
 // Preferência de tela, guardada por instalação (localStorage), não no cofre:
 // é ajuste de máquina, não conteúdo que deva viajar junto com as notas.
 const { APARENCIA_PADRAO, TEMAS, SKINS, contraste, corValida } = Kiro;
-const ACENTOS = [['#C77DFF','Roxo'],['#4EA8DE','Azul'],['#4CC9F0','Ciano'],['#57CC99','Verde'],['#FFD166','Amarelo'],['#FF9F43','Laranja'],['#FF7EB6','Rosa'],['#FF6B6B','Vermelho']];
+const ACENTOS = [['#C77DFF',frase('Roxo')],['#4EA8DE',frase('Azul')],['#4CC9F0',frase('Ciano')],['#57CC99',frase('Verde')],['#FFD166',frase('Amarelo')],['#FF9F43',frase('Laranja')],['#FF7EB6',frase('Rosa')],['#FF6B6B',frase('Vermelho')]];
 function lerAparencia() {
   try { return Kiro.aparenciaValida(JSON.parse(lerPreferencia('aparencia') || '{}')); } catch { return Kiro.aparenciaValida({}); }
 }
