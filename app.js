@@ -9,13 +9,13 @@ async function loadFromVault() { return window.cadernoDesktop ? window.cadernoDe
 async function save(origem = null) {
   if (busy || failed || !loaded) return false;
   const snapshot = structuredClone(state);
-  setBusy(true); status('Salvando…');
+  setBusy(true); status(t('Salvando…'));
   try {
     Kiro.validateState(snapshot);
     state = window.cadernoDesktop ? await window.cadernoDesktop.saveState(snapshot) : await api('state', snapshot);
-    status('Salvo no cofre'); render(); eventosDoCofre(origem); return true;
+    status(t('Salvo no cofre')); render(); eventosDoCofre(origem); return true;
   } catch (error) {
-    failed = true; status(error.message + ' Suas alterações continuam nesta janela. Exporte-as antes de recarregar.', true); return false;
+    failed = true; status(error.message + ' ' + t('Suas alterações continuam nesta janela. Exporte-as antes de recarregar.'), true); return false;
   } finally { setBusy(false); }
 }
 function escapeHtml(value = '') { return String(value).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
@@ -29,8 +29,8 @@ function atualizarSeletorDeCofre() {
   const nome = 'Kiro';   // o nome da pasta do cofre aparece na dica, junto do caminho
   const notas = state.notes.length, pastas = state.folders.length;
   document.querySelector('#cofre-seletor-nome').textContent = nome;
-  botao.dataset.dica = `${state.vaultPath}\n\n${notas} nota${notas === 1 ? '' : 's'}, ${pastas} pasta${pastas === 1 ? '' : 's'}`;
-  botao.setAttribute('aria-label', `Cofre ${nome}: ${window.cadernoDesktop ? 'trocar de cofre' : 'ver nas configurações'}`);
+  botao.dataset.dica = `${state.vaultPath}\n\n${notas === 1 ? t('1 nota') : t('{n} notas', { n: notas })}, ${pastas === 1 ? t('1 pasta') : t('{n} pastas', { n: pastas })}`;
+  botao.setAttribute('aria-label', t('Cofre {nome}: {acao}', { nome, acao: window.cadernoDesktop ? t('trocar de cofre') : t('ver nas configurações') }));
 }
 function getNote(id) { return state.notes.find(n => n.id === id); }
 function getFluxo(id) { return (state.fluxos || []).find(f => f.id === id); }
@@ -56,8 +56,8 @@ function render() {
   bindView(); updateCount();
 }
 function head(eyebrow, title, description, action="") { return `<header class="page-head"><div><p class="eyebrow">${eyebrow}</p><h1>${title}</h1><p class="subhead">${description}</p></div>${action}</header>`; }
-function check(done, action, id) { return `<button class="check ${done ? "done" : ""}" aria-label="Marcar como ${done ? "não concluído" : "concluído"}" data-action="${action}" data-id="${id}"></button>`; }
-function taskRow(task) { return `<div class="task-item">${check(task.done,"toggle-task",task.id)}<div class="task-title">${escapeHtml(task.title)}<div class="task-info">${dateLabel(task.due)}${task.noteId && getNote(task.noteId) ? ` · ${linkDaNota(getNote(task.noteId))}` : ""}</div></div>${task.priority === "Alta" ? '<span class="priority">Alta</span>' : ""}<div class="task-actions"><button class="icon-button" data-action="edit-task" data-id="${task.id}" title="Editar">${icone('renomear')}</button><button class="icon-button" data-action="delete-task" data-id="${task.id}" title="Excluir">${icone('lixeira')}</button></div></div>`; }
+function check(done, action, id) { return `<button class="check ${done ? "done" : ""}" aria-label="${done ? t('Marcar como não concluído') : t('Marcar como concluído')}" data-action="${action}" data-id="${id}"></button>`; }
+function taskRow(task) { return `<div class="task-item">${check(task.done,"toggle-task",task.id)}<div class="task-title">${escapeHtml(task.title)}<div class="task-info">${dateLabel(task.due)}${task.noteId && getNote(task.noteId) ? ` · ${linkDaNota(getNote(task.noteId))}` : ""}</div></div>${task.priority === "Alta" ? `<span class="priority">${t('Alta')}</span>` : ""}<div class="task-actions"><button class="icon-button" data-action="edit-task" data-id="${task.id}" title="${t('Editar')}">${icone('renomear')}</button><button class="icon-button" data-action="delete-task" data-id="${task.id}" title="${t('Excluir')}">${icone('lixeira')}</button></div></div>`; }
 function renderToday() {
   const catalogo = catalogoDaHoje(), l = layoutDaHoje(catalogo);
   const porId = new Map(catalogo.map(c => [c.id, c]));
@@ -72,23 +72,24 @@ function renderToday() {
   const faixas = lista.map((f, idx) => f.tipo === 'inteira'
     ? `<div class="hoje-faixa-inteira">${desenhar(f.id)}</div>`
     : `<div class="today-grid hoje-colunas" style="--hoje-colunas:${l.colunas}" data-hoje-fim="${escapeHtml(lista.slice(idx + 1).find(x => x.tipo === 'inteira')?.id || '')}">${f.colunas.map((ids, i) => `<div class="stack" data-hoje-coluna="${i}">${ids.map(desenhar).join('')}</div>`).join('')}</div>`).join('');
-  const botao = `<button type="button" class="secondary" data-hoje-acao="personalizar" aria-pressed="${personalizandoHoje}">${personalizandoHoje ? 'Concluir' : `${icone('realce')} Personalizar`}</button>`;
+  const botao = `<button type="button" class="secondary" data-hoje-acao="personalizar" aria-pressed="${personalizandoHoje}">${personalizandoHoje ? t('Concluir') : `${icone('realce')} ${t('Personalizar')}`}</button>`;
   return `${head(formatDate(today()), saudacao(), '', botao)}<div class="hoje-faixas${personalizandoHoje ? ' personalizando' : ''}">${faixas}</div>${personalizandoHoje ? rodapeDaPersonalizacao(catalogo, l) : ''}`;
 }
 // Cartões do Kiro e dos plug-ins num catálogo só: o layout decide onde e se aparecem.
-const LIMITE_DA_LISTA = { key: 'limite', type: 'number', label: 'Quantos mostrar (0 = todos)', default: 0, min: 0, max: 50 };
+const LIMITE_DA_LISTA = { key: 'limite', type: 'number', label: frase('Quantos mostrar (0 = todos)'), default: 0, min: 0, max: 50 };
 const cortar = (lista, limite) => limite > 0 ? lista.slice(0, limite) : lista;
 function catalogoDaHoje() {
+  const limite = { ...LIMITE_DA_LISTA, label: t(LIMITE_DA_LISTA.label) };
   const nativos = [
-    { id: 'nativo:frase', titulo: 'Frase do dia', coluna: 0, largura: 'inteira', opcoes: [],
+    { id: 'nativo:frase', titulo: t('Frase do dia'), coluna: 0, largura: 'inteira', opcoes: [],
       render: () => `<section class="card cartao-frase"><p class="frase-do-dia">${escapeHtml(fraseDoDia())}</p></section>` },
-    { id: 'nativo:habitos', titulo: 'Hábitos', coluna: 0, opcoes: [{ key: 'mostrarSemana', type: 'boolean', label: 'Mostrar a semana', default: true }],
+    { id: 'nativo:habitos', titulo: t('Hábitos'), coluna: 0, opcoes: [{ key: 'mostrarSemana', type: 'boolean', label: t('Mostrar a semana'), default: true }],
       render: o => cardHabitos(o) },
-    { id: 'nativo:agora', titulo: 'Para fazer agora', coluna: 0, opcoes: [LIMITE_DA_LISTA], render: o => cardAgora(o) },
-    { id: 'nativo:continuar', titulo: 'Continuar de onde parei', coluna: 1, opcoes: [],
+    { id: 'nativo:agora', titulo: t('Para fazer agora'), coluna: 0, opcoes: [limite], render: o => cardAgora(o) },
+    { id: 'nativo:continuar', titulo: t('Continuar de onde parei'), coluna: 1, opcoes: [],
       render: () => cardContinuar([...state.notes].sort((a, b) => b.updatedAt - a.updatedAt)[0]) },
-    { id: 'nativo:caixa', titulo: 'Caixa de entrada', coluna: 1, opcoes: [LIMITE_DA_LISTA], render: o => cardCaixaDeEntrada(o) },
-    { id: 'nativo:revisar', titulo: 'Para revisar', coluna: 1, opcoes: [LIMITE_DA_LISTA], render: o => cardParaRevisar(o) },
+    { id: 'nativo:caixa', titulo: t('Caixa de entrada'), coluna: 1, opcoes: [limite], render: o => cardCaixaDeEntrada(o) },
+    { id: 'nativo:revisar', titulo: t('Para revisar'), coluna: 1, opcoes: [limite], render: o => cardParaRevisar(o) },
   ].map(c => ({ largura: 'normal', origem: 'Kiro', ...c }));
   const dosPlugins = [];
   for (const [id, estado] of pluginsAtivos) for (const painel of estado.paineis || []) dosPlugins.push({
@@ -107,54 +108,56 @@ function layoutDaHoje(catalogo = catalogoDaHoje()) {
 const idsVisiveisDaHoje = (l, catalogo) => new Set(catalogo.map(c => c.id).filter(id => !l.ocultos.includes(id)));
 function cardAgora({ limite }) {
   const urgent = state.tasks.filter(t => !t.done && t.due <= today());
-  return `<section class="card"><div class="card-head"><h2>Para fazer agora</h2><a data-go="tasks">Ver tarefas</a></div>${cortar(urgent, limite).map(taskRow).join("") || '<div class="empty">Nada urgente para hoje.</div>'}</section>`;
+  return `<section class="card"><div class="card-head"><h2>${t('Para fazer agora')}</h2><a data-go="tasks">${t('Ver tarefas')}</a></div>${cortar(urgent, limite).map(taskRow).join("") || `<div class="empty">${t('Nada urgente para hoje.')}</div>`}</section>`;
 }
 // Frase do dia no lugar do "Bom dia". Muda à meia-noite e não repete a de ontem:
 // o passo 7 percorre as 20 frases antes de voltar à primeira.
 const FRASES = [
-  'Ara ara… não seja vagabundo, vamos trabalhar porque você é pobre.',
-  'Ara ara~ o boleto não se paga sozinho, sabia?',
-  'Levanta, guerreiro. O sofá não vai te pagar salário.',
-  'Seus sonhos ligaram. Disseram que você está atrasado.',
-  'Menos scroll, mais progresso.',
-  'Ara ara… procrastinando de novo? Que decepção~',
-  'O café já fez a parte dele. Agora é com você.',
-  'Nem o Goku ficou forte deitado.',
-  'Bora, protagonista. O arco de treinamento começa agora.',
-  'Sua conta bancária pediu pra eu te lembrar: vai trabalhar.',
-  'Disciplina é fazer mesmo sem vontade. Tipo agora.',
-  'Ara ara~ quem não anota esquece. Quem esquece repete.',
-  'Hoje não é dia de desistir. Amanhã também não.',
-  'Senpai não vai te notar se as tarefas não estiverem feitas.',
-  'Pobre de ideias você não é. De dinheiro, ainda. Bora mudar isso.',
-  'Um hábito por vez, uma nota por vez, um boleto por vez.',
-  'Menos "amanhã eu faço", mais "feito".',
-  'O você do futuro está contando com você. Não passe vergonha.',
-  'Ara ara… esse cérebro não vai se organizar sozinho.',
-  'Trabalhe em silêncio. Deixe o saldo fazer barulho.',
+  frase('Ara ara… não seja vagabundo, vamos trabalhar porque você é pobre.'),
+  frase('Ara ara~ o boleto não se paga sozinho, sabia?'),
+  frase('Levanta, guerreiro. O sofá não vai te pagar salário.'),
+  frase('Seus sonhos ligaram. Disseram que você está atrasado.'),
+  frase('Menos scroll, mais progresso.'),
+  frase('Ara ara… procrastinando de novo? Que decepção~'),
+  frase('O café já fez a parte dele. Agora é com você.'),
+  frase('Nem o Goku ficou forte deitado.'),
+  frase('Bora, protagonista. O arco de treinamento começa agora.'),
+  frase('Sua conta bancária pediu pra eu te lembrar: vai trabalhar.'),
+  frase('Disciplina é fazer mesmo sem vontade. Tipo agora.'),
+  frase('Ara ara~ quem não anota esquece. Quem esquece repete.'),
+  frase('Hoje não é dia de desistir. Amanhã também não.'),
+  frase('Senpai não vai te notar se as tarefas não estiverem feitas.'),
+  frase('Pobre de ideias você não é. De dinheiro, ainda. Bora mudar isso.'),
+  frase('Um hábito por vez, uma nota por vez, um boleto por vez.'),
+  frase('Menos "amanhã eu faço", mais "feito".'),
+  frase('O você do futuro está contando com você. Não passe vergonha.'),
+  frase('Ara ara… esse cérebro não vai se organizar sozinho.'),
+  frase('Trabalhe em silêncio. Deixe o saldo fazer barulho.'),
 ];
 function fraseDoDia(dia = today()) {
   const [a, m, d] = dia.split('-').map(Number);
-  return FRASES[(Math.floor(Date.UTC(a, m - 1, d) / 864e5) * 7) % FRASES.length];
+  return t(FRASES[(Math.floor(Date.UTC(a, m - 1, d) / 864e5) * 7) % FRASES.length]);
 }
-const saudacao = (hora = new Date().getHours()) => hora < 5 ? 'Boa madrugada' : hora < 12 ? 'Bom dia' : hora < 18 ? 'Boa tarde' : 'Boa noite';
+const saudacao = (hora = new Date().getHours()) => hora < 5 ? t('Boa madrugada') : hora < 12 ? t('Bom dia') : hora < 18 ? t('Boa tarde') : t('Boa noite');
 // Última nota editada, com o fim do texto: "Continuar" abre a nota já escrevendo no final.
 function cardContinuar(nota) {
   if (!nota) return '';
   const ultimo = textoPlano(nota.body.trim().split(/\n\s*\n/).filter(p => textoPlano(p)).pop() || '');
   const trecho = ultimo === textoPlano(nota.title || '') ? '' : ultimo;
   const pasta = state.folders.find(f => f.id === nota.folderId);
-  return `<section class="card continuar"><div class="card-head"><h2>Continuar de onde parei</h2><span class="continuar-quando">editada ${dateLabel(Kiro.localDate(new Date(nota.updatedAt))).toLowerCase()}</span></div><button type="button" class="continuar-nota" data-extra="continuar" data-id="${nota.id}"><span class="continuar-titulo">${pasta ? `<span class="pasta-chip"${pasta.color ? ` data-cor-pasta="${pasta.color}"` : ''}>${icone('pastas')}</span>` : icone('nota')} ${escapeHtml(nota.title || 'Sem título')}</span>${trecho ? `<span class="continuar-trecho">${trecho.length > 180 ? '…' : ''}${escapeHtml(trecho.slice(-180))}</span>` : ''}<span class="continuar-acao">Continuar escrevendo ${icone('direita')}</span></button></section>`;
+  return `<section class="card continuar"><div class="card-head"><h2>${t('Continuar de onde parei')}</h2><span class="continuar-quando">${t('editada {quando}', { quando: dateLabel(Kiro.localDate(new Date(nota.updatedAt))).toLowerCase() })}</span></div><button type="button" class="continuar-nota" data-extra="continuar" data-id="${nota.id}"><span class="continuar-titulo">${pasta ? `<span class="pasta-chip"${pasta.color ? ` data-cor-pasta="${pasta.color}"` : ''}>${icone('pastas')}</span>` : icone('nota')} ${escapeHtml(nota.title || t('Sem título'))}</span>${trecho ? `<span class="continuar-trecho">${trecho.length > 180 ? '…' : ''}${escapeHtml(trecho.slice(-180))}</span>` : ''}<span class="continuar-acao">${t('Continuar escrevendo')} ${icone('direita')}</span></button></section>`;
 }
 // ---- Hábitos no Hoje: só os do dia, com a semana clicável e a sequência. ----
-const DIAS_LETRA = ['D','S','T','Q','Q','S','S'], DIAS_CURTO = ['dom','seg','ter','qua','qui','sex','sáb'];
+// Inicial do dia da semana (0 = domingo) no idioma atual: 7/jan/2024 foi um domingo.
+const letraDoDia = d => KiroIdiomas.formatarData(new Date(2024, 0, 7 + d, 12), { weekday: 'narrow' }).toUpperCase();
+const DIAS_CURTO = [frase('dom'), frase('seg'), frase('ter'), frase('qua'), frase('qui'), frase('sex'), frase('sáb')];
 const rotuloDoDia = dia => KiroIdiomas.formatarData(new Date(`${dia}T12:00`), { weekday:'long', day:'numeric', month:'short' });
 function rotuloFrequencia(f) {
-  if (f.type === 'weekly') return `${f.times}x por semana`;
-  if (f.type !== 'days') return 'Todo dia';
+  if (f.type === 'weekly') return t('{n}x por semana', { n: f.times });
+  if (f.type !== 'days') return t('Todo dia');
   const ordem = [...f.days].sort((a,b) => ((a+6)%7) - ((b+6)%7));
-  if (ordem.length === 7) return 'Todo dia';
-  return ordem.join() === '1,2,3,4,5' ? 'Dias úteis' : ordem.join() === '6,0' ? 'Fim de semana' : ordem.map(d => DIAS_CURTO[d]).join(', ');
+  if (ordem.length === 7) return t('Todo dia');
+  return ordem.join() === '1,2,3,4,5' ? t('Dias úteis') : ordem.join() === '6,0' ? t('Fim de semana') : ordem.map(d => t(DIAS_CURTO[d])).join(', ');
 }
 function cardHabitos({ mostrarSemana = true } = {}) {
   const hoje = today();
@@ -164,19 +167,19 @@ function cardHabitos({ mostrarSemana = true } = {}) {
   const linha = ({ h, s }) => {
     const semanal = h.frequency.type === 'weekly';
     const meta = [
-      semanal ? `${s.weekCount}/${h.frequency.times} na semana` : rotuloFrequencia(h.frequency),
-      s.streak ? `<span class="habito-sequencia">${icone('chama')} ${s.streak} ${semanal ? (s.streak === 1 ? 'semana' : 'semanas') : (s.streak === 1 ? 'dia' : 'dias')}</span>` : '',
+      semanal ? t('{feitos}/{meta} na semana', { feitos: s.weekCount, meta: h.frequency.times }) : rotuloFrequencia(h.frequency),
+      s.streak ? `<span class="habito-sequencia">${icone('chama')} ${s.streak} ${semanal ? (s.streak === 1 ? t('semana') : t('semanas')) : (s.streak === 1 ? t('dia') : t('dias'))}</span>` : '',
     ].filter(Boolean).join(' · ');
     // Semana fixa de segunda a domingo: as letras não mudam de lugar; dias que ainda não chegaram ficam apagados.
     const dias = Kiro.habitDays(h, state.habitLog[h.id] || [], domingo, 7).map(d => d.date > hoje
-      ? `<span class="habito-dia futuro" title="${rotuloDoDia(d.date)}">${DIAS_LETRA[new Date(`${d.date}T12:00`).getDay()]}</span>`
-      : `<button type="button" class="habito-dia${d.done ? ' feito' : ''}${d.due ? '' : ' livre'}${d.date === hoje ? ' hoje' : ''}" data-action="toggle-habit-day" data-id="${h.id}|${d.date}" title="${rotuloDoDia(d.date)}${d.done ? ' · feito' : ''}" aria-label="${rotuloDoDia(d.date)}: ${d.done ? 'feito' : 'não feito'}" aria-pressed="${d.done}">${DIAS_LETRA[new Date(`${d.date}T12:00`).getDay()]}</button>`).join('');
+      ? `<span class="habito-dia futuro" title="${rotuloDoDia(d.date)}">${letraDoDia(new Date(`${d.date}T12:00`).getDay())}</span>`
+      : `<button type="button" class="habito-dia${d.done ? ' feito' : ''}${d.due ? '' : ' livre'}${d.date === hoje ? ' hoje' : ''}" data-action="toggle-habit-day" data-id="${h.id}|${d.date}" title="${rotuloDoDia(d.date)}${d.done ? ` · ${t('feito')}` : ''}" aria-label="${rotuloDoDia(d.date)}: ${d.done ? t('feito') : t('não feito')}" aria-pressed="${d.done}">${letraDoDia(new Date(`${d.date}T12:00`).getDay())}</button>`).join('');
     return `<div class="routine-item habito" data-habito="${h.id}">${check(s.doneToday, 'toggle-habit', h.id)}<div class="habito-texto"><span class="routine-title">${escapeHtml(h.title)}</span><span class="habito-meta">${meta}</span></div>${mostrarSemana ? `<div class="habito-semana">${dias}</div>` : ''}</div>`;
   };
   const vazio = state.habits.length
-    ? '<div class="empty">Nenhum hábito para hoje.</div>'
-    : `<div class="empty">Crie um hábito para acompanhar sua sequência. ${extraButton('add-habit', 'Criar hábito')}</div>`;
-  return `<section class="card habitos"><div class="card-head"><h2>Hábitos</h2>${doDia.length ? `<span class="small-muted">${feitos}/${doDia.length}</span>` : ''}${extraButton('habit-stats', icone('grafico'), '', 'icon-button', 'Estatísticas dos hábitos')}${extraButton('add-habit', icone('mais'), '', 'icon-button', 'Novo hábito')}</div>${doDia.map(linha).join('') || vazio}</section>`;
+    ? `<div class="empty">${t('Nenhum hábito para hoje.')}</div>`
+    : `<div class="empty">${t('Crie um hábito para acompanhar sua sequência.')} ${extraButton('add-habit', t('Criar hábito'))}</div>`;
+  return `<section class="card habitos"><div class="card-head"><h2>${t('Hábitos')}</h2>${doDia.length ? `<span class="small-muted">${feitos}/${doDia.length}</span>` : ''}${extraButton('habit-stats', icone('grafico'), '', 'icon-button', t('Estatísticas dos hábitos'))}${extraButton('add-habit', icone('mais'), '', 'icon-button', t('Novo hábito'))}</div>${doDia.map(linha).join('') || vazio}</section>`;
 }
 function marcarHabito(id, dia = today()) {
   if (busy || failed || !loaded || dia > today() || !state.habits.some(h => h.id === id)) return;
@@ -190,13 +193,13 @@ function marcarHabito(id, dia = today()) {
 }
 function habitoModal(habito = { title: '', frequency: { type: 'daily' } }) {
   const f = habito.frequency, dias = f.type === 'days' ? f.days : [1, 3, 5];
-  modal(habito.id ? 'Editar hábito' : 'Novo hábito', `<form class="form" id="habito-form">
-    <div class="field"><label for="habito-titulo">Hábito</label><input id="habito-titulo" name="title" required maxlength="80" value="${escapeHtml(habito.title)}" placeholder="Ex.: Beber 2 litros de água" /></div>
-    <div class="field"><span class="rotulo-campo" id="freq-rotulo">Frequência</span><div class="segmentos" role="radiogroup" aria-labelledby="freq-rotulo">${[['daily','Todo dia'],['days','Dias da semana'],['weekly','Vezes por semana']].map(([v, r]) => `<label class="segmento"><input type="radio" name="tipo" value="${v}" ${f.type === v ? 'checked' : ''} /><span>${r}</span></label>`).join('')}</div></div>
-    <div class="field" id="freq-dias" ${f.type === 'days' ? '' : 'hidden'}><span class="rotulo-campo">Em quais dias</span><div class="dias-semana">${[1,2,3,4,5,6,0].map(d => `<label class="dia-chip" title="${DIAS_CURTO[d]}"><input type="checkbox" name="dias" value="${d}" ${dias.includes(d) ? 'checked' : ''} /><span>${DIAS_LETRA[d]}</span></label>`).join('')}</div></div>
-    <div class="field" id="freq-vezes" ${f.type === 'weekly' ? '' : 'hidden'}><label for="habito-vezes">Quantas vezes por semana</label><input id="habito-vezes" name="vezes" type="number" min="1" max="7" value="${f.type === 'weekly' ? f.times : 3}" /></div>
-    <p class="cfg-aviso" id="habito-erro" hidden>Escolha pelo menos um dia.</p>
-    <div class="form-actions">${habito.id ? '<button type="button" class="secondary perigo" id="habito-excluir">Excluir</button>' : ''}<button type="button" class="secondary" id="cancel">Cancelar</button><button class="primary">${habito.id ? 'Salvar' : 'Criar hábito'}</button></div>
+  modal(habito.id ? t('Editar hábito') : t('Novo hábito'), `<form class="form" id="habito-form">
+    <div class="field"><label for="habito-titulo">${t('Hábito')}</label><input id="habito-titulo" name="title" required maxlength="80" value="${escapeHtml(habito.title)}" placeholder="${t('Ex.: Beber 2 litros de água')}" /></div>
+    <div class="field"><span class="rotulo-campo" id="freq-rotulo">${t('Frequência')}</span><div class="segmentos" role="radiogroup" aria-labelledby="freq-rotulo">${[['daily',t('Todo dia')],['days',t('Dias da semana')],['weekly',t('Vezes por semana')]].map(([v, r]) => `<label class="segmento"><input type="radio" name="tipo" value="${v}" ${f.type === v ? 'checked' : ''} /><span>${r}</span></label>`).join('')}</div></div>
+    <div class="field" id="freq-dias" ${f.type === 'days' ? '' : 'hidden'}><span class="rotulo-campo">${t('Em quais dias')}</span><div class="dias-semana">${[1,2,3,4,5,6,0].map(d => `<label class="dia-chip" title="${t(DIAS_CURTO[d])}"><input type="checkbox" name="dias" value="${d}" ${dias.includes(d) ? 'checked' : ''} /><span>${letraDoDia(d)}</span></label>`).join('')}</div></div>
+    <div class="field" id="freq-vezes" ${f.type === 'weekly' ? '' : 'hidden'}><label for="habito-vezes">${t('Quantas vezes por semana')}</label><input id="habito-vezes" name="vezes" type="number" min="1" max="7" value="${f.type === 'weekly' ? f.times : 3}" /></div>
+    <p class="cfg-aviso" id="habito-erro" hidden>${t('Escolha pelo menos um dia.')}</p>
+    <div class="form-actions">${habito.id ? `<button type="button" class="secondary perigo" id="habito-excluir">${t('Excluir')}</button>` : ''}<button type="button" class="secondary" id="cancel">${t('Cancelar')}</button><button class="primary">${habito.id ? t('Salvar') : t('Criar hábito')}</button></div>
   </form>`);
   const form = $('#habito-form');
   form.querySelectorAll('[name="tipo"]').forEach(r => r.onchange = () => { $('#freq-dias').hidden = r.value !== 'days'; $('#freq-vezes').hidden = r.value !== 'weekly'; });
@@ -218,7 +221,8 @@ function excluirHabito(id) {
   const habito = state.habits.find(h => h.id === id);
   if (!habito || busy || failed || !loaded) return;
   const dias = (state.habitLog[id] || []).length;
-  modal('Excluir hábito', `<p class="confirmar-texto">Excluir <strong>${escapeHtml(habito.title)}</strong>${dias ? ` e ${dias === 1 ? 'o dia marcado' : `os ${dias} dias marcados`}` : ''}? Isso não pode ser desfeito.</p><div class="form-actions"><button type="button" class="secondary" id="cancel">Cancelar</button><button type="button" class="primary perigo-cheio" id="confirmar-exclusao">Excluir hábito</button></div>`);
+  const marcados = dias ? ' ' + (dias === 1 ? t('e o dia marcado') : t('e os {n} dias marcados', { n: dias })) : '';
+  modal(t('Excluir hábito'), `<p class="confirmar-texto">${t('Excluir {titulo}{marcados}? Isso não pode ser desfeito.', { titulo: `<strong>${escapeHtml(habito.title)}</strong>`, marcados })}</p><div class="form-actions"><button type="button" class="secondary" id="cancel">${t('Cancelar')}</button><button type="button" class="primary perigo-cheio" id="confirmar-exclusao">${t('Excluir hábito')}</button></div>`);
   $('#cancel').onclick = () => closeModal(true);
   $('#confirmar-exclusao').onclick = async () => {
     state.habits = state.habits.filter(h => h.id !== id);
@@ -233,34 +237,34 @@ function menuDoHabito(id) {
   const atual = () => state.habits.find(h => h.id === id);
   const feitoHoje = (state.habitLog[id] || []).includes(today());
   return [
-    { rotulo: feitoHoje ? 'Desmarcar hoje' : 'Marcar como feito hoje', icone: icone('lista-tarefas'), acao: () => marcarHabito(id) },
-    { rotulo: 'Editar hábito', icone: icone('renomear'), acao: () => atual() && habitoModal(atual()) },
-    { rotulo: 'Novo hábito', icone: icone('mais'), acao: () => habitoModal() },
-    { rotulo: 'Estatísticas', icone: icone('grafico'), acao: () => habitosModal() },
+    { rotulo: feitoHoje ? t('Desmarcar hoje') : t('Marcar como feito hoje'), icone: icone('lista-tarefas'), acao: () => marcarHabito(id) },
+    { rotulo: t('Editar hábito'), icone: icone('renomear'), acao: () => atual() && habitoModal(atual()) },
+    { rotulo: t('Novo hábito'), icone: icone('mais'), acao: () => habitoModal() },
+    { rotulo: t('Estatísticas'), icone: icone('grafico'), acao: () => habitosModal() },
     { separador: true },
-    { rotulo: 'Excluir hábito', icone: icone('lixeira'), acao: () => excluirHabito(id) },
+    { rotulo: t('Excluir hábito'), icone: icone('lixeira'), acao: () => excluirHabito(id) },
   ];
 }
 const menuDosHabitos = () => [
-  { rotulo: 'Novo hábito', icone: icone('mais'), acao: () => habitoModal() },
-  { rotulo: 'Estatísticas', icone: icone('grafico'), acao: () => habitosModal() },
+  { rotulo: t('Novo hábito'), icone: icone('mais'), acao: () => habitoModal() },
+  { rotulo: t('Estatísticas'), icone: icone('grafico'), acao: () => habitosModal() },
 ];
 function habitosModal() {
   const hoje = today();
   const blocos = state.habits.map(h => {
     const dias = state.habitLog[h.id] || [], s = Kiro.habitStats(h, dias, hoje), semanal = h.frequency.type === 'weekly';
-    const grade = Kiro.habitDays(h, dias, hoje, 35).map(d => `<span class="grade-dia${d.done ? ' feito' : ''}${d.due ? '' : ' livre'}${d.date === hoje ? ' hoje' : ''}" title="${rotuloDoDia(d.date)}${d.done ? ' · feito' : ''}"></span>`).join('');
-    return `<section class="habito-stats" data-habito="${h.id}"><header><div class="cfg-texto"><span class="cfg-titulo">${escapeHtml(h.title)}</span><span class="small-muted">${rotuloFrequencia(h.frequency)}</span></div><button type="button" class="icon-button" data-editar-habito="${h.id}" aria-label="Editar hábito" title="Editar">${icone('renomear')}</button></header>
-      <div class="habito-numeros"><div><b>${s.streak}</b><span>${semanal ? 'semanas seguidas' : 'dias seguidos'}</span></div><div><b>${s.rate30 === null ? '–' : s.rate30 + '%'}</b><span>nos últimos 30 dias</span></div><div><b>${s.totalDone}</b><span>vezes no total</span></div></div>
-      <div class="habito-grade" aria-label="Últimas 5 semanas">${grade}</div></section>`;
+    const grade = Kiro.habitDays(h, dias, hoje, 35).map(d => `<span class="grade-dia${d.done ? ' feito' : ''}${d.due ? '' : ' livre'}${d.date === hoje ? ' hoje' : ''}" title="${rotuloDoDia(d.date)}${d.done ? ` · ${t('feito')}` : ''}"></span>`).join('');
+    return `<section class="habito-stats" data-habito="${h.id}"><header><div class="cfg-texto"><span class="cfg-titulo">${escapeHtml(h.title)}</span><span class="small-muted">${rotuloFrequencia(h.frequency)}</span></div><button type="button" class="icon-button" data-editar-habito="${h.id}" aria-label="${t('Editar hábito')}" title="${t('Editar')}">${icone('renomear')}</button></header>
+      <div class="habito-numeros"><div><b>${s.streak}</b><span>${semanal ? t('semanas seguidas') : t('dias seguidos')}</span></div><div><b>${s.rate30 === null ? '–' : s.rate30 + '%'}</b><span>${t('nos últimos 30 dias')}</span></div><div><b>${s.totalDone}</b><span>${t('vezes no total')}</span></div></div>
+      <div class="habito-grade" aria-label="${t('Últimas 5 semanas')}">${grade}</div></section>`;
   }).join('');
-  modal('Seus hábitos', `<div class="habitos-lista">${blocos || '<div class="empty">Nenhum hábito ainda.</div>'}</div><div class="form-actions"><button type="button" class="secondary" id="cancel">Fechar</button><button type="button" class="primary" id="habito-novo">${icone('mais')} Novo hábito</button></div>`);
+  modal(t('Seus hábitos'), `<div class="habitos-lista">${blocos || `<div class="empty">${t('Nenhum hábito ainda.')}</div>`}</div><div class="form-actions"><button type="button" class="secondary" id="cancel">${t('Fechar')}</button><button type="button" class="primary" id="habito-novo">${icone('mais')} ${t('Novo hábito')}</button></div>`);
   $('#cancel').onclick = () => closeModal(true);
   $('#habito-novo').onclick = () => { closeModal(true); habitoModal(); };
   document.querySelectorAll('[data-editar-habito]').forEach(b => b.onclick = () => { const h = state.habits.find(x => x.id === b.dataset.editarHabito); closeModal(true); if (h) habitoModal(h); });
 }
-function renderNotes() { return `${head("Biblioteca", "Notas", "Escreva, revise e mantenha suas referências perto.", `<button class="primary" id="add-note">${icone('mais')} Nova nota</button>`)}<div class="toolbar"><input class="search" id="note-search" placeholder="Buscar texto ou #tag…" /></div><section class="notes-grid" id="notes-grid">${notesMarkup(state.notes)}</section>`; }
-const linkDaNota = nota => `<a class="task-nota" data-action="edit-note" data-id="${nota.id}">${escapeHtml(nota.title || "Sem título")}</a>`;
+function renderNotes() { return `${head(t("Biblioteca"), t("Notas"), t("Escreva, revise e mantenha suas referências perto."), `<button class="primary" id="add-note">${icone('mais')} ${t('Nova nota')}</button>`)}<div class="toolbar"><input class="search" id="note-search" placeholder="${t('Buscar texto ou #tag…')}" /></div><section class="notes-grid" id="notes-grid">${notesMarkup(state.notes)}</section>`; }
+const linkDaNota = nota => `<a class="task-nota" data-action="edit-note" data-id="${nota.id}">${escapeHtml(nota.title || t("Sem título"))}</a>`;
 // Prévia do card: o texto que a nota mostra, sem a sintaxe do Markdown.
 function textoPlano(md) {
   return md
@@ -277,14 +281,14 @@ function notesMarkup(notes) { return notes.length ? [...notes].sort((a,b)=>b.upd
   const meta=[
     folder && `<span class="pasta-chip"${folder.color?` data-cor-pasta="${folder.color}"`:""}>${icone('pastas')} ${escapeHtml(folder.path||folder.title)}</span>`,
     Kiro.tags(n).map(t=>`#${escapeHtml(t)}`).join(" "),
-    ligacoes && `${ligacoes} ${ligacoes===1?"ligação":"ligações"}`,
-    n.links.length && `${n.links.length} link${n.links.length===1?"":"s"} externo${n.links.length===1?"":"s"}`,
+    ligacoes && (ligacoes===1 ? t('1 ligação') : t('{n} ligações', { n: ligacoes })),
+    n.links.length && (n.links.length===1 ? t('1 link externo') : t('{n} links externos', { n: n.links.length })),
     ...(()=>{const dia=d=>KiroIdiomas.formatarData(d,{day:"numeric",month:"short"});
-      if(!n.createdAt)return [`atualizado ${dia(n.updatedAt)}`];
-      return [`criada ${dia(n.createdAt)}`,new Date(n.createdAt).toDateString()!==new Date(n.updatedAt).toDateString()&&`atualizada ${dia(n.updatedAt)}`];})()
+      if(!n.createdAt)return [t('atualizado {data}', { data: dia(n.updatedAt) })];
+      return [t('criada {data}', { data: dia(n.createdAt) }),new Date(n.createdAt).toDateString()!==new Date(n.updatedAt).toDateString()&&t('atualizada {data}', { data: dia(n.updatedAt) })];})()
   ].filter(Boolean).join(" · ");
-  return `<article class="note-card" data-action="edit-note" data-id="${n.id}"><h2>${escapeHtml(n.title || "Sem título")}</h2><p>${escapeHtml(textoPlano(n.body).slice(0,220) || "Nota vazia")}</p><div class="note-meta">${meta}</div></article>`;
-}).join("") : '<div class="empty">Crie sua primeira nota para começar.</div>'; }
+  return `<article class="note-card" data-action="edit-note" data-id="${n.id}"><h2>${escapeHtml(n.title || t("Sem título"))}</h2><p>${escapeHtml(textoPlano(n.body).slice(0,220) || t("Nota vazia"))}</p><div class="note-meta">${meta}</div></article>`;
+}).join("") : `<div class="empty">${t('Crie sua primeira nota para começar.')}</div>`; }
 // Caixas "- [ ]" escritas dentro das notas, com a posição da linha para marcar sem abrir a nota.
 function tarefasDasNotas() {
   const achadas = [];
@@ -308,7 +312,7 @@ function marcarTarefaDaNota(chave) {
   state.notes = state.notes.map(n => n.id === id ? { ...n, body: n.body.slice(0, pos) + trocada + n.body.slice(pos + linha.length), updatedAt: Date.now() } : n);
   save(); render();
 }
-function renderTasks() { const open = state.tasks.filter(t=>!t.done).sort((a,b)=>a.due.localeCompare(b.due)); const done = state.tasks.filter(t=>t.done); const dasNotas = tarefasDasNotas().filter(t=>!t.feita); return `${head("Organização", "Tarefas", "Concentre-se no que realmente importa hoje.", `<button class="primary" id="add-task">${icone('mais')} Nova tarefa</button>`)}<div class="task-layout"><section class="card"><div class="task-group"><h2>Em aberto</h2>${open.map(taskRow).join("") || '<div class="empty">Tudo concluído por aqui.</div>'}</div>${dasNotas.length ? `<div class="task-group"><h2>Nas notas</h2>${dasNotas.map(t=>`<div class="task-item">${check(false,"toggle-note-task",`${t.nota.id}:${t.pos}`)}<div class="task-title">${escapeHtml(t.texto)}<div class="task-info">${linkDaNota(t.nota)}</div></div></div>`).join("")}</div>` : ""}<div class="task-group"><h2>Concluídas</h2>${done.map(taskRow).join("") || '<div class="empty">As tarefas concluídas aparecerão aqui.</div>'}</div></section><aside class="card"><h2>Seu foco</h2><p class="subhead">Você tem <strong>${open.length}</strong> tarefa${open.length===1?"":"s"} em aberto.</p><div class="progress"><div style="width:${state.tasks.length ? done.length/state.tasks.length*100 : 0}%"></div></div><p class="small-muted">${done.length} de ${state.tasks.length} concluídas</p></aside></div>`; }
+function renderTasks() { const open = state.tasks.filter(t=>!t.done).sort((a,b)=>a.due.localeCompare(b.due)); const done = state.tasks.filter(t=>t.done); const dasNotas = tarefasDasNotas().filter(t=>!t.feita); return `${head(t("Organização"), t("Tarefas"), t("Concentre-se no que realmente importa hoje."), `<button class="primary" id="add-task">${icone('mais')} ${t('Nova tarefa')}</button>`)}<div class="task-layout"><section class="card"><div class="task-group"><h2>${t('Em aberto')}</h2>${open.map(taskRow).join("") || `<div class="empty">${t('Tudo concluído por aqui.')}</div>`}</div>${dasNotas.length ? `<div class="task-group"><h2>${t('Nas notas')}</h2>${dasNotas.map(t=>`<div class="task-item">${check(false,"toggle-note-task",`${t.nota.id}:${t.pos}`)}<div class="task-title">${escapeHtml(t.texto)}<div class="task-info">${linkDaNota(t.nota)}</div></div></div>`).join("")}</div>` : ""}<div class="task-group"><h2>${t('Concluídas')}</h2>${done.map(taskRow).join("") || `<div class="empty">${t('As tarefas concluídas aparecerão aqui.')}</div>`}</div></section><aside class="card"><h2>${t('Seu foco')}</h2><p class="subhead">${open.length===1 ? t('Você tem {n} tarefa em aberto.', { n: '<strong>1</strong>' }) : t('Você tem {n} tarefas em aberto.', { n: `<strong>${open.length}</strong>` })}</p><div class="progress"><div style="width:${state.tasks.length ? done.length/state.tasks.length*100 : 0}%"></div></div><p class="small-muted">${t('{feitas} de {total} concluídas', { feitas: done.length, total: state.tasks.length })}</p></aside></div>`; }
 const byTitle = (a,b) => KiroIdiomas.comparar(a.title, b.title);
 const childFolders = id => state.folders.filter(f=>(f.parentId||"")===id).sort(byTitle);
 const folderNotes = id => state.notes.filter(n=>(n.folderId||"")===id).sort(byTitle);
@@ -427,16 +431,16 @@ function treeMarkup(parentId, depth) {
   const folders = childFolders(parentId).map(folder => {
     const open = expanded.has(folder.id);
     const temFilhos = childFolders(folder.id).length || folderNotes(folder.id).length || folderFluxos(folder.id).length;
-    const tools = `<span class="tree-tools"><button class="icon-button" data-action="new-note-folder" data-id="${folder.id}" title="Nova nota nesta pasta">${icone('mais')}</button><button class="icon-button" data-action="new-subfolder" data-id="${folder.id}" title="Nova subpasta">${icone('pasta-nova')}</button><button class="icon-button" data-action="edit-folder" data-id="${folder.id}" title="Renomear ou mover">${icone('renomear')}</button><button class="icon-button" data-action="delete-folder" data-id="${folder.id}" title="Excluir">${icone('lixeira')}</button></span>`;
+    const tools = `<span class="tree-tools"><button class="icon-button" data-action="new-note-folder" data-id="${folder.id}" title="${t('Nova nota nesta pasta')}">${icone('mais')}</button><button class="icon-button" data-action="new-subfolder" data-id="${folder.id}" title="${t('Nova subpasta')}">${icone('pasta-nova')}</button><button class="icon-button" data-action="edit-folder" data-id="${folder.id}" title="${t('Renomear ou mover')}">${icone('renomear')}</button><button class="icon-button" data-action="delete-folder" data-id="${folder.id}" title="${t('Excluir')}">${icone('lixeira')}</button></span>`;
     // Filhos ficam sempre no DOM: abrir e fechar vira transição de CSS, sem redesenhar.
     return `<div class="tree-node${open?" open":""}" data-id="${folder.id}"${folder.color?` data-cor-pasta="${folder.color}"`:""}><div class="tree-row tree-folder" data-action="toggle-folder" data-id="${folder.id}" style="--depth:${depth}"${folder.description?` title="${escapeHtml(folder.description)}"`:""}><span class="twisty">${temFilhos?icone('direita'):""}</span><span class="tree-icone">${icone('pastas')}</span><span class="tree-name" title="${escapeHtml(folder.title)}">${escapeHtml(folder.title)}</span>${tools}</div><div class="tree-children"><div class="tree-children-inner">${treeMarkup(folder.id,depth+1)}</div></div></div>`;
   }).join("");
   const notes = folderNotes(parentId).map(note => {
     const tags = Kiro.tags(note).slice(0,2).map(t=>`#${escapeHtml(t)}`).join(" ");
-    return `<div class="tree-row tree-note${editing?.id === note.id ? " ativa" : ""}${selecaoArvore.has(note.id) ? " selecionada" : ""}" draggable="true" data-action="edit-note" data-id="${note.id}" style="--depth:${depth}"><span class="twisty"></span><span class="tree-icone">${icone('nota')}</span><span class="tree-name" title="${escapeHtml(note.title||"Sem título")}">${escapeHtml(note.title||"Sem título")}</span><span class="tree-meta">${tags}</span></div>`;
+    return `<div class="tree-row tree-note${editing?.id === note.id ? " ativa" : ""}${selecaoArvore.has(note.id) ? " selecionada" : ""}" draggable="true" data-action="edit-note" data-id="${note.id}" style="--depth:${depth}"><span class="twisty"></span><span class="tree-icone">${icone('nota')}</span><span class="tree-name" title="${escapeHtml(note.title||t("Sem título"))}">${escapeHtml(note.title||t("Sem título"))}</span><span class="tree-meta">${tags}</span></div>`;
   }).join("");
   const ativo = KiroAbas.notaAtiva(abas);
-  const fluxos = folderFluxos(parentId).map(f => `<div class="tree-row tree-fluxo${ativo === f.id ? " ativa" : ""}${selecaoArvore.has(f.id) ? " selecionada" : ""}" draggable="true" data-action="abrir-fluxo" data-id="${f.id}" style="--depth:${depth}"><span class="twisty"></span><span class="tree-icone">${icone('fluxo')}</span><span class="tree-name" title="${escapeHtml(f.title)}">${escapeHtml(f.title)}</span><span class="tree-tipo">FLUXO</span></div>`).join("");
+  const fluxos = folderFluxos(parentId).map(f => `<div class="tree-row tree-fluxo${ativo === f.id ? " ativa" : ""}${selecaoArvore.has(f.id) ? " selecionada" : ""}" draggable="true" data-action="abrir-fluxo" data-id="${f.id}" style="--depth:${depth}"><span class="twisty"></span><span class="tree-icone">${icone('fluxo')}</span><span class="tree-name" title="${escapeHtml(f.title)}">${escapeHtml(f.title)}</span><span class="tree-tipo">${t('FLUXO')}</span></div>`).join("");
   return folders + notes + fluxos;
 }
 // Anima a altura em pixels: height:auto não é interpolável, e o interpolate-size
@@ -551,7 +555,7 @@ async function reduzirImagem(arquivo) {
   tela.width = Math.round(bitmap.width * escala); tela.height = Math.round(bitmap.height * escala);
   tela.getContext('2d').drawImage(bitmap, 0, 0, tela.width, tela.height);
   bitmap.close?.();
-  return new Promise((ok, erro) => tela.toBlob(b => (b ? ok(b) : erro(new Error('Imagem vazia.'))), 'image/jpeg', 0.9));
+  return new Promise((ok, erro) => tela.toBlob(b => (b ? ok(b) : erro(new Error(t('Imagem vazia.')))), 'image/jpeg', 0.9));
 }
 // Largura da árvore de Pastas: arrastar a linha entre a árvore e a nota; fica no navegador.
 // O mínimo cabe a casinha, as três ações e a seta de recolher.
@@ -663,7 +667,7 @@ let gravandoAtalho = false;   // enquanto Configurações escuta a combinação 
 let lateralCompacta = lerPreferencia('lateralCompacta') === '1';
 function aplicarLateralCompacta() {
   document.querySelector('.app-shell').classList.toggle('lateral-compacta', lateralCompacta);
-  const acao = lateralCompacta ? 'Expandir barra lateral' : 'Recolher barra lateral';
+  const acao = lateralCompacta ? t('Expandir barra lateral') : t('Recolher barra lateral');
   const botao = document.querySelector('#alternar-lateral');
   botao.setAttribute('aria-label', acao);
   botao.setAttribute('aria-expanded', String(!lateralCompacta));
@@ -673,7 +677,7 @@ function aplicarLateralCompacta() {
   for (const item of document.querySelectorAll('.sidebar :is(.new-note, .quiet-button, .nav-item, .busca-rapida, .nota-diaria)')) {
     const rotulo = item.querySelector('.rotulo')?.textContent.trim();
     if (!rotulo) continue;
-    if (item.id === 'go-note') item.dataset.dica = `Ir para nota (${teclaDe('irPara')})`;
+    if (item.id === 'go-note') item.dataset.dica = t('Ir para nota ({tecla})', { tecla: teclaDe('irPara') });
     item.dataset.dica ??= item.getAttribute('title') || '';   // a dica original, se houver
     const original = item.dataset.dica;
     if (lateralCompacta) item.title = original ? `${rotulo} (${original})` : rotulo;
@@ -687,7 +691,7 @@ function alternarLateralCompacta() {
   aplicarLateralCompacta();
 }
 function botaoLateral() {
-  const acao = lateralRecolhida ? 'Mostrar barra lateral' : 'Esconder barra lateral';
+  const acao = lateralRecolhida ? t('Mostrar barra lateral') : t('Esconder barra lateral');
   return `<button class="icon-button cofre-alternar" data-cofre="alternar" title="${acao}" aria-label="${acao}" aria-expanded="${!lateralRecolhida}">${icone(lateralRecolhida ? 'direita' : 'esquerda')}</button>`;
 }
 function alternarLateral() {
@@ -707,10 +711,10 @@ function alternarLateral() {
 // A casinha devolve o usuário à tela inicial, onde a navegação completa vive.
 // Título mostrado na aba: da nota salva, ou "Nova nota" para o rascunho ainda sem título.
 function tituloDaAba(id) {
-  if (id === KiroAbas.RASCUNHO) return 'Nova nota';
+  if (id === KiroAbas.RASCUNHO) return t('Nova nota');
   const nota = getNote(id);
-  if (nota) return nota.title || 'Sem título';
-  return getFluxo(id)?.title || 'Sem título';
+  if (nota) return nota.title || t('Sem título');
+  return getFluxo(id)?.title || t('Sem título');
 }
 function barraDeAbas(painel) {
   const p = abas.paineis[painel];
@@ -719,25 +723,25 @@ function barraDeAbas(painel) {
   // (não focável, não anunciado por leitor de tela). role=group em vez de tablist/tab pela
   // metade: não há aria-controls/tabpanel nem navegação por setas, então não é o padrão ARIA
   // tabs completo — só um grupo rotulado.
-  const itens = p.abas.map(id => { const titulo = escapeHtml(tituloDaAba(id)); return `<div class="aba${p.ativa === id ? ' ativa' : ''}" data-painel="${painel}" data-aba="${escapeHtml(id)}" draggable="true"><button type="button" class="aba-abrir" aria-current="${p.ativa === id}"><span class="aba-titulo">${titulo}</span></button><button type="button" class="aba-fechar" data-fechar-aba aria-label="Fechar aba ${titulo}">×</button></div>`; }).join('');
+  const itens = p.abas.map(id => { const titulo = escapeHtml(tituloDaAba(id)); return `<div class="aba${p.ativa === id ? ' ativa' : ''}" data-painel="${painel}" data-aba="${escapeHtml(id)}" draggable="true"><button type="button" class="aba-abrir" aria-current="${p.ativa === id}"><span class="aba-titulo">${titulo}</span></button><button type="button" class="aba-fechar" data-fechar-aba aria-label="${t('Fechar aba {titulo}', { titulo })}">×</button></div>`; }).join('');
   // O botão do painel da direita só aparece na última coluna, depois do menu ⌄ dela.
   const botaoPainel = painel === abas.paineis.length - 1
-    ? `<button type="button" class="icon-button painel-direito-alternar" data-painel-direito aria-pressed="${painelDireito.aberto}" title="Painel da direita (${escapeHtml(teclaDe('painelDireito'))})" aria-label="Painel da direita">${icone('painel-direito')}</button>`
+    ? `<button type="button" class="icon-button painel-direito-alternar" data-painel-direito aria-pressed="${painelDireito.aberto}" title="${t('Painel da direita ({tecla})', { tecla: escapeHtml(teclaDe('painelDireito')) })}" aria-label="${t('Painel da direita')}">${icone('painel-direito')}</button>`
     : '';
-  return `<div class="abas-barra" data-painel="${painel}" role="group" aria-label="Abas">${itens}<button type="button" class="icon-button aba-nova" data-nova-aba="${painel}" aria-label="Nova aba">${icone('mais')}</button><button type="button" class="icon-button abas-menu" data-menu-abas="${painel}" aria-label="Opções das abas desta coluna" aria-haspopup="menu" title="Opções das abas">${icone('abaixo')}</button>${botaoPainel}</div>`;
+  return `<div class="abas-barra" data-painel="${painel}" role="group" aria-label="${t('Abas')}">${itens}<button type="button" class="icon-button aba-nova" data-nova-aba="${painel}" aria-label="${t('Nova aba')}">${icone('mais')}</button><button type="button" class="icon-button abas-menu" data-menu-abas="${painel}" aria-label="${t('Opções das abas desta coluna')}" aria-haspopup="menu" title="${t('Opções das abas')}">${icone('abaixo')}</button>${botaoPainel}</div>`;
 }
 // Vazio de uma metade sem aba nenhuma: mesmo convite de sempre, com o + já sabendo em qual metade abrir.
 function cofreVazioMarkup(painel) {
   return `<div class="cofre-vazio">
-    <p>Escolha uma nota na árvore ao lado.</p>
-    <button class="secondary" data-cofre-nova="${painel}">${icone('mais')} Nova nota</button>
+    <p>${t('Escolha uma nota na árvore ao lado.')}</p>
+    <button class="secondary" data-cofre-nova="${painel}">${icone('mais')} ${t('Nova nota')}</button>
   </div>`;
 }
 // Metade em leitura: a versão salva da nota (getNote), nunca o que está em `editing`.
 function renderLeitura(id, painel) {
   const nota = id === KiroAbas.RASCUNHO ? notaVazia() : getNote(id);
   if (!nota) return cofreVazioMarkup(painel);
-  return `<article class="doc-leitura" data-painel="${painel}"><h1 class="doc-leitura-titulo">${escapeHtml(nota.title || 'Sem título')}</h1>${renderizarMarkdown(nota.body)}</article>`;
+  return `<article class="doc-leitura" data-painel="${painel}"><h1 class="doc-leitura-titulo">${escapeHtml(nota.title || t('Sem título'))}</h1>${renderizarMarkdown(nota.body)}</article>`;
 }
 // O que vai dentro do corpo de uma metade: a metade ativa mostra o editor (ou o vazio); a outra, leitura.
 function conteudoMetade(painel) {
@@ -753,7 +757,7 @@ function metadeMarkup(painel) {
 }
 // Coluna com um fluxo: o editor é montado depois do innerHTML (bindView → montarFluxos).
 function fluxoHostMarkup(fluxo, painel) {
-  if (fluxo.erro) return `<div class="fluxo-erro"><h2>${escapeHtml(fluxo.title)}</h2><p>Este fluxo não pôde ser lido e não será alterado pelo Kiro.</p><p><code>${escapeHtml(fluxo.erro)}</code></p></div>`;
+  if (fluxo.erro) return `<div class="fluxo-erro"><h2>${escapeHtml(fluxo.title)}</h2><p>${t('Este fluxo não pôde ser lido e não será alterado pelo Kiro.')}</p><p><code>${escapeHtml(fluxo.erro)}</code></p></div>`;
   return `<div class="fluxo-host" data-fluxo="${escapeHtml(fluxo.id)}" data-painel="${painel}"></div>`;
 }
 // Cartão de arquivo aponta para a nota pelo caminho no cofre (sem diferenciar maiúsculas).
@@ -761,7 +765,7 @@ const notaPorArquivo = arquivo => state.notes.find(n => n.file && Kiro.pathKey(n
 // "Na outra metade": uma coluna que já existe ao lado do fluxo, ou uma nova à direita dele.
 function abrirNotaDoFluxo(arquivo, painel) {
   const nota = notaPorArquivo(arquivo);
-  if (!nota) return status('Nota não encontrada no cofre.', true);
+  if (!nota) return status(t('Nota não encontrada no cofre.'), true);
   const outra = painel + 1 < abas.paineis.length ? painel + 1 : painel - 1;
   if (outra >= 0 && outra !== painel) return abrirNota(nota, { painel: outra, novaAba: true, duplicar: true });
   if (!cabeOutraColuna()) return abrirNota(nota, { painel, novaAba: true, duplicar: true });
@@ -769,7 +773,7 @@ function abrirNotaDoFluxo(arquivo, painel) {
 }
 function abrirLinkDoFluxo(url) {
   const seguro = Kiro.safeUrl(url);
-  if (!seguro) return status('Esse link não é http nem https.', true);
+  if (!seguro) return status(t('Esse link não é http nem https.'), true);
   window.open(seguro, '_blank', 'noopener,noreferrer');
 }
 function montarFluxos() {
@@ -783,7 +787,7 @@ function montarFluxos() {
       chaveDaVista: 'kiro.fluxoVista:' + (state.vaultPath || ''),
       aoMudar: canvas => mudarFluxo(fluxo.id, canvas),
       urlDoArquivo: urlDoAnexo,
-      nota: arquivo => { const n = notaPorArquivo(arquivo); return n ? { titulo: n.title || 'Sem título', html: renderizarMarkdown(n.body.slice(0, 2000)) } : null; },
+      nota: arquivo => { const n = notaPorArquivo(arquivo); return n ? { titulo: n.title || t('Sem título'), html: renderizarMarkdown(n.body.slice(0, 2000)) } : null; },
       abrirNota: arquivo => abrirNotaDoFluxo(arquivo, Number(host.dataset.painel)),
       abrirLink: abrirLinkDoFluxo,
       escolherNota: () => irParaNota({ escolher: true }),
@@ -808,7 +812,7 @@ function montarFluxos() {
 // Colunas lado a lado; entre duas vizinhas, uma divisória que ajusta a largura das duas.
 const LARGURA_MIN_COLUNA = 260;
 function colunasMarkup() {
-  return `<div class="cofre-metades">${abas.paineis.map((_, i) => (i ? `<div class="metades-divisor" data-divisor="${i - 1}" role="separator" aria-orientation="vertical" tabindex="0" aria-label="Largura das colunas ${i} e ${i + 1}" title="Arraste para ajustar · dois cliques deixam as colunas iguais"></div>` : '') + metadeMarkup(i)).join('')}</div>`;
+  return `<div class="cofre-metades">${abas.paineis.map((_, i) => (i ? `<div class="metades-divisor" data-divisor="${i - 1}" role="separator" aria-orientation="vertical" tabindex="0" aria-label="${t('Largura das colunas {a} e {b}', { a: i, b: i + 1 })}" title="${t('Arraste para ajustar · dois cliques deixam as colunas iguais')}"></div>` : '') + metadeMarkup(i)).join('')}</div>`;
 }
 // Cabe mais uma coluna com a largura mínima na área de notas?
 function cabeOutraColuna() {
@@ -818,29 +822,29 @@ function cabeOutraColuna() {
 // ---- Painel da direita: links de volta, links de saída, sumário e etiquetas de `editing` ----
 function painelItemMarkup(nota, trecho, vincular) {
   return `<div class="painel-item" data-painel-titulo="${escapeHtml(nota.title || '')}">
-    <button type="button" class="painel-item-titulo" data-abrir-nota="${nota.id}">${escapeHtml(nota.title || 'Sem título')}</button>
+    <button type="button" class="painel-item-titulo" data-abrir-nota="${nota.id}">${escapeHtml(nota.title || t('Sem título'))}</button>
     <span class="small-muted">${escapeHtml(trecho.slice(0, 160))}</span>
-    ${vincular ? `<button type="button" class="secondary cfg-pequeno" data-vincular="${nota.id}">Vincular</button>` : ''}
+    ${vincular ? `<button type="button" class="secondary cfg-pequeno" data-vincular="${nota.id}">${t('Vincular')}</button>` : ''}
   </div>`;
 }
 function painelVoltaMarkup() {
   // Rascunho sem id (nota nova ainda não salva): ninguém no cofre pode apontar pra ela de
   // verdade, então nada de menções — mesmo critério de renderMencoes ("!nota.id" → vazio).
-  if (!editing.id) return '<p class="small-muted painel-direito-vazio">Salve a nota para ver as menções.</p>';
+  if (!editing.id) return `<p class="small-muted painel-direito-vazio">${t('Salve a nota para ver as menções.')}</p>`;
   const resolveParaEditing = l => Kiro.findLinkedNote(state.notes, l.target)?.id === editing.id;
   const vinculadas = Kiro.mentions(state.notes, editing);
   const naoVinculadas = Kiro.mencoesNaoVinculadas(state.notes, editing);
   const vinculadasHtml = vinculadas.map(n => {
     const linha = n.body.split('\n').find(l => Kiro.wikiLinks(l).some(resolveParaEditing)) || '';
     return painelItemMarkup(n, textoPlano(linha), false);
-  }).join('') || '<p class="small-muted">Nenhuma.</p>';
-  const naoVinculadasHtml = naoVinculadas.map(({ nota, trecho }) => painelItemMarkup(nota, textoPlano(trecho), true)).join('') || '<p class="small-muted">Nenhuma.</p>';
+  }).join('') || `<p class="small-muted">${t('Nenhuma.')}</p>`;
+  const naoVinculadasHtml = naoVinculadas.map(({ nota, trecho }) => painelItemMarkup(nota, textoPlano(trecho), true)).join('') || `<p class="small-muted">${t('Nenhuma.')}</p>`;
   const fluxos = Kiro.fluxosQueCitam(state, editing);
-  const fluxosHtml = fluxos.map(f => `<div class="painel-item" data-painel-titulo="${escapeHtml(f.title)}"><button type="button" class="painel-fluxo" data-abrir-nota="${escapeHtml(f.id)}">${icone('fluxo')} ${escapeHtml(f.title)}</button></div>`).join('') || '<p class="small-muted">Nenhum.</p>';
-  return `<input type="search" class="painel-filtro" placeholder="Filtrar" aria-label="Filtrar links de volta" value="${escapeHtml(painelFiltro)}" />
-  <section class="painel-secao"><h3>Menções vinculadas (${vinculadas.length})</h3>${vinculadasHtml}</section>
-  <section class="painel-secao"><h3>Menções não vinculadas (${naoVinculadas.length})</h3>${naoVinculadasHtml}</section>
-  <section class="painel-secao"><h3>Aparece nos fluxos (${fluxos.length})</h3>${fluxosHtml}</section>`;
+  const fluxosHtml = fluxos.map(f => `<div class="painel-item" data-painel-titulo="${escapeHtml(f.title)}"><button type="button" class="painel-fluxo" data-abrir-nota="${escapeHtml(f.id)}">${icone('fluxo')} ${escapeHtml(f.title)}</button></div>`).join('') || `<p class="small-muted">${t('Nenhum.')}</p>`;
+  return `<input type="search" class="painel-filtro" placeholder="${t('Filtrar')}" aria-label="${t('Filtrar links de volta')}" value="${escapeHtml(painelFiltro)}" />
+  <section class="painel-secao"><h3>${t('Menções vinculadas ({n})', { n: vinculadas.length })}</h3>${vinculadasHtml}</section>
+  <section class="painel-secao"><h3>${t('Menções não vinculadas ({n})', { n: naoVinculadas.length })}</h3>${naoVinculadasHtml}</section>
+  <section class="painel-secao"><h3>${t('Aparece nos fluxos ({n})', { n: fluxos.length })}</h3>${fluxosHtml}</section>`;
 }
 function painelSaidaMarkup() {
   const vistos = new Set();
@@ -849,14 +853,14 @@ function painelSaidaMarkup() {
   const links = Kiro.wikiLinks(editing.body)
     .map(l => ({ ...l, nota: Kiro.findLinkedNote(state.notes, l.target) }))
     .filter(l => { const chave = l.nota ? l.nota.id : Kiro.pathKey(l.target); if (vistos.has(chave)) return false; vistos.add(chave); return true; });
-  if (!links.length) return '<p class="small-muted">Esta nota não tem links de saída.</p>';
+  if (!links.length) return `<p class="small-muted">${t('Esta nota não tem links de saída.')}</p>`;
   return `<ul class="painel-lista">${links.map(l =>
-    `<li><button type="button" class="painel-link${l.nota ? '' : ' ausente'}" data-link-saida-id="${l.nota ? escapeHtml(l.nota.id) : ''}" data-link-saida-alvo="${escapeHtml(l.target)}">${escapeHtml(l.label)}${l.nota ? '' : ' <span class="small-muted">não existe ainda</span>'}</button></li>`
+    `<li><button type="button" class="painel-link${l.nota ? '' : ' ausente'}" data-link-saida-id="${l.nota ? escapeHtml(l.nota.id) : ''}" data-link-saida-alvo="${escapeHtml(l.target)}">${escapeHtml(l.label)}${l.nota ? '' : ` <span class="small-muted">${t('não existe ainda')}</span>`}</button></li>`
   ).join('')}</ul>`;
 }
 function painelSumarioMarkup() {
   const itens = Kiro.sumario(editing.body);
-  if (!itens.length) return '<p class="small-muted">Nenhum título nesta nota.</p>';
+  if (!itens.length) return `<p class="small-muted">${t('Nenhum título nesta nota.')}</p>`;
   // data-sumario-pos é o mesmo offset que renderizarMarkdown grava em data-pos: rolarParaTitulo
   // ancora na fonte, não numa contagem de <h*> que pode discordar do que foi de fato desenhado.
   return `<ul class="painel-sumario">${itens.map(it => `<li style="--nivel:${it.nivel}"><button type="button" class="painel-sumario-item" data-sumario-pos="${it.pos}">${escapeHtml(it.texto)}</button></li>`).join('')}</ul>`;
@@ -871,11 +875,11 @@ function etiquetaItemMarkup(no) {
 }
 function painelEtiquetasMarkup() {
   const arvore = Kiro.arvoreDeEtiquetas(state.notes);
-  if (!arvore.length) return '<p class="small-muted">Nenhuma etiqueta ainda.</p>';
+  if (!arvore.length) return `<p class="small-muted">${t('Nenhuma etiqueta ainda.')}</p>`;
   return `<ul class="painel-etiquetas-lista painel-etiquetas-raiz">${arvore.map(etiquetaItemMarkup).join('')}</ul>`;
 }
 function painelDireitoConteudo() {
-  if (!editing) return '<p class="small-muted painel-direito-vazio">Abra uma nota para ver os links, o sumário e as etiquetas dela.</p>';
+  if (!editing) return `<p class="small-muted painel-direito-vazio">${t('Abra uma nota para ver os links, o sumário e as etiquetas dela.')}</p>`;
   if (painelDireito.aba === 'saida') return painelSaidaMarkup();
   if (painelDireito.aba === 'sumario') return painelSumarioMarkup();
   if (painelDireito.aba === 'etiquetas') return painelEtiquetasMarkup();
@@ -883,11 +887,11 @@ function painelDireitoConteudo() {
 }
 function painelDireitoMarkup() {
   if (!painelDireito.aberto) return '';
-  const abasDoPainel = [['volta', 'link-volta', 'Links de volta'], ['saida', 'link-saida', 'Links de saída'], ['sumario', 'sumario', 'Sumário'], ['etiquetas', 'etiqueta', 'Etiquetas']];
+  const abasDoPainel = [['volta', 'link-volta', t('Links de volta')], ['saida', 'link-saida', t('Links de saída')], ['sumario', 'sumario', t('Sumário')], ['etiquetas', 'etiqueta', t('Etiquetas')]];
   const botoes = abasDoPainel.map(([id, ic, rotulo]) => `<button type="button" class="icon-button" data-painel-aba="${id}" aria-pressed="${painelDireito.aba === id}" title="${rotulo}" aria-label="${rotulo}">${icone(ic)}</button>`).join('');
-  return `<aside class="painel-direito" style="width:${painelDireito.largura}px" aria-label="Painel da direita">
-    <div class="painel-direito-divisor" role="separator" aria-orientation="vertical" aria-label="Largura do painel da direita" tabindex="0" aria-valuemin="${PAINEL_DIREITO_LARGURA.min}" aria-valuemax="${PAINEL_DIREITO_LARGURA.max}" aria-valuenow="${painelDireito.largura}" title="Arraste para ajustar a largura · dois cliques voltam ao padrão"></div>
-    <div class="painel-direito-topo" role="group" aria-label="Abas do painel">${botoes}</div>
+  return `<aside class="painel-direito" style="width:${painelDireito.largura}px" aria-label="${t('Painel da direita')}">
+    <div class="painel-direito-divisor" role="separator" aria-orientation="vertical" aria-label="${t('Largura do painel da direita')}" tabindex="0" aria-valuemin="${PAINEL_DIREITO_LARGURA.min}" aria-valuemax="${PAINEL_DIREITO_LARGURA.max}" aria-valuenow="${painelDireito.largura}" title="${t('Arraste para ajustar a largura · dois cliques voltam ao padrão')}"></div>
+    <div class="painel-direito-topo" role="group" aria-label="${t('Abas do painel')}">${botoes}</div>
     <div class="painel-direito-corpo">${painelDireitoConteudo()}</div>
   </aside>`;
 }
@@ -922,15 +926,15 @@ function bindPainelDireito() {
 // Troca a 1ª ocorrência solta do título da nota em edição por [[link]] na outra nota, e salva.
 async function vincularMencaoNaOutraNota(id) {
   if (!editing) return;
-  if (!Kiro.podeVincular(editing, editorDirty)) return void status('Salve a nota antes de vincular.', true);
-  if (busy || failed || !loaded) return void status('O cofre está ocupado.', true);
+  if (!Kiro.podeVincular(editing, editorDirty)) return void status(t('Salve a nota antes de vincular.'), true);
+  if (busy || failed || !loaded) return void status(t('O cofre está ocupado.'), true);
   const outra = getNote(id);
   if (!outra) return;
   const corpoAntigo = outra.body, atualizadoAntigo = outra.updatedAt;
   const corpoNovo = Kiro.vincularMencao(corpoAntigo, editing.title);
-  if (corpoNovo === corpoAntigo) return void status('Nada para vincular.', true);
+  if (corpoNovo === corpoAntigo) return void status(t('Nada para vincular.'), true);
   state.notes = state.notes.map(n => n.id === id ? { ...n, body: corpoNovo, updatedAt: Date.now() } : n);
-  if (await save()) return void status('Menção vinculada.');
+  if (await save()) return void status(t('Menção vinculada.'));
   // save() falhou (cofre ocupado/erro/não carregado): desfaz em memória pra não divergir do disco.
   state.notes = state.notes.map(n => n.id === id ? { ...n, body: corpoAntigo, updatedAt: atualizadoAntigo } : n);
 }
@@ -957,24 +961,24 @@ function renderCofre() {
     editing = nota ? { ...nota, tags: [...(nota.tags || [])], links: [...(nota.links || [])] } : null;
   }
   gravarAbas();
-  const arvore = treeMarkup('', 0) || '<div class="empty">Crie uma pasta para começar.</div>';
+  const arvore = treeMarkup('', 0) || `<div class="empty">${t('Crie uma pasta para começar.')}</div>`;
   const notas = colunasMarkup();
   const painel = painelDireitoMarkup();
   return `<div class="cofre">
   <aside class="cofre-lateral">
     <header class="cofre-topo">
-      <button class="icon-button" data-cofre="casa" title="Voltar ao início" aria-label="Voltar ao início">${icone('casa')}</button>
-      <span class="cofre-nome">Cofre</span>
+      <button class="icon-button" data-cofre="casa" title="${t('Voltar ao início')}" aria-label="${t('Voltar ao início')}">${icone('casa')}</button>
+      <span class="cofre-nome">${t('Cofre')}</span>
       <span class="cofre-acoes">
-        <button class="icon-button" id="add-fluxo" title="Novo fluxo">${icone('fluxo')}</button>
-        <button class="icon-button" id="add-folder" title="Nova pasta">${icone('pasta-nova')}</button>
-        <button class="icon-button" id="expand-all" title="Expandir tudo">${icone('expandir')}</button>
-        <button class="icon-button" id="collapse-all" title="Recolher tudo">${icone('recolher')}</button>
+        <button class="icon-button" id="add-fluxo" title="${t('Novo fluxo')}">${icone('fluxo')}</button>
+        <button class="icon-button" id="add-folder" title="${t('Nova pasta')}">${icone('pasta-nova')}</button>
+        <button class="icon-button" id="expand-all" title="${t('Expandir tudo')}">${icone('expandir')}</button>
+        <button class="icon-button" id="collapse-all" title="${t('Recolher tudo')}">${icone('recolher')}</button>
       </span>
       ${botaoLateral()}
     </header>
     <div class="tree">${arvore}</div>
-    <div class="cofre-divisor" role="separator" aria-orientation="vertical" aria-label="Largura da árvore de pastas" tabindex="0" aria-valuemin="${LARGURA_ARVORE.min}" aria-valuemax="${LARGURA_ARVORE.max}" aria-valuenow="${larguraArvore}" title="Arraste para ajustar a largura · dois cliques voltam ao padrão"></div>
+    <div class="cofre-divisor" role="separator" aria-orientation="vertical" aria-label="${t('Largura da árvore de pastas')}" tabindex="0" aria-valuemin="${LARGURA_ARVORE.min}" aria-valuemax="${LARGURA_ARVORE.max}" aria-valuenow="${larguraArvore}" title="${t('Arraste para ajustar a largura · dois cliques voltam ao padrão')}"></div>
     <footer class="cofre-rodape">${rodapeDaArvore()}</footer>
   </aside>
   ${notas}
@@ -985,12 +989,12 @@ function renderCofre() {
 function itensDaAba(painel, id) {
   const n = abas.paineis.length;
   return [
-    { rotulo: 'Abrir em nova coluna à direita', icone: icone('direita'), acao: () => moverAba(painel, id, painel + 1, { nova: true }) },
-    ...(painel > 0 ? [{ rotulo: 'Mover para a coluna da esquerda', icone: icone('esquerda'), acao: () => moverAba(painel, id, painel - 1) }] : []),
-    ...(painel < n - 1 ? [{ rotulo: 'Mover para a coluna da direita', icone: icone('direita'), acao: () => moverAba(painel, id, painel + 1) }] : []),
+    { rotulo: t('Abrir em nova coluna à direita'), icone: icone('direita'), acao: () => moverAba(painel, id, painel + 1, { nova: true }) },
+    ...(painel > 0 ? [{ rotulo: t('Mover para a coluna da esquerda'), icone: icone('esquerda'), acao: () => moverAba(painel, id, painel - 1) }] : []),
+    ...(painel < n - 1 ? [{ rotulo: t('Mover para a coluna da direita'), icone: icone('direita'), acao: () => moverAba(painel, id, painel + 1) }] : []),
     { separador: true },
-    { rotulo: 'Fechar', icone: icone('fechar'), acao: () => fecharAba(painel, id) },
-    { rotulo: 'Fechar as outras', icone: icone('fechar'), acao: () => fecharOutrasAbas(painel, id) },
+    { rotulo: t('Fechar'), icone: icone('fechar'), acao: () => fecharAba(painel, id) },
+    { rotulo: t('Fechar as outras'), icone: icone('fechar'), acao: () => fecharOutrasAbas(painel, id) },
   ];
 }
 // Menu ⌄ de uma coluna: nova aba, levar a ativa para uma coluna nova, fechar tudo e a lista
@@ -999,9 +1003,9 @@ function itensDoMenuDasAbas(painel) {
   const p = abas.paineis[painel];
   if (!p) return [];
   return [
-    { rotulo: 'Nova aba', icone: icone('mais'), acao: () => abrirNota(notaVazia(), { novaAba: true, painel }) },
-    ...(p.ativa ? [{ rotulo: 'Abrir em nova coluna à direita', icone: icone('direita'), acao: () => moverAba(painel, p.ativa, painel + 1, { nova: true }) }] : []),
-    ...(p.abas.length ? [{ rotulo: 'Fechar tudo', icone: icone('fechar'), acao: () => fecharColuna(painel) }] : []),
+    { rotulo: t('Nova aba'), icone: icone('mais'), acao: () => abrirNota(notaVazia(), { novaAba: true, painel }) },
+    ...(p.ativa ? [{ rotulo: t('Abrir em nova coluna à direita'), icone: icone('direita'), acao: () => moverAba(painel, p.ativa, painel + 1, { nova: true }) }] : []),
+    ...(p.abas.length ? [{ rotulo: t('Fechar tudo'), icone: icone('fechar'), acao: () => fecharColuna(painel) }] : []),
     ...(p.abas.length ? [{ separador: true }] : []),
     ...p.abas.map(id => ({ rotulo: tituloDaAba(id), icone: id === p.ativa ? icone('marcado') : '', acao: () => (id === KiroAbas.RASCUNHO ? null : abrirPorId(id, { painel })) })),
   ];
