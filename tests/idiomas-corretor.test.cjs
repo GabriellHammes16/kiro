@@ -31,5 +31,5 @@ test('página: interruptor do corretor e Shift+botão direito deixa o menu nativ
   const app = ler('app.js');
   assert.ok(app.includes("lerPreferencia('corretor') !== '0'"), 'ligado por padrão');
   assert.ok(app.includes('id="cfg-corretor"'));
-  assert.ok(/if \(evento\.shiftKey\) return;/.test(app), 'Shift + botão direito: menu do navegador');
+  assert.ok(/if \(evento\.shiftKey && !window\.cadernoDesktop\) return;/.test(app), 'Shift + botão direito: menu do navegador');
 });

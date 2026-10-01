@@ -145,7 +145,7 @@ function cardContinuar(nota) {
   const ultimo = textoPlano(nota.body.trim().split(/\n\s*\n/).filter(p => textoPlano(p)).pop() || '');
   const trecho = ultimo === textoPlano(nota.title || '') ? '' : ultimo;
   const pasta = state.folders.find(f => f.id === nota.folderId);
-  return `<section class="card continuar"><div class="card-head"><h2>${t('Continuar de onde parei')}</h2><span class="continuar-quando">${t('editada {quando}', { quando: dateLabel(Kiro.localDate(new Date(nota.updatedAt))).toLowerCase() })}</span></div><button type="button" class="continuar-nota" data-extra="continuar" data-id="${nota.id}"><span class="continuar-titulo">${pasta ? `<span class="pasta-chip"${pasta.color ? ` data-cor-pasta="${pasta.color}"` : ''}>${icone('pastas')}</span>` : icone('nota')} ${escapeHtml(nota.title || t('Sem título'))}</span>${trecho ? `<span class="continuar-trecho">${trecho.length > 180 ? '…' : ''}${escapeHtml(trecho.slice(-180))}</span>` : ''}<span class="continuar-acao">${t('Continuar escrevendo')} ${icone('direita')}</span></button></section>`;
+  return `<section class="card continuar"><div class="card-head"><h2>${t('Continuar de onde parei')}</h2><span class="continuar-quando">${t('editada {quando}', { quando: (quando => KiroIdiomas.idioma() === 'pt-BR' ? quando.toLowerCase() : quando)(dateLabel(Kiro.localDate(new Date(nota.updatedAt)))) })}</span></div><button type="button" class="continuar-nota" data-extra="continuar" data-id="${nota.id}"><span class="continuar-titulo">${pasta ? `<span class="pasta-chip"${pasta.color ? ` data-cor-pasta="${pasta.color}"` : ''}>${icone('pastas')}</span>` : icone('nota')} ${escapeHtml(nota.title || t('Sem título'))}</span>${trecho ? `<span class="continuar-trecho">${trecho.length > 180 ? '…' : ''}${escapeHtml(trecho.slice(-180))}</span>` : ''}<span class="continuar-acao">${t('Continuar escrevendo')} ${icone('direita')}</span></button></section>`;
 }
 // ---- Hábitos no Hoje: só os do dia, com a semana clicável e a sequência. ----
 // Inicial do dia da semana (0 = domingo) no idioma atual: 7/jan/2024 foi um domingo.
@@ -1467,6 +1467,7 @@ function traduzirFixos() {
   for (const raiz of document.querySelectorAll('.sidebar, #save-status')) {
     const passo = document.createTreeWalker(raiz, NodeFilter.SHOW_TEXT);
     for (let no = passo.nextNode(); no; no = passo.nextNode()) {
+      if (no.parentElement.closest('#nav-plugins')) continue; // texto de plug-in não se traduz
       const original = originaisDoIndex.get(no) ?? no.nodeValue;
       const limpo = original.trim();
       if (!limpo) continue;
@@ -1474,7 +1475,7 @@ function traduzirFixos() {
       no.nodeValue = original.replace(limpo, t(limpo));
     }
     for (const el of raiz.querySelectorAll('[title], [aria-label]')) for (const [atributo, chave] of [['title', 'ptTitle'], ['aria-label', 'ptAria']]) {
-      if (!el.hasAttribute(atributo)) continue;
+      if (!el.hasAttribute(atributo) || el.closest('#nav-plugins')) continue;
       el.dataset[chave] ??= el.getAttribute(atributo);
       el.setAttribute(atributo, t(el.dataset[chave]));
     }
@@ -2932,7 +2933,7 @@ function bindCorpo(corpo) {
   // O botão direito já abriu o bloco no mousedown; o menu age sobre ele. Shift + botão direito
   // deixa o menu do navegador (na versão web, é onde ficam as sugestões de ortografia).
   corpo.addEventListener('contextmenu', evento => {
-    if (evento.shiftKey) return;
+    if (evento.shiftKey && !window.cadernoDesktop) return;
     const area = blocoAberto?.campo ?? abrirNoPonto(evento);
     if (podeCorrigir(evento)) return esperarCorretor(evento, area, menuDaNota());
     abrirMenuContexto(evento, area);
@@ -4998,7 +4999,7 @@ aplicarLateralCompacta();
 aplicarLarguraArvore(larguraArvore);
 document.querySelector('#alternar-lateral').onclick = alternarLateralCompacta;
 // Campos de texto sem menu próprio (títulos, buscas, cartões): no app, só as sugestões do corretor.
-document.addEventListener('contextmenu', e => { if (!e.defaultPrevented && !e.shiftKey && !menuDoCorretor && podeCorrigir(e)) esperarCorretor(e, e.target, []); });
+document.addEventListener('contextmenu', e => { if (!e.defaultPrevented && (!e.shiftKey || window.cadernoDesktop) && !menuDoCorretor && podeCorrigir(e)) esperarCorretor(e, e.target, []); });
 iniciar();
 
 // ---- Início ----

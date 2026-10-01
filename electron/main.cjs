@@ -44,7 +44,8 @@ async function prepararCorretor(sessao) {
     for (const arquivo of (await readdir(embutidos)).filter(a => a.endsWith('.bdic')))
       if (!existsSync(join(destino, arquivo))) await copyFile(join(embutidos, arquivo), join(destino, arquivo));
   }
-  sessao.setSpellCheckerLanguages(IDIOMAS_DO_CORRETOR.filter(i => sessao.availableSpellCheckerLanguages.includes(i)));
+  const idiomas = IDIOMAS_DO_CORRETOR.filter(i => sessao.availableSpellCheckerLanguages.includes(i));
+  if (idiomas.length) sessao.setSpellCheckerLanguages(idiomas); // vazio: fica o padrão do sistema
 }
 function createWindow() {
   const window = new BrowserWindow({ width: 1280, height: 820, minWidth: 900, minHeight: 620, backgroundColor: '#0a0a0a', title: 'Kiro',
@@ -61,6 +62,7 @@ function createWindow() {
 }
 if (!app.requestSingleInstanceLock()) app.quit();
 else app.whenReady().then(async () => {
+  KiroIdiomas.definirIdioma(KiroIdiomas.detectar(app.getLocale())); // caixas de erro de partida; a página manda o idioma escolhido
   Menu.setApplicationMenu(null);
   settings = join(app.getPath('userData'), 'vault-settings.json');
   // Instalação que veio do KUROI: a escolha de cofre está na pasta com o nome antigo.
@@ -155,11 +157,12 @@ else app.whenReady().then(async () => {
   // Plug-ins: a lista da pasta, as escolhas do usuário e o espaço de cada plug-in.
   // A versão do app é o que a página compara com o minKiro do manifesto.
   ipcMain.handle('app:version', () => app.getVersion());
-  // Cores dos botões da janela: só as duas cores, validadas, para a janela que pediu.
+  // Corretor ortográfico e idioma: o que a página manda é validado aqui.
   ipcMain.on('idioma:definir', (_event, codigo) => KiroIdiomas.definirIdioma(String(codigo || '')));
   ipcMain.on('corretor:definir', (event, ligado) => event.sender.session.setSpellCheckerEnabled(ligado === true));
   ipcMain.on('corretor:trocar', (event, palavra) => { if (palavraValida(palavra)) event.sender.replaceMisspelling(palavra); });
   ipcMain.on('corretor:adicionar', (event, palavra) => { if (palavraParaDicionario(palavra)) event.sender.session.addWordToSpellCheckerDictionary(palavra); });
+  // Cores dos botões da janela: só as duas cores, validadas, para a janela que pediu.
   ipcMain.on('janela:cores', (event, cores) => {
     const cor = v => (typeof v === 'string' && /^#[0-9a-f]{6}$/i.test(v.trim()) ? v.trim() : null);
     const janela = BrowserWindow.fromWebContents(event.sender);
@@ -207,5 +210,5 @@ else app.whenReady().then(async () => {
   createWindow();
   app.on('activate', () => { if (!BrowserWindow.getAllWindows().length) createWindow(); });
   app.on('second-instance', () => { const window = BrowserWindow.getAllWindows()[0]; if (window) { window.restore(); window.focus(); } });
-}).catch(error => { dialog.showErrorBox('Não foi possível abrir o Kiro', error.message); app.quit(); });
+}).catch(error => { dialog.showErrorBox(t('Não foi possível abrir o Kiro'), error.message); app.quit(); });
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
