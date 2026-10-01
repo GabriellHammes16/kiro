@@ -315,7 +315,7 @@
     'Anexar link': 'Attach link',
     'Cole um link de aula ou vídeo': 'Paste a link to a lesson or video',
     'Anexar': 'Attach',
-    'Clique para escrever. [[Nome da nota]] conecta ideias e #tag marca a nota.': 'Click to write. [[Note name]] connects ideas and #tag tags the note.',
+    'Não foi possível carregar o editor': 'Could not load the editor',
     'Mencionada em ({n})': 'Mentioned in ({n})',
     'Remover link': 'Remove link',
     'Substituir o texto desta nota pelo modelo?': 'Replace this note\'s text with the template?',

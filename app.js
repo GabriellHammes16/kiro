@@ -35,6 +35,7 @@ function atualizarSeletorDeCofre() {
 function getNote(id) { return state.notes.find(n => n.id === id); }
 function getFluxo(id) { return (state.fluxos || []).find(f => f.id === id); }
 function render() {
+  const focoNoEditor = Boolean(editorDaNota?.editor.temFoco());
   KiroFluxoTela.desmontarTodos(); // grava o texto em edição no estado antes de a tela ser refeita
   if (currentView !== 'today') personalizandoHoje = false;
   if (currentView.startsWith('plugin:') && !pluginsAtivos.get(currentView.slice(7))?.manifesto?.page) currentView = 'today';
@@ -54,6 +55,9 @@ function render() {
   // Animar só na troca de tela: um redesenho comum não deve piscar.
   if (renderedView !== currentView) { app.classList.remove("view-enter"); void app.offsetWidth; app.classList.add("view-enter"); renderedView = currentView; }
   bindView(); updateCount();
+  // O editor da nota é o mesmo de antes do redesenho (montarEditorDaNota): devolve o foco a ele.
+  if (focoNoEditor && editorDaNota && document.querySelector('#doc-corpo')?.contains(editorDaNota.editor.dom)) editorDaNota.editor.focar();
+  if (editorDaNota && !document.querySelector('#doc-corpo')) { editorDaNota.editor.destruir(); editorDaNota = null; }
 }
 function head(eyebrow, title, description, action="") { return `<header class="page-head"><div><p class="eyebrow">${eyebrow}</p><h1>${title}</h1><p class="subhead">${description}</p></div>${action}</header>`; }
 function check(done, action, id) { return `<button class="check ${done ? "done" : ""}" aria-label="${done ? t('Marcar como não concluído') : t('Marcar como concluído')}" data-action="${action}" data-id="${id}"></button>`; }
@@ -942,6 +946,8 @@ async function vincularMencaoNaOutraNota(id) {
 // (data-pos) que renderizarMarkdown grava. Sem elemento (ex.: bloco em edição, virou
 // <textarea>), não faz nada: nunca rola para o título errado.
 function rolarParaTitulo(pos) {
+  // pos conta \r\n como 2 caracteres; no editor cada quebra de linha conta 1.
+  if (editorDaNota && $('#doc-corpo')?.contains(editorDaNota.editor.dom)) return editorDaNota.editor.rolarPara(editing.body.slice(0, pos).replace(/\r\n/g, '\n').length);
   document.querySelector(`#doc-corpo [data-pos="${pos}"]`)?.scrollIntoView({ block: 'start', behavior: 'smooth' });
 }
 function renderCofre() {
@@ -1520,7 +1526,7 @@ function setBusy(value){
   }
 }
 async function reload(manual=false){
-  if(aguardandoCofre||busy||(!manual&&(failed||editorDirty||fluxoPendente||KiroFluxoTela.ocupado()||$('#modal-root').firstChild)))return;
+  if(aguardandoCofre||busy||(!manual&&(failed||editorDirty||fluxoPendente||KiroFluxoTela.ocupado()||$('#modal-root').firstChild||editorDaNota?.editor.temFoco())))return;
   if(manual&&(failed||modalDirty||editorDirty||fluxoPendente)&&!confirm(t('Recarregar descarta alterações ainda não salvas nesta janela. Exporte seus dados ou copie o texto antes de continuar. Recarregar?')))return;
   setBusy(true);
   try{
@@ -1747,7 +1753,7 @@ function renderEditor(){
   return `<header class="doc-bar"><div class="crumbs"><span>${pasta?escapeHtml(pasta.path||pasta.title):t('Raiz do cofre')}</span><span>/</span><span class="crumb-atual">${escapeHtml(nota.title||t('Sem título'))}</span></div><span class="doc-ponto" id="doc-state" title="${t('Alterações não salvas')}"></span></header>
 <input class="doc-title" id="doc-title" value="${escapeHtml(nota.title)}" placeholder="${t('Sem título')}" aria-label="${t('Título da nota')}" />
 <section class="doc-details" id="doc-details" hidden><div class="two-cols"><div class="field"><label for="doc-folder">${t('Pasta')}</label><select id="doc-folder">${opcoes}</select></div><div class="field"><label for="doc-tags">${t('Tags (separadas por vírgulas)')}</label><input id="doc-tags" value="${escapeHtml(nota.tags.join(', '))}" placeholder="${t('ideias, estudos')}" /></div></div><div class="two-cols"><div class="field"><label for="doc-template">${t('Modelo')}</label><select id="doc-template"><option value="">${t('Escolher modelo…')}</option>${modelos}</select></div><div class="field"><label for="doc-link">${t('Anexar link')}</label><div class="add-link"><input id="doc-link" placeholder="${t('Cole um link de aula ou vídeo')}" /><button type="button" class="secondary" id="doc-link-add">${t('Anexar')}</button></div></div></div><div class="links-list" id="doc-links"></div></section>
-<div class="doc-corpo" id="doc-corpo" data-vazio="${t('Clique para escrever. [[Nome da nota]] conecta ideias e #tag marca a nota.')}">${renderizarMarkdown(nota.body)}</div>${renderMencoes(nota)}`;
+<div class="doc-corpo" id="doc-corpo"></div>${renderMencoes(nota)}`;
 }
 // Quem cita esta nota, com a linha do [[link]] como trecho. Nota ainda não salva não tem quem a cite.
 // "Mencionada em" no pé da nota: opcional, desligado por padrão (Configurações → Personalização).
@@ -1777,29 +1783,76 @@ function bindEditor(){
   titulo.onkeydown=e=>{
     if(e.key!=='Enter'&&e.key!=='ArrowDown')return;
     e.preventDefault();
-    const primeiro=corpo.querySelector(':scope > [data-pos]');
-    primeiro?abrirBloco(primeiro,0):abrirNoFim();
+    editorDaNota?.editor.focar('inicio');
   };
   $('#doc-folder').onchange=e=>{editing.folderId=e.target.value;sujar();};
   $('#doc-tags').oninput=e=>{editing.tags=e.target.value.split(',').map(t=>t.trim().replace(/^#/,'')).filter(Boolean);sujar();};
   $('#doc-template').onchange=e=>{
     if(!e.target.value)return;
     if(editing.body.trim()&&!confirm(t('Substituir o texto desta nota pelo modelo?'))){e.target.value='';return;}
-    blocoAberto=null;
-    editing.body=templates[e.target.value].body;corpo.innerHTML=renderizarMarkdown(editing.body);sujar();
+    editing.body=templates[e.target.value].body;editorDaNota?.editor.definirTexto(editing.body);sujar();
   };
   $('#doc-link-add').onclick=()=>{
     const campo=$('#doc-link'), valor=campo.value.trim();
     if(!Kiro.safeUrl(valor)){alert(t('Informe um endereço http:// ou https:// válido.'));return;}
     editing.links.push(valor);campo.value='';sujar();desenharLinksDoc();
   };
-  bindCorpo(corpo);
+  const montado=montarEditorDaNota(corpo);
   document.querySelectorAll('[data-editor]').forEach(b=>b.onclick=()=>acaoEditor(b.dataset.editor));
   desenharLinksDoc();estadoDoc();
   $('.cofre-nota')?.scrollTo(0, 0);
   // Nota nova começa pelo título; nota existente sem texto já abre o campo para escrever.
+  // (o editor pode ainda estar carregando: o foco espera a montagem)
   if(!editing.id)titulo.focus({preventScroll:true});
-  else if(!editing.body.trim())abrirNoFim();
+  else if(!editing.body.trim())montado.then(editor=>{if(editor&&editorDaNota?.editor===editor)editor.focar('fim');});
+}
+// O corpo da nota é um editor CodeMirror (editor-nota.js). A instância vive enquanto a mesma nota
+// está aberta: um redesenho (salvar, releitura) recoloca o mesmo editor no lugar novo, com cursor,
+// rolagem e desfazer intactos.
+let editorDaNota = null; // { chave, editor }
+const chaveDaNota = nota => nota.id || 'rascunho';
+function opcoesDoEditor() {
+  return {
+    aoMudar: texto => { if (!editing) return; editing.body = texto; editorDirty = true; estadoDoc(); },
+    aoSalvar: () => salvarNota(),
+    existe: alvo => Boolean(Kiro.findLinkedNote(state.notes, alvo)),
+    aoTeclar: evento => Boolean(sugestao && teclaNaSugestao(evento)),
+    aoMoverCursor: () => atualizarSugestoes(editorDaNota?.editor.area()),
+    aoColar: evento => {
+      const arquivos = imagensDoEvento(evento.clipboardData || evento.dataTransfer);
+      if (!arquivos.length) return false;
+      evento.preventDefault();
+      colarImagens(editorDaNota.editor.area(), arquivos);
+      return true;
+    },
+    aoMenu: evento => {
+      if (evento.shiftKey && !window.cadernoDesktop) return;
+      const area = editorDaNota.editor.area();
+      if (podeCorrigir(evento)) return esperarCorretor(evento, area, menuDaNota());
+      abrirMenuContexto(evento, area);
+    },
+  };
+}
+async function montarEditorDaNota(corpo) {
+  const chave = chaveDaNota(editing);
+  if (editorDaNota?.chave === chave) {
+    corpo.replaceChildren(editorDaNota.editor.dom);
+    editorDaNota.editor.definirTexto(editing.body);
+    return editorDaNota.editor;
+  }
+  editorDaNota?.editor.destruir(); editorDaNota = null;
+  try { await KiroEditor.carregar(); }
+  catch {
+    status(t('Não foi possível carregar o editor'), true);
+    const campo = Object.assign(document.createElement('textarea'), { className: 'doc-corpo-simples', value: editing.body });
+    campo.addEventListener('input', () => { editing.body = campo.value; editorDirty = true; estadoDoc(); });
+    corpo.replaceChildren(campo);
+    return null;
+  }
+  if (!corpo.isConnected || chaveDaNota(editing || {}) !== chave) return null;   // trocou de nota enquanto carregava
+  const editor = KiroEditor.montar(corpo, { texto: editing.body, ...opcoesDoEditor() });
+  editorDaNota = { chave, editor };
+  return editor;
 }
 // ---- Grafo de conexões ----
 // As ligações são derivadas do texto, como no resto do Kiro: não há índice a
@@ -2566,6 +2619,7 @@ function abrirBloco(elemento, cursor = Infinity) {
 
 // Clique abaixo do texto: continua o último parágrafo, ou começa um novo no fim.
 function abrirNoFim() {
+  if (editorDaNota && $('#doc-corpo')?.contains(editorDaNota.editor.dom)) { editorDaNota.editor.focar('fim'); return editorDaNota.editor.area(); }
   fecharBloco();
   const corpo = $('#doc-corpo');
   const ultimo = [...corpo.querySelectorAll(':scope > [data-pos]')].pop();
@@ -2656,6 +2710,7 @@ function fecharSugestoes() { sugestao?.lista.remove(); sugestao = null; }
 // A lista é fixa na tela: se a página rolar, fecha em vez de ficar longe do cursor.
 document.addEventListener('scroll', () => { if (sugestao) fecharSugestoes(); }, true);
 function atualizarSugestoes(campo) {
+  if (!campo) return fecharSugestoes();
   const cursor = campo.selectionStart, antes = campo.value.slice(0, cursor);
   const consulta = cursor === campo.selectionEnd ? Kiro.linkQuery(antes.slice(antes.lastIndexOf('\n') + 1)) : null;
   const titulos = consulta === null ? [] : Kiro.linkSuggestions(state.notes.filter(n => n.id !== editing?.id), consulta);
@@ -2699,6 +2754,7 @@ function teclaNaSugestao(evento) {
 }
 // Div espelho com a mesma caixa e fonte do campo: o fim do texto antes do cursor é onde o cursor está.
 function posicaoDoCursor(campo) {
+  if (campo.posicao) { const p = campo.posicao(); if (p) return p; }
   const estilo = getComputedStyle(campo), espelho = document.createElement('div');
   for (const p of ['boxSizing', 'width', 'padding', 'border', 'font', 'letterSpacing', 'lineHeight', 'tabSize', 'textIndent']) espelho.style[p] = estilo[p];
   Object.assign(espelho.style, { position: 'fixed', top: '0', left: '0', visibility: 'hidden', whiteSpace: 'pre-wrap', overflowWrap: 'break-word' });
@@ -2779,7 +2835,7 @@ async function colarImagens(campo, arquivos) {
   }
   if (!trechos.length || !editing) return;
   // Se o bloco fechou enquanto a imagem era gravada, ela entra no fim da nota.
-  const destino = campo.isConnected && blocoAberto?.campo === campo ? campo : abrirNoFim();
+  const destino = (campo.inserir ? editorDaNota?.editor.area() === campo : campo.isConnected && blocoAberto?.campo === campo) ? campo : abrirNoFim();
   // Cada imagem vira um parágrafo próprio, separado do texto em volta por linha em branco.
   const texto = destino.value, anterior = texto.slice(0, destino.selectionStart), seguinte = texto.slice(destino.selectionEnd);
   const antes = !anterior || anterior.endsWith('\n\n') ? '' : anterior.endsWith('\n') ? '\n' : '\n\n';
@@ -2797,7 +2853,7 @@ function aoColarOuSoltar(evento) {
 }
 // Ctrl+V com a nota aberta mas nenhum bloco em edição: a imagem entra no fim da nota.
 document.addEventListener('paste', evento => {
-  if (!editing || blocoAberto || evento.defaultPrevented || !$('#doc-corpo')) return;
+  if (!editing || editorDaNota?.editor.temFoco() || evento.defaultPrevented || !$('#doc-corpo')) return;
   if (evento.target.closest?.('input, textarea, select, [contenteditable]')) return;
   const arquivos = imagensDoEvento(evento.clipboardData);
   if (!arquivos.length) return;
@@ -2957,6 +3013,7 @@ function bindCorpo(corpo) {
 // O corpo é Markdown puro: cada item insere a marcação correspondente.
 // Usa execCommand('insertText') para não destruir a pilha de desfazer do textarea.
 function inserirTexto(area, texto) {
+  if (area.inserir) { area.focus(); area.inserir(texto); return; }
   area.focus();
   let ok = false;
   try { ok = document.execCommand('insertText', false, texto); } catch { ok = false; }
@@ -3030,7 +3087,7 @@ function wikilinkNoCursor(area) {
   return null;
 }
 function menuDaNota() {
-  const destino = wikilinkNoCursor(blocoAberto?.campo);
+  const destino = wikilinkNoCursor(editorDaNota?.editor.area() ?? blocoAberto?.campo);
   return [
     ...(destino ? [
       { rotulo: t('Ir para "{alvo}"', { alvo: destino.alvo }), icone: icone('ir-para'), acao: () => abrirNota(destino.nota || notaVazia({ title: destino.alvo })) },
@@ -3092,7 +3149,7 @@ function menuDaNota() {
     { rotulo: t('Copiar'), icone: icone('copiar'), ativo: temSelecao, acao: a => copiarSelecao(a, false) },
     { rotulo: t('Colar'), icone: icone('colar'), acao: colar },
     { separador: true },
-    { rotulo: t('Selecionar tudo'), icone: icone('selecionar'), acao: a => a.select() },
+    { rotulo: t('Selecionar tudo'), icone: icone('selecionar'), acao: a => a.setSelectionRange(0, a.value.length) },
     { separador: true },
     { rotulo: t('Salvar'), icone: icone('salvar'), acao: () => salvarNota() },
     { rotulo: t('Detalhes'), icone: icone('detalhes'), acao: () => acaoEditor('detalhes') },
@@ -3146,7 +3203,8 @@ function montarNivel(itens, area) {
     } else if (habilitado) {
       linha.addEventListener('click', async () => {
         fecharMenuContexto();
-        if (document.body.contains(area)) await item.acao(area);
+        // a área do editor da nota não é um nó: vale enquanto for a do editor aberto
+        if (area.inserir ? editorDaNota?.editor.area() === area : document.body.contains(area)) await item.acao(area);
       });
     }
     nivel.appendChild(linha);
@@ -3209,17 +3267,17 @@ async function acaoEditor(tipo){
 async function salvarNota(){
   if(busy||failed||!loaded)return false;
   if(!editing.title.trim()){status(t('Dê um título à nota antes de salvar.'),true);$('#doc-title')?.focus();return false;}
-  // Salvar redesenha a nota; quem estava digitando volta para o mesmo ponto.
-  const retomar=blocoAberto&&document.activeElement===blocoAberto.campo?{inicio:blocoAberto.inicio,cursor:blocoAberto.campo.selectionStart}:null;
   const eraNova=!editing.id;
   const salva={...editing,id:editing.id||uid(),title:editing.title.trim(),createdAt:editing.createdAt||Date.now(),updatedAt:Date.now()};
   state.notes=editing.id?state.notes.map(n=>n.id===editing.id?salva:n):[salva,...state.notes];
   editing=salva;
   if(eraNova){abas=KiroAbas.trocarId(abas,KiroAbas.RASCUNHO,salva.id);gravarAbas();}
+  // O rascunho virou nota com id: o mesmo editor continua (cursor e desfazer intactos).
+  if(eraNova&&editorDaNota?.chave==='rascunho')editorDaNota.chave=chaveDaNota(salva);
   if(!await save())return false;
   const atual=getNote(salva.id);
   if(atual)editing={...atual,tags:[...(atual.tags||[])],links:[...(atual.links||[])]};
-  editorDirty=false;render();if(retomar&&editing)retomarBloco(retomar);return true;
+  editorDirty=false;render();return true;
 }
 async function extraAction(type,id){
   if(busy||failed||!loaded)return;
