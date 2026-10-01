@@ -142,9 +142,11 @@ baixo no título descem para o texto; sugestões de `[[` com setas, Enter e Esc,
     (`#` no meio de palavra, `[[` sem fechar);
   - adaptador `area()`: `envolver` e `prefixar` dão o mesmo texto que num `textarea`;
   - o teste de cobertura de idiomas continua passando (frases novas em `idiomas/en.js`).
-- App desktop automatizado (script em `dev/`, fora do `npm test`): clique direito em "ovario"
+- App desktop automatizado (feito por quem coordena, com o driver de automação do ambiente; o script não entra no repositório porque o driver não é dependência do projeto): clique direito em "ovario"
   no corpo da nota traz "ovário"; escolher troca e Ctrl+Z desfaz; Ctrl+S salva sem perder o
   cursor; 10 s com a nota aberta sem editar não fecham a edição nem tiram o foco.
+- Sumário do painel da direita: clicar num título rola o editor até ele (hoje usa `data-pos` da
+  leitura). Colar ou soltar imagem insere o `![[…]]` no cursor (o desenho da imagem é etapa 2).
 
 ## Fora do escopo desta etapa
 
