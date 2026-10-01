@@ -22,4 +22,9 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
-O WebAssembly embutido é o Hunspell (https://github.com/hunspell/hunspell), sob MPL 1.1 / GPL 2.0 / LGPL 2.1, à escolha.
+==== Hunspell (MPL 1.1 / GPL 2.0 / LGPL 2.1) ====
+
+Copyright (C) 2002-2023 Hunspell Developers
+https://github.com/hunspell/hunspell
+
+Hunspell é fornecido sob a Mozilla Public License 1.1 (https://www.mozilla.org/MPL/1.1/), GNU General Public License version 2.0 (GPL 2.0), ou GNU Lesser General Public License version 2.1 (LGPL 2.1), à sua escolha.
