@@ -103,3 +103,22 @@ test('código em linha: crases escondidas fora do cursor, conteúdo sem corretor
   assert.ok(r.estilos.some(([a, b, c]) => c === 'ed-codigo' && texto.slice(a, b).includes('npm test')));
   assert.ok(r.estilos.some(([a, b, c]) => c === 'ed-sem-corretor' && texto.slice(a, b).includes('npm test')));
 });
+
+const semSobreposicao = (intervalos, msg) => {
+  for (let i = 1; i < intervalos.length; i++) assert.ok(intervalos[i][0] >= intervalos[i - 1][1], `${msg}: ${JSON.stringify(intervalos)}`);
+};
+
+test('endereços e autolinks não têm marcações do Kiro', () => {
+  for (const texto of ['[a](http://x?a==b==c)\n\n.', '<https://x.com/#a==b==>\n\n.']) {
+    const r = ver(texto);
+    assert.ok(!r.estilos.some(([, , c]) => c === 'ed-realce'), `sem realce em ${texto}`);
+    const ini = texto.indexOf('http');
+    assert.ok(!r.esconder.some(([a, b]) => a >= ini && b <= texto.indexOf('\n') - (texto[0] === '<' ? 1 : 1) && texto.slice(a, b) === '=='), 'nada escondido dentro do endereço');
+  }
+});
+
+test('trechos escondidos nunca se sobrepõem', () => {
+  for (const t of ['**[[Nota]]**', '==[[x]]==', '~~[[x]]~~', '# Tit [[Nota]] #tag', '*a [[b]] c*', '[a **b** c](u)', '[a](http://x?a==b==c)', '<https://x.com/#a==b==>']) {
+    semSobreposicao(ver(t + '\n\n.').esconder, t);
+  }
+});

@@ -36,7 +36,7 @@
     const r = { esconder: [], estilos: [], linhas: [], trocar: [] };
     const naLinhaDoCursor = pos => linhasDoCursor.has(state.doc.lineAt(pos).number);
     const esconder = (a, b) => { if (b > a && !naLinhaDoCursor(a)) r.esconder.push([a, b]); };
-    const codigo = [];   // trechos de código: marcações do Kiro não valem dentro deles
+    const excluir = [];   // código e endereços: marcações do Kiro não valem dentro deles
     const linhasDe = (a, b, classe) => { for (let p = a; p <= b;) { const l = state.doc.lineAt(p); r.linhas.push([l.from, classe]); p = l.to + 1; } };
     CM().language.syntaxTree(state).iterate({
       from: de, to: ate,
@@ -46,7 +46,7 @@
         if (titulo) { r.linhas.push([state.doc.lineAt(no.from).from, `ed-h${titulo[1]}`]); return; }
         if (nome === 'HeaderMark') { const fim = state.sliceDoc(no.to, no.to + 1) === ' ' ? no.to + 1 : no.to; esconder(no.from, fim); return; }
         if (ESTILO_DO_NO[nome]) r.estilos.push([no.from, no.to, ESTILO_DO_NO[nome]]);
-        if (nome === 'InlineCode') { r.estilos.push([no.from, no.to, 'ed-sem-corretor']); codigo.push([no.from, no.to]); }
+        if (nome === 'InlineCode') { r.estilos.push([no.from, no.to, 'ed-sem-corretor']); excluir.push([no.from, no.to]); }
         if (MARCAS.has(nome)) { esconder(no.from, no.to); return; }
         if (nome === 'Link') {
           const marcas = [], url = [];
@@ -57,9 +57,10 @@
             esconder(marcas[0].from, marcas[0].to);
             esconder(marcas[1].from, no.to);
           }
-          for (const u of url) r.estilos.push([u.from, u.to, 'ed-sem-corretor']);
+          for (const u of url) { r.estilos.push([u.from, u.to, 'ed-sem-corretor']); excluir.push([u.from, u.to]); }
           return false;
         }
+        if (nome === 'Autolink') { excluir.push([no.from, no.to]); return false; }
         if (nome === 'Blockquote') linhasDe(no.from, no.to, 'ed-citacao');
         if (nome === 'QuoteMark') { const fim = state.sliceDoc(no.to, no.to + 1) === ' ' ? no.to + 1 : no.to; esconder(no.from, fim); return; }
         if (nome === 'HorizontalRule') { r.linhas.push([state.doc.lineAt(no.from).from, 'ed-regua']); esconder(no.from, no.to); return; }
@@ -70,7 +71,7 @@
         }
         if (nome === 'FencedCode') {
           linhasDe(no.from, no.to, 'ed-codigo-bloco');
-          codigo.push([no.from, no.to]);
+          excluir.push([no.from, no.to]);
           const primeira = state.doc.lineAt(no.from), ultima = state.doc.lineAt(no.to);
           if (ultima.number > primeira.number + 1) r.estilos.push([state.doc.line(primeira.number + 1).from, state.doc.line(ultima.number - 1).to, 'ed-sem-corretor']);
           esconder(primeira.from, primeira.to);
@@ -80,7 +81,7 @@
       },
     });
     // Marcações do Kiro, linha a linha, fora de código.
-    const dentroDeCodigo = (a, b) => codigo.some(([x, y]) => a < y && b > x);
+    const dentroDeCodigo = (a, b) => excluir.some(([x, y]) => a < y && b > x);
     for (let p = de; p <= ate;) {
       const linha = state.doc.lineAt(p);
       for (const m of marcacoesDoKiro(linha.text)) {
@@ -98,6 +99,8 @@
       p = linha.to + 1;
     }
     r.esconder.sort((x, y) => x[0] - y[0]);
+    // defesa: Decoration.replace lança em intervalos sobrepostos
+    r.esconder = r.esconder.filter((x, i, v) => { if (i && x[0] < (v.fim ?? 0)) return false; v.fim = x[1]; return true; });
     return r;
   }
 
