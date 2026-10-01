@@ -29,3 +29,21 @@ test('com \\r\\n, value vem com \\n (como um textarea) e a inserção preserva o
   area.inserir('X');
   assert.equal(texto(), 'a\r\nXb');
 });
+
+test('inserir com \n numa nota \r\n não mistura finais de linha', () => {
+  const { area, texto } = areaDe('a\r\nb', 1);
+  area.inserir('\nX');
+  assert.equal(texto(), 'a\r\nX\r\nb');
+  assert.ok(!/(^|[^\r])\n/.test(texto()));
+});
+
+test('transacaoDeTexto: cursor limitado ao novo texto, fora do histórico e marcada como externa', () => {
+  const S = CM.state;
+  let s = S.EditorState.create({ doc: 'x\r\ny\r\nzzzzzz', selection: { anchor: 10 }, extensions: [S.EditorState.lineSeparator.of('\r\n')] });
+  const tr = s.update(E.transacaoDeTexto(s, 'a\r\nb\r\nc'));
+  assert.equal(tr.state.sliceDoc(), 'a\r\nb\r\nc');
+  assert.equal(tr.state.selection.main.head, tr.state.doc.length);
+  assert.equal(tr.annotation(S.Transaction.addToHistory), false);
+  assert.equal(E.veioDeFora(tr), true);
+  assert.equal(E.veioDeFora(s.update({ changes: { from: 0, insert: 'q' } })), false);
+});

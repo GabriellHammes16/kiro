@@ -4,6 +4,7 @@
 // entrega o novo por aoMudar.
 (function (root) {
   const CM = () => root.CM;
+  const t = (f, v) => (root.KiroIdiomas ? root.KiroIdiomas.t(f, v) : f);
 
   const separadorDeLinha = texto => (texto.includes('\r\n') ? '\r\n' : '\n');
 
@@ -32,13 +33,20 @@
   const ESTILO_DO_NO = { StrongEmphasis: 'ed-negrito', Emphasis: 'ed-italico', Strikethrough: 'ed-tachado', InlineCode: 'ed-codigo' };
   const MARCAS = new Set(['EmphasisMark', 'StrikethroughMark', 'CodeMark']);
 
-  function analisar(state, de, ate, linhasDoCursor, { existe } = {}) {
+  function analisar(state, de, ate, linhasDoCursor, { existe, arvore } = {}) {
     const r = { esconder: [], estilos: [], linhas: [], trocar: [] };
     const naLinhaDoCursor = pos => linhasDoCursor.has(state.doc.lineAt(pos).number);
-    const esconder = (a, b) => { if (b > a && !naLinhaDoCursor(a)) r.esconder.push([a, b]); };
+    // por linha: Decoration.replace vinda de plugin não pode cobrir quebra de linha
+    const esconder = (a, b) => {
+      for (let p = a; p < b;) {
+        const l = state.doc.lineAt(p), fim = Math.min(b, l.to);
+        if (fim > p && !linhasDoCursor.has(l.number)) r.esconder.push([p, fim]);
+        p = l.to + 1;
+      }
+    };
     const excluir = [];   // código e endereços: marcações do Kiro não valem dentro deles
     const linhasDe = (a, b, classe) => { for (let p = a; p <= b;) { const l = state.doc.lineAt(p); r.linhas.push([l.from, classe]); p = l.to + 1; } };
-    CM().language.syntaxTree(state).iterate({
+    (arvore ?? CM().language.syntaxTree(state)).iterate({
       from: de, to: ate,
       enter: no => {
         const nome = no.name;
@@ -104,6 +112,23 @@
     return r;
   }
 
+  // Texto do CodeMirror a partir de uma string com qualquer final de linha: o doc guarda as linhas
+  // e o lineSeparator decide o que sai; assim um \n inserido numa nota \r\n vira \r\n.
+  const textoDe = s => CM().state.Text.of(s.split(/\r\n|\r|\n/));
+
+  // Recarga vinda de fora (o cofre): não entra no desfazer e não volta por aoMudar.
+  let externo = null;
+  const marcaExterna = () => (externo ??= CM().state.Annotation.define());
+  const veioDeFora = tr => tr.annotation(marcaExterna()) === true;
+  function transacaoDeTexto(state, novo) {
+    const texto = textoDe(novo);
+    return {
+      changes: { from: 0, to: state.doc.length, insert: texto },
+      selection: { anchor: Math.min(state.selection.main.head, texto.length) },
+      annotations: [CM().state.Transaction.addToHistory.of(false), marcaExterna().of(true)],
+    };
+  }
+
   // Adaptador: o que os menus e atalhos do app esperam de um textarea, sobre o estado do editor.
   // value é o doc com \n (como um textarea normaliza), porque as posições do CodeMirror contam
   // cada quebra como 1 caractere mesmo com lineSeparator '\r\n'; assim value e os índices batem
@@ -117,7 +142,8 @@
       focus() { focar(); },
       inserir(texto) {
         const { from, to } = estado().selection.main;
-        aplicar({ changes: { from, to, insert: texto }, selection: { anchor: from + texto.length }, userEvent: 'input' });
+        const novo = textoDe(texto);
+        aplicar({ changes: { from, to, insert: novo }, selection: { anchor: from + novo.length }, userEvent: 'input' });
       },
       posicao: () => (posicao ? posicao() : null),
     };
@@ -129,8 +155,9 @@
     carregando ??= new Promise((ok, falha) => {
       const s = document.createElement('script');
       s.src = 'vendor/codemirror/codemirror.js';
-      s.onload = () => (root.CM ? ok() : falha(new Error('Não foi possível carregar o editor')));
-      s.onerror = () => { carregando = null; s.remove(); falha(new Error('Não foi possível carregar o editor')); };
+      const erro = () => { carregando = null; s.remove(); falha(new Error('Não foi possível carregar o editor')); };
+      s.onload = () => (root.CM ? ok() : erro());
+      s.onerror = erro;
       document.head.appendChild(s);
     });
     return carregando;
@@ -141,8 +168,8 @@
     const decorar = view => {
       const linhas = linhasDaSelecao(view.state), marcas = [];
       for (const { from, to } of view.visibleRanges) {
-        L.ensureSyntaxTree(view.state, to, 50);
-        const r = analisar(view.state, from, to, linhas, { existe });
+        const arvore = L.ensureSyntaxTree(view.state, to, 50) ?? L.syntaxTree(view.state);
+        const r = analisar(view.state, from, to, linhas, { existe, arvore });
         for (const [a, classe] of r.linhas) marcas.push(V.Decoration.line({ class: classe }).range(a));
         for (const [a, b, classe] of r.estilos) if (b > a) marcas.push(V.Decoration.mark(classe === 'ed-sem-corretor' ? { attributes: { spellcheck: 'false' } } : { class: classe }).range(a, b));
         for (const [a, b] of r.esconder) marcas.push(V.Decoration.replace({}).range(a, b));
@@ -179,10 +206,10 @@
           ]),
           M.markdown({ base: M.markdownLanguage }),
           V.EditorView.lineWrapping,
-          V.EditorView.contentAttributes.of({ 'aria-label': root.KiroIdiomas ? root.KiroIdiomas.t('Conteúdo da nota') : 'Conteúdo da nota' }),
+          V.EditorView.contentAttributes.of({ 'aria-label': t('Conteúdo da nota') }),
           aoVivo,
           V.EditorView.updateListener.of(u => {
-            if (u.docChanged) aoMudar?.(u.state.sliceDoc());
+            if (u.docChanged && !u.transactions.some(veioDeFora)) aoMudar?.(u.state.sliceDoc());
             if (u.docChanged || u.selectionSet) aoMoverCursor?.();
           }),
         ],
@@ -190,28 +217,28 @@
     });
     const aplicar = spec => view.dispatch(spec);
     const posicao = () => { const c = view.coordsAtPos(view.state.selection.main.head); return c ? { left: c.left, top: c.top, altura: c.bottom - c.top } : null; };
+    const limitar = pos => Math.min(Math.max(pos, 0), view.state.doc.length);
     const area = criarArea({ estado: () => view.state, aplicar, focar: () => view.focus(), posicao });
     return {
       dom: view.dom,
       texto: () => view.state.sliceDoc(),
       definirTexto(novo) {
         if (novo === view.state.sliceDoc()) return;
-        const cursor = Math.min(view.state.selection.main.head, novo.length);
-        view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: novo }, selection: { anchor: cursor } });
+        view.dispatch(transacaoDeTexto(view.state, novo));
       },
       area: () => area,
       focar(onde) {
-        const pos = onde === 'inicio' ? 0 : onde === 'fim' ? view.state.doc.length : typeof onde === 'number' ? onde : null;
+        const pos = onde === 'inicio' ? 0 : onde === 'fim' ? view.state.doc.length : typeof onde === 'number' ? limitar(onde) : null;
         if (pos !== null) view.dispatch({ selection: { anchor: pos }, scrollIntoView: true });
         view.focus();
       },
       temFoco: () => view.hasFocus,
-      rolarPara(pos) { view.dispatch({ effects: V.EditorView.scrollIntoView(pos, { y: 'start' }) }); },
+      rolarPara(pos) { view.dispatch({ effects: V.EditorView.scrollIntoView(limitar(pos), { y: 'start' }) }); },
       destruir: () => view.destroy(),
     };
   }
 
-  const api = { separadorDeLinha, marcacoesDoKiro, linhasDaSelecao, analisar, criarArea, carregar, montar };
+  const api = { separadorDeLinha, marcacoesDoKiro, linhasDaSelecao, analisar, criarArea, transacaoDeTexto, veioDeFora, carregar, montar };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.KiroEditor = api;
 })(globalThis);

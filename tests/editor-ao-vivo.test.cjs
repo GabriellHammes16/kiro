@@ -122,3 +122,22 @@ test('trechos escondidos nunca se sobrepõem', () => {
     semSobreposicao(ver(t + '\n\n.').esconder, t);
   }
 });
+
+test('trechos escondidos nunca atravessam uma quebra de linha', () => {
+  for (const t of ['[a](http://x\n"t")\n\nfim', '[a](http://x\n"t")\nfim', '**a\nb**\n\nfim']) {
+    const s = estado(t, t.length);
+    CM.language.ensureSyntaxTree(s, s.doc.length, 5000);
+    const r = E.analisar(s, 0, s.doc.length, E.linhasDaSelecao(s), {});
+    assert.ok(r.esconder.length > 0, t);
+    for (const [a, b] of r.esconder) assert.equal(s.doc.lineAt(a).number, s.doc.lineAt(b - 1).number, `${JSON.stringify(t)} [${a},${b}]`);
+  }
+});
+
+test('analisar usa a árvore recebida, quando há', () => {
+  const s = estado('**a**\n\nfim', 9), outra = estado('xxaxx\n\nfim', 9);
+  CM.language.ensureSyntaxTree(s, s.doc.length, 5000);
+  CM.language.ensureSyntaxTree(outra, outra.doc.length, 5000);
+  const r = E.analisar(s, 0, s.doc.length, E.linhasDaSelecao(s), { arvore: CM.language.syntaxTree(outra) });
+  assert.deepEqual(r.esconder, []);
+  assert.ok(!r.estilos.some(([, , c]) => c === 'ed-negrito'));
+});
