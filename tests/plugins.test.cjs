@@ -316,8 +316,8 @@ test('o host reservado do worker nunca é id de plug-in válido', async () => {
 test('a CSP do index.html declara connect-src sem perder o resto', () => {
   const html = require('node:fs').readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
   const csp = html.match(/http-equiv="Content-Security-Policy" content="([^"]+)"/)[1];
-  assert.ok(/(^|; )connect-src 'self'(;|$)/.test(csp), 'connect-src explícito');
-  for (const diretiva of ["default-src 'self'", "script-src 'self'", "worker-src 'self' blob: kiro-plugin:", "object-src 'none'", "base-uri 'none'", 'kiro-anexo:']) {
+  assert.ok(/(^|; )connect-src 'self' data:(;|$)/.test(csp), 'connect-src explícito com data:');
+  for (const diretiva of ["default-src 'self'", "script-src 'self' 'wasm-unsafe-eval'", "worker-src 'self' blob: kiro-plugin:", "object-src 'none'", "base-uri 'none'", 'kiro-anexo:']) {
     assert.ok(csp.includes(diretiva), diretiva);
   }
 });

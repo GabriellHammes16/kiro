@@ -26,3 +26,27 @@ test('o servidor entrega o motor e os dicionários, e só códigos válidos', ()
   assert.ok(s.includes('vendor/dicionarios'));
   assert.ok(s.includes('[a-z]{2}-[A-Z]{2}'));
 });
+
+test('as CSPs permitem WebAssembly e o binário embutido do motor', () => {
+  const html = fs.readFileSync(path.join(raiz, 'index.html'), 'utf8');
+  const htmlCsp = html.match(/http-equiv="Content-Security-Policy" content="([^"]+)"/)[1];
+
+  const server = fs.readFileSync(path.join(raiz, 'server.mjs'), 'utf8');
+  const serverCspMatch = server.match(/response\.setHeader\('Content-Security-Policy', "([^"]+)"/);
+  assert.ok(serverCspMatch, 'CSP do servidor encontrada');
+  const serverCsp = serverCspMatch[1];
+
+  // index.html deve permitir WebAssembly e dados embutidos
+  assert.ok(htmlCsp.includes("'wasm-unsafe-eval'"), 'index.html: script-src tem wasm-unsafe-eval');
+  assert.ok(/(^|; )connect-src 'self' data:(;|$)/.test(htmlCsp), 'index.html: connect-src permite data:');
+
+  // server.mjs deve ter o mesmo
+  assert.ok(serverCsp.includes("'wasm-unsafe-eval'"), 'server.mjs: script-src tem wasm-unsafe-eval');
+  assert.ok(/(^|; )connect-src 'self' data:(;|$)/.test(serverCsp), 'server.mjs: connect-src permite data:');
+
+  // CSP do worker não deve mudar (deve ter connect-src 'none')
+  const workerCspMatch = server.match(/CSP.*WORKER.*?["']([^"']*connect-src[^"']*)['"]/i) ||
+                         server.match(/connect-src 'none'.*plugin-worker/);
+  // Verificar que em algum lugar do server há refer=ência à CSP do worker com connect-src 'none'
+  assert.ok(server.includes("connect-src 'none'"), 'server.mjs: CSP do worker mantém connect-src none');
+});
