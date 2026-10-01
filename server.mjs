@@ -112,6 +112,14 @@ createServer(async (request, response) => {
         return response.end(corpo);
       } catch { return send(response, 404, { error: frase('Arquivo não encontrado.') }); }
     }
+    // CodeMirror 6 embarcado: um arquivo só, gerado por scripts/build-codemirror.mjs.
+    if (request.method === 'GET' && rota === '/vendor/codemirror/codemirror.js') {
+      try {
+        const corpo = await readFile(join(root, 'vendor', 'codemirror', 'codemirror.js'));
+        response.writeHead(200, { 'Content-Type': 'text/javascript; charset=utf-8', 'Cache-Control': 'no-cache' });
+        return response.end(corpo);
+      } catch { return send(response, 404, { error: frase('Arquivo não encontrado.') }); }
+    }
     // Fontes embarcadas: nome fixo, sem caminho, e só .woff2 de dentro de fonts/.
     if (request.method === 'GET' && /^\/fonts\/[a-z0-9-]+\.woff2$/.test(rota)) {
       try {

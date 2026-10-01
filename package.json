@@ -8,6 +8,7 @@
     "dev": "node --watch server.mjs --dev",
     "dev:reset": "node dev/seed.cjs --reset",
     "test": "node --test tests/*.test.cjs",
+    "vendor:codemirror": "node scripts/build-codemirror.mjs",
     "desktop": "electron .",
     "desktop:dev": "electron . --dev-vault",
     "mcp": "node mcp/server.mjs",
@@ -61,7 +62,14 @@
     "js-yaml": "4.3.2"
   },
   "devDependencies": {
+    "@codemirror/commands": "^6.11.1",
+    "@codemirror/lang-markdown": "^6.5.2",
+    "@codemirror/language": "^6.12.4",
+    "@codemirror/state": "^6.7.6",
+    "@codemirror/view": "^6.43.13",
+    "@lezer/markdown": "^1.7.2",
     "electron": "^44.1.1",
-    "electron-builder": "^26.15.3"
+    "electron-builder": "^26.15.3",
+    "esbuild": "^0.28.2"
   }
 }
