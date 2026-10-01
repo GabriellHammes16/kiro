@@ -120,6 +120,23 @@ createServer(async (request, response) => {
         return response.end(corpo);
       } catch { return send(response, 404, { error: frase('Arquivo não encontrado.') }); }
     }
+    // Hunspell embarcado: motor em WebAssembly.
+    if (request.method === 'GET' && rota === '/vendor/hunspell/hunspell.js') {
+      try {
+        const corpo = await readFile(join(root, 'vendor', 'hunspell', 'hunspell.js'));
+        response.writeHead(200, { 'Content-Type': 'text/javascript; charset=utf-8', 'Cache-Control': 'no-cache' });
+        return response.end(corpo);
+      } catch { return send(response, 404, { error: frase('Arquivo não encontrado.') }); }
+    }
+    // Dicionários embarcados: um por idioma, gerados por scripts/build-ortografia.mjs — vendor/dicionarios/
+    const dicionario = rota.match(/^\/vendor\/dicionarios\/([a-z]{2}-[A-Z]{2})\.js$/);
+    if (request.method === 'GET' && dicionario) {
+      try {
+        const corpo = await readFile(join(root, 'vendor', 'dicionarios', `${dicionario[1]}.js`));
+        response.writeHead(200, { 'Content-Type': 'text/javascript; charset=utf-8', 'Cache-Control': 'no-cache' });
+        return response.end(corpo);
+      } catch { return send(response, 404, { error: frase('Arquivo não encontrado.') }); }
+    }
     // Fontes embarcadas: nome fixo, sem caminho, e só .woff2 de dentro de fonts/.
     if (request.method === 'GET' && /^\/fonts\/[a-z0-9-]+\.woff2$/.test(rota)) {
       try {

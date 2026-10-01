@@ -9,6 +9,7 @@
     "dev:reset": "node dev/seed.cjs --reset",
     "test": "node --test tests/*.test.cjs",
     "vendor:codemirror": "node scripts/build-codemirror.mjs",
+    "vendor:ortografia": "node scripts/build-ortografia.mjs",
     "desktop": "electron .",
     "desktop:dev": "electron . --dev-vault",
     "mcp": "node mcp/server.mjs",
@@ -68,8 +69,11 @@
     "@codemirror/state": "^6.7.6",
     "@codemirror/view": "^6.43.13",
     "@lezer/markdown": "^1.7.2",
+    "dictionary-en": "^4.0.0",
+    "dictionary-pt": "^4.0.0",
     "electron": "^44.1.1",
     "electron-builder": "^26.15.3",
-    "esbuild": "^0.28.2"
+    "esbuild": "^0.28.2",
+    "hunspell-asm": "^4.0.2"
   }
 }
