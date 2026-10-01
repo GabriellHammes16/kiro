@@ -475,6 +475,7 @@ function aplicarCorretor() {
   if (corretorLigado) document.documentElement.removeAttribute('spellcheck');
   else document.documentElement.setAttribute('spellcheck', 'false');
   window.cadernoDesktop?.definirCorretor?.(corretorLigado);
+  editorDaNota?.editor.definirCorretor?.(corretorLigado);
 }
 let lateralRecolhida = lerPreferencia('lateralRecolhida') === '1';
 // Papel de parede: imagem atrás do conteúdo de todas as telas, menos Pastas (onde se lê e escreve).
@@ -1824,6 +1825,7 @@ let montagemDoEditor = Promise.resolve(null);   // a montagem em curso (ou a úl
 const chaveDaNota = nota => nota.id || 'rascunho';
 function opcoesDoEditor() {
   return {
+    corretor: corretorLigado,
     aoMudar: texto => { if (!editing) return; editing.body = texto; editorDirty = true; estadoDoc(); },
     aoSalvar: () => salvarNota(),
     existe: alvo => Boolean(Kiro.findLinkedNote(state.notes, alvo)),

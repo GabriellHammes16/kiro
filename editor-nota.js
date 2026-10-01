@@ -163,7 +163,10 @@
     return carregando;
   }
 
-  function montar(elemento, { texto, aoMudar, aoSalvar, existe, aoTeclar, aoMoverCursor, aoColar, aoMenu }) {
+  // O CodeMirror põe spellcheck="false" no .cm-content; aqui ele segue a opção das Configurações.
+  const atributosDoCorretor = ligado => ({ spellcheck: ligado ? 'true' : 'false' });
+
+  function montar(elemento, { texto, aoMudar, aoSalvar, existe, aoTeclar, aoMoverCursor, aoColar, aoMenu, corretor = true }) {
     const { state: S, view: V, commands: C, language: L, markdown: M } = CM();
     const decorar = view => {
       const linhas = linhasDaSelecao(view.state), marcas = [];
@@ -186,6 +189,7 @@
       constructor(view) { this.decorations = decorar(view); }
       update(u) { if (u.docChanged || u.selectionSet || u.viewportChanged || L.syntaxTree(u.startState) !== L.syntaxTree(u.state)) this.decorations = decorar(u.view); }
     }, { decorations: v => v.decorations });
+    const compartimentoCorretor = new S.Compartment();
     const view = new V.EditorView({
       parent: elemento,
       state: S.EditorState.create({
@@ -207,6 +211,7 @@
           M.markdown({ base: M.markdownLanguage }),
           V.EditorView.lineWrapping,
           V.EditorView.contentAttributes.of({ 'aria-label': t('Conteúdo da nota') }),
+          compartimentoCorretor.of(V.EditorView.contentAttributes.of(atributosDoCorretor(corretor))),
           aoVivo,
           V.EditorView.updateListener.of(u => {
             if (u.docChanged && !u.transactions.some(veioDeFora)) aoMudar?.(u.state.sliceDoc());
@@ -234,11 +239,12 @@
       },
       temFoco: () => view.hasFocus,
       rolarPara(pos) { view.dispatch({ effects: V.EditorView.scrollIntoView(limitar(pos), { y: 'start' }) }); },
+      definirCorretor(ligado) { view.dispatch({ effects: compartimentoCorretor.reconfigure(V.EditorView.contentAttributes.of(atributosDoCorretor(ligado))) }); },
       destruir: () => view.destroy(),
     };
   }
 
-  const api = { separadorDeLinha, marcacoesDoKiro, linhasDaSelecao, analisar, criarArea, transacaoDeTexto, veioDeFora, carregar, montar };
+  const api = { atributosDoCorretor, separadorDeLinha, marcacoesDoKiro, linhasDaSelecao, analisar, criarArea, transacaoDeTexto, veioDeFora, carregar, montar };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.KiroEditor = api;
 })(globalThis);

@@ -47,3 +47,8 @@ test('transacaoDeTexto: cursor limitado ao novo texto, fora do histórico e marc
   assert.equal(E.veioDeFora(tr), true);
   assert.equal(E.veioDeFora(s.update({ changes: { from: 0, insert: 'q' } })), false);
 });
+
+test('atributosDoCorretor: spellcheck true/false conforme a opção', () => {
+  assert.deepEqual(E.atributosDoCorretor(true), { spellcheck: 'true' });
+  assert.deepEqual(E.atributosDoCorretor(false), { spellcheck: 'false' });
+});
