@@ -1318,6 +1318,8 @@ html.janela-propria #barra-titulo { position:fixed; top:0; left:0; right:0; z-in
 .doc-corpo .cm-content { padding:0; caret-color:var(--acento); font-family:inherit; line-height:inherit; }
 .doc-corpo .cm-line { padding:0; }
 .doc-corpo .cm-cursor { border-left-color:var(--acento); }
+/* Modo simples: o editor não carregou e o corpo vira um textarea comum. */
+.doc-corpo-simples { display:block; width:100%; min-height:60vh; padding:0; border:0; outline:none; background:transparent; color:inherit; font:inherit; line-height:inherit; resize:vertical; }
 .doc-corpo .ed-negrito { font-weight:700; }
 .doc-corpo .ed-italico { font-style:italic; }
 .doc-corpo .ed-tachado { text-decoration:line-through; }

@@ -1522,11 +1522,14 @@ function setBusy(value){
     const f=focoAntesDoBusy;focoAntesDoBusy=null;
     // Se o elemento saiu do documento nesse meio-tempo (ex.: um redesenho o substituiu, ou o
     // modal que o continha fechou), não há pra onde voltar: quem substituiu cuida do próprio foco.
-    if(f&&f!==document.body&&document.contains(f)&&document.activeElement!==f)f.focus({preventScroll:true});
+    // No editor da nota o foco volta pelo próprio editor: um focus() direto no conteúdo deixaria
+    // o navegador pôr o cursor no começo, e o editor adotaria essa posição.
+    if(f&&editorDaNota?.editor.dom.contains(f)&&document.contains(f)){if(!editorDaNota.editor.temFoco())editorDaNota.editor.focar();}
+    else if(f&&f!==document.body&&document.contains(f)&&document.activeElement!==f)f.focus({preventScroll:true});
   }
 }
 async function reload(manual=false){
-  if(aguardandoCofre||busy||(!manual&&(failed||editorDirty||fluxoPendente||KiroFluxoTela.ocupado()||$('#modal-root').firstChild||editorDaNota?.editor.temFoco())))return;
+  if(aguardandoCofre||busy||(!manual&&(failed||editorDirty||fluxoPendente||KiroFluxoTela.ocupado()||$('#modal-root').firstChild)))return;
   if(manual&&(failed||modalDirty||editorDirty||fluxoPendente)&&!confirm(t('Recarregar descarta alterações ainda não salvas nesta janela. Exporte seus dados ou copie o texto antes de continuar. Recarregar?')))return;
   setBusy(true);
   try{
@@ -1536,6 +1539,9 @@ async function reload(manual=false){
     state=saved;loaded=true;failed=false;eventosDoCofre(null);
     if(manual){fluxoPendente=false;clearTimeout(timerDoFluxo);}
     // Recarregar de propósito descarta a edição: a nota aberta volta ao que está no cofre.
+    // Releitura automática com a nota aberta sem alterações: ela passa a mostrar o que está no cofre
+    // (senão o próximo salvar gravaria por cima a versão antiga).
+    if(!manual&&changed&&editing?.id&&!editorDirty){const n=getNote(editing.id);if(n)editing={...n,tags:[...(n.tags||[])],links:[...(n.links||[])]};}
     if(manual&&editing){const n=editing.id&&getNote(editing.id);editing=n?{...n,tags:[...(n.tags||[])],links:[...(n.links||[])]}:null;editorDirty=false;if(!editing)currentView='today';}
     if(manual)closeModal(true);if(changed||manual)render();status(t('Cofre atualizado'));
   }catch(error){status(t('Não foi possível ler o cofre: {erro}',{erro:mensagemDoErro(error)}),true);}
@@ -1790,14 +1796,18 @@ function bindEditor(){
   $('#doc-template').onchange=e=>{
     if(!e.target.value)return;
     if(editing.body.trim()&&!confirm(t('Substituir o texto desta nota pelo modelo?'))){e.target.value='';return;}
-    editing.body=templates[e.target.value].body;editorDaNota?.editor.definirTexto(editing.body);sujar();
+    // Pelo editor, como uma edição comum: Ctrl+Z volta ao texto de antes do modelo (aoMudar atualiza editing.body).
+    const modelo=templates[e.target.value].body, area=editorDaNota?.editor.area();
+    if(area){area.setSelectionRange(0,area.value.length);area.inserir(modelo);}
+    else{editing.body=modelo;const c=$('#doc-corpo .doc-corpo-simples');if(c)c.value=modelo;}
+    sujar();
   };
   $('#doc-link-add').onclick=()=>{
     const campo=$('#doc-link'), valor=campo.value.trim();
     if(!Kiro.safeUrl(valor)){alert(t('Informe um endereço http:// ou https:// válido.'));return;}
     editing.links.push(valor);campo.value='';sujar();desenharLinksDoc();
   };
-  const montado=montarEditorDaNota(corpo);
+  const montado=montagemDoEditor=montarEditorDaNota(corpo);
   document.querySelectorAll('[data-editor]').forEach(b=>b.onclick=()=>acaoEditor(b.dataset.editor));
   desenharLinksDoc();estadoDoc();
   $('.cofre-nota')?.scrollTo(0, 0);
@@ -1810,6 +1820,7 @@ function bindEditor(){
 // está aberta: um redesenho (salvar, releitura) recoloca o mesmo editor no lugar novo, com cursor,
 // rolagem e desfazer intactos.
 let editorDaNota = null; // { chave, editor }
+let montagemDoEditor = Promise.resolve(null);   // a montagem em curso (ou a última): quem precisa do editor espera por ela
 const chaveDaNota = nota => nota.id || 'rascunho';
 function opcoesDoEditor() {
   return {
@@ -2617,21 +2628,13 @@ function abrirBloco(elemento, cursor = Infinity) {
   return ativarCampo(campo, { inicio, tamanho: fim - inicio, separador: '', item }, cursor);
 }
 
-// Clique abaixo do texto: continua o último parágrafo, ou começa um novo no fim.
+// Cursor no fim do texto da nota. Sem editor montado (ainda carregando, ou no modo simples
+// quando o editor não carregou) devolve null: quem chama desiste, em vez de abrir um segundo
+// editor sobre o mesmo texto.
 function abrirNoFim() {
-  if (editorDaNota && $('#doc-corpo')?.contains(editorDaNota.editor.dom)) { editorDaNota.editor.focar('fim'); return editorDaNota.editor.area(); }
-  fecharBloco();
-  const corpo = $('#doc-corpo');
-  const ultimo = [...corpo.querySelectorAll(':scope > [data-pos]')].pop();
-  // Parágrafo que só tem imagem não é continuado: escrever depois dela começa um novo,
-  // em vez de reabrir o ![[...]] da imagem.
-  const soImagem = ultimo?.tagName === 'P' && !ultimo.textContent.trim() && ultimo.querySelector('.md-imagem');
-  if (ultimo?.tagName === 'P' && !soImagem) return abrirBloco(ultimo, Infinity);
-  const texto = editing.body;
-  const separador = !texto.trim() || texto.endsWith('\n\n') ? '' : texto.endsWith('\n') ? '\n' : '\n\n';
-  const campo = montarCampo('');
-  corpo.appendChild(campo);
-  return ativarCampo(campo, { inicio: texto.length + separador.length, tamanho: 0, separador }, 0);
+  if (!editorDaNota || !$('#doc-corpo')?.contains(editorDaNota.editor.dom)) return null;
+  editorDaNota.editor.focar('fim');
+  return editorDaNota.editor.area();
 }
 
 function abrirNoPonto(evento) {
@@ -2836,6 +2839,7 @@ async function colarImagens(campo, arquivos) {
   if (!trechos.length || !editing) return;
   // Se o bloco fechou enquanto a imagem era gravada, ela entra no fim da nota.
   const destino = (campo.inserir ? editorDaNota?.editor.area() === campo : campo.isConnected && blocoAberto?.campo === campo) ? campo : abrirNoFim();
+  if (!destino) return;
   // Cada imagem vira um parágrafo próprio, separado do texto em volta por linha em branco.
   const texto = destino.value, anterior = texto.slice(0, destino.selectionStart), seguinte = texto.slice(destino.selectionEnd);
   const antes = !anterior || anterior.endsWith('\n\n') ? '' : anterior.endsWith('\n') ? '\n' : '\n\n';
@@ -2857,8 +2861,10 @@ document.addEventListener('paste', evento => {
   if (evento.target.closest?.('input, textarea, select, [contenteditable]')) return;
   const arquivos = imagensDoEvento(evento.clipboardData);
   if (!arquivos.length) return;
+  const destino = abrirNoFim();
+  if (!destino) return;
   evento.preventDefault();
-  colarImagens(abrirNoFim(), arquivos);
+  colarImagens(destino, arquivos);
 });
 // Arquivo solto fora da nota não deve abrir a imagem no lugar do aplicativo.
 window.addEventListener('dragover', evento => { if (evento.dataTransfer?.types.includes('Files')) evento.preventDefault(); });
@@ -3290,7 +3296,7 @@ async function extraAction(type,id){
   if(type==='daily')abrirNota(state.notes.find(n=>n.title===today())||notaVazia({title:today(),body:templates.daily.body,tags:['diario']}));
   if(type==='add-habit') habitoModal();
   if(type==='habit-stats') habitosModal();
-  if(type==='continuar'){const nota=getNote(id);if(nota){await abrirNota(nota);if(editing?.id===id)abrirNoFim();}}
+  if(type==='continuar'){const nota=getNote(id);if(nota){await abrirNota(nota);await montagemDoEditor;if(editing?.id===id&&!abrirNoFim()){const c=$('#doc-corpo .doc-corpo-simples');if(c){c.focus();c.setSelectionRange(c.value.length,c.value.length);}}}}
 }
 // A restauração é do próprio Vault: ele devolve a nota ou a pasta inteira, com
 // subpastas, anexos e os identificadores originais. Reconstruir isso aqui, como
