@@ -1311,3 +1311,25 @@ html.janela-propria #barra-titulo { position:fixed; top:0; left:0; right:0; z-in
 .tree-tipo { flex:0 0 auto; margin-left:auto; padding-left:8px; font-size:10px; letter-spacing:.06em; color:var(--muted); }
 .painel-fluxo { display:flex; align-items:center; gap:6px; width:100%; padding:4px 6px; border:0; border-radius:6px; background:none; color:var(--ink); font:inherit; text-align:left; cursor:pointer; }
 .painel-fluxo:hover, .painel-fluxo:focus-visible { background:color-mix(in srgb, var(--line) 45%, transparent); }
+
+/* Editor da nota (CodeMirror): mesma cara da leitura (.doc-corpo …), aplicada às linhas e trechos do editor. */
+.doc-corpo .cm-editor { background:transparent; font:inherit; color:inherit; }
+.doc-corpo .cm-editor.cm-focused { outline:none; }
+.doc-corpo .cm-content { padding:0; caret-color:var(--acento); font-family:inherit; line-height:inherit; }
+.doc-corpo .cm-line { padding:0; }
+.doc-corpo .cm-cursor { border-left-color:var(--acento); }
+.doc-corpo .ed-negrito { font-weight:700; }
+.doc-corpo .ed-italico { font-style:italic; }
+.doc-corpo .ed-tachado { text-decoration:line-through; }
+.doc-corpo .ed-h1,.doc-corpo .ed-h2,.doc-corpo .ed-h3,.doc-corpo .ed-h4,.doc-corpo .ed-h5,.doc-corpo .ed-h6 { line-height:1.3; letter-spacing:-.4px; font-weight:700; }
+.doc-corpo .ed-h1 { font-size:26px; } .doc-corpo .ed-h2 { font-size:21px; } .doc-corpo .ed-h3 { font-size:17px; } .doc-corpo .ed-h4,.doc-corpo .ed-h5,.doc-corpo .ed-h6 { font-size:14px; }
+.doc-corpo .ed-realce { background:color-mix(in srgb, var(--acento) 28%, transparent); color:color-mix(in srgb, var(--acento) 19%, var(--realce-base, white)); border-radius:3px; padding:0 3px; }
+.doc-corpo .ed-codigo { font-family:var(--fonte-codigo); font-size:.9em; background:var(--campo); border:1px solid var(--line); border-radius:8px; padding:1px 5px; }
+.doc-corpo .ed-link { color:var(--acento); }
+.doc-corpo .ed-wikilink { color:var(--acento); cursor:pointer; text-decoration:none; border-bottom:1px solid color-mix(in srgb, var(--acento) 32%, transparent); }
+.doc-corpo .ed-wikilink-ausente { color:color-mix(in srgb, var(--acento) 45%, var(--muted)); cursor:pointer; border-bottom:1px dashed color-mix(in srgb, var(--acento) 32%, transparent); }
+.doc-corpo .ed-etiqueta { color:var(--acento); }
+.doc-corpo .ed-citacao { border-left:3px solid var(--accent); background:color-mix(in srgb, var(--acento-forte) 7%, transparent); padding-left:16px; }
+.doc-corpo .ed-regua { border-bottom:1px solid var(--line); }
+.doc-corpo .ed-codigo-bloco { font-family:var(--fonte-codigo); background:var(--campo); }
+.doc-corpo .ed-marcador { color:var(--muted); }

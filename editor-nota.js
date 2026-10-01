@@ -1,6 +1,6 @@
 // Editor do corpo da nota: CodeMirror 6 (vendor/codemirror) com visualização ao vivo. Este
 // arquivo tem duas metades: as partes puras (análise do texto → o que esconder e estilizar),
-// testáveis no Node, e a montagem na página (Task 3). Não conhece o cofre: recebe o texto e
+// testáveis no Node, e a montagem na página. Não conhece o cofre: recebe o texto e
 // entrega o novo por aoMudar.
 (function (root) {
   const CM = () => root.CM;
@@ -104,7 +104,114 @@
     return r;
   }
 
-  const api = { separadorDeLinha, marcacoesDoKiro, linhasDaSelecao, analisar };
+  // Adaptador: o que os menus e atalhos do app esperam de um textarea, sobre o estado do editor.
+  // value é o doc com \n (como um textarea normaliza), porque as posições do CodeMirror contam
+  // cada quebra como 1 caractere mesmo com lineSeparator '\r\n'; assim value e os índices batem
+  // e envolver/prefixar continuam iguais. O texto que vai para o cofre sai de sliceDoc().
+  function criarArea({ estado, aplicar, focar, posicao }) {
+    return {
+      get value() { return estado().doc.toString(); },
+      get selectionStart() { return estado().selection.main.from; },
+      get selectionEnd() { return estado().selection.main.to; },
+      setSelectionRange(a, b = a) { aplicar({ selection: { anchor: a, head: b } }); },
+      focus() { focar(); },
+      inserir(texto) {
+        const { from, to } = estado().selection.main;
+        aplicar({ changes: { from, to, insert: texto }, selection: { anchor: from + texto.length }, userEvent: 'input' });
+      },
+      posicao: () => (posicao ? posicao() : null),
+    };
+  }
+
+  let carregando = null;
+  function carregar() {
+    if (root.CM) return Promise.resolve();
+    carregando ??= new Promise((ok, falha) => {
+      const s = document.createElement('script');
+      s.src = 'vendor/codemirror/codemirror.js';
+      s.onload = () => (root.CM ? ok() : falha(new Error('Não foi possível carregar o editor')));
+      s.onerror = () => { carregando = null; s.remove(); falha(new Error('Não foi possível carregar o editor')); };
+      document.head.appendChild(s);
+    });
+    return carregando;
+  }
+
+  function montar(elemento, { texto, aoMudar, aoSalvar, existe, aoTeclar, aoMoverCursor, aoColar, aoMenu }) {
+    const { state: S, view: V, commands: C, language: L, markdown: M } = CM();
+    const decorar = view => {
+      const linhas = linhasDaSelecao(view.state), marcas = [];
+      for (const { from, to } of view.visibleRanges) {
+        L.ensureSyntaxTree(view.state, to, 50);
+        const r = analisar(view.state, from, to, linhas, { existe });
+        for (const [a, classe] of r.linhas) marcas.push(V.Decoration.line({ class: classe }).range(a));
+        for (const [a, b, classe] of r.estilos) if (b > a) marcas.push(V.Decoration.mark(classe === 'ed-sem-corretor' ? { attributes: { spellcheck: 'false' } } : { class: classe }).range(a, b));
+        for (const [a, b] of r.esconder) marcas.push(V.Decoration.replace({}).range(a, b));
+        for (const [a, b, s] of r.trocar) marcas.push(V.Decoration.replace({ widget: new Marcador(s) }).range(a, b));
+      }
+      return V.Decoration.set(marcas, true);
+    };
+    class Marcador extends V.WidgetType {
+      constructor(s) { super(); this.s = s; }
+      eq(o) { return o.s === this.s; }
+      toDOM() { const e = document.createElement('span'); e.className = 'ed-marcador'; e.textContent = this.s; return e; }
+    }
+    const aoVivo = V.ViewPlugin.fromClass(class {
+      constructor(view) { this.decorations = decorar(view); }
+      update(u) { if (u.docChanged || u.selectionSet || u.viewportChanged || L.syntaxTree(u.startState) !== L.syntaxTree(u.state)) this.decorations = decorar(u.view); }
+    }, { decorations: v => v.decorations });
+    const view = new V.EditorView({
+      parent: elemento,
+      state: S.EditorState.create({
+        doc: texto,
+        extensions: [
+          S.EditorState.lineSeparator.of(separadorDeLinha(texto)),
+          C.history(),
+          S.Prec.highest(V.EditorView.domEventHandlers({
+            keydown: e => Boolean(aoTeclar?.(e)),
+            paste: e => Boolean(aoColar?.(e)),
+            drop: e => Boolean(aoColar?.(e)),
+            contextmenu: e => { aoMenu?.(e); return false; },
+          })),
+          V.keymap.of([
+            { key: 'Mod-s', run: () => { aoSalvar?.(); return true; } },
+            { key: 'Escape', run: v => { v.contentDOM.blur(); return true; } },
+            ...M.markdownKeymap, C.indentWithTab, ...C.historyKeymap, ...C.defaultKeymap,
+          ]),
+          M.markdown({ base: M.markdownLanguage }),
+          V.EditorView.lineWrapping,
+          V.EditorView.contentAttributes.of({ 'aria-label': root.KiroIdiomas ? root.KiroIdiomas.t('Conteúdo da nota') : 'Conteúdo da nota' }),
+          aoVivo,
+          V.EditorView.updateListener.of(u => {
+            if (u.docChanged) aoMudar?.(u.state.sliceDoc());
+            if (u.docChanged || u.selectionSet) aoMoverCursor?.();
+          }),
+        ],
+      }),
+    });
+    const aplicar = spec => view.dispatch(spec);
+    const posicao = () => { const c = view.coordsAtPos(view.state.selection.main.head); return c ? { left: c.left, top: c.top, altura: c.bottom - c.top } : null; };
+    const area = criarArea({ estado: () => view.state, aplicar, focar: () => view.focus(), posicao });
+    return {
+      dom: view.dom,
+      texto: () => view.state.sliceDoc(),
+      definirTexto(novo) {
+        if (novo === view.state.sliceDoc()) return;
+        const cursor = Math.min(view.state.selection.main.head, novo.length);
+        view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: novo }, selection: { anchor: cursor } });
+      },
+      area: () => area,
+      focar(onde) {
+        const pos = onde === 'inicio' ? 0 : onde === 'fim' ? view.state.doc.length : typeof onde === 'number' ? onde : null;
+        if (pos !== null) view.dispatch({ selection: { anchor: pos }, scrollIntoView: true });
+        view.focus();
+      },
+      temFoco: () => view.hasFocus,
+      rolarPara(pos) { view.dispatch({ effects: V.EditorView.scrollIntoView(pos, { y: 'start' }) }); },
+      destruir: () => view.destroy(),
+    };
+  }
+
+  const api = { separadorDeLinha, marcacoesDoKiro, linhasDaSelecao, analisar, criarArea, carregar, montar };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.KiroEditor = api;
 })(globalThis);
