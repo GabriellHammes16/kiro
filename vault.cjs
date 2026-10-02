@@ -430,9 +430,7 @@ class Vault {
   }
   async addToDictionary(palavra){
     if(!palavraParaDicionario(palavra))throw new Error(frase('Palavra inválida.'));
-    const palavras=await this.readDictionary();
-    if(!palavras.includes(palavra)){palavras.push(palavra);await atomicWrite(path.join(this.directory,'.kiro','dicionario.txt'),palavras.join('\n')+'\n');}
-    return palavras;
+    const r=((this._fila??=Promise.resolve()).then(async()=>{const palavras=await this.readDictionary();if(!palavras.includes(palavra)){palavras.push(palavra);await atomicWrite(path.join(this.directory,'.kiro','dicionario.txt'),palavras.join('\n')+'\n');}return palavras;}));this._fila=r.catch(()=>{});return r;
   }
   /** Espaço do próprio plug-in (kiro.storage), com teto de 1 MB. */
   async readPluginData(id){

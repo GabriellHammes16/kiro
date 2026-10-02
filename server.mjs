@@ -159,7 +159,10 @@ createServer(async (request, response) => {
     }
     if (rota === '/api/dicionario') {
       if (request.method === 'GET') return send(response, 200, await vault.readDictionary());
-      if (request.method === 'POST') return send(response, 200, await vault.addToDictionary(String((await lerJson(request, 4096))?.palavra ?? '')));
+      if (request.method === 'POST') {
+        if (!mesmaOrigem(request)) return send(response, 403, { error: frase('Só a própria página do Kiro pode usar esta rota.') });
+        return send(response, 200, await vault.addToDictionary(String((await lerJson(request, 4096))?.palavra ?? '')));
+      }
     }
     if (rota.startsWith('/api/plugin-data/')) {
       const id = decodeURIComponent(rota.slice('/api/plugin-data/'.length));

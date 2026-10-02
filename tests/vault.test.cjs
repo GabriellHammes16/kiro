@@ -267,6 +267,15 @@ test('dicionário pessoal: ausente = vazio; adiciona sem repetir; lê \\r\\n e l
   await assert.rejects(vault.addToDictionary('duas palavras'), /Palavra inválida/);
 });
 
+test('dicionário pessoal: adds simultâneos não perdem palavras', async t => {
+  const vault = await setup(t);
+  await Promise.all([vault.addToDictionary('alfa'), vault.addToDictionary('beta')]);
+  const dict = await vault.readDictionary();
+  assert.equal(dict.length, 2);
+  assert.ok(dict.includes('alfa'));
+  assert.ok(dict.includes('beta'));
+});
+
 const escreverCanvas = async (vault, arquivo, conteudo) => {
   await fs.mkdir(path.dirname(path.join(vault.directory, arquivo)), { recursive: true });
   await fs.writeFile(path.join(vault.directory, arquivo), typeof conteudo === 'string' ? conteudo : JSON.stringify(conteudo));
