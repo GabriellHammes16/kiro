@@ -55,6 +55,8 @@
       "vault.cjs",
       "domain.js",
       "fluxo.js",
+      "corretor.js",
+      "idiomas.js",
       "node_modules/**"
     ]
   },

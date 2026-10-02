@@ -4,6 +4,7 @@ const { createHash, randomUUID } = require('node:crypto');
 const { validateState, upgradeBackup, folderPaths, descendants, pathKey, folderColor, withHabits, validFolderName } = require('./domain.js');
 const yaml = require('js-yaml');
 const KiroFluxo = require('./fluxo.js');
+const { palavraParaDicionario } = require('./corretor.js');
 // Marca a frase para tradução na tela (idiomas.js); aqui o texto segue em português.
 const frase = f => f;
 
@@ -421,6 +422,17 @@ class Vault {
   async writeHomeLayout(layout){
     await atomicWrite(path.join(this.directory,'.kiro','hoje.json'),`${JSON.stringify(layout,null,2)}\n`);
     return layout;
+  }
+  /** Dicionário pessoal do corretor em .kiro/dicionario.txt: uma palavra por linha. */
+  async readDictionary(){
+    const bruto=await optionalRead(path.join(this.directory,'.kiro','dicionario.txt'));
+    return [...new Set((bruto||'').split(/\r?\n/).map(p=>p.trim()).filter(Boolean))];
+  }
+  async addToDictionary(palavra){
+    if(!palavraParaDicionario(palavra))throw new Error(frase('Palavra inválida.'));
+    const palavras=await this.readDictionary();
+    if(!palavras.includes(palavra)){palavras.push(palavra);await atomicWrite(path.join(this.directory,'.kiro','dicionario.txt'),palavras.join('\n')+'\n');}
+    return palavras;
   }
   /** Espaço do próprio plug-in (kiro.storage), com teto de 1 MB. */
   async readPluginData(id){

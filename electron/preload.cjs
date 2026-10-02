@@ -26,6 +26,8 @@ contextBridge.exposeInMainWorld('cadernoDesktop', {
   savePluginChoices: escolhas => ipcRenderer.invoke('plugins:choices:set', escolhas),
   homeLayout: () => ipcRenderer.invoke('home:get'),
   saveHomeLayout: layout => ipcRenderer.invoke('home:set', layout),
+  dicionario: () => ipcRenderer.invoke('dicionario:get'),
+  adicionarAoDicionarioDoCofre: palavra => ipcRenderer.invoke('dicionario:add', palavra),
   pluginData: id => ipcRenderer.invoke('plugins:data:get', id),
   savePluginData: (id, dados) => ipcRenderer.invoke('plugins:data:set', id, dados),
   pluginFetch: (id, pedido) => ipcRenderer.invoke('plugins:fetch', id, pedido),

@@ -257,6 +257,16 @@ test('layout da Hoje: ida e volta em .kiro/hoje.json; sem arquivo ou quebrado, n
   assert.equal(await vault.readHomeLayout(), null);
 });
 
+test('dicionário pessoal: ausente = vazio; adiciona sem repetir; lê \\r\\n e linhas vazias', async t => {
+  const vault = await setup(t);
+  assert.deepEqual(await vault.readDictionary(), []);
+  assert.deepEqual(await vault.addToDictionary('nubank'), ['nubank']);
+  assert.deepEqual(await vault.addToDictionary('nubank'), ['nubank']);
+  await fs.writeFile(path.join(vault.directory, '.kiro', 'dicionario.txt'), 'Kiro\r\n\r\n  BTG  \r\nKiro\r\n');
+  assert.deepEqual(await vault.readDictionary(), ['Kiro', 'BTG']);
+  await assert.rejects(vault.addToDictionary('duas palavras'), /Palavra inválida/);
+});
+
 const escreverCanvas = async (vault, arquivo, conteudo) => {
   await fs.mkdir(path.dirname(path.join(vault.directory, arquivo)), { recursive: true });
   await fs.writeFile(path.join(vault.directory, arquivo), typeof conteudo === 'string' ? conteudo : JSON.stringify(conteudo));

@@ -787,6 +787,7 @@
   'Este item já está no cofre.': 'This item is already in the vault.',
   'Uma subpasta já existe no cofre.': 'A subfolder already exists in the vault.',
   'Uma nota já existe no cofre.': 'A note already exists in the vault.',
+  'Palavra inválida.': 'Invalid word.',
   // mensagens de outros módulos — server.mjs
   'Use JSON.': 'Use JSON.',
   'Pedido grande demais.': 'Request too large.',

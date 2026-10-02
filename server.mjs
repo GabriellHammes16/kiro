@@ -157,6 +157,10 @@ createServer(async (request, response) => {
       if (request.method === 'GET') return send(response, 200, await vault.readHomeLayout());
       if (request.method === 'POST') return send(response, 200, await vault.writeHomeLayout(await lerJson(request, 256 * 1024)));
     }
+    if (rota === '/api/dicionario') {
+      if (request.method === 'GET') return send(response, 200, await vault.readDictionary());
+      if (request.method === 'POST') return send(response, 200, await vault.addToDictionary(String((await lerJson(request, 4096))?.palavra ?? '')));
+    }
     if (rota.startsWith('/api/plugin-data/')) {
       const id = decodeURIComponent(rota.slice('/api/plugin-data/'.length));
       if (request.method === 'GET') return send(response, 200, await vault.readPluginData(id));

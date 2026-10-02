@@ -174,6 +174,8 @@ else app.whenReady().then(async () => {
   ipcMain.handle('plugins:choices:set', (_event, escolhas) => vault.writePluginChoices(escolhas));
   ipcMain.handle('home:get', () => vault.readHomeLayout());
   ipcMain.handle('home:set', (_event, layout) => vault.writeHomeLayout(layout));
+  ipcMain.handle('dicionario:get', () => vault.readDictionary());
+  ipcMain.handle('dicionario:add', (_event, palavra) => vault.addToDictionary(palavra));
   ipcMain.handle('plugins:data:get', (_event, id) => vault.readPluginData(String(id || '')));
   ipcMain.handle('plugins:data:set', (_event, id, dados) => vault.writePluginData(String(id || ''), dados));
   // kiro.fetch e chaves: tudo é relido do cofre aberto (ligacao-rede-plugins.cjs); a página
