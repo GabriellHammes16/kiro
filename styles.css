@@ -1335,3 +1335,6 @@ html.janela-propria #barra-titulo { position:fixed; top:0; left:0; right:0; z-in
 .doc-corpo .ed-regua { border-bottom:1px solid var(--line); }
 .doc-corpo .ed-codigo-bloco { font-family:var(--fonte-codigo); background:var(--campo); }
 .doc-corpo .ed-marcador { color:var(--muted); }
+.doc-corpo .ed-erro { text-decoration:underline wavy #e5484d; text-decoration-skip-ink:none; text-underline-offset:3px; }
+/* O tema padrão do CodeMirror põe monospace no .cm-scroller: o texto da nota usa a fonte da leitura. */
+.doc-corpo .cm-scroller { font-family:inherit; line-height:inherit; }

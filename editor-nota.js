@@ -21,6 +21,15 @@
     return achadas.sort((a, b) => a.de - b.de);
   }
 
+  // Palavras de uma linha para o corretor: letras e números (Unicode), com hífen ou apóstrofo só
+  // entre letras (guarda-chuva, don't, d'água). Trechos em `ignorar` (código, endereço, alvo de
+  // [[link]], etiqueta) ficam de fora.
+  const PALAVRA = /[\p{L}\p{N}]+(?:['’-][\p{L}\p{N}]+)*/gu;
+  function palavrasDaLinha(texto, ignorar = []) {
+    const fora = (a, b) => !ignorar.some(([x, y]) => a < y && b > x);
+    return [...texto.matchAll(PALAVRA)].map(m => ({ de: m.index, ate: m.index + m[0].length, palavra: m[0] })).filter(({ de, ate }) => fora(de, ate));
+  }
+
   function linhasDaSelecao(state) {
     const linhas = new Set();
     for (const faixa of state.selection.ranges) {
@@ -163,10 +172,7 @@
     return carregando;
   }
 
-  // O CodeMirror põe spellcheck="false" no .cm-content; aqui ele segue a opção das Configurações.
-  const atributosDoCorretor = ligado => ({ spellcheck: ligado ? 'true' : 'false' });
-
-  function montar(elemento, { texto, aoMudar, aoSalvar, existe, aoTeclar, aoMoverCursor, aoColar, aoMenu, corretor = true }) {
+  function montar(elemento, { texto, aoMudar, aoSalvar, existe, aoTeclar, aoMoverCursor, aoColar, aoMenu, ortografia }) {
     const { state: S, view: V, commands: C, language: L, markdown: M } = CM();
     const decorar = view => {
       const linhas = linhasDaSelecao(view.state), marcas = [];
@@ -189,7 +195,42 @@
       constructor(view) { this.decorations = decorar(view); }
       update(u) { if (u.docChanged || u.selectionSet || u.viewportChanged || L.syntaxTree(u.startState) !== L.syntaxTree(u.state)) this.decorations = decorar(u.view); }
     }, { decorations: v => v.decorations });
-    const compartimentoCorretor = new S.Compartment();
+    // Corretor próprio: sublinha as palavras que ortografia.errada reprova, só nas linhas visíveis.
+    // Sem `ortografia` fica inativo. Em docChanged refaz só as linhas tocadas; o resto é mapeado.
+    let ortografiaAtiva = Boolean(ortografia?.ativa);
+    const redesenhar = S.StateEffect.define();
+    const erroDeOrtografia = V.Decoration.mark({ class: 'ed-erro' });
+    const errosDasLinhas = (view, de, ate, marcas) => {
+      const doc = view.state.doc;
+      const arvore = L.ensureSyntaxTree(view.state, ate, 50) ?? L.syntaxTree(view.state);
+      for (let p = doc.lineAt(de).from; p <= ate;) {
+        const l = doc.lineAt(p);
+        const ignorar = analisar(view.state, l.from, l.to, new Set(), { arvore }).estilos
+          .filter(e => e[2] === 'ed-sem-corretor').map(e => [e[0] - l.from, e[1] - l.from]);
+        for (const w of palavrasDaLinha(l.text, ignorar)) if (ortografia.errada(w.palavra)) marcas.push(erroDeOrtografia.range(l.from + w.de, l.from + w.ate));
+        p = l.to + 1;
+      }
+    };
+    const todosOsErros = view => {
+      const marcas = [];
+      if (ortografiaAtiva && ortografia?.errada) for (const { from, to } of view.visibleRanges) errosDasLinhas(view, from, to, marcas);
+      return V.Decoration.set(marcas, true);
+    };
+    const ortografiaPlugin = V.ViewPlugin.fromClass(class {
+      constructor(view) { this.decorations = todosOsErros(view); }
+      update(u) {
+        if (u.viewportChanged || u.transactions.some(tr => tr.effects.some(e => e.is(redesenhar)))) { this.decorations = todosOsErros(u.view); return; }
+        if (!u.docChanged || !ortografiaAtiva) return;
+        let decos = this.decorations.map(u.changes);
+        const novas = [];
+        u.changes.iterChangedRanges((_a, _b, de, ate) => {
+          const doc = u.state.doc, ini = doc.lineAt(de).from, fim = doc.lineAt(ate).to;
+          decos = decos.update({ filterFrom: ini, filterTo: fim, filter: () => false });
+          errosDasLinhas(u.view, ini, fim, novas);
+        });
+        this.decorations = decos.update({ add: novas, sort: true });
+      }
+    }, { decorations: v => v.decorations });
     const view = new V.EditorView({
       parent: elemento,
       state: S.EditorState.create({
@@ -210,9 +251,9 @@
           ]),
           M.markdown({ base: M.markdownLanguage }),
           V.EditorView.lineWrapping,
-          V.EditorView.contentAttributes.of({ 'aria-label': t('Conteúdo da nota') }),
-          compartimentoCorretor.of(V.EditorView.contentAttributes.of(atributosDoCorretor(corretor))),
+          V.EditorView.contentAttributes.of({ spellcheck: 'false', 'aria-label': t('Conteúdo da nota') }),
           aoVivo,
+          ortografiaPlugin,
           V.EditorView.updateListener.of(u => {
             if (u.docChanged && !u.transactions.some(veioDeFora)) aoMudar?.(u.state.sliceDoc());
             if (u.docChanged || u.selectionSet) aoMoverCursor?.();
@@ -239,12 +280,21 @@
       },
       temFoco: () => view.hasFocus,
       rolarPara(pos) { view.dispatch({ effects: V.EditorView.scrollIntoView(limitar(pos), { y: 'start' }) }); },
-      definirCorretor(ligado) { view.dispatch({ effects: compartimentoCorretor.reconfigure(V.EditorView.contentAttributes.of(atributosDoCorretor(ligado))) }); },
+      definirOrtografia(ativa) { ortografiaAtiva = Boolean(ativa); view.dispatch({ effects: redesenhar.of(null) }); },
+      redesenharOrtografia() { view.dispatch({ effects: redesenhar.of(null) }); },
+      palavraEm(x, y) {
+        const pos = view.posAtCoords({ x, y });
+        if (pos == null) return null;
+        const l = view.state.doc.lineAt(pos), rel = pos - l.from;
+        const w = palavrasDaLinha(l.text).find(p => p.de <= rel && rel <= p.ate);
+        return w ? { de: l.from + w.de, ate: l.from + w.ate, palavra: w.palavra } : null;
+      },
+      trocarTrecho(de, ate, texto) { view.dispatch({ changes: { from: de, to: ate, insert: texto }, selection: { anchor: de + texto.length }, userEvent: 'input' }); },
       destruir: () => view.destroy(),
     };
   }
 
-  const api = { atributosDoCorretor, separadorDeLinha, marcacoesDoKiro, linhasDaSelecao, analisar, criarArea, transacaoDeTexto, veioDeFora, carregar, montar };
+  const api = { separadorDeLinha, palavrasDaLinha, marcacoesDoKiro, linhasDaSelecao, analisar, criarArea, transacaoDeTexto, veioDeFora, carregar, montar };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.KiroEditor = api;
 })(globalThis);

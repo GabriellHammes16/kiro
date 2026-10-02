@@ -141,3 +141,12 @@ test('analisar usa a árvore recebida, quando há', () => {
   assert.deepEqual(r.esconder, []);
   assert.ok(!r.estilos.some(([, , c]) => c === 'ed-negrito'));
 });
+
+test('palavrasDaLinha: letras com acento, hífen e apóstrofo internos, pula trechos ignorados', () => {
+  const p = (t, ig = []) => E.palavrasDaLinha(t, ig).map(x => t.slice(x.de, x.ate));
+  assert.deepEqual(p('O ovário e a bicicletta.'), ['O', 'ovário', 'e', 'a', 'bicicletta']);
+  assert.deepEqual(p("guarda-chuva, don't e d'água"), ['guarda-chuva', "don't", 'e', "d'água"]);
+  assert.deepEqual(p('-borda- e ’aspas’'), ['borda', 'e', 'aspas']);
+  assert.deepEqual(p('ver código aqui', [[4, 10]]), ['ver', 'aqui']);
+  assert.deepEqual(p('ano 2026 e C3PO'), ['ano', '2026', 'e', 'C3PO'], 'o editor entrega; quem ignora números é o corretor');
+});
