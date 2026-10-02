@@ -485,11 +485,18 @@ async function lerDicionarioDoCofre() {
   try { const p = await (window.cadernoDesktop ? window.cadernoDesktop.dicionario() : api('dicionario')); return Array.isArray(p) ? p : []; }
   catch { return []; }
 }
+// Só a leitura mais recente vale: uma leitura do cofre antigo que termine depois da do novo não a sobrescreve.
+let leituraDoDicionario = 0;
+async function aplicarDicionarioDoCofre() {
+  const minha = ++leituraDoDicionario;
+  const palavras = await lerDicionarioDoCofre();
+  if (minha === leituraDoDicionario) KiroOrtografia.definirPessoais(palavras);
+}
 async function iniciarOrtografia() {
   if (ortografiaIniciada || !corretorLigado) return;
   ortografiaIniciada = true;
   try {
-    KiroOrtografia.definirPessoais(await lerDicionarioDoCofre());
+    await aplicarDicionarioDoCofre();
     if (!ortografiaOuvindo) { ortografiaOuvindo = true; KiroOrtografia.aoMudar(() => editorDaNota?.editor.redesenharOrtografia()); }
     await KiroOrtografia.carregar();
   } catch {
@@ -5019,7 +5026,7 @@ async function escolherOutroCofre(){
     // hoje.json do novo) e carrega os que este cofre permite.
     carregarPlugins();await carregarHoje();personalizandoHoje=false;render();
     // Dicionário pessoal é do cofre: recarrega o do novo (também com o motor ainda carregando).
-    if(ortografiaIniciada)KiroOrtografia.definirPessoais(await lerDicionarioDoCofre());}}
+    if(ortografiaIniciada)await aplicarDicionarioDoCofre();}}
   catch(error){status(mensagemDoErro(error),true);}finally{setBusy(false);}
 }
 function exportarDados(){
