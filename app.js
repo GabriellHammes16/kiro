@@ -36,6 +36,7 @@ function getNote(id) { return state.notes.find(n => n.id === id); }
 function getFluxo(id) { return (state.fluxos || []).find(f => f.id === id); }
 function render() {
   const focoNoEditor = Boolean(editorDaNota?.editor.temFoco());
+  const rolagemDaNota = editorDaNota?.editor.dom.closest('.cofre-nota-corpo')?.scrollTop;   // o app.innerHTML abaixo refaz o elemento que rola
   KiroFluxoTela.desmontarTodos(); // grava o texto em edição no estado antes de a tela ser refeita
   if (currentView !== 'today') personalizandoHoje = false;
   if (currentView.startsWith('plugin:') && !pluginsAtivos.get(currentView.slice(7))?.manifesto?.page) currentView = 'today';
@@ -55,6 +56,7 @@ function render() {
   // Animar só na troca de tela: um redesenho comum não deve piscar.
   if (renderedView !== currentView) { app.classList.remove("view-enter"); void app.offsetWidth; app.classList.add("view-enter"); renderedView = currentView; }
   bindView(); updateCount();
+  if (rolagemDaNota && editorDaNota) { const rola = editorDaNota.editor.dom.closest('.cofre-nota-corpo'); if (rola) rola.scrollTop = rolagemDaNota; }   // mesmo editor de volta: mesma rolagem
   // O editor da nota é o mesmo de antes do redesenho (montarEditorDaNota): devolve o foco a ele.
   if (focoNoEditor && editorDaNota && document.querySelector('#doc-corpo')?.contains(editorDaNota.editor.dom)) editorDaNota.editor.focar();
   if (editorDaNota && !document.querySelector('#doc-corpo')) { editorDaNota.editor.destruir(); editorDaNota = null; }
@@ -1843,7 +1845,6 @@ function bindEditor(){
   const montado=montagemDoEditor=montarEditorDaNota(corpo);
   document.querySelectorAll('[data-editor]').forEach(b=>b.onclick=()=>acaoEditor(b.dataset.editor));
   desenharLinksDoc();estadoDoc();
-  $('.cofre-nota')?.scrollTo(0, 0);
   // Nota nova começa pelo título; nota existente sem texto já abre o campo para escrever.
   // (o editor pode ainda estar carregando: o foco espera a montagem)
   if(!editing.id)titulo.focus({preventScroll:true});
