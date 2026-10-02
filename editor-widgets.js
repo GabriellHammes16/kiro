@@ -30,7 +30,9 @@
         if (no.name === 'FencedCode') {
           codigo.push([no.from, no.to]);
           const primeira = doc.lineAt(no.from), ultima = doc.lineAt(no.to);
-          const info = primeira.text.replace(/^\s*(```|~~~)/, '').trim();
+          // Strip leading > for blockquotes first, then the fence marker
+          let info = primeira.text.replace(/^>\s?/, '').trim();
+          info = info.replace(/^\s*(```|~~~)/, '').trim();
           if (!/^kiro:/.test(info)) {
             const fechada = ultima.number > primeira.number && /^\s*(```|~~~)\s*$/.test(ultima.text);
             const corpoAte = fechada ? doc.line(ultima.number - 1).to : no.to;
@@ -53,8 +55,9 @@
     });
     const emCodigo = (a, b) => codigo.some(([x, y]) => a < y && b > x);
     // Blocos $$ (a árvore do Markdown não os conhece): mesma regra de renderizarMarkdown.
+    // Scan from line 1 (not from de) to catch blocks that intersect [de, ate]
     const blocos = [];
-    for (let n = doc.lineAt(de).number; n <= doc.lineAt(ate).number; n++) {
+    for (let n = 1; n <= doc.lines; n++) {
       const l = doc.line(n);
       const m = /^\$\$(.*)$/.exec(l.text);
       if (!m || emCodigo(l.from, l.to)) continue;
@@ -68,8 +71,12 @@
         fim = Math.min(k, doc.lines);
         tex = corpo.join('\n');
       }
-      blocos.push([l.from, doc.line(fim).to]);
-      els.push({ tipo: 'formulaBloco', de: l.from, ate: doc.line(fim).to, tex: tex.trim() });
+      const blocoInicio = l.from, blocoFim = doc.line(fim).to;
+      blocos.push([blocoInicio, blocoFim]);
+      // Only add to els if the block intersects [de, ate]
+      if (blocoInicio < ate && blocoFim > de) {
+        els.push({ tipo: 'formulaBloco', de: blocoInicio, ate: blocoFim, tex: tex.trim() });
+      }
       n = fim;
     }
     const foraDeTudo = (a, b) => !emCodigo(a, b) && !blocos.some(([x, y]) => a < y && b > x);
@@ -90,7 +97,29 @@
         if (foraDeTudo(a, b)) els.push({ tipo: 'comentario', de: a, ate: b });
       }
     }
-    return els.sort((x, y) => x.de - y.de);
+    els.sort((x, y) => x.de - y.de);
+
+    // Remove overlapping elements: priority comentario > formulaBloco > imagem > formula
+    // Tasks, callouts, and code headers never overlap these
+    const prioridade = { comentario: 0, formulaBloco: 1, imagem: 2, formula: 3, tarefa: 4, callout: 4, cabecalhoCodigo: 4 };
+    const sobrepostos = new Set();
+    for (let i = 0; i < els.length; i++) {
+      if (sobrepostos.has(i)) continue;
+      for (let j = i + 1; j < els.length; j++) {
+        if (sobrepostos.has(j)) continue;
+        const ei = els[i], ej = els[j];
+        const sobrepoe = ei.de < ej.ate && ei.ate > ej.de;
+        if (sobrepoe) {
+          const priorI = prioridade[ei.tipo];
+          const priorJ = prioridade[ej.tipo];
+          if (priorI !== undefined && priorJ !== undefined) {
+            if (priorI < priorJ) sobrepostos.add(j);
+            else if (priorJ < priorI) sobrepostos.add(i);
+          }
+        }
+      }
+    }
+    return els.filter((_, i) => !sobrepostos.has(i));
   }
 
   const trocaDaTarefa = (state, el) => ({ from: el.de + 1, to: el.de + 2, insert: el.feito ? ' ' : 'x' });

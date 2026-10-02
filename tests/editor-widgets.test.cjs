@@ -62,3 +62,46 @@ test('posições corretas com \\r\\n', () => {
   assert.equal(fatia(s, els.find(e => e.tipo === 'tarefa')), '[ ]');
   assert.equal(els.find(e => e.tipo === 'formula').tex, 'x');
 });
+
+test('blocos $$ achados desde o início, mesmo com de dentro de um bloco; fórmula em linha dentro de bloco não é retornada', () => {
+  const texto = '$$\nx\n$$\n\ntexto\n\n$$\ny\n$$\n';
+  const { s, els } = achar(texto);
+  const blocos = els.filter(e => e.tipo === 'formulaBloco');
+  assert.deepEqual(blocos.map(b => [b.de, b.ate, b.tex]), [[0, 7, 'x'], [16, 23, 'y']]);
+
+  // Partial range starting inside first block: deve achar ambos os blocos que intersectam [de, ate]
+  const s2 = estado(texto);
+  const arvore = CM.language.ensureSyntaxTree(s2, s2.doc.length, 5000);
+  const els2 = W.acharElementos(s2, 4, s2.doc.length, { arvore });
+  const blocos2 = els2.filter(e => e.tipo === 'formulaBloco');
+  assert.deepEqual(blocos2.map(b => [b.de, b.ate, b.tex]), [[0, 7, 'x'], [16, 23, 'y']]);
+
+  // Fórmula em linha dentro de um bloco não deve ser retornada
+  const comFormula = '$$\nmiddle $x$ line\n$$';
+  const { els: els3 } = achar(comFormula);
+  const formulas = els3.filter(e => e.tipo === 'formula');
+  assert.deepEqual(formulas.map(f => f.tex), []);
+});
+
+test('elementos sobrepostos: comentário esconde o que está dentro, blocos escondem fórmulas em linha', () => {
+  // Comentário esconde tudo dentro dele
+  const { els: els1 } = achar('%%$x$ ![[a.png]]%%');
+  assert.equal(els1.filter(e => e.tipo === 'comentario').length, 1);
+  assert.equal(els1.filter(e => e.tipo === 'formula').length, 0);
+  assert.equal(els1.filter(e => e.tipo === 'imagem').length, 0);
+
+  // Fórmula e comentário sobrepostos: comentário vence
+  const { els: els2 } = achar('$a %%b%% c$');
+  const formula = els2.find(e => e.tipo === 'formula');
+  const comentario = els2.find(e => e.tipo === 'comentario');
+  assert.ok(comentario, 'deveria ter comentário');
+  if (formula && comentario) {
+    assert.ok(formula.de >= comentario.ate || formula.ate <= comentario.de, 'fórmula e comentário não deveriam se sobrepor');
+  }
+});
+
+test('cabeçalho do código: blockquote com fence tem linguagem sem o > prefixo', () => {
+  const { s, els } = achar('> ```js\n> let a\n> ```');
+  const c = els.find(e => e.tipo === 'cabecalhoCodigo');
+  assert.equal(c.linguagem, 'js', 'linguagem deve ser "js", não "> js"');
+});
