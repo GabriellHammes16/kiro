@@ -105,3 +105,12 @@ test('cabeçalho do código: blockquote com fence tem linguagem sem o > prefixo'
   const c = els.find(e => e.tipo === 'cabecalhoCodigo');
   assert.equal(c.linguagem, 'js', 'linguagem deve ser "js", não "> js"');
 });
+
+test('soBlocos: mesmos blocos do caminho completo, sem elementos em linha', () => {
+  const texto = '- [ ] t\n\n![[x.png]] $a$ %%c%%\n\n$$\nb\n$$\n\n```js\nlet a\n```\n\n> [!nota] t\n> c\n\n$$x$$';
+  const s = estado(texto), arvore = CM.language.ensureSyntaxTree(s, s.doc.length, 5000);
+  const cheio = W.acharElementos(s, 0, s.doc.length, { arvore }).filter(e => e.tipo === 'formulaBloco' || e.tipo === 'cabecalhoCodigo');
+  const so = W.acharElementos(s, 0, s.doc.length, { arvore, soBlocos: true });
+  assert.equal(so.length, 3);
+  assert.deepEqual(so, cheio);
+});

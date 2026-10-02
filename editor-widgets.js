@@ -16,13 +16,13 @@
   const IMAGEM_NA_LINHA = /!\[\[([^\][\n]+)\]\]/g;
   const COMENTARIO = /%%([^\n%]+)%%/g;
 
-  function acharElementos(state, de, ate, { arvore } = {}) {
+  function acharElementos(state, de, ate, { arvore, soBlocos } = {}) {
     const doc = state.doc, els = [], codigo = [];
     const tree = arvore || CM().language.syntaxTree(state);
     tree.iterate({
       from: de, to: ate,
       enter: no => {
-        if (no.name === 'TaskMarker') {
+        if (!soBlocos && no.name === 'TaskMarker') {
           const marca = state.sliceDoc(no.from, no.to);
           els.push({ tipo: 'tarefa', de: no.from, ate: no.to, feito: /x/i.test(marca[1] || '') });
         }
@@ -41,7 +41,7 @@
           }
           return false;
         }
-        if (no.name === 'Blockquote') {
+        if (!soBlocos && no.name === 'Blockquote') {
           const primeira = doc.lineAt(no.from);
           const m = /^>\s?\[!(\w+)\]/.exec(primeira.text);
           if (m) {
@@ -79,6 +79,7 @@
       }
       n = fim;
     }
+    if (soBlocos) return els.sort((x, y) => x.de - y.de);   // só cabeçalhos de código e $$: não se sobrepõem entre si
     const foraDeTudo = (a, b) => !emCodigo(a, b) && !blocos.some(([x, y]) => a < y && b > x);
     for (let n = doc.lineAt(de).number; n <= doc.lineAt(ate).number; n++) {
       const l = doc.line(n);
@@ -200,7 +201,7 @@
       toDOM() {
         const e = document.createElement(this.bloco ? 'div' : 'span');
         if (this.bloco) e.className = 'math-bloco';
-        e.innerHTML = htmlDaFormula(this.tex, this.bloco);
+        if (opcoes.desenharFormula) e.innerHTML = htmlDaFormula(this.tex, this.bloco); else e.textContent = this.tex;
         return e;
       }
       ignoreEvent() { return false; }   // clicar põe o cursor ali e mostra o texto
@@ -272,7 +273,7 @@
     const desenharBlocos = (state, els) => {
       const linhas = linhasDaSelecao(state), doc = state.doc, decos = [], faixas = [];
       for (const el of els) {
-        const ini = doc.lineAt(el.de).number, fim = doc.lineAt(el.ate).number;
+        const ini = doc.lineAt(el.blocoDe ?? el.de).number, fim = doc.lineAt(el.blocoAte ?? el.ate).number;   // código: o bloco todo
         let tocada = false;
         for (let n = ini; n <= fim; n++) if (linhas.has(n)) tocada = true;
         if (tocada) continue;
@@ -282,7 +283,7 @@
       }
       return { els, faixas, decos: V.Decoration.set(decos, true) };
     };
-    const procurarBlocos = state => acharElementos(state, 0, state.doc.length, { arvore: arvoreAte(state, state.doc.length) }).filter(e => BLOCOS.has(e.tipo));
+    const procurarBlocos = state => acharElementos(state, 0, state.doc.length, { arvore: arvoreAte(state, state.doc.length), soBlocos: true });
     const campoDosBlocos = S.StateField.define({
       create: state => desenharBlocos(state, procurarBlocos(state)),
       update(v, tr) {
@@ -300,7 +301,7 @@
         if (!alvo) return false;
         const pos = view.posAtDOM(alvo), linha = view.state.doc.lineAt(pos);
         if (linhasDaSelecao(view.state).has(linha.number)) return false;
-        if (alvo.matches('.ed-etiqueta')) { opcoes.buscarEtiqueta?.(alvo.textContent.replace(/^#/, '')); e.preventDefault(); return true; }
+        if (alvo.matches('.ed-etiqueta')) { const rel = pos - linha.from, m = root.KiroEditor.marcacoesDoKiro(linha.text).find(x => x.tipo === 'etiqueta' && x.de <= rel && rel < x.ate); if (m) opcoes.buscarEtiqueta?.(linha.text.slice(m.de + 1, m.ate)); e.preventDefault(); return true; }
         if (alvo.matches('.ed-link')) {
           for (let n = L.syntaxTree(view.state).resolveInner(pos, 1); n; n = n.parent) {
             if (n.name !== 'Link') continue;
