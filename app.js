@@ -475,7 +475,29 @@ function aplicarCorretor() {
   if (corretorLigado) document.documentElement.removeAttribute('spellcheck');
   else document.documentElement.setAttribute('spellcheck', 'false');
   window.cadernoDesktop?.definirCorretor?.(corretorLigado);
-  editorDaNota?.editor.definirCorretor?.(corretorLigado);
+  editorDaNota?.editor.definirOrtografia(corretorLigado);
+  if (corretorLigado) iniciarOrtografia();
+}
+// Corretor próprio (ortografia.js): carregado em segundo plano depois que a primeira nota aparece,
+// só com a opção ligada. O dicionário pessoal vem do cofre aberto.
+let ortografiaIniciada = false;
+async function iniciarOrtografia() {
+  if (ortografiaIniciada || !corretorLigado) return;
+  ortografiaIniciada = true;
+  try {
+    const pessoais = await (window.cadernoDesktop ? window.cadernoDesktop.dicionario() : api('dicionario'));
+    KiroOrtografia.definirPessoais(Array.isArray(pessoais) ? pessoais : []);
+    KiroOrtografia.aoMudar(() => editorDaNota?.editor.redesenharOrtografia());
+    await KiroOrtografia.carregar();
+  } catch {
+    ortografiaIniciada = false;
+    status(t('Não foi possível carregar o corretor'), true);
+  }
+}
+async function adicionarAoDicionario(palavra) {
+  KiroOrtografia.adicionar(palavra);   // o sublinhado some na hora
+  try { await (window.cadernoDesktop ? window.cadernoDesktop.adicionarAoDicionarioDoCofre(palavra) : api('dicionario', { palavra })); }
+  catch (erro) { status(t('Não foi possível salvar no dicionário: {erro}', { erro: mensagemDoErro(erro) }), true); }
 }
 let lateralRecolhida = lerPreferencia('lateralRecolhida') === '1';
 // Papel de parede: imagem atrás do conteúdo de todas as telas, menos Pastas (onde se lê e escreve).
@@ -1825,7 +1847,7 @@ let montagemDoEditor = Promise.resolve(null);   // a montagem em curso (ou a úl
 const chaveDaNota = nota => nota.id || 'rascunho';
 function opcoesDoEditor() {
   return {
-    corretor: corretorLigado,
+    ortografia: { ativa: corretorLigado, errada: p => KiroOrtografia.errada(p) },
     aoMudar: texto => { if (!editing) return; editing.body = texto; editorDirty = true; estadoDoc(); },
     aoSalvar: () => salvarNota(),
     existe: alvo => Boolean(Kiro.findLinkedNote(state.notes, alvo)),
@@ -1840,8 +1862,17 @@ function opcoesDoEditor() {
     },
     aoMenu: evento => {
       if (evento.shiftKey && !window.cadernoDesktop) return;
-      const area = editorDaNota.editor.area();
-      if (podeCorrigir(evento)) return esperarCorretor(evento, area, menuDaNota());
+      const editor = editorDaNota.editor, area = editor.area();
+      const alvo = corretorLigado && KiroOrtografia.pronto() ? editor.palavraEm(evento.clientX, evento.clientY) : null;
+      if (alvo && KiroOrtografia.errada(alvo.palavra)) {
+        evento.preventDefault();
+        const doCorretor = KiroCorretor.itensDoCorretor({ palavra: alvo.palavra, sugestoes: KiroOrtografia.sugestoes(alvo.palavra) }, {
+          trocar: s => editor.trocarTrecho(alvo.de, alvo.ate, s),
+          adicionar: p => adicionarAoDicionario(p),
+          t,
+        });
+        return abrirMenuContexto(evento, area, [...doCorretor, { separador: true }, ...menuDaNota()]);
+      }
       abrirMenuContexto(evento, area);
     },
   };
@@ -1865,6 +1896,7 @@ async function montarEditorDaNota(corpo) {
   if (!corpo.isConnected || chaveDaNota(editing || {}) !== chave) return null;   // trocou de nota enquanto carregava
   const editor = KiroEditor.montar(corpo, { texto: editing.body, ...opcoesDoEditor() });
   editorDaNota = { chave, editor };
+  setTimeout(iniciarOrtografia, 0);   // fora do caminho da abertura
   return editor;
 }
 // ---- Grafo de conexões ----
@@ -4982,6 +5014,7 @@ async function escolherOutroCofre(){
   try{const saved=await window.cadernoDesktop.chooseVault();if(saved){Kiro.validateState(saved);state=saved;fluxoPendente=false;clearTimeout(timerDoFluxo);loaded=true;failed=false;expanded=null;editing=null;
     // Plug-ins são do cofre: desliga os do anterior já (antes de ler o layout, para não entrarem no
     // hoje.json do novo) e carrega os que este cofre permite.
+    if(KiroOrtografia.pronto())KiroOrtografia.definirPessoais(await window.cadernoDesktop.dicionario());
     carregarPlugins();await carregarHoje();personalizandoHoje=false;render();}}
   catch(error){status(mensagemDoErro(error),true);}finally{setBusy(false);}
 }

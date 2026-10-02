@@ -26,6 +26,8 @@
     'Adicionar "{palavra}" ao dicionário': 'Add "{palavra}" to dictionary',
     'Corretor ortográfico': 'Spell check',
     'Sublinha palavras erradas em português e em inglês, ao mesmo tempo. Botão direito sobre a palavra mostra as sugestões.': 'Underlines misspelled words in Portuguese and English at the same time. Right-click a word to see suggestions.',
+    'Não foi possível carregar o corretor': 'Could not load the spell checker',
+    'Não foi possível salvar no dicionário: {erro}': 'Could not save to the dictionary: {erro}',
     // app.js — idioma
     'Não foi possível carregar o idioma': 'Could not load the language',
     'Idioma': 'Language',
