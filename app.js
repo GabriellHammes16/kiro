@@ -480,18 +480,21 @@ function aplicarCorretor() {
 }
 // Corretor próprio (ortografia.js): carregado em segundo plano depois que a primeira nota aparece,
 // só com a opção ligada. O dicionário pessoal vem do cofre aberto.
-let ortografiaIniciada = false;
+let ortografiaIniciada = false, ortografiaOuvindo = false, falhaAnunciada = false;
+async function lerDicionarioDoCofre() {
+  try { const p = await (window.cadernoDesktop ? window.cadernoDesktop.dicionario() : api('dicionario')); return Array.isArray(p) ? p : []; }
+  catch { return []; }
+}
 async function iniciarOrtografia() {
   if (ortografiaIniciada || !corretorLigado) return;
   ortografiaIniciada = true;
   try {
-    const pessoais = await (window.cadernoDesktop ? window.cadernoDesktop.dicionario() : api('dicionario'));
-    KiroOrtografia.definirPessoais(Array.isArray(pessoais) ? pessoais : []);
-    KiroOrtografia.aoMudar(() => editorDaNota?.editor.redesenharOrtografia());
+    KiroOrtografia.definirPessoais(await lerDicionarioDoCofre());
+    if (!ortografiaOuvindo) { ortografiaOuvindo = true; KiroOrtografia.aoMudar(() => editorDaNota?.editor.redesenharOrtografia()); }
     await KiroOrtografia.carregar();
   } catch {
     ortografiaIniciada = false;
-    status(t('Não foi possível carregar o corretor'), true);
+    if (!falhaAnunciada) { falhaAnunciada = true; status(t('Não foi possível carregar o corretor'), true); }   // uma vez por sessão; as tentativas seguintes são silenciosas
   }
 }
 async function adicionarAoDicionario(palavra) {
@@ -5014,8 +5017,9 @@ async function escolherOutroCofre(){
   try{const saved=await window.cadernoDesktop.chooseVault();if(saved){Kiro.validateState(saved);state=saved;fluxoPendente=false;clearTimeout(timerDoFluxo);loaded=true;failed=false;expanded=null;editing=null;
     // Plug-ins são do cofre: desliga os do anterior já (antes de ler o layout, para não entrarem no
     // hoje.json do novo) e carrega os que este cofre permite.
-    if(KiroOrtografia.pronto())KiroOrtografia.definirPessoais(await window.cadernoDesktop.dicionario());
-    carregarPlugins();await carregarHoje();personalizandoHoje=false;render();}}
+    carregarPlugins();await carregarHoje();personalizandoHoje=false;render();
+    // Dicionário pessoal é do cofre: recarrega o do novo (também com o motor ainda carregando).
+    if(ortografiaIniciada)KiroOrtografia.definirPessoais(await lerDicionarioDoCofre());}}
   catch(error){status(mensagemDoErro(error),true);}finally{setBusy(false);}
 }
 function exportarDados(){
