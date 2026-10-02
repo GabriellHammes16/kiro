@@ -197,7 +197,7 @@
     }, { decorations: v => v.decorations });
     // Corretor próprio: sublinha as palavras que ortografia.errada reprova, só nas linhas visíveis.
     // Sem `ortografia` fica inativo. Em docChanged refaz só as linhas tocadas; o resto é mapeado.
-    let ortografiaAtiva = Boolean(ortografia?.ativa);
+    let ortografiaAtiva = Boolean(ortografia?.ativa) && typeof ortografia?.errada === 'function';
     const redesenhar = S.StateEffect.define();
     const erroDeOrtografia = V.Decoration.mark({ class: 'ed-erro' });
     const errosDasLinhas = (view, de, ate, marcas) => {
@@ -213,7 +213,7 @@
     };
     const todosOsErros = view => {
       const marcas = [];
-      if (ortografiaAtiva && ortografia?.errada) for (const { from, to } of view.visibleRanges) errosDasLinhas(view, from, to, marcas);
+      if (ortografiaAtiva) for (const { from, to } of view.visibleRanges) errosDasLinhas(view, from, to, marcas);
       return V.Decoration.set(marcas, true);
     };
     const ortografiaPlugin = V.ViewPlugin.fromClass(class {
@@ -222,12 +222,15 @@
         if (u.viewportChanged || u.transactions.some(tr => tr.effects.some(e => e.is(redesenhar)))) { this.decorations = todosOsErros(u.view); return; }
         if (!u.docChanged || !ortografiaAtiva) return;
         let decos = this.decorations.map(u.changes);
-        const novas = [];
+        const novas = [], tocadas = new Map();   // início da linha → fim, uma vez por linha
         u.changes.iterChangedRanges((_a, _b, de, ate) => {
-          const doc = u.state.doc, ini = doc.lineAt(de).from, fim = doc.lineAt(ate).to;
+          const doc = u.state.doc;
+          for (let l = doc.lineAt(de); ; l = doc.line(l.number + 1)) { tocadas.set(l.from, l.to); if (l.to >= ate) break; }
+        });
+        for (const [ini, fim] of tocadas) {
           decos = decos.update({ filterFrom: ini, filterTo: fim, filter: () => false });
           errosDasLinhas(u.view, ini, fim, novas);
-        });
+        }
         this.decorations = decos.update({ add: novas, sort: true });
       }
     }, { decorations: v => v.decorations });
@@ -280,14 +283,18 @@
       },
       temFoco: () => view.hasFocus,
       rolarPara(pos) { view.dispatch({ effects: V.EditorView.scrollIntoView(limitar(pos), { y: 'start' }) }); },
-      definirOrtografia(ativa) { ortografiaAtiva = Boolean(ativa); view.dispatch({ effects: redesenhar.of(null) }); },
+      definirOrtografia(ativa) { ortografiaAtiva = Boolean(ativa) && typeof ortografia?.errada === 'function'; view.dispatch({ effects: redesenhar.of(null) }); },
       redesenharOrtografia() { view.dispatch({ effects: redesenhar.of(null) }); },
       palavraEm(x, y) {
         const pos = view.posAtCoords({ x, y });
         if (pos == null) return null;
         const l = view.state.doc.lineAt(pos), rel = pos - l.from;
         const w = palavrasDaLinha(l.text).find(p => p.de <= rel && rel <= p.ate);
-        return w ? { de: l.from + w.de, ate: l.from + w.ate, palavra: w.palavra } : null;
+        if (!w) return null;
+        // posAtCoords devolve a posição mais próxima: só vale se o clique cai sobre a palavra
+        const a = view.coordsAtPos(l.from + w.de, 1), b = view.coordsAtPos(l.from + w.ate, -1);
+        if (!a || !b || y < Math.min(a.top, b.top) || y > Math.max(a.bottom, b.bottom) || x < a.left || x > b.right) return null;
+        return { de: l.from + w.de, ate: l.from + w.ate, palavra: w.palavra };
       },
       trocarTrecho(de, ate, texto) { view.dispatch({ changes: { from: de, to: ate, insert: texto }, selection: { anchor: de + texto.length }, userEvent: 'input' }); },
       destruir: () => view.destroy(),
