@@ -1885,6 +1885,15 @@ function opcoesDoEditor() {
       }
       abrirMenuContexto(evento, area);
     },
+    widgets: {
+      desenharFormula: (tex, bloco) => matematica(tex, bloco),
+      desenharImagem: texto => { const img = lerImagem(texto); return img ? htmlDaImagem(img) : null; },
+      abrirImagem: (caminho, nome) => abrirImagemInteira(urlDoAnexo(caminho), nome),
+      abrirNota: alvo => abrirNota(Kiro.findLinkedNote(state.notes, alvo) || notaVazia({ title: alvo })),
+      abrirSite: url => { const limpa = Kiro.safeUrl(url); if (limpa) window.open(limpa, '_blank', 'noopener,noreferrer'); },
+      buscarEtiqueta: texto => buscarEtiqueta(texto),
+      copiar: async texto => { const ok = await copiarTexto(texto); if (!ok) status(t('O navegador não liberou a área de transferência.'), true); return ok; },
+    },
   };
 }
 async function montarEditorDaNota(corpo) {
