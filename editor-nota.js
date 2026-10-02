@@ -78,6 +78,8 @@
           return false;
         }
         if (nome === 'Autolink') { excluir.push([no.from, no.to]); return false; }
+        // URL solta (https://…, www.…, a@b.c): o GFM a deixa como nó de primeiro nível
+        if (nome === 'URL') { r.estilos.push([no.from, no.to, 'ed-sem-corretor']); excluir.push([no.from, no.to]); return false; }
         if (nome === 'Blockquote') linhasDe(no.from, no.to, 'ed-citacao');
         if (nome === 'QuoteMark') { const fim = state.sliceDoc(no.to, no.to + 1) === ' ' ? no.to + 1 : no.to; esconder(no.from, fim); return; }
         if (nome === 'HorizontalRule') { r.linhas.push([state.doc.lineAt(no.from).from, 'ed-regua']); esconder(no.from, no.to); return; }
@@ -138,6 +140,15 @@
     };
   }
 
+  // Troca externa do texto: o histórico antigo não se aplica ao texto novo (desfazer reinseriria
+  // trechos apagados no texto velho). Em duas transações, a segunda recria o histórico vazio.
+  function especsDeTroca(state, novo, historico, ativarHistorico) {
+    return [
+      { ...transacaoDeTexto(state, novo), effects: historico.reconfigure([]) },
+      { effects: historico.reconfigure(ativarHistorico()) },
+    ];
+  }
+
   // Adaptador: o que os menus e atalhos do app esperam de um textarea, sobre o estado do editor.
   // value é o doc com \n (como um textarea normaliza), porque as posições do CodeMirror contam
   // cada quebra como 1 caractere mesmo com lineSeparator '\r\n'; assim value e os índices batem
@@ -172,7 +183,7 @@
     return carregando;
   }
 
-  function montar(elemento, { texto, aoMudar, aoSalvar, existe, aoTeclar, aoMoverCursor, aoColar, aoMenu, ortografia }) {
+  function montar(elemento, { texto, aoMudar, existe, aoTeclar, aoMoverCursor, aoColar, aoMenu, ortografia }) {
     const { state: S, view: V, commands: C, language: L, markdown: M } = CM();
     const decorar = view => {
       const linhas = linhasDaSelecao(view.state), marcas = [];
@@ -180,7 +191,7 @@
         const arvore = L.ensureSyntaxTree(view.state, to, 50) ?? L.syntaxTree(view.state);
         const r = analisar(view.state, from, to, linhas, { existe, arvore });
         for (const [a, classe] of r.linhas) marcas.push(V.Decoration.line({ class: classe }).range(a));
-        for (const [a, b, classe] of r.estilos) if (b > a) marcas.push(V.Decoration.mark(classe === 'ed-sem-corretor' ? { attributes: { spellcheck: 'false' } } : { class: classe }).range(a, b));
+        for (const [a, b, classe] of r.estilos) if (b > a && classe !== 'ed-sem-corretor') marcas.push(V.Decoration.mark({ class: classe }).range(a, b));   // ed-sem-corretor só vale como lista de exclusão
         for (const [a, b] of r.esconder) marcas.push(V.Decoration.replace({}).range(a, b));
         for (const [a, b, s] of r.trocar) marcas.push(V.Decoration.replace({ widget: new Marcador(s) }).range(a, b));
       }
@@ -200,13 +211,15 @@
     let ortografiaAtiva = Boolean(ortografia?.ativa) && typeof ortografia?.errada === 'function';
     const redesenhar = S.StateEffect.define();
     const erroDeOrtografia = V.Decoration.mark({ class: 'ed-erro' });
+    // trechos de uma linha onde o corretor não olha (código, endereço, alvo de [[link]], etiqueta)
+    const ignoradosDaLinha = (view, l, arvore) => analisar(view.state, l.from, l.to, new Set(), { arvore }).estilos
+      .filter(e => e[2] === 'ed-sem-corretor').map(e => [e[0] - l.from, e[1] - l.from]);
     const errosDasLinhas = (view, de, ate, marcas) => {
       const doc = view.state.doc;
       const arvore = L.ensureSyntaxTree(view.state, ate, 50) ?? L.syntaxTree(view.state);
       for (let p = doc.lineAt(de).from; p <= ate;) {
         const l = doc.lineAt(p);
-        const ignorar = analisar(view.state, l.from, l.to, new Set(), { arvore }).estilos
-          .filter(e => e[2] === 'ed-sem-corretor').map(e => [e[0] - l.from, e[1] - l.from]);
+        const ignorar = ignoradosDaLinha(view, l, arvore);
         for (const w of palavrasDaLinha(l.text, ignorar)) if (ortografia.errada(w.palavra)) marcas.push(erroDeOrtografia.range(l.from + w.de, l.from + w.ate));
         p = l.to + 1;
       }
@@ -234,13 +247,14 @@
         this.decorations = decos.update({ add: novas, sort: true });
       }
     }, { decorations: v => v.decorations });
+    const historico = new S.Compartment();
     const view = new V.EditorView({
       parent: elemento,
       state: S.EditorState.create({
         doc: texto,
         extensions: [
           S.EditorState.lineSeparator.of(separadorDeLinha(texto)),
-          C.history(),
+          historico.of(C.history()),
           S.Prec.highest(V.EditorView.domEventHandlers({
             keydown: e => Boolean(aoTeclar?.(e)),
             paste: e => Boolean(aoColar?.(e)),
@@ -248,12 +262,12 @@
             contextmenu: e => { aoMenu?.(e); return false; },
           })),
           V.keymap.of([
-            { key: 'Mod-s', run: () => { aoSalvar?.(); return true; } },
             { key: 'Escape', run: v => { v.contentDOM.blur(); return true; } },
             ...M.markdownKeymap, C.indentWithTab, ...C.historyKeymap, ...C.defaultKeymap,
           ]),
           M.markdown({ base: M.markdownLanguage }),
           V.EditorView.lineWrapping,
+          V.placeholder(t('Clique para escrever. [[Nome da nota]] conecta ideias e #tag marca a nota.')),
           V.EditorView.contentAttributes.of({ spellcheck: 'false', 'aria-label': t('Conteúdo da nota') }),
           aoVivo,
           ortografiaPlugin,
@@ -273,7 +287,7 @@
       texto: () => view.state.sliceDoc(),
       definirTexto(novo) {
         if (novo === view.state.sliceDoc()) return;
-        view.dispatch(transacaoDeTexto(view.state, novo));
+        for (const spec of especsDeTroca(view.state, novo, historico, C.history)) view.dispatch(spec);
       },
       area: () => area,
       focar(onde) {
@@ -289,19 +303,20 @@
         const pos = view.posAtCoords({ x, y });
         if (pos == null) return null;
         const l = view.state.doc.lineAt(pos), rel = pos - l.from;
-        const w = palavrasDaLinha(l.text).find(p => p.de <= rel && rel <= p.ate);
+        const w = palavrasDaLinha(l.text, ignoradosDaLinha(view, l)).find(p => p.de <= rel && rel <= p.ate);
         if (!w) return null;
         // posAtCoords devolve a posição mais próxima: só vale se o clique cai sobre a palavra
         const a = view.coordsAtPos(l.from + w.de, 1), b = view.coordsAtPos(l.from + w.ate, -1);
         if (!a || !b || y < Math.min(a.top, b.top) || y > Math.max(a.bottom, b.bottom) || x < a.left || x > b.right) return null;
         return { de: l.from + w.de, ate: l.from + w.ate, palavra: w.palavra };
       },
-      trocarTrecho(de, ate, texto) { view.dispatch({ changes: { from: de, to: ate, insert: texto }, selection: { anchor: de + texto.length }, userEvent: 'input' }); },
+      // só troca se o texto ainda é a palavra clicada (pode ter mudado até a escolha da sugestão)
+      trocarTrecho(de, ate, texto, esperada) { if (esperada !== undefined && (ate > view.state.doc.length || view.state.sliceDoc(de, ate) !== esperada)) return false; view.dispatch({ changes: { from: de, to: ate, insert: texto }, selection: { anchor: de + texto.length }, userEvent: 'input' }); return true; },
       destruir: () => view.destroy(),
     };
   }
 
-  const api = { separadorDeLinha, palavrasDaLinha, marcacoesDoKiro, linhasDaSelecao, analisar, criarArea, transacaoDeTexto, veioDeFora, carregar, montar };
+  const api = { separadorDeLinha, palavrasDaLinha, marcacoesDoKiro, linhasDaSelecao, analisar, criarArea, transacaoDeTexto, especsDeTroca, veioDeFora, carregar, montar };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.KiroEditor = api;
 })(globalThis);

@@ -220,7 +220,6 @@ select:focus-visible, textarea:focus-visible, .tree-row:focus-visible {
    campo com a mesma tipografia do texto: sem moldura, sem alça de redimensionar
    e sem rolagem própria — ele cresce junto com o que se escreve. */
 .doc-corpo { flex:1 0 auto; padding:10px 0 26px; cursor:text; }
-.doc-corpo:empty::before { content:attr(data-vazio); color:#4a4a4a; pointer-events:none; }
 .bloco-editor { display:block; width:100%; margin:0 0 14px; padding:0; border:0; outline:none; background:transparent;
   color:var(--ink); font:inherit; line-height:inherit; letter-spacing:inherit; resize:none; overflow:hidden; white-space:pre-wrap; }
 .bloco-editor.bloco-codigo { font-family:ui-monospace,Consolas,monospace; font-size:13px; line-height:1.6; }

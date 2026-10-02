@@ -476,14 +476,14 @@ function aplicarCorretor() {
   else document.documentElement.setAttribute('spellcheck', 'false');
   window.cadernoDesktop?.definirCorretor?.(corretorLigado);
   editorDaNota?.editor.definirOrtografia(corretorLigado);
-  if (corretorLigado) iniciarOrtografia();
+  if (corretorLigado && editorDaNota) iniciarOrtografia();   // sem editor montado, a montagem agenda
 }
 // Corretor próprio (ortografia.js): carregado em segundo plano depois que a primeira nota aparece,
 // só com a opção ligada. O dicionário pessoal vem do cofre aberto.
-let ortografiaIniciada = false, ortografiaOuvindo = false, falhaAnunciada = false;
+let ortografiaIniciada = false, ortografiaOuvindo = false, falhaAnunciada = false, falhaDoDicionario = false;
 async function lerDicionarioDoCofre() {
   try { const p = await (window.cadernoDesktop ? window.cadernoDesktop.dicionario() : api('dicionario')); return Array.isArray(p) ? p : []; }
-  catch { return []; }
+  catch { if (!falhaDoDicionario) { falhaDoDicionario = true; status(t('Não foi possível ler o dicionário do cofre'), true); } return []; }
 }
 // Só a leitura mais recente vale: uma leitura do cofre antigo que termine depois da do novo não a sobrescreve.
 let leituraDoDicionario = 0;
@@ -1859,7 +1859,6 @@ function opcoesDoEditor() {
   return {
     ortografia: { ativa: corretorLigado, errada: p => KiroOrtografia.errada(p) },
     aoMudar: texto => { if (!editing) return; editing.body = texto; editorDirty = true; estadoDoc(); },
-    aoSalvar: () => salvarNota(),
     existe: alvo => Boolean(Kiro.findLinkedNote(state.notes, alvo)),
     aoTeclar: evento => Boolean(sugestao && teclaNaSugestao(evento)),
     aoMoverCursor: () => atualizarSugestoes(editorDaNota?.editor.area()),
@@ -1877,7 +1876,7 @@ function opcoesDoEditor() {
       if (alvo && KiroOrtografia.errada(alvo.palavra)) {
         evento.preventDefault();
         const doCorretor = KiroCorretor.itensDoCorretor({ palavra: alvo.palavra, sugestoes: KiroOrtografia.sugestoes(alvo.palavra) }, {
-          trocar: s => editor.trocarTrecho(alvo.de, alvo.ate, s),
+          trocar: s => editor.trocarTrecho(alvo.de, alvo.ate, s, alvo.palavra),
           adicionar: p => adicionarAoDicionario(p),
           t,
         });

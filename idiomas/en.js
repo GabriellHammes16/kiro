@@ -27,6 +27,7 @@
     'Corretor ortográfico': 'Spell check',
     'Sublinha palavras erradas em português e em inglês, ao mesmo tempo. Botão direito sobre a palavra mostra as sugestões.': 'Underlines misspelled words in Portuguese and English at the same time. Right-click a word to see suggestions.',
     'Não foi possível carregar o corretor': 'Could not load the spell checker',
+    'Não foi possível ler o dicionário do cofre': 'Could not read the vault dictionary',
     'Não foi possível salvar no dicionário: {erro}': 'Could not save to the dictionary: {erro}',
     // app.js — idioma
     'Não foi possível carregar o idioma': 'Could not load the language',
@@ -371,6 +372,7 @@
     'O navegador não liberou a área de transferência.': 'The browser did not allow clipboard access.',
     'O navegador não liberou a área de transferência. Use Ctrl+V.': 'The browser did not allow clipboard access. Use Ctrl+V.',
     'Conteúdo da nota': 'Note content',
+    'Clique para escrever. [[Nome da nota]] conecta ideias e #tag marca a nota.': 'Click to write. [[Note name]] links ideas and #tag labels the note.',
     'Não foi possível guardar a imagem.': 'Could not save the image.',
     '{nome} passa de 20 MB.': '{nome} is over 20 MB.',
     'A imagem': 'The image',

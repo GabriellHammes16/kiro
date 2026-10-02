@@ -150,3 +150,34 @@ test('palavrasDaLinha: letras com acento, hífen e apóstrofo internos, pula tre
   assert.deepEqual(p('ver código aqui', [[4, 10]]), ['ver', 'aqui']);
   assert.deepEqual(p('ano 2026 e C3PO'), ['ano', '2026', 'e', 'C3PO'], 'o editor entrega; quem ignora números é o corretor');
 });
+
+test('URL e e-mail soltos ficam fora do corretor e sem marcação do Kiro', () => {
+  const texto = 'veja https://github.com/kirozzapp/meuprojeto e fulano@exemplozz.com e www.youtube.com';
+  const r = ver(texto);
+  const sem = r.estilos.filter(e => e[2] === 'ed-sem-corretor').map(e => [e[0], e[1]]);
+  for (const trecho of ['https://github.com/kirozzapp/meuprojeto', 'fulano@exemplozz.com', 'www.youtube.com']) {
+    const a = texto.indexOf(trecho), b = a + trecho.length;
+    assert.ok(sem.some(([x, y]) => x <= a && y >= b), trecho);
+    assert.ok(!r.estilos.some(e => e[2] !== 'ed-sem-corretor' && e[0] < b && e[1] > a), trecho);
+  }
+});
+
+test('definirTexto externo zera o histórico: desfazer não reinsere texto velho', () => {
+  const { EditorState } = CM.state, C = CM.commands;
+  const historico = new CM.state.Compartment();
+  let s = EditorState.create({ doc: 'Hello SECRET', extensions: [historico.of(C.history())] });
+  const ir = spec => { s = s.update(spec).state; };
+  ir({ changes: { from: 5, to: 12, insert: '' }, userEvent: 'delete' });
+  ir({ changes: { from: 5, insert: ' X' }, userEvent: 'input' });
+  for (const spec of E.especsDeTroca(s, 'Totally different text from outside', historico, C.history)) ir(spec);
+  assert.equal(s.doc.toString(), 'Totally different text from outside');
+  C.undo({ state: s, dispatch: tr => { s = tr.state; } });
+  assert.equal(s.doc.toString(), 'Totally different text from outside');
+  // sem o helper (só addToHistory:false) o bug reaparece, então o teste protege algo real
+  let v = EditorState.create({ doc: 'Hello SECRET', extensions: [C.history()] });
+  v = v.update({ changes: { from: 5, to: 12, insert: '' }, userEvent: 'delete' }).state;
+  v = v.update({ changes: { from: 5, insert: ' X' }, userEvent: 'input' }).state;
+  v = v.update(E.transacaoDeTexto(v, 'Totally different text from outside')).state;
+  C.undo({ state: v, dispatch: tr => { v = tr.state; } });
+  assert.match(v.doc.toString(), /SECRET/);
+});
