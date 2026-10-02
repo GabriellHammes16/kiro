@@ -183,17 +183,20 @@
     return carregando;
   }
 
-  function montar(elemento, { texto, aoMudar, existe, aoTeclar, aoMoverCursor, aoColar, aoMenu, ortografia }) {
+  function montar(elemento, { texto, aoMudar, existe, aoTeclar, aoMoverCursor, aoColar, aoMenu, ortografia, widgets }) {
     const { state: S, view: V, commands: C, language: L, markdown: M } = CM();
+    // Elementos desenhados (etapa 2): onde um widget substitui o texto, a etapa 1 não esconde nada.
+    const desenhados = widgets && root.KiroWidgets ? root.KiroWidgets.extensao({ ...widgets, t }) : null;
+    const dentroDeWidget = (ocupadas, a, b) => ocupadas.some(([x, y]) => a < y && b > x);
     const decorar = view => {
-      const linhas = linhasDaSelecao(view.state), marcas = [];
+      const linhas = linhasDaSelecao(view.state), marcas = [], ocupadas = desenhados ? desenhados.ocupadas(view) : [];
       for (const { from, to } of view.visibleRanges) {
         const arvore = L.ensureSyntaxTree(view.state, to, 50) ?? L.syntaxTree(view.state);
         const r = analisar(view.state, from, to, linhas, { existe, arvore });
         for (const [a, classe] of r.linhas) marcas.push(V.Decoration.line({ class: classe }).range(a));
         for (const [a, b, classe] of r.estilos) if (b > a && classe !== 'ed-sem-corretor') marcas.push(V.Decoration.mark({ class: classe }).range(a, b));   // ed-sem-corretor só vale como lista de exclusão
-        for (const [a, b] of r.esconder) marcas.push(V.Decoration.replace({}).range(a, b));
-        for (const [a, b, s] of r.trocar) marcas.push(V.Decoration.replace({ widget: new Marcador(s) }).range(a, b));
+        for (const [a, b] of r.esconder) if (!dentroDeWidget(ocupadas, a, b)) marcas.push(V.Decoration.replace({}).range(a, b));
+        for (const [a, b, s] of r.trocar) if (!dentroDeWidget(ocupadas, a, b)) marcas.push(V.Decoration.replace({ widget: new Marcador(s) }).range(a, b));
       }
       return V.Decoration.set(marcas, true);
     };
@@ -269,6 +272,7 @@
           V.EditorView.lineWrapping,
           V.placeholder(t('Clique para escrever. [[Nome da nota]] conecta ideias e #tag marca a nota.')),
           V.EditorView.contentAttributes.of({ spellcheck: 'false', 'aria-label': t('Conteúdo da nota') }),
+          ...(desenhados ?? []),
           aoVivo,
           ortografiaPlugin,
           V.EditorView.updateListener.of(u => {
