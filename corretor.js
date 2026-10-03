@@ -2,7 +2,7 @@
 // sob o clique está errada, e a validação do que a página manda ao processo principal.
 // Só o modelo, sem DOM. Roda no navegador (KiroCorretor) e no Node (testes e main.cjs).
 (function (root) {
-  const MAX_SUGESTOES = 2;   // como no Obsidian: só as mais parecidas
+  const MAX_SUGESTOES = 1;   // como no Obsidian: só a mais parecida
   // Troca: texto curto numa linha só (sugestão pode ter espaço: "a gente").
   const palavraValida = v => typeof v === 'string' && v.length > 0 && v.length <= 100 && !/[\r\n]/.test(v);
   // Dicionário do usuário: uma palavra só.
