@@ -23,7 +23,7 @@
     'Carregando…': 'Loading…',
     // corretor.js
     'Sem sugestões': 'No suggestions',
-    'Adicionar "{palavra}" ao dicionário': 'Add "{palavra}" to dictionary',
+    'Adicionar ao dicionário': 'Add to dictionary',
     'Corretor ortográfico': 'Spell check',
     'Sublinha palavras erradas em português e em inglês, ao mesmo tempo. Botão direito sobre a palavra mostra as sugestões.': 'Underlines misspelled words in Portuguese and English at the same time. Right-click a word to see suggestions.',
     'Não foi possível carregar o corretor': 'Could not load the spell checker',

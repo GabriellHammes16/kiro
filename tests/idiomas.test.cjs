@@ -91,8 +91,9 @@ test('itensDoCorretor: sem palavra, nada; com palavra, sugestões e adicionar', 
   assert.deepEqual(C.itensDoCorretor({ palavra: '' }, acoes), []);
   assert.deepEqual(C.itensDoCorretor(null, acoes), []);
   const itens = C.itensDoCorretor({ palavra: 'errrado', sugestoes: ['errado', 'errada', 'erro', 'ferrado', 'serrado', 'aterrado'] }, acoes);
-  assert.deepEqual(itens.map(i => i.rotulo), ['errado', 'errada', 'erro', 'ferrado', 'serrado', 'Adicionar "errrado" ao dicionário']);
-  itens[0].acao(); itens[5].acao();
+  assert.deepEqual(itens.map(i => i.rotulo), ['errado', 'errada', undefined, 'Adicionar ao dicionário']);
+  assert.equal(itens[2].separador, true);
+  itens[0].acao(); itens[3].acao();
   assert.deepEqual(feito, [['trocar', 'errado'], ['adicionar', 'errrado']]);
 });
 
@@ -101,7 +102,7 @@ test('itensDoCorretor: sem sugestões mostra um item desabilitado; lixo na lista
   const itens = C.itensDoCorretor({ palavra: 'xyzq', sugestoes: [null, '', 3] }, acoes);
   assert.equal(itens[0].rotulo, 'Sem sugestões');
   assert.equal(itens[0].ativo(), false);
-  assert.equal(itens.length, 2);
+  assert.equal(itens.length, 3);
 });
 
 test('palavraValida e palavraParaDicionario recusam o que não é palavra curta', () => {

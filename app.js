@@ -358,6 +358,8 @@ const TRACOS = {
   renomear: '<path d="M4 20h4l10.3-10.3a2.4 2.4 0 1 0-3.4-3.4L4.6 16.6z"/><path d="M13.6 7.2 16.8 10.4"/>',
   link: '<path d="M10.2 13.8a3.6 3.6 0 0 0 5.1 0l2.6-2.6a3.6 3.6 0 1 0-5.1-5.1l-1.2 1.2"/><path d="M13.8 10.2a3.6 3.6 0 0 0-5.1 0l-2.6 2.6a3.6 3.6 0 1 0 5.1 5.1l1.2-1.2"/>',
   imagem: '<rect x="3.5" y="4.5" width="17" height="15" rx="2"/><circle cx="9" cy="10" r="1.6"/><path d="m20.5 16-4.5-4.5L6 19.5"/>',
+  trocar: '<path d="M4.5 9h14M15 5.5 18.5 9 15 12.5"/><path d="M19.5 15h-14M9 11.5 5.5 15 9 18.5"/>',
+  dicionario: '<path d="M5 5.5A2 2 0 0 1 7 3.5h11.5v14H7a2 2 0 0 0-2 2z"/><path d="M5 19.5a2 2 0 0 0 2 2h11.5v-4"/><path d="M11.75 7.5v6M8.75 10.5h6"/>',
   'link-externo': '<path d="M14 4.5h5.5V10"/><path d="M19.5 4.5 11.5 12.5"/><path d="M18 14v4.5a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-10a2 2 0 0 1 2-2h4.5"/>',
   'ir-para': '<path d="M4.5 12h13M12.5 7l5 5-5 5"/>',
   texto: '<path d="m5 19 6-14 6 14M7.6 14h6.8"/>',
@@ -1881,7 +1883,7 @@ function opcoesDoEditor({ atual = () => editorDaNota?.editor, menu = menuDaNota 
         const doCorretor = KiroCorretor.itensDoCorretor({ palavra: alvo.palavra, sugestoes: KiroOrtografia.sugestoes(alvo.palavra) }, {
           trocar: s => editor.trocarTrecho(alvo.de, alvo.ate, s, alvo.palavra),
           adicionar: p => adicionarAoDicionario(p),
-          t,
+          t, icone,
         });
         return abrirMenuContexto(evento, area, [...doCorretor, ...(menu().length ? [{ separador: true }, ...menu()] : [])]);
       }
@@ -3039,7 +3041,7 @@ function abrirMenuDoCorretor(dados) {
   menuDoCorretor = null;
   clearTimeout(limiteDoCorretor);
   if (!pendente) return;
-  const doCorretor = KiroCorretor.itensDoCorretor(dados, { trocar: s => window.cadernoDesktop.trocarPalavra(s), adicionar: p => window.cadernoDesktop.adicionarAoDicionario(p), t });
+  const doCorretor = KiroCorretor.itensDoCorretor(dados, { trocar: s => window.cadernoDesktop.trocarPalavra(s), adicionar: p => window.cadernoDesktop.adicionarAoDicionario(p), t, icone });
   const itens = doCorretor.length && pendente.itens.length ? [...doCorretor, { separador: true }, ...pendente.itens] : [...doCorretor, ...pendente.itens];
   if (itens.length) abrirMenuContexto({ clientX: pendente.x, clientY: pendente.y, preventDefault() {} }, pendente.area, itens);
 }
