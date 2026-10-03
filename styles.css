@@ -58,8 +58,7 @@ nav { margin-top:20px; display:grid; gap:2px; }
 .today-grid { display:grid; grid-template-columns:1.15fr .85fr; gap:22px; }.stack { display:grid; gap:22px; }.card { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:20px; box-shadow:var(--shadow); }.card h2 { margin:0; font-size:16px; font-weight:600; letter-spacing:-.2px; }.card-head { display:flex; align-items:center; justify-content:space-between; margin-bottom:14px; }.card-head a { color:var(--accent); font-size:13px; cursor:pointer; }.progress { height:7px; border-radius:8px; overflow:hidden; margin:13px 0 5px; }.progress div { height:100%; border-radius:inherit; }.small-muted { color:var(--muted); font-size:12px; }
 .routine-item, .task-item { display:flex; align-items:center; gap:11px; padding:10px 0; border-bottom:1px solid var(--line); }.routine-item:last-child,.task-item:last-child { border-bottom:0; }.check { width:20px; height:20px; border-radius:6px; border:1.5px solid var(--border-strong); flex:0 0 auto; }.check.done { color:var(--primario-texto); display:grid; place-content:center; }.check.done:after { content:"✓"; font-size:13px; }.routine-title, .task-title { flex:1; font-size:14px; }.done + .routine-title, .done + .task-title { text-decoration:line-through; }.priority { font-size:12px; padding:3px 7px; border-radius:999px; }.empty { padding:30px 4px; color:var(--muted); text-align:center; font-size:14px; }
 .toolbar { display:flex; gap:10px; align-items:center; margin-bottom:18px; }.search { max-width:380px; width:100%; border:1px solid var(--line); border-radius:8px; padding:10px 12px; background:var(--campo); }.notes-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(230px,1fr)); gap:14px; }.note-card { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:17px; cursor:pointer; transition:.15s; }.note-card h2 { margin:0 0 6px; font-size:15px; font-weight:600; line-height:1.35; }.note-card p { margin:0; font-size:13px; line-height:1.55; display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:3; overflow:hidden; overflow-wrap:anywhere; }.note-meta { color:var(--muted); font-size:12px; margin-top:17px; }.task-layout { display:grid; grid-template-columns:minmax(300px,2fr) minmax(260px,1fr); gap:22px; align-items:start; }
-.task-layout > aside.card { background:transparent; }
-.task-layout > aside.card h2 { font-size:var(--fs-interface); }.task-group + .task-group { margin-top:21px; }.task-group h2 { font-size:12px; font-weight:600; color:var(--muted); text-transform:uppercase; letter-spacing:.06em; margin:0 0 4px; }.task-info { color:var(--muted); font-size:12px; }.task-actions { display:flex; gap:3px; opacity:0; }.task-item:hover .task-actions { opacity:1; }
+.task-group + .task-group { margin-top:21px; }.task-group h2 { font-size:12px; font-weight:600; color:var(--muted); text-transform:uppercase; letter-spacing:.06em; margin:0 0 4px; }.task-info { color:var(--muted); font-size:12px; }.task-actions { display:flex; gap:3px; opacity:0; }.task-item:hover .task-actions { opacity:1; }
 .form { display:grid; gap:13px; }.field { display:grid; gap:6px; }.field label { font-size:12px; font-weight:600; }.field input,.field textarea,.field select { border:1px solid var(--line); border-radius:8px; padding:10px; background:var(--campo); }.field textarea { resize:vertical; min-height:140px; }.two-cols { display:grid; grid-template-columns:1fr 1fr; gap:10px; }.form-actions { display:flex; justify-content:flex-end; gap:8px; margin-top:4px; }
 .modal-backdrop { position:fixed; inset:0; display:grid; place-items:center; padding:20px; z-index:5; }.modal { max-width:660px; width:100%; max-height:88vh; overflow:auto; border-radius:var(--raio-card); padding:22px; }.modal-head { display:flex; justify-content:space-between; align-items:center; margin-bottom:18px; }.modal-head h2 { margin:0; font-size:20px; }.modal .form { margin-top:0; }.links-list { margin-top:14px; }.link-row { display:flex; gap:8px; align-items:center; padding:8px 0; border-top:1px solid var(--line); }.link-row a { flex:1; color:var(--accent); font-size:13px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }.add-link { display:flex; gap:8px; margin-top:9px; }.add-link input { flex:1; border:1px solid var(--line); border-radius:8px; padding:8px; }
 @media (max-width:780px) { .app-shell { display:block; }.sidebar { position:sticky; top:0; width:100%; height:auto; z-index:3; padding:12px; flex-direction:row; align-items:center; gap:10px; }.brand { padding:0; }.sidebar nav { margin:0; display:flex; overflow:auto; }.nav-item { white-space:nowrap; }.new-note { width:auto; white-space:nowrap; }.content { margin:0; width:100%; padding:28px 18px; }.today-grid,.task-layout { grid-template-columns:1fr; }.page-head h1 { font-size:27px; } }
@@ -1501,3 +1500,51 @@ html:not(.papel-em-video) .papel-so-video { display:none; }
 /* As ferramentas aparecem só no cartão sob o mouse, com foco do teclado ou com as opções abertas; em tela de toque, sempre. */
 .hoje-cartao:is(:hover, :focus-within) > .hoje-ferramentas, .hoje-ferramentas:has(:popover-open) { opacity:1; }
 @media (hover:none) { .hoje-ferramentas { opacity:1; } }
+
+/* ---- Tarefas: resumo, abas e grupos por data ---- */
+.tarefas-resumo { display:grid; grid-template-columns:repeat(auto-fit, minmax(160px, 1fr)); gap:var(--esp-3); margin:0 0 var(--esp-5); }
+.resumo-item { display:grid; gap:2px; align-content:start; padding:var(--esp-3) var(--esp-4); border:1px solid var(--line); border-radius:var(--raio-card); background:var(--panel); }
+.resumo-item b { font-size:24px; font-weight:600; line-height:1.2; font-variant-numeric:tabular-nums; color:var(--ink); }
+.resumo-item span { font-size:var(--fs-legenda); color:var(--muted); }
+.resumo-item.alerta b { color:var(--danger); }
+.resumo-progresso .progress { margin:6px 0 0; height:5px; }
+.tarefas-abas { margin:0 0 var(--esp-3); }
+.tarefas-lista { padding:var(--esp-2) var(--esp-5) var(--esp-4); }
+.tarefas-lista .task-group { margin-top:var(--esp-4); }
+.task-group h2 { display:flex; align-items:center; gap:8px; }
+.task-group-conta { min-width:18px; padding:0 6px; border-radius:var(--raio-pilula); background:var(--surface-active); color:var(--muted); font-size:11px; line-height:16px; text-align:center; font-variant-numeric:tabular-nums; letter-spacing:0; }
+.grupo-atrasado h2 { color:var(--danger); }
+.task-data { display:inline-flex; align-items:center; gap:4px; }
+.task-data .icone { width:12px; height:12px; }
+.task-data.atrasada { color:var(--danger); }
+.tarefa-datas { display:flex; flex-wrap:wrap; align-items:center; gap:6px; }
+.tarefa-datas input { flex:1 1 170px; }
+.tarefa-datas .chip { display:inline-flex; align-items:center; min-height:32px; }
+.tarefa-datas .chip[aria-pressed="true"] { background:var(--surface-active); border-color:var(--border-strong); }
+
+/* ---- Tarefa citada numa nota ([[tarefa:id|Título]]): chip com caixinha, título e data ---- */
+.tarefa-citada { display:inline-flex; align-items:center; gap:6px; max-width:100%; padding:0 7px 0 5px; border:1px solid var(--line); border-radius:6px; background:var(--surface-hover); font-family:var(--fonte-interface); font-size:.82em; line-height:1.7; vertical-align:baseline; }
+.tarefa-citada .ed-caixa, .tarefa-citada .check { margin:0; }
+.tarefa-citada .check { width:15px; height:15px; border-radius:4px; }
+.tarefa-citada .check.done:after { font-size:10px; }
+.tarefa-citada-titulo { color:var(--ink); cursor:pointer; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.tarefa-citada-titulo:hover { text-decoration:underline; }
+.tarefa-citada-data { color:var(--muted); font-size:.9em; }
+.tarefa-citada-data.atrasada { color:var(--danger); }
+.tarefa-citada.feita .tarefa-citada-titulo { color:var(--muted); text-decoration:line-through; }
+.tarefa-citada.ausente { border-style:dashed; }
+.tarefa-citada.ausente .tarefa-citada-titulo { color:var(--text-disabled); text-decoration:line-through; cursor:default; }
+.ctx-tipo { margin-left:auto; padding-left:8px; color:var(--muted); font-size:11px; }
+
+/* Tarefa: descrição e notas que a citam. */
+.task-descricao { margin:1px 0 2px; color:var(--muted); font-size:var(--fs-secundario); line-height:1.45; white-space:pre-line; display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2; overflow:hidden; }
+.task-citada-em { color:var(--muted); }
+.form-actions .tarefa-copiar { margin-right:auto; }
+
+/* Grafo: tarefa é um anel (a nota é ponto cheio); concluída fica apagada. */
+.graph-node.tipo-tarefa circle:not(.graph-hit) { fill:var(--graph-background); stroke:var(--graph-node); stroke-width:1.8; }
+.graph-node.tipo-tarefa.feita circle:not(.graph-hit) { opacity:.45; stroke-dasharray:2 2; }
+.graph-node.tipo-tarefa:hover circle:not(.graph-hit) { fill:var(--graph-node-active); stroke:var(--graph-node-active); }
+/* Tarefa concluída: risca só o nome; descrição, data e notas ficam legíveis. */
+.done + .task-title:has(> .task-nome) { text-decoration:none; }
+.done + .task-title > .task-nome { text-decoration:line-through; color:var(--muted); }

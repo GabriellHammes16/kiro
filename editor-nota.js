@@ -117,6 +117,8 @@
         if (dentroDeCodigo(a, b)) continue;
         if (m.tipo === 'etiqueta') { r.estilos.push([a, b, 'ed-etiqueta'], [a, b, 'ed-sem-corretor']); continue; }
         if (m.tipo === 'realce') { r.estilos.push([a + 2, b - 2, 'ed-realce']); esconder(a, a + 2); esconder(b - 2, b); continue; }
+        // Citação de tarefa: fora da linha do cursor um widget (editor-widgets) cobre tudo; na linha, o texto cru, sem corretor.
+        if (/^tarefa:/i.test(m.alvo)) { r.estilos.push([a, b, 'ed-sem-corretor']); continue; }
         const classe = existe && !existe(m.alvo) ? 'ed-wikilink-ausente' : 'ed-wikilink';
         const inicioDoTexto = m.apelido ? a + 2 + linha.text.slice(m.de + 2).indexOf('|') + 1 : a + 2;
         r.estilos.push([inicioDoTexto, b - 2, classe]);
@@ -312,6 +314,8 @@
       rolarPara(pos) { view.dispatch({ effects: V.EditorView.scrollIntoView(limitar(pos), { y: 'start' }) }); },
       definirOrtografia(ativa) { ortografiaAtiva = Boolean(ativa) && typeof ortografia?.errada === 'function'; view.dispatch({ effects: redesenhar.of(null) }); },
       redesenharOrtografia() { view.dispatch({ effects: redesenhar.of(null) }); },
+      // Algo de fora do texto mudou (ex.: tarefa citada concluída): os elementos desenhados se refazem.
+      redesenhar() { view.dispatch({ effects: redesenhar.of(null) }); },
       palavraEm(x, y) {
         const pos = view.posAtCoords({ x, y });
         if (pos == null) return null;

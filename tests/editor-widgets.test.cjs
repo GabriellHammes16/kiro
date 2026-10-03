@@ -184,3 +184,9 @@ test('bloco de plug-in: mesma regra de cerca da leitura (3 crases exatas; 4 não
   assert.equal(tipos('```kiro:abc\nx\n```'), 1);
   assert.equal(tipos('````kiro:abc\nx\n````'), 0);
 });
+
+test('citação de tarefa: [[tarefa:id|Título]] vira elemento próprio, fora de código', () => {
+  const { s, els } = achar('Fazer [[tarefa:abc-1|Assistir à aula]] hoje e `[[tarefa:x|não]]`\n[[Nota comum]]');
+  const c = els.filter(e => e.tipo === 'citacaoTarefa');
+  assert.deepEqual(c.map(e => [fatia(s, e), e.id, e.titulo]), [['[[tarefa:abc-1|Assistir à aula]]', 'abc-1', 'Assistir à aula']]);
+});

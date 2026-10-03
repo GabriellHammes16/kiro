@@ -26,7 +26,7 @@
       if (n.file !== undefined && (!text(n.file) || /(^[\\/]|:|(^|[\\/])\.\.([\\/]|$))/.test(n.file) || !/\.md$/i.test(n.file))) fail();
       if (n.folderId && !id(n.folderId)) fail();
     }
-    for (const t of value.tasks) if (!date(t.due) || !['Baixa', 'Média', 'Alta'].includes(t.priority) || typeof t.done !== 'boolean' || (t.noteId && !id(t.noteId))) fail();
+    for (const t of value.tasks) if (!date(t.due) || !['Baixa', 'Média', 'Alta'].includes(t.priority) || typeof t.done !== 'boolean' || (t.noteId && !id(t.noteId)) || (t.description !== undefined && (!text(t.description) || t.description.length > 5000))) fail();
     for (const r of value.routine || []) if (!date(r.date) || typeof r.done !== 'boolean') fail();
     for (const h of value.habits || []) {
       if (!validFrequency(h.frequency) || (h.createdAt !== undefined && (!Number.isFinite(h.createdAt) || Math.abs(h.createdAt) > 8.64e15))) fail();
@@ -191,7 +191,13 @@
   const normalize = value => String(value).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
   const isImagePath = value => /\.(png|jpe?g|gif|webp|avif|bmp)$/i.test(value.trim());
   // ![[imagem.png]] embute uma imagem; não é ligação entre notas, então fica fora do grafo e dos backlinks.
-  const wikiLinks = body => [...body.matchAll(/(!?)\[\[([^\]\n]+)\]\]/g)].filter(match => !(match[1] && isImagePath(match[2].split('|')[0]))).map(match => ({ target: match[2].split('|')[0].split('#')[0].trim(), label: (match[2].split('|')[1] || match[2]).trim() }));
+  // [[tarefa:id|Título]] cita uma tarefa, não uma nota: fica fora do grafo de notas e dos backlinks (ver taskLinks).
+  const CITACAO_DE_TAREFA = /(?<!!)\[\[tarefa:([^\]|\n]+)(?:\|[^\]\n]*)?\]\]/gi;
+  const taskLinks = body => [...String(body).matchAll(CITACAO_DE_TAREFA)].map(m => m[1].trim());
+  const notesCitingTask = (notes, taskId) => notes.filter(n => taskLinks(n.body).includes(taskId));
+  // Citação pronta para colar numa nota: o id não muda quando a tarefa troca de nome; o título é só o rótulo.
+  const taskReference = task => `[[tarefa:${task.id}|${String(task.title).replace(/[\[\]|\n]+/g, ' ').replace(/\s+/g, ' ').trim()}]]`;
+  const wikiLinks = body => [...body.matchAll(/(!?)\[\[([^\]\n]+)\]\]/g)].filter(match => !(match[1] && isImagePath(match[2].split('|')[0])) && !/^tarefa:/i.test(match[2])).map(match => ({ target: match[2].split('|')[0].split('#')[0].trim(), label: (match[2].split('|')[1] || match[2]).trim() }));
   const tags = note => [...new Set([...(note.tags || []), ...[...note.body.matchAll(/(?:^|\s)#([\p{L}\p{N}_/-]+)/gu)].map(m => m[1])])];
   const findLinkedNote = (notes, target) => notes.find(n => normalize(n.title) === normalize(target) || normalize((n.file || '').replace(/\.md$/i, '')) === normalize(target) || normalize((n.file || '').split('/').pop().replace(/\.md$/i, '')) === normalize(target));
   // Notas que citam `note` com [[...]]; a própria nota não conta.
@@ -397,7 +403,7 @@
     return atalhos;
   }
 
-  const api = { ATALHOS_EDITAVEIS, combinacaoDoEvento, rotuloDaCombinacao, problemaDoAtalho, atalhosValidos, TEMAS, SKINS, APARENCIA_PADRAO, luminancia, contraste, corValida, aparenciaValida, classesDaAparencia, FOLDER_COLORS, folderColor, habitStats, habitDays, withHabits, validFrequency, localDate, safeUrl, validateState, normalize, isImagePath, wikiLinks, tags, findLinkedNote, mentions, fluxosQueCitam, inInbox, withoutInbox, toReview, linkQuery, linkSuggestions, validFolderName, folderPaths, descendants, upgradeBackup, pathKey, mencoesNaoVinculadas, vincularMencao, sumario, arvoreDeEtiquetas, podeVincular };
+  const api = { taskLinks, notesCitingTask, taskReference, ATALHOS_EDITAVEIS, combinacaoDoEvento, rotuloDaCombinacao, problemaDoAtalho, atalhosValidos, TEMAS, SKINS, APARENCIA_PADRAO, luminancia, contraste, corValida, aparenciaValida, classesDaAparencia, FOLDER_COLORS, folderColor, habitStats, habitDays, withHabits, validFrequency, localDate, safeUrl, validateState, normalize, isImagePath, wikiLinks, tags, findLinkedNote, mentions, fluxosQueCitam, inInbox, withoutInbox, toReview, linkQuery, linkSuggestions, validFolderName, folderPaths, descendants, upgradeBackup, pathKey, mencoesNaoVinculadas, vincularMencao, sumario, arvoreDeEtiquetas, podeVincular };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Kiro = api;
 })(globalThis);

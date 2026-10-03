@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Lista de Tarefas</title>
+<style>
+  * { box-sizing: border-box; }
+  /* Fundo explícito: sem ele a moldura não acompanha o tema (o color-scheme dela é outro). */
+  html, body { margin: 0; padding: 0; background: var(--content-bg, #0A0A0A); }
+  body { color: var(--ink, #EDEDED); font: 14px/1.45 var(--fonte-interface, system-ui); }
+  body.cartao, body.cartao html { background: var(--panel, #161616); }
+  .pagina { max-width: 880px; margin: 0 auto; padding: 32px 24px 48px; }
+  body.cartao .pagina { padding: 0; }
+  .topo { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin: 0 0 18px; }
+  .topo h1 { margin: 0; font-size: 26px; font-weight: 600; letter-spacing: -.4px; }
+  .topo p { margin: 4px 0 0; color: var(--muted, #A1A1A1); font-size: 13px; }
+  body.cartao .topo { display: none; }
+
+  .secao { margin: 0 0 10px; border-radius: var(--raio-card, 10px); transition: background .12s; }
+  .secao[data-sobre="true"] { background: var(--accent-soft, rgba(255,255,255,.08)); outline: 1px dashed var(--focus-ring, #888); outline-offset: 2px; }
+  .cabeca { display: flex; align-items: center; gap: 8px; width: 100%; padding: 6px 4px; border: 0; background: none; color: var(--muted, #A1A1A1); font: 600 12px/1.4 var(--fonte-interface, system-ui); letter-spacing: .06em; text-transform: uppercase; cursor: pointer; text-align: left; }
+  .cabeca:hover { color: var(--ink, #EDEDED); }
+  .cabeca:focus-visible, .item:focus-visible { outline: 2px solid var(--focus-ring, #888); outline-offset: 1px; }
+  .seta { width: 10px; transition: transform .12s; }
+  .secao.recolhida .seta { transform: rotate(-90deg); }
+  .conta { min-width: 18px; padding: 0 6px; border-radius: 999px; background: var(--surface-active, rgba(255,255,255,.1)); font-size: 11px; letter-spacing: 0; text-align: center; }
+  .secao.recolhida ul { display: none; }
+
+  ul { list-style: none; margin: 0 0 4px; padding: 0; min-height: 10px; }
+  .item { display: flex; align-items: center; gap: 10px; min-height: 38px; padding: 4px 8px; border-radius: var(--raio-controle, 8px); cursor: grab; user-select: none; }
+  .item:hover { background: var(--surface-hover, rgba(255,255,255,.06)); }
+  .item[data-arrastando="true"] { opacity: .4; }
+  .alca { color: var(--text-disabled, #666); font-size: 12px; letter-spacing: -2px; }
+  .item:hover .alca { color: var(--muted, #A1A1A1); }
+  /* Ícone do status: vazio, meio, pausa, feito — a forma diz o status, não só a cor. */
+  .marca { position: relative; flex: 0 0 auto; width: 16px; height: 16px; border-radius: 50%; border: 1.5px solid var(--border-strong, #555); }
+  [data-status="andamento"] .marca { border-color: var(--acento, #EDEDED); background: linear-gradient(90deg, var(--acento, #EDEDED) 50%, transparent 50%); }
+  [data-status="pausado"] .marca { border-color: var(--warning, #E8B04B); }
+  [data-status="pausado"] .marca::after { content: ""; position: absolute; inset: 3.5px 4px; border-inline: 2px solid var(--warning, #E8B04B); }
+  [data-status="concluido"] .marca { border-color: var(--acento, #EDEDED); background: var(--acento, #EDEDED); }
+  [data-status="concluido"] .marca::after { content: ""; position: absolute; left: 4.5px; top: 1.5px; width: 4px; height: 8px; border: solid var(--acento-texto, #000); border-width: 0 2px 2px 0; transform: rotate(45deg); }
+  .titulo { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  [data-status="concluido"] .titulo { color: var(--muted, #A1A1A1); text-decoration: line-through; }
+  .data { flex: 0 0 auto; color: var(--muted, #A1A1A1); font-size: 12px; font-variant-numeric: tabular-nums; }
+  .data.atrasada { color: var(--danger, #E5484D); }
+  .alta { flex: 0 0 auto; padding: 0 7px; border-radius: 999px; background: color-mix(in srgb, var(--priority-high, var(--danger, #E5484D)) 14%, transparent); color: var(--danger, #E5484D); font-size: 11px; }
+  .vazio { margin: 0; padding: 6px 8px 10px; color: var(--text-disabled, #777); font-size: 13px; }
+  .dica { margin: 14px 4px 0; color: var(--text-disabled, #777); font-size: 12px; }
+  body.cartao .dica { display: none; }
+</style>
+</head>
+<body>
+<main class="pagina">
+  <header class="topo"><div><h1>Lista de Tarefas</h1><p>Arraste uma tarefa para outra seção para mudar o status.</p></div></header>
+  <div id="lista" aria-live="polite"></div>
+  <p class="dica">Pelo teclado: Tab até a tarefa e ← → para mudar o status. Levar a "Concluído" marca a tarefa como feita no Kiro.</p>
+</main>
+<script src="estados.js"></script>
+<script src="lista.js"></script>
+</body>
+</html>

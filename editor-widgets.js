@@ -15,6 +15,7 @@
   const FORMULA = /\$([^\s$](?:[^$\n]*[^\s$])?)\$/g;
   const IMAGEM_NA_LINHA = /!\[\[([^\][\n]+)\]\]/g;
   const COMENTARIO = /%%([^\n%]+)%%/g;
+  const CITACAO_DE_TAREFA = /(?<!!)\[\[tarefa:([^\]|\n]+)(?:\|([^\]\n]*))?\]\]/gi;
 
   function acharElementos(state, de, ate, { arvore, soBlocos, blocos: dados } = {}) {
     const doc = state.doc, els = [], codigo = [];
@@ -110,12 +111,16 @@
         const a = l.from + m.index, b = a + m[0].length;
         if (foraDeTudo(a, b)) els.push({ tipo: 'comentario', de: a, ate: b });
       }
+      for (const m of l.text.matchAll(CITACAO_DE_TAREFA)) {
+        const a = l.from + m.index, b = a + m[0].length;
+        if (foraDeTudo(a, b)) els.push({ tipo: 'citacaoTarefa', de: a, ate: b, id: m[1].trim(), titulo: (m[2] || '').trim() });
+      }
     }
     els.sort((x, y) => x.de - y.de);
 
     // Remove overlapping elements: priority comentario > formulaBloco > imagem > formula
     // Tasks, callouts, and code headers never overlap these
-    const prioridade = { comentario: 0, formulaBloco: 1, imagem: 2, formula: 3, tarefa: 4, callout: 4, cabecalhoCodigo: 4, blocoPlugin: 4 };
+    const prioridade = { comentario: 0, formulaBloco: 1, imagem: 2, formula: 3, citacaoTarefa: 3, tarefa: 4, callout: 4, cabecalhoCodigo: 4, blocoPlugin: 4 };
     const sobrepostos = new Set();
     for (let i = 0; i < els.length; i++) {
       if (sobrepostos.has(i)) continue;
@@ -189,6 +194,30 @@
         });
         return i;
       }
+    }
+    // Tarefa citada na nota: caixinha que conclui a tarefa de verdade, título que abre a tarefa e a data.
+    // Os dados vêm do app (opcoes.tarefa); tarefa apagada mostra o título guardado na citação, riscado.
+    class CitacaoDeTarefa extends V.WidgetType {
+      constructor(id, titulo, info) { super(); this.id = id; this.titulo = titulo; this.info = info; }
+      eq(o) { return o.id === this.id && o.titulo === this.titulo && JSON.stringify(o.info) === JSON.stringify(this.info); }
+      toDOM() {
+        const s = document.createElement('span'), info = this.info;
+        s.className = 'tarefa-citada' + (info?.feita ? ' feita' : '') + (info ? '' : ' ausente');
+        if (info) {
+          const c = document.createElement('input');
+          c.type = 'checkbox'; c.className = 'ed-caixa'; c.checked = info.feita; c.setAttribute('aria-label', info.feita ? t('Marcar como não concluído') : t('Marcar como concluído'));
+          c.addEventListener('click', e => e.preventDefault());
+          c.addEventListener('mousedown', e => { e.preventDefault(); opcoes.alternarTarefa?.(this.id); });
+          s.append(c);
+        }
+        const nome = document.createElement('span');
+        nome.className = 'tarefa-citada-titulo'; nome.textContent = info?.titulo || this.titulo || t('Tarefa apagada');
+        if (info) { nome.title = t('Abrir tarefa'); nome.addEventListener('mousedown', e => { e.preventDefault(); opcoes.abrirTarefa?.(this.id); }); }
+        s.append(nome);
+        if (info?.data) { const d = document.createElement('small'); d.className = 'tarefa-citada-data' + (info.atrasada ? ' atrasada' : ''); d.textContent = info.data; s.append(d); }
+        return s;
+      }
+      ignoreEvent() { return true; }
     }
     class Imagem extends V.WidgetType {
       constructor(texto) { super(); this.texto = texto; this.img = lerImagem(texto); }
@@ -316,6 +345,7 @@
           else if (el.tipo === 'imagem') cobre(el.de, el.ate, V.Decoration.replace({ widget: new Imagem(doc.sliceString(el.de + 3, el.ate - 2)) }));
           else if (el.tipo === 'formula') cobre(el.de, el.ate, V.Decoration.replace({ widget: new Formula(el.tex, false) }));
           else if (el.tipo === 'callout') cobre(el.de, el.ate, V.Decoration.replace({ widget: new RotuloDoCallout(el.nome) }));
+          else if (el.tipo === 'citacaoTarefa') cobre(el.de, el.ate, V.Decoration.replace({ widget: new CitacaoDeTarefa(el.id, el.titulo, opcoes.tarefa?.(el.id) ?? null) }));
         }
       }
       const r = { chave, decos: V.Decoration.set(decos, true), faixas };
@@ -324,7 +354,8 @@
     }
     const pluginEmLinha = V.ViewPlugin.fromClass(class {
       constructor(view) { this.decorations = emLinha(view).decos; }
-      update(u) { if (u.docChanged || u.selectionSet || u.viewportChanged || L.syntaxTree(u.startState) !== L.syntaxTree(u.state)) this.decorations = emLinha(u.view).decos; }
+      // Efeito sem mudança de texto (editor.redesenhar) também refaz: a tarefa citada pode ter mudado fora do editor.
+      update(u) { if (u.docChanged || u.selectionSet || u.viewportChanged || u.transactions.some(tr => tr.effects.length) || L.syntaxTree(u.startState) !== L.syntaxTree(u.state)) this.decorations = emLinha(u.view).decos; }
     }, { decorations: v => v.decorations });
 
     // Blocos: o documento inteiro (são poucos); só refaz a procura quando o texto ou a árvore mudam.

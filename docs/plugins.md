@@ -31,7 +31,7 @@ Three complete working examples live in this repository: `examples/plugins/word-
 that calls a web API with `kiro.fetch`), `examples/plugins/habit-heatmap/`
 (a frame — see [Frames (custom UI)](#frames-custom-ui) below) and
 `examples/plugins/kanban-tasks/` (a Kanban board of your tasks as a frame page, plus a frame panel with a miniature of the pending columns on Today,
-with drag & drop between columns). `npm run dev`
+with drag & drop between columns) and `examples/plugins/lista-tarefas/` (a to-do list by status — not started, in progress, paused, done — as a page and a Today card, with the status rules in a plain `estados.js` the tests load too). `npm run dev`
 copies all of them into the example vault. Copying one of these folders is the
 fastest way to start.
 
@@ -237,6 +237,17 @@ kiro.tasks.list() / kiro.tasks.create(task) / kiro.tasks.update(id, changes)
 kiro.habits.list() / kiro.habits.mark(id, date)
 kiro.folders.create(path)
 ```
+
+A task is `{ id, title, description, due, priority, done, noteId }`: `due` is
+`YYYY-MM-DD`, `priority` is `'Baixa'`, `'Média'` or `'Alta'`, `description` is
+free text up to 5000 characters (empty string when there is none) and `noteId`
+is the associated note or `''`. `create` and `update` accept the same fields;
+sending `description: ''` removes it.
+
+A note can cite a task with `[[tarefa:<id>|Title]]`. The id is what counts —
+the title after `|` is only the label, so renaming the task does not break the
+citation. These citations are not links between notes: `notes.list` bodies keep
+the raw text, and Kiro draws them as a checkbox that completes the task.
 
 Writes go through exactly the same path as the user interface, so history,
 atomic writes and the trash all keep working.

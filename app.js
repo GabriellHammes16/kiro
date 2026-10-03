@@ -63,7 +63,16 @@ function render() {
 }
 function head(eyebrow, title, description, action="") { return `<header class="page-head"><div><p class="eyebrow">${eyebrow}</p><h1>${title}</h1><p class="subhead">${description}</p></div>${action}</header>`; }
 function check(done, action, id) { return `<button class="check ${done ? "done" : ""}" aria-label="${done ? t('Marcar como não concluído') : t('Marcar como concluído')}" data-action="${action}" data-id="${id}"></button>`; }
-function taskRow(task) { return `<div class="task-item">${check(task.done,"toggle-task",task.id)}<div class="task-title">${escapeHtml(task.title)}<div class="task-info">${dateLabel(task.due)}${task.noteId && getNote(task.noteId) ? ` · ${linkDaNota(getNote(task.noteId))}` : ""}</div></div>${task.priority === "Alta" ? `<span class="priority">${t('Alta')}</span>` : ""}<div class="task-actions"><button class="icon-button" data-action="edit-task" data-id="${task.id}" title="${t('Editar')}">${icone('renomear')}</button><button class="icon-button" data-action="delete-task" data-id="${task.id}" title="${t('Excluir')}">${icone('lixeira')}</button></div></div>`; }
+// Notas que citam a tarefa com [[tarefa:…]], como links (até três, depois "+n").
+function citadaEm(task) {
+  const notas = Kiro.notesCitingTask(state.notes, task.id);
+  if (!notas.length) return '';
+  return ` · <span class="task-citada-em">${t('Citada em')} ${notas.slice(0, 3).map(linkDaNota).join(', ')}${notas.length > 3 ? ` +${notas.length - 3}` : ''}</span>`;
+}
+function taskRow(task) {
+  const atrasada = !task.done && task.due < today();
+  return `<div class="task-item">${check(task.done,"toggle-task",task.id)}<div class="task-title"><span class="task-nome">${escapeHtml(task.title)}</span>${task.description ? `<div class="task-descricao">${escapeHtml(task.description)}</div>` : ''}<div class="task-info"><span class="task-data${atrasada ? ' atrasada' : ''}">${icone('calendario')}${dateLabel(task.due)}</span>${task.noteId && getNote(task.noteId) ? ` · ${linkDaNota(getNote(task.noteId))}` : ""}${citadaEm(task)}</div></div>${task.priority === "Alta" ? `<span class="priority">${t('Alta')}</span>` : ""}<div class="task-actions"><button class="icon-button" data-action="edit-task" data-id="${task.id}" title="${t('Editar')}">${icone('renomear')}</button><button class="icon-button" data-action="delete-task" data-id="${task.id}" title="${t('Excluir')}">${icone('lixeira')}</button></div></div>`;
+}
 function renderToday() {
   const catalogo = catalogoDaHoje(), l = layoutDaHoje(catalogo);
   const porId = new Map(catalogo.map(c => [c.id, c]));
@@ -323,7 +332,48 @@ function marcarTarefaDaNota(chave) {
   state.notes = state.notes.map(n => n.id === id ? { ...n, body: n.body.slice(0, pos) + trocada + n.body.slice(pos + linha.length), updatedAt: Date.now() } : n);
   save(); render();
 }
-function renderTasks() { const open = state.tasks.filter(t=>!t.done).sort((a,b)=>a.due.localeCompare(b.due)); const done = state.tasks.filter(t=>t.done); const dasNotas = tarefasDasNotas().filter(t=>!t.feita); return `${head(t("Organização"), t("Tarefas"), t("Concentre-se no que realmente importa hoje."), `<button class="primary" id="add-task">${icone('mais')} ${t('Nova tarefa')}</button>`)}<div class="task-layout"><section class="card"><div class="task-group"><h2>${t('Em aberto')}</h2>${open.map(taskRow).join("") || `<div class="empty">${t('Tudo concluído por aqui.')}</div>`}</div>${dasNotas.length ? `<div class="task-group"><h2>${t('Nas notas')}</h2>${dasNotas.map(t=>`<div class="task-item">${check(false,"toggle-note-task",`${t.nota.id}:${t.pos}`)}<div class="task-title">${escapeHtml(t.texto)}<div class="task-info">${linkDaNota(t.nota)}</div></div></div>`).join("")}</div>` : ""}<div class="task-group"><h2>${t('Concluídas')}</h2>${done.map(taskRow).join("") || `<div class="empty">${t('As tarefas concluídas aparecerão aqui.')}</div>`}</div></section><aside class="card"><h2>${t('Seu foco')}</h2><p class="subhead">${open.length===1 ? t('Você tem {n} tarefa em aberto.', { n: '<strong>1</strong>' }) : t('Você tem {n} tarefas em aberto.', { n: `<strong>${open.length}</strong>` })}</p><div class="progress"><div style="width:${state.tasks.length ? done.length/state.tasks.length*100 : 0}%"></div></div><p class="small-muted">${t('{feitas} de {total} concluídas', { feitas: done.length, total: state.tasks.length })}</p></aside></div>`; }
+// ---- Tarefas: resumo no topo, abas com contagem e grupos por data ----
+let filtroDasTarefas = 'todas';   // vale enquanto o app está aberto
+const somarDias = (dia, n) => { const [a, m, d] = dia.split('-').map(Number); return Kiro.localDate(new Date(a, m - 1, d + n)); };
+const GRUPOS_DE_DATA = [['atrasadas', frase('Atrasadas')], ['hoje', frase('Hoje')], ['amanha', frase('Amanhã')], ['semana', frase('Próximos 7 dias')], ['depois', frase('Depois')]];
+function grupoDaData(due, hoje) {
+  if (due < hoje) return 'atrasadas';
+  if (due === hoje) return 'hoje';
+  if (due === somarDias(hoje, 1)) return 'amanha';
+  return due <= somarDias(hoje, 7) ? 'semana' : 'depois';
+}
+const ordemDaPrioridade = x => ({ Alta: 0, 'Média': 1 })[x.priority] ?? 2;
+const linhaDaTarefaDaNota = x => `<div class="task-item">${check(x.feita, "toggle-note-task", `${x.nota.id}:${x.pos}`)}<div class="task-title">${escapeHtml(x.texto)}<div class="task-info">${linkDaNota(x.nota)}</div></div></div>`;
+function renderTasks() {
+  const hoje = today();
+  const abertas = state.tasks.filter(x => !x.done).sort((a, b) => a.due.localeCompare(b.due) || ordemDaPrioridade(a) - ordemDaPrioridade(b));
+  const feitas = state.tasks.filter(x => x.done).sort((a, b) => b.due.localeCompare(a.due));
+  const dasNotas = tarefasDasNotas().filter(x => !x.feita);
+  const atrasadas = abertas.filter(x => x.due < hoje), paraHoje = abertas.filter(x => x.due === hoje), proximas = abertas.filter(x => x.due > hoje);
+  const abas = [['todas', t('Todas'), abertas.length + dasNotas.length], ['hoje', t('Hoje'), atrasadas.length + paraHoje.length], ['proximas', t('Próximas'), proximas.length], ['notas', t('Nas notas'), dasNotas.length], ['feitas', t('Concluídas'), feitas.length]];
+  const f = filtroDasTarefas;
+  const grupo = (titulo, itens, linha = taskRow, classe = '') => itens.length ? `<div class="task-group ${classe}"><h2>${titulo}<span class="task-group-conta">${itens.length}</span></h2>${itens.map(linha).join('')}</div>` : '';
+  const porData = lista => GRUPOS_DE_DATA.map(([id, nome]) => grupo(t(nome), lista.filter(x => grupoDaData(x.due, hoje) === id), taskRow, id === 'atrasadas' ? 'grupo-atrasado' : '')).join('');
+  const corpo = f === 'feitas' ? grupo(t('Concluídas'), feitas)
+    : f === 'notas' ? grupo(t('Nas notas'), dasNotas, linhaDaTarefaDaNota)
+    : f === 'hoje' ? porData([...atrasadas, ...paraHoje])
+    : f === 'proximas' ? porData(proximas)
+    : porData(abertas) + grupo(t('Nas notas'), dasNotas, linhaDaTarefaDaNota);
+  const vazio = { todas: t('Tudo concluído por aqui.'), hoje: t('Nada para hoje.'), proximas: t('Nada agendado para os próximos dias.'), notas: t('Nenhuma caixinha aberta nas notas.'), feitas: t('As tarefas concluídas aparecerão aqui.') }[f];
+  const total = state.tasks.length, pct = total ? Math.round(feitas.length / total * 100) : 0;
+  const numero = (valor, rotulo, classe = '') => `<div class="resumo-item ${classe}"><b>${valor}</b><span>${rotulo}</span></div>`;
+  return `${head(t("Organização"), t("Tarefas"), t("Concentre-se no que realmente importa hoje."), `<button class="primary" id="add-task">${icone('mais')} ${t('Nova tarefa')}</button>`)}
+  <div class="tarefas-resumo">${numero(abertas.length, t('Em aberto'))}${numero(atrasadas.length, t('Atrasadas'), atrasadas.length ? 'alerta' : '')}${numero(paraHoje.length, t('Para hoje'))}<div class="resumo-item resumo-progresso"><b>${pct}%</b><span>${t('{feitas} de {total} concluídas', { feitas: feitas.length, total })}</span><div class="progress"><div style="width:${pct}%"></div></div></div></div>
+  <div class="segmentos-compactos tarefas-abas" role="group" aria-label="${t('Filtrar')}">${abas.map(([id, rotulo, n]) => `<button type="button" class="segmento-botao" data-tarefas-aba="${id}" aria-pressed="${f === id}">${rotulo} <span class="segmento-contagem">${n}</span></button>`).join('')}</div>
+  <section class="card tarefas-lista">${corpo || `<div class="empty">${vazio}</div>`}</section>`;
+}
+document.addEventListener('click', e => {
+  const b = e.target.closest?.('[data-tarefas-aba]');
+  if (!b) return;
+  filtroDasTarefas = b.dataset.tarefasAba;
+  render();
+  $(`[data-tarefas-aba="${filtroDasTarefas}"]`)?.focus();
+});
 const byTitle = (a,b) => KiroIdiomas.comparar(a.title, b.title);
 const childFolders = id => state.folders.filter(f=>(f.parentId||"")===id).sort(byTitle);
 const folderNotes = id => state.notes.filter(n=>(n.folderId||"")===id).sort(byTitle);
@@ -1440,7 +1490,22 @@ function menuDaArvore(linha) {
 }
 function modal(title, body) { modalDirty=false; document.querySelector("#modal-root").innerHTML=`<div class="modal-backdrop"><section class="modal" role="dialog" aria-modal="true"><header class="modal-head"><h2>${title}</h2><button class="icon-button" id="close-modal" title="${t('Fechar')}" aria-label="${t('Fechar')}">${icone('fechar')}</button></header>${body}</section></div>`; document.querySelector(".modal").addEventListener("input",()=>modalDirty=true); document.querySelector(".modal").addEventListener("change",()=>modalDirty=true); document.querySelector("#close-modal").onclick=()=>closeModal(); document.querySelector(".modal-backdrop").onclick=e=>{if(e.target===e.currentTarget)closeModal();}; }
 function closeModal(force=false){ if(!force && (busy || (modalDirty && !confirm(t('Descartar as alterações deste formulário?')))))return false; document.querySelector('#modal-root').innerHTML='';modalDirty=false;return true; }
-function taskModal(task={title:"",due:today(),priority:"Média",noteId:""}) { modal(task.id?t("Editar tarefa"):t("Nova tarefa"), `<form class="form" id="task-form"><div class="field"><label>${t('Tarefa')}</label><input name="title" required value="${escapeHtml(task.title)}" placeholder="${t('O que precisa ser feito?')}" /></div><div class="two-cols"><div class="field"><label>${t('Data')}</label><input name="due" type="date" value="${task.due}" required /></div><div class="field"><label>${t('Prioridade')}</label><select name="priority">${[frase("Baixa"),frase("Média"),frase("Alta")].map(p=>`<option value="${p}" ${p===task.priority?"selected":""}>${t(p)}</option>`).join("")}</select></div></div><div class="field"><label>${t('Nota associada (opcional)')}</label><select name="noteId"><option value="">${t('Nenhuma')}</option>${state.notes.map(n=>`<option value="${n.id}" ${n.id===task.noteId?"selected":""}>${escapeHtml(n.title)}</option>`).join("")}</select></div><div class="form-actions"><button type="button" class="secondary" id="cancel">${t('Cancelar')}</button><button class="primary">${t('Salvar tarefa')}</button></div></form>`);document.querySelector("#cancel").onclick=()=>closeModal();document.querySelector("#task-form").onsubmit=e=>{e.preventDefault();const f=new FormData(e.currentTarget);const saved={...task,id:task.id||uid(),title:f.get("title"),due:f.get("due"),priority:f.get("priority"),noteId:f.get("noteId"),done:task.done||false};state.tasks=task.id?state.tasks.map(t=>t.id===task.id?saved:t):[saved,...state.tasks];save();closeModal(true);render();}; }
+function taskModal(task={title:"",due:today(),priority:"Média",noteId:""}) {
+  const ATALHOS = [[0, frase('Hoje')], [1, frase('Amanhã')], [7, frase('Próxima semana')]];
+  modal(task.id?t("Editar tarefa"):t("Nova tarefa"), `<form class="form" id="task-form">
+    <div class="field"><label for="tarefa-titulo">${t('Tarefa')}</label><input id="tarefa-titulo" name="title" required autofocus value="${escapeHtml(task.title)}" placeholder="${t('O que precisa ser feito?')}" /></div>
+    <div class="field"><label for="tarefa-data">${t('Data')}</label><div class="tarefa-datas"><input id="tarefa-data" name="due" type="date" value="${task.due}" required />${ATALHOS.map(([n, r]) => `<button type="button" class="chip" data-somar-dias="${n}">${t(r)}</button>`).join('')}</div></div>
+    <div class="field"><span class="rotulo-campo" id="tarefa-prioridade">${t('Prioridade')}</span><div class="segmentos" role="radiogroup" aria-labelledby="tarefa-prioridade">${[frase("Baixa"),frase("Média"),frase("Alta")].map(p=>`<label class="segmento"><input type="radio" name="priority" value="${p}" ${p===task.priority?"checked":""} /><span>${t(p)}</span></label>`).join("")}</div></div>
+    <div class="field"><label for="tarefa-descricao">${t('Descrição (opcional)')}</label><textarea id="tarefa-descricao" name="description" maxlength="5000" rows="3" placeholder="${t('Detalhes, passos, links…')}">${escapeHtml(task.description || '')}</textarea></div>
+    <div class="field"><label for="tarefa-nota">${t('Nota associada (opcional)')}</label><select id="tarefa-nota" name="noteId"><option value="">${t('Nenhuma')}</option>${state.notes.map(n=>`<option value="${n.id}" ${n.id===task.noteId?"selected":""}>${escapeHtml(n.title)}</option>`).join("")}</select></div>
+    <div class="form-actions">${task.id ? `<button type="button" class="secondary tarefa-copiar" id="tarefa-copiar" title="${t('Cole numa nota para citar esta tarefa')}">${icone('link')} ${t('Copiar citação')}</button>` : ''}<button type="button" class="secondary" id="cancel">${t('Cancelar')}</button><button class="primary">${t('Salvar tarefa')}</button></div></form>`);
+  $('#tarefa-copiar')?.addEventListener('click', async () => { if (await copiarTexto(Kiro.taskReference(task))) status(t('Citação copiada: cole numa nota.')); });
+  const data = $('#tarefa-data'), atalhos = [...document.querySelectorAll('[data-somar-dias]')];
+  const marcarAtalho = () => atalhos.forEach(b => b.setAttribute('aria-pressed', String(somarDias(today(), Number(b.dataset.somarDias)) === data.value)));
+  atalhos.forEach(b => b.onclick = () => { data.value = somarDias(today(), Number(b.dataset.somarDias)); marcarAtalho(); });
+  data.addEventListener('input', marcarAtalho); marcarAtalho();
+  $('#tarefa-titulo')?.focus();
+  document.querySelector("#cancel").onclick=()=>closeModal();document.querySelector("#task-form").onsubmit=e=>{e.preventDefault();const f=new FormData(e.currentTarget);const saved={...task,id:task.id||uid(),title:f.get("title"),due:f.get("due"),priority:f.get("priority"),noteId:f.get("noteId"),done:task.done||false};const descricao=String(f.get("description")||"").trim();if(descricao)saved.description=descricao;else delete saved.description;state.tasks=task.id?state.tasks.map(t=>t.id===task.id?saved:t):[saved,...state.tasks];save();closeModal(true);render();}; }
 const NOMES_DE_COR = { "":frase("Sem cor"), azul:frase("Azul"), verde:frase("Verde"), amarelo:frase("Amarelo"), laranja:frase("Laranja"), vermelho:frase("Vermelho"), rosa:frase("Rosa"), roxo:frase("Roxo"), cinza:frase("Cinza") };
 function folderModal(folder={title:"",description:"",parentId:""}) { modal(folder.id?t("Editar pasta"):t("Nova pasta de estudo"), `<form class="form" id="folder-form"><div class="field"><label>${t('Nome da pasta')}</label><input name="title" required value="${escapeHtml(folder.title)}" placeholder="${t('Ex.: JAVA, Inglês, programação')}" /><small class="small-muted">${t('Vira uma pasta de verdade no cofre: sem &lt; &gt; : " / \\ | ? * e sem ponto ou espaço no início ou no final.')}</small></div><div class="field"><label>${t('Dentro de')}</label><select name="parentId"><option value="">${t('Raiz do cofre')}</option>${state.folders.filter(f=>!(folder.id?Kiro.descendants(state.folders,folder.id):new Set()).has(f.id)).sort(byTitle).map(f=>`<option value="${f.id}" ${f.id===(folder.parentId||"")?"selected":""}>${escapeHtml(f.path||f.title)}</option>`).join("")}</select></div><div class="field"><span class="rotulo-campo" id="cor-pasta-rotulo">${t('Cor')}</span><div class="amostras" role="radiogroup" aria-labelledby="cor-pasta-rotulo">${["",...Kiro.FOLDER_COLORS].map(cor=>`<label class="amostra" data-cor-pasta="${cor}" title="${t(NOMES_DE_COR[cor])}"><input type="radio" name="color" value="${cor}" ${cor===(folder.color||"")?"checked":""} /><span class="sr-only">${t(NOMES_DE_COR[cor])}</span></label>`).join("")}</div></div><div class="field"><label>${t('Descrição')}</label><textarea name="description" placeholder="${t('Qual é seu objetivo com esta pasta?')}">${escapeHtml(folder.description||"")}</textarea></div><div class="form-actions"><button type="button" class="secondary" id="cancel">${t('Cancelar')}</button><button class="primary">${t('Salvar pasta')}</button></div></form>`);document.querySelector("#cancel").onclick=()=>closeModal();document.querySelector("#folder-form").onsubmit=e=>{e.preventDefault();const f=new FormData(e.currentTarget);const title=f.get("title").trim();
   // Validar aqui evita que um nome inválido bloqueie a janela no salvamento.
@@ -1925,9 +1990,22 @@ function opcoesDoEditor({ atual = () => editorDaNota?.editor, menu = menuDaNota 
       buscarEtiqueta: texto => buscarEtiqueta(texto),
       copiar: async texto => { const ok = await copiarTexto(texto); if (!ok) status(t('O navegador não liberou a área de transferência.'), true); return ok; },
       desenharBlocoPlugin: (id, fonte) => htmlDoBlocoPlugin(id, fonte),
+      tarefa: id => infoDaTarefaCitada(id),
+      alternarTarefa: id => alternarTarefa(id),
+      abrirTarefa: id => { const x = state.tasks.find(y => y.id === id); if (x) taskModal(x); },
     },
   };
 }
+// Caixinha da tarefa citada numa nota: conclui ou reabre a tarefa e redesenha só as citações e o contador.
+function alternarTarefa(id) {
+  const tarefa = state.tasks.find(x => x.id === id);
+  if (!tarefa || busy || failed || !loaded) return;
+  state.tasks = state.tasks.map(x => x.id === id ? { ...x, done: !x.done } : x);
+  save();
+  updateCount();
+  editorDaNota?.editor.redesenhar?.();
+}
+const infoDaTarefaCitada = id => { const x = state.tasks.find(y => y.id === id); return x ? { titulo: x.title, feita: x.done, data: dateLabel(x.due), atrasada: !x.done && x.due < today() } : null; };
 async function montarEditorDaNota(corpo) {
   const chave = chaveDaNota(editing);
   if (editorDaNota?.chave === chave) {
@@ -1970,14 +2048,14 @@ function montarEditorDoCartao(elemento, { texto }) {
 // As opções da tela ficam no navegador, como a aparência: são preferência de
 // visualização, não dado do cofre.
 const GRAFO_PADRAO = {
-  busca: '', etiquetas: false, anexos: false, somenteExistentes: false, orfaos: true,
+  busca: '', etiquetas: false, anexos: false, tarefas: true, somenteExistentes: false, orfaos: true,
   setas: false, rotulos: 0.6, tamanho: 1, grossura: 1,
   centripeta: 0.5, repulsao: 1, forcaLinks: 1, distancia: 95,
   local: false, profundidade: 1,
   corSolta: '#FFFFFF', grupos: [], painel: false, secoes: { filtros: true, grupos: true, tela: true, forcas: true },
 };
 const CORES_DE_GRUPO = ['#4EA8DE', '#57CC99', '#FFB703', '#FF6B6B', '#F72585', '#C77DFF'];
-const FILTROS = ['etiquetas', 'anexos', 'somenteExistentes', 'orfaos', 'local', 'profundidade'];
+const FILTROS = ['etiquetas', 'anexos', 'tarefas', 'somenteExistentes', 'orfaos', 'local', 'profundidade'];
 // A nota aberta mais recentemente é o centro do grafo local.
 let ultimaNota = null;
 let grafoOpcoes = { ...GRAFO_PADRAO, ...(() => { try { return JSON.parse(lerPreferencia('grafo') || '{}'); } catch { return {}; } })() };
@@ -2021,6 +2099,12 @@ function grafoDados(op = grafoOpcoes) {
       if (!nos.has(chave)) nos.set(chave, { id: chave, rotulo: achado.imagem.caminho.split('/').pop(), tipo: 'anexo', grau: 0, entradas: 0 });
       ligar(nota.id, chave);
     }
+  }
+  if (op.tarefas) for (const tarefa of state.tasks) {
+    const chave = `tarefa:${tarefa.id}`, ligadas = new Set(Kiro.notesCitingTask(state.notes, tarefa.id).map(n => n.id));
+    if (tarefa.noteId && nos.has(tarefa.noteId)) ligadas.add(tarefa.noteId);
+    nos.set(chave, { id: chave, rotulo: tarefa.title, tipo: 'tarefa', feita: tarefa.done, tarefaId: tarefa.id, grau: 0, entradas: 0, procura: tarefa.title });
+    for (const nota of ligadas) ligar(nota, chave);
   }
   let lista = [...nos.values()];
   // Grafo local: parte da última nota aberta e caminha pelas ligações.
@@ -2082,6 +2166,7 @@ function renderGraph() {
       <input class="grafo-busca" type="search" data-opcao="busca" value="${escapeHtml(grafoOpcoes.busca)}" placeholder="${t('Procurar notas…')}" aria-label="${t('Procurar notas')}" />
       ${grafoChave('etiquetas', t('Etiquetas'))}
       ${grafoChave('anexos', t('Anexos'))}
+      ${grafoChave('tarefas', t('Tarefas'))}
       ${grafoChave('somenteExistentes', t('Apenas notas existentes'))}
       ${grafoChave('orfaos', t('Órfãs'))}
       ${grafoChave('local', t('Somente ao redor da nota aberta'))}
@@ -2196,7 +2281,7 @@ function bindGraph() {
     }
     for (const no of nos) {
       no.el = document.createElementNS(ns, 'g');
-      no.el.setAttribute('class', `graph-node tipo-${no.tipo}`);
+      no.el.setAttribute('class', `graph-node tipo-${no.tipo}${no.feita ? ' feita' : ''}`);
       if (no.pasta) no.el.setAttribute('data-cor-pasta', no.pasta);
       no.alvo = document.createElementNS(ns, 'circle');
       no.alvo.setAttribute('class', 'graph-hit');
@@ -2205,6 +2290,7 @@ function bindGraph() {
       no.texto.textContent = no.rotulo.length > 26 ? `${no.rotulo.slice(0, 25)}…` : no.rotulo;
       no.el.append(no.alvo, no.circulo, no.texto);
       if (no.tipo === 'nota') no.el.addEventListener('click', () => { if (!arrastou) abrirNota(getNote(no.id)); });
+      if (no.tipo === 'tarefa') no.el.addEventListener('click', () => { const x = state.tasks.find(y => y.id === no.tarefaId); if (!arrastou && x) taskModal(x); });
       no.el.addEventListener('pointerenter', () => destacar(no.id));
       no.el.addEventListener('pointerleave', () => destacar(null));
       grupoNos.appendChild(no.el);
@@ -2463,6 +2549,12 @@ function mdInline(texto) {
       const imagem = lerImagem(desescapar(dentro));
       return imagem ? reservar(htmlDaImagem(imagem)) : inteiro;
     })
+    .replace(/\[\[tarefa:([^\][\n|]+)(?:\|([^\][\n]*))?\]\]/gi, (_, id, rotulo = '') => {
+      const info = infoDaTarefaCitada(desescapar(id.trim()));
+      if (!info) return reservar(`<span class="tarefa-citada ausente"><span class="tarefa-citada-titulo">${rotulo.trim() || t('Tarefa apagada')}</span></span>`);
+      const tid = escapeHtml(desescapar(id.trim()));
+      return reservar(`<span class="tarefa-citada${info.feita ? ' feita' : ''}"><button type="button" class="check ${info.feita ? 'done' : ''}" data-action="toggle-task" data-id="${tid}" aria-label="${info.feita ? t('Marcar como não concluído') : t('Marcar como concluído')}"></button><a class="tarefa-citada-titulo" data-action="edit-task" data-id="${tid}" title="${t('Abrir tarefa')}">${escapeHtml(info.titulo)}</a><small class="tarefa-citada-data${info.atrasada ? ' atrasada' : ''}">${escapeHtml(info.data)}</small></span>`);
+    })
     .replace(/\[\[([^\][\n]+)\]\]/g, (_, dentro) => {
       const [alvoBruto, rotuloBruto] = dentro.split('|');
       const alvo = alvoBruto.split('#')[0].trim();
@@ -2652,7 +2744,10 @@ function atualizarSugestoes(campo) {
   if (!campo) return fecharSugestoes();
   const cursor = campo.selectionStart, antes = campo.value.slice(0, cursor);
   const consulta = cursor === campo.selectionEnd ? Kiro.linkQuery(antes.slice(antes.lastIndexOf('\n') + 1)) : null;
-  const titulos = consulta === null ? [] : Kiro.linkSuggestions(state.notes.filter(n => n.id !== editing?.id), consulta);
+  const notas = consulta === null ? [] : Kiro.linkSuggestions(state.notes.filter(n => n.id !== editing?.id), consulta).map(titulo => ({ rotulo: titulo, inserir: titulo + ']]' }));
+  const procura = consulta ? Kiro.normalize(consulta.replace(/^tarefa:/i, '')) : '';
+  const tarefas = !procura ? [] : state.tasks.filter(x => !x.done && Kiro.normalize(x.title).includes(procura)).slice(0, 5).map(x => ({ rotulo: x.title, tarefa: true, inserir: Kiro.taskReference(x).slice(2) }));
+  const titulos = [...notas, ...tarefas];
   if (!titulos.length) return fecharSugestoes();
   let lista = sugestao?.lista;
   if (!lista) {
@@ -2672,14 +2767,14 @@ function atualizarSugestoes(campo) {
 }
 function desenharSugestoes() {
   const { lista, titulos, indice } = sugestao;
-  lista.innerHTML = titulos.map((t, i) => `<button type="button" class="ctx-item${i === indice ? ' marcada' : ''}" data-i="${i}" role="option" aria-selected="${i === indice}"><span class="ctx-rotulo">${escapeHtml(t)}</span></button>`).join('');
+  lista.innerHTML = titulos.map((s, i) => `<button type="button" class="ctx-item${i === indice ? ' marcada' : ''}" data-i="${i}" role="option" aria-selected="${i === indice}">${s.tarefa ? `<span class="ctx-icone">${icone('tarefas')}</span>` : ''}<span class="ctx-rotulo">${escapeHtml(s.rotulo)}</span>${s.tarefa ? `<small class="ctx-tipo">${t('Tarefa')}</small>` : ''}</button>`).join('');
   lista.querySelector('.marcada')?.scrollIntoView({ block: 'nearest' });
 }
 function inserirSugestao(i) {
   const { campo, titulos, inicio } = sugestao;
   fecharSugestoes();
   campo.setSelectionRange(inicio, campo.selectionStart);
-  inserirTexto(campo, titulos[i] + ']]'); // dispara input: o editor marca a nota como alterada
+  inserirTexto(campo, titulos[i].inserir); // dispara input: o editor marca a nota como alterada
 }
 function teclaNaSugestao(evento) {
   if (evento.ctrlKey || evento.altKey || evento.metaKey) return false;
@@ -3801,7 +3896,8 @@ const pastaPorNome = valor => {
   return p.id;
 };
 const notaParaPlugin = n => ({ id: n.id, title: n.title || '', body: n.body || '', tags: [...(n.tags || [])], folder: caminhoDaPasta(n.folderId), createdAt: n.createdAt || null, updatedAt: n.updatedAt || null });
-const tarefaParaPlugin = t => ({ id: t.id, title: t.title, due: t.due, priority: t.priority, done: !!t.done, noteId: t.noteId || '' });
+const tarefaParaPlugin = t => ({ id: t.id, title: t.title, description: t.description || '', due: t.due, priority: t.priority, done: !!t.done, noteId: t.noteId || '' });
+const descricaoDoPlugin = v => String(v ?? '').trim().slice(0, 5000);
 const etiquetas = v => Array.isArray(v) ? v.map(t => String(t).trim()).filter(Boolean).slice(0, 30) : [];
 const notaDoPlugin = id => { const n = getNote(String(id || '')); if (!n) throw new Error(t('Nota não encontrada.')); return n; };
 // Gravar pelo mesmo caminho da interface: se o cofre recusar, o plug-in recebe o motivo.
@@ -3896,9 +3992,10 @@ async function executarMetodo(id, metodo, args) {
     }
     case 'tasks.list': return state.tasks.map(tarefaParaPlugin);
     case 'tasks.create': {
-      const { title, due, priority, noteId } = a || {};
+      const { title, due, priority, noteId, description } = a || {};
       if (!String(title || '').trim()) throw new Error(t('A tarefa precisa de um título.'));
       const tarefa = { id: uid(), title: String(title).trim().slice(0, 200), due: /^\d{4}-\d{2}-\d{2}$/.test(due || '') ? due : today(), priority: ['Baixa', 'Média', 'Alta'].includes(priority) ? priority : 'Média', noteId: noteId && getNote(noteId) ? noteId : '', done: false };
+      if (descricaoDoPlugin(description)) tarefa.description = descricaoDoPlugin(description);
       state.tasks = [tarefa, ...state.tasks];
       await gravar(id);
       return tarefaParaPlugin(tarefa);
@@ -3911,6 +4008,7 @@ async function executarMetodo(id, metodo, args) {
       if (campos.due !== undefined && /^\d{4}-\d{2}-\d{2}$/.test(campos.due)) nova.due = campos.due;
       if (campos.priority !== undefined && ['Baixa', 'Média', 'Alta'].includes(campos.priority)) nova.priority = campos.priority;
       if (campos.done !== undefined) nova.done = !!campos.done;
+      if (campos.description !== undefined) { const d = descricaoDoPlugin(campos.description); if (d) nova.description = d; else delete nova.description; }
       if (!nova.title) throw new Error(t('A tarefa precisa de um título.'));
       state.tasks = state.tasks.map(t => t.id === tarefa.id ? nova : t);
       await gravar(id);
