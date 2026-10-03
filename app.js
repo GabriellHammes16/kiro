@@ -4377,7 +4377,7 @@ async function showSettings(aba = abaDasConfiguracoes) {
     ${painel('hoje', `<div id="cfg-hoje">${conteudoDaAbaHoje()}</div>`)}
     ${painel('sistema', `<section class="cfg-grupo">
       <header class="cfg-grupo-topo">${texto(t('Idioma'), t('Idioma dos menus, botões e avisos. Suas notas não mudam.'))}</header>
-      <label class="cfg-linha">${texto(t('Idioma da interface'))}<select id="cfg-idioma">${KiroIdiomas.IDIOMAS.map(i => `<option value="${i.codigo}" ${i.codigo === KiroIdiomas.idioma() ? 'selected' : ''}>${escapeHtml(i.nome)}</option>`).join('')}</select></label>
+      <div class="cfg-linha">${texto(t('Idioma da interface'), '', 'cfg-idioma-rotulo')}<div class="segmentos cfg-idioma" id="cfg-idioma" role="radiogroup" aria-labelledby="cfg-idioma-rotulo">${KiroIdiomas.IDIOMAS.map(i => `<label class="segmento"><input type="radio" name="cfg-idioma" value="${i.codigo}" ${i.codigo === KiroIdiomas.idioma() ? 'checked' : ''} /><span>${escapeHtml(i.nome)}</span></label>`).join('')}</div></div>
     </section>
     <section class="cfg-grupo">
       <header class="cfg-grupo-topo">${texto(t('Cofre'), t('A pasta onde suas notas ficam, como arquivos Markdown.'))}</header>
