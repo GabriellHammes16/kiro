@@ -1893,6 +1893,7 @@ function opcoesDoEditor() {
       abrirSite: url => { const limpa = Kiro.safeUrl(url); if (limpa) window.open(limpa, '_blank', 'noopener,noreferrer'); },
       buscarEtiqueta: texto => buscarEtiqueta(texto),
       copiar: async texto => { const ok = await copiarTexto(texto); if (!ok) status(t('O navegador não liberou a área de transferência.'), true); return ok; },
+      desenharBlocoPlugin: (id, fonte) => htmlDoBlocoPlugin(id, fonte),
     },
   };
 }
@@ -2461,8 +2462,7 @@ function renderizarMarkdown(fonte, base = 0) {
       const doPlugin = cerca[1].trim().match(/^kiro:([a-z0-9][a-z0-9-]{1,39})$/);
       if (doPlugin) {
         const fonteDoBloco = corpo.join('\n');
-        saida.push(`<figure class="plugin-bloco" data-plugin="${doPlugin[1]}" data-fonte="${escapeHtml(fonteDoBloco)}" ${abrir(inicio, ate)}><div class="plugin-bloco-conteudo" data-desenho="${pluginsAtivos.has(doPlugin[1]) && conteudoDosBlocos.has(`${doPlugin[1]}\n${fonteDoBloco}`) ? 'pronto' : 'aviso'}">${conteudoDoBloco(doPlugin[1], fonteDoBloco)}</div></figure>`);
-        agendarBlocosDosPlugins();
+        saida.push(htmlDoBlocoPlugin(doPlugin[1], fonteDoBloco, abrir(inicio, ate)));
         avancar(ate - i);
         i = j + 1;
         continue;
@@ -3932,6 +3932,13 @@ function conteudoDoBloco(id, fonte) {
   // Sem `pronto` ainda não se sabe se ele desenha blocos.
   if (estado.desenhaBlocos === false) return avisoDeBloco(t('Plug-in {nome} não desenha blocos.', { nome: estado.manifesto?.name || id }));
   return avisoDeBloco(t('Carregando…'));
+}
+
+// A mesma marcação na leitura e no editor; desenharBlocosDosPlugins a completa depois.
+function htmlDoBlocoPlugin(id, fonte, atributos = '') {
+  agendarBlocosDosPlugins();
+  const pronto = pluginsAtivos.has(id) && conteudoDosBlocos.has(`${id}\n${fonte}`);
+  return `<figure class="plugin-bloco" data-plugin="${id}" data-fonte="${escapeHtml(fonte)}" ${atributos}><div class="plugin-bloco-conteudo" data-desenho="${pronto ? 'pronto' : 'aviso'}">${conteudoDoBloco(id, fonte)}</div></figure>`;
 }
 
 let blocosAgendados = false;

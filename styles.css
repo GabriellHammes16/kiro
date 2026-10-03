@@ -1351,5 +1351,7 @@ html.janela-propria #barra-titulo { position:fixed; top:0; left:0; right:0; z-in
 .doc-corpo .cm-editor .md-destaque { border-left-color:var(--acento); }
 .doc-corpo .cm-editor .md-destaque-tipo { display:block; font-size:12px; text-transform:uppercase; letter-spacing:1px; color:var(--acento); font-weight:700; margin-bottom:5px; }
 .doc-corpo .cm-editor .md-comentario { color:#6a6a76; font-style:italic; }
+.doc-corpo .cm-editor .ed-plugin { cursor:pointer; }
+.doc-corpo .cm-editor .ed-plugin .plugin-bloco { margin:0 0 14px; cursor:auto; }
 /* O tema padrão do CodeMirror põe monospace no .cm-scroller: o texto da nota usa a fonte da leitura. */
 .doc-corpo .cm-scroller { font-family:inherit; line-height:inherit; }
