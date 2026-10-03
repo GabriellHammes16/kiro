@@ -16,7 +16,7 @@ etapa 2 e o instalador.
 | Cartão de texto do Fluxo | O editor novo completo (visualização ao vivo, corretor, fórmulas, links) no lugar do `textarea` |
 | Rótulo de seta do Fluxo | Continua `<input>` (uma linha, sem Markdown) |
 | Editor antigo de blocos | Removido; o `textarea` simples fica só como reserva se o CodeMirror não carregar |
-| Pendências da etapa 2 | Caixa de tarefa pelo teclado; altura estimada dos widgets de bloco; Ctrl+clique abre o link na linha do cursor |
+| Pendências da etapa 2 | Tarefa pelo teclado (Ctrl+Enter); altura estimada dos widgets de bloco; Ctrl+clique abre o link na linha do cursor |
 | Entrega | Instalador 0.19.0 depois da verificação no app desktop; merge em `idiomas-etapa-1` e `main` só depois que o usuário aprovar o instalador |
 
 ## Blocos de plug-in
@@ -59,7 +59,9 @@ etapa 2 e o instalador.
 
 ## Pendências da etapa 2
 
-- Caixa de tarefa focável e marcável com Espaço/Enter (mesma transação do clique).
+- Tarefa pelo teclado: Ctrl+Enter (Cmd+Enter no Mac) marca/desmarca as tarefas das linhas do cursor ou
+  da seleção, como no Obsidian (a caixa dentro do editor não pode receber o foco do teclado sem
+  atrapalhar a digitação); mesma transação do clique, Ctrl+Z desfaz.
 - `estimatedHeight` nos widgets de bloco (fórmula `$$`, cabeçalho do código, bloco de plug-in).
 - Ctrl+clique (Cmd no Mac) num link desenhado abre o link mesmo na linha do cursor; clique sem
   modificador continua como na etapa 2.
@@ -87,7 +89,7 @@ etapa 2 e o instalador.
     digitar fora não recria o desenho;
   - cartão de texto do Fluxo: editar mostra o editor novo, sublinha palavra errada sem digitar,
     Esc grava, o cartão cresce, Ctrl+Z desfaz no texto;
-  - caixa de tarefa por Espaço; Ctrl+clique no `[[link]]` da linha do cursor abre a nota;
+  - Ctrl+Enter marca a tarefa da linha do cursor; Ctrl+clique no `[[link]]` da linha do cursor abre a nota;
   - nada do editor antigo no DOM; `npm test` sem falhas.
 - Instalador 0.19.0 gerado e instalado num perfil limpo: abre, edita, salva.
 
