@@ -33,9 +33,14 @@
           const ci = no.node.getChild('CodeInfo'), info = ci ? state.sliceDoc(ci.from, ci.to).trim() : '';
           if (!/^kiro:/.test(info)) {
             const fechada = no.node.getChildren('CodeMark').length > 1;
-            const noCitacao = (() => { for (let p = no.node.parent; p; p = p.parent) if (p.name === 'Blockquote') return true; return false; })();
+            // Tira de cada linha só os `>` das citações em volta e o recuo da cerca (item de lista).
+            let citacoes = 0;
+            for (let p = no.node.parent; p; p = p.parent) if (p.name === 'Blockquote') citacoes++;
+            const semCitacao = t => { for (let i = 0; i < citacoes; i++) t = t.replace(/^\s*> ?/, ''); return t; };
+            const recuo = new RegExp(`^ {0,${Math.max(0, semCitacao(primeira.text).search(/[`~]/))}}`);
             const corpo = [];
-            for (let n = primeira.number + 1; n <= (fechada ? ultima.number - 1 : ultima.number); n++) corpo.push(noCitacao ? doc.line(n).text.replace(/^(\s*>)+ ?/, '') : doc.line(n).text);
+            for (let n = primeira.number + 1; n <= (fechada ? ultima.number - 1 : ultima.number); n++) corpo.push(semCitacao(doc.line(n).text).replace(recuo, ''));
+            if (!fechada && corpo.length && corpo[corpo.length - 1] === '') corpo.pop();
             els.push({ tipo: 'cabecalhoCodigo', de: primeira.from, ate: primeira.to, linguagem: info, codigo: corpo.join('\n'), blocoDe: no.from, blocoAte: no.to });
           }
           return false;

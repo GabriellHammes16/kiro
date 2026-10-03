@@ -126,8 +126,13 @@ test('faixa visível com blocos: $$ dentro de código acima não engole os eleme
 });
 
 test('código em lista ou citação: linguagem sem marcador e Copiar sem > nem cerca', () => {
-  let c = achar('- ```js\n  x\n  ```').els.find(e => e.tipo === 'cabecalhoCodigo');
+  let c = achar('- ```js\n  a\n    b\n  ```').els.find(e => e.tipo === 'cabecalhoCodigo');
   assert.equal(c.linguagem, 'js');
+  assert.equal(c.codigo, 'a\n  b');
+  c = achar('> ```js\n> > x\n> ```').els.find(e => e.tipo === 'cabecalhoCodigo');
+  assert.equal(c.codigo, '> x');
+  c = achar('```\naberto\n').els.find(e => e.tipo === 'cabecalhoCodigo');
+  assert.equal(c.codigo, 'aberto');
   c = achar('> > ```py\n> > a\n> > b\n> > ```').els.find(e => e.tipo === 'cabecalhoCodigo');
   assert.equal(c.linguagem, 'py');
   assert.equal(c.codigo, 'a\nb');
