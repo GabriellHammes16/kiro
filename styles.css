@@ -87,9 +87,9 @@ body.saving { cursor:progress; }
    Derivados misturam com --ink (nunca com o painel), então valem também sobre o papel de parede,
    onde o painel fica translúcido. Um tema pode sobrescrever qualquer derivado. */
 :root {
-  --bg:#0B0F14; --panel:#1A1F26; --panel-raised:#232A33; --sidebar-bg:#11161D; --content-bg:#0B0F14; --campo:#12171E;
-  --ink:#E5E7EB; --muted:#94A3B8; --line:#2A3340;
-  --acento:#9273FF; --acento-2:#3B82F6; --acento-forte:#6B4AE8; --acento-escuro:#5836C7; --acento-texto:#000000; --primario-texto:#FFFFFF;
+  --bg:#0A0A0A; --panel:#161616; --panel-raised:#1E1E1E; --sidebar-bg:#111111; --content-bg:#0A0A0A; --campo:#121212;
+  --ink:#EDEDED; --muted:#A1A1A1; --line:#2A2A2A;
+  --acento:#EDEDED; --acento-2:#A1A1A1; --acento-forte:#D4D4D4; --acento-escuro:#A3A3A3; --acento-texto:#0A0A0A; --primario-texto:#0A0A0A;
   color-scheme:dark;
 
   /* Destaque */
@@ -1400,3 +1400,67 @@ div.fluxo-editor { overflow:auto; }
 :is(.doc-corpo, .fluxo-editor) .cm-editor .ed-plugin .plugin-bloco { margin:0 0 14px; cursor:auto; }
 /* O tema padrão do CodeMirror põe monospace no .cm-scroller: o texto da nota usa a fonte da leitura. */
 :is(.doc-corpo, .fluxo-editor) .cm-scroller { font-family:inherit; line-height:inherit; }
+
+/* ---- Hoje: cabeçalho compacto, captura como barra de comando, hábitos em uma linha ---- */
+.content { padding-top:32px; }
+.page-head h1 { font-size:30px; letter-spacing:-.5px; }
+.page-head .subhead:has(.frase-do-dia) { margin-top:6px; }
+.page-head .frase-do-dia { display:inline; font-family:var(--fonte-leitura); font-style:italic; font-size:15px; letter-spacing:0; color:var(--muted); }
+.page-head:has(+ .hoje-acoes) { margin-bottom:var(--esp-5); }
+
+.hoje-acoes .capture { height:46px; padding:0 6px 0 14px; border-radius:var(--raio-card); }
+.hoje-acoes > .secondary { height:46px; border-radius:var(--raio-card); }
+.hoje-acoes .capture > .icone { color:var(--muted); }
+.hoje-acoes .capture:focus-within > .icone { color:var(--acento); }
+.captura-enviar { min-width:34px; width:34px; min-height:34px; height:34px; padding:0; border-radius:var(--raio-controle); background:var(--accent); border-color:var(--accent); color:var(--primario-texto); }
+.captura-enviar:hover { background:var(--acento); border-color:var(--acento); color:var(--acento-texto); }
+.captura-enviar .icone { width:16px; height:16px; }
+
+/* Títulos dos cartões com um ícone discreto. */
+.card-head h2 { display:flex; align-items:center; gap:8px; }
+.card-head h2 > .icone { width:16px; height:16px; color:var(--muted); }
+
+/* Hábitos: nome à esquerda, a semana em pontos à direita; as letras aparecem uma vez, no topo. */
+.habitos .routine-item.habito { min-height:40px; padding:var(--esp-1) 0; }
+.habito-texto { display:flex; align-items:baseline; gap:var(--esp-2); }
+.habito-meta:empty { display:none; }
+.habito-semana { gap:2px; }
+.habito-semana > *, .habito-dia { width:24px; height:24px; }
+.habito-dia, .habito-dia.futuro { display:inline-grid; place-items:center; padding:0; border:0; border-radius:50%; background:transparent; font-size:0; box-shadow:none; opacity:1; }
+.habito-dia::after { content:""; width:10px; height:10px; border-radius:50%; background:var(--surface-active); transition:background var(--rapido) var(--curva), box-shadow var(--rapido) var(--curva); }
+.habito-dia:hover::after { background:var(--border-strong); }
+.habito-dia.feito, .habito-dia.feito:hover { background:transparent; }
+.habito-dia.feito::after { background:var(--acento); }
+.habito-dia.hoje { box-shadow:none; }
+.habito-dia.hoje::after { box-shadow:0 0 0 2px var(--content-bg), 0 0 0 3.5px var(--acento); }
+.habito-dia.livre::after { background:transparent; box-shadow:inset 0 0 0 1px var(--line); }
+.habito-dia.futuro::after { opacity:.4; }
+.habito-dia:focus-visible { outline:2px solid var(--focus-ring); outline-offset:0; }
+.habitos-cabecalho { min-height:0; padding:0 0 2px; }
+.habitos-cabecalho > span:first-child { width:20px; }
+.habitos-cabecalho .habito-semana > span { display:grid; place-items:center; height:16px; font-size:10px; font-weight:600; color:var(--muted); }
+.habitos .card-head + .habitos-cabecalho + .habito { border-top:0; }
+/* Cartão estreito: a semana desce para baixo do nome e cada ponto volta a mostrar a letra. */
+@container (max-width: 420px) {
+  .habitos-cabecalho { display:none; }
+  .habito-dia, .habito-dia.futuro { font-size:10px; font-weight:600; color:var(--muted); }
+  .habito-dia::after { display:none; }
+  .habito-dia { border:1.5px solid var(--line); }
+  .habito-dia.feito { background:var(--accent); border-color:var(--accent); color:var(--primario-texto); }
+  .habito-dia.hoje { border-color:var(--acento); }
+}
+
+/* Abas compactas (Para revisar): uma escolha ativa, contagem ao lado. */
+.segmentos-compactos { display:flex; flex-wrap:wrap; gap:4px; margin:0 0 var(--esp-2); }
+.segmento-botao { display:inline-flex; align-items:center; gap:6px; min-height:28px; padding:0 10px; border:1px solid transparent; border-radius:var(--raio-controle); background:transparent; color:var(--muted); font-size:var(--fs-secundario); cursor:pointer; transition:background var(--rapido) var(--curva), color var(--rapido) var(--curva); }
+.segmento-botao:hover { background:var(--surface-hover); color:var(--ink); }
+.segmento-botao[aria-pressed="true"] { background:var(--surface-active); border-color:var(--line); color:var(--ink); font-weight:500; }
+.segmento-botao:focus-visible { outline:2px solid var(--focus-ring); outline-offset:1px; }
+.segmento-contagem { min-width:18px; padding:0 5px; border-radius:var(--raio-pilula); background:var(--surface-active); font-size:11px; line-height:16px; text-align:center; font-variant-numeric:tabular-nums; }
+.para-revisar:not([data-filtro="todas"]) .revisar-grupo:not([data-grupo]) { display:none; }
+.para-revisar[data-filtro="soltas"] .revisar-grupo:not([data-grupo="soltas"]),
+.para-revisar[data-filtro="esquecidas"] .revisar-grupo:not([data-grupo="esquecidas"]) { display:none; }
+.para-revisar:not([data-filtro="todas"]) .revisar-titulo { display:none; }
+
+/* Etiqueta no texto: pílula sutil, para se distinguir mesmo quando o destaque é da cor do texto (tema Kiro). */
+:is(.doc-corpo, .fluxo-editor) :is(.md-tag, .ed-etiqueta) { padding:0 4px; border-radius:4px; background:var(--accent-soft); }

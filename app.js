@@ -75,11 +75,14 @@ function renderToday() {
   const lista = KiroHoje.faixas(l, idsVisiveisDaHoje(l, catalogo));
   // Editando sem nenhum cartão normal: uma faixa de colunas vazia, para ter onde soltar.
   if (personalizandoHoje && !lista.some(f => f.tipo === 'colunas')) lista.push({ tipo: 'colunas', colunas: Array.from({ length: l.colunas }, () => []) });
+  // Frase como primeira faixa: sobe para o cabeçalho, logo abaixo da saudação (no Personalizar ela continua um cartão que se move).
+  const fraseNoTopo = !personalizandoHoje && lista[0]?.tipo === 'inteira' && lista[0].id === 'nativo:frase';
+  if (fraseNoTopo) lista.shift();
   const faixas = lista.map((f, idx) => f.tipo === 'inteira'
     ? `<div class="hoje-faixa-inteira">${desenhar(f.id)}</div>`
     : `<div class="today-grid hoje-colunas" style="--hoje-colunas:${l.colunas}" data-hoje-fim="${escapeHtml(lista.slice(idx + 1).find(x => x.tipo === 'inteira')?.id || '')}">${f.colunas.map((ids, i) => `<div class="stack" data-hoje-coluna="${i}">${ids.map(desenhar).join('')}</div>`).join('')}</div>`).join('');
   const botao = `<button type="button" class="secondary" data-hoje-acao="personalizar" aria-pressed="${personalizandoHoje}">${personalizandoHoje ? t('Concluir') : `${icone('realce')} ${t('Personalizar')}`}</button>`;
-  return `${head(formatDate(today()), saudacao(), '', botao)}<div class="hoje-faixas${personalizandoHoje ? ' personalizando' : ''}">${faixas}</div>${personalizandoHoje ? rodapeDaPersonalizacao(catalogo, l) : ''}`;
+  return `${head(formatDate(today()), saudacao(), fraseNoTopo ? `<span class="frase-do-dia">${escapeHtml(fraseDoDia())}</span>` : '', botao)}<div class="hoje-faixas${personalizandoHoje ? ' personalizando' : ''}">${faixas}</div>${personalizandoHoje ? rodapeDaPersonalizacao(catalogo, l) : ''}`;
 }
 // Cartões do Kiro e dos plug-ins num catálogo só: o layout decide onde e se aparecem.
 const LIMITE_DA_LISTA = { key: 'limite', type: 'number', label: frase('Quantos mostrar (0 = todos)'), default: 0, min: 0, max: 50 };
@@ -114,7 +117,7 @@ function layoutDaHoje(catalogo = catalogoDaHoje()) {
 const idsVisiveisDaHoje = (l, catalogo) => new Set(catalogo.map(c => c.id).filter(id => !l.ocultos.includes(id)));
 function cardAgora({ limite }) {
   const urgent = state.tasks.filter(t => !t.done && t.due <= today());
-  return `<section class="card"><div class="card-head"><h2>${t('Para fazer agora')}</h2><a data-go="tasks">${t('Ver tarefas')}</a></div>${cortar(urgent, limite).map(taskRow).join("") || `<div class="empty">${t('Nada urgente para hoje.')}</div>`}</section>`;
+  return `<section class="card"><div class="card-head"><h2>${icone('tarefas')}${t('Para fazer agora')}</h2><a data-go="tasks">${t('Ver tarefas')}</a></div>${cortar(urgent, limite).map(taskRow).join("") || `<div class="empty">${t('Nada urgente para hoje.')}</div>`}</section>`;
 }
 // Frase do dia no lugar do "Bom dia". Muda à meia-noite e não repete a de ontem:
 // o passo 7 percorre as 20 frases antes de voltar à primeira.
@@ -151,7 +154,7 @@ function cardContinuar(nota) {
   const ultimo = textoPlano(nota.body.trim().split(/\n\s*\n/).filter(p => textoPlano(p)).pop() || '');
   const trecho = ultimo === textoPlano(nota.title || '') ? '' : ultimo;
   const pasta = state.folders.find(f => f.id === nota.folderId);
-  return `<section class="card continuar"><div class="card-head"><h2>${t('Continuar de onde parei')}</h2><span class="continuar-quando">${t('editada {quando}', { quando: (quando => KiroIdiomas.idioma() === 'pt-BR' ? quando.toLowerCase() : quando)(dateLabel(Kiro.localDate(new Date(nota.updatedAt)))) })}</span></div><button type="button" class="continuar-nota" data-extra="continuar" data-id="${nota.id}"><span class="continuar-titulo">${pasta ? `<span class="pasta-chip"${pasta.color ? ` data-cor-pasta="${pasta.color}"` : ''}>${icone('pastas')}</span>` : icone('nota')} ${escapeHtml(nota.title || t('Sem título'))}</span>${trecho ? `<span class="continuar-trecho">${trecho.length > 180 ? '…' : ''}${escapeHtml(trecho.slice(-180))}</span>` : ''}<span class="continuar-acao">${t('Continuar escrevendo')} ${icone('direita')}</span></button></section>`;
+  return `<section class="card continuar"><div class="card-head"><h2>${icone('notas')}${t('Continuar de onde parei')}</h2><span class="continuar-quando">${t('editada {quando}', { quando: (quando => KiroIdiomas.idioma() === 'pt-BR' ? quando.toLowerCase() : quando)(dateLabel(Kiro.localDate(new Date(nota.updatedAt)))) })}</span></div><button type="button" class="continuar-nota" data-extra="continuar" data-id="${nota.id}"><span class="continuar-titulo">${pasta ? `<span class="pasta-chip"${pasta.color ? ` data-cor-pasta="${pasta.color}"` : ''}>${icone('pastas')}</span>` : icone('nota')} ${escapeHtml(nota.title || t('Sem título'))}</span>${trecho ? `<span class="continuar-trecho">${trecho.length > 180 ? '…' : ''}${escapeHtml(trecho.slice(-180))}</span>` : ''}<span class="continuar-acao">${t('Continuar escrevendo')} ${icone('direita')}</span></button></section>`;
 }
 // ---- Hábitos no Hoje: só os do dia, com a semana clicável e a sequência. ----
 // Inicial do dia da semana (0 = domingo) no idioma atual: 7/jan/2024 foi um domingo.
@@ -173,7 +176,8 @@ function cardHabitos({ mostrarSemana = true } = {}) {
   const linha = ({ h, s }) => {
     const semanal = h.frequency.type === 'weekly';
     const meta = [
-      semanal ? t('{feitos}/{meta} na semana', { feitos: s.weekCount, meta: h.frequency.times }) : rotuloFrequencia(h.frequency),
+      // "Todo dia" é o caso comum: só aparece a frequência que foge dele.
+      semanal ? t('{feitos}/{meta} na semana', { feitos: s.weekCount, meta: h.frequency.times }) : rotuloFrequencia(h.frequency) === t('Todo dia') ? '' : rotuloFrequencia(h.frequency),
       s.streak ? `<span class="habito-sequencia">${icone('chama')} ${s.streak} ${semanal ? (s.streak === 1 ? t('semana') : t('semanas')) : (s.streak === 1 ? t('dia') : t('dias'))}</span>` : '',
     ].filter(Boolean).join(' · ');
     // Semana fixa de segunda a domingo: as letras não mudam de lugar; dias que ainda não chegaram ficam apagados.
@@ -185,7 +189,8 @@ function cardHabitos({ mostrarSemana = true } = {}) {
   const vazio = state.habits.length
     ? `<div class="empty">${t('Nenhum hábito para hoje.')}</div>`
     : `<div class="empty">${t('Crie um hábito para acompanhar sua sequência.')} ${extraButton('add-habit', t('Criar hábito'))}</div>`;
-  return `<section class="card habitos"><div class="card-head"><h2>${t('Hábitos')}</h2>${doDia.length ? `<span class="small-muted">${feitos}/${doDia.length}</span>` : ''}${extraButton('habit-stats', icone('grafico'), '', 'icon-button', t('Estatísticas dos hábitos'))}${extraButton('add-habit', icone('mais'), '', 'icon-button', t('Novo hábito'))}</div>${doDia.map(linha).join('') || vazio}</section>`;
+  const cabecalho = mostrarSemana && doDia.length ? `<div class="habito habitos-cabecalho" aria-hidden="true"><span></span><span></span><span class="habito-semana">${[1, 2, 3, 4, 5, 6, 0].map(d => `<span>${letraDoDia(d)}</span>`).join('')}</span></div>` : '';
+  return `<section class="card habitos"><div class="card-head"><h2>${icone('chama')}${t('Hábitos')}</h2>${doDia.length ? `<span class="small-muted">${t('Hoje')} · ${feitos}/${doDia.length}</span>` : ''}${extraButton('habit-stats', icone('grafico'), '', 'icon-button', t('Estatísticas dos hábitos'))}${extraButton('add-habit', icone('mais'), '', 'icon-button', t('Novo hábito'))}</div>${cabecalho}${doDia.map(linha).join('') || vazio}</section>`;
 }
 function marcarHabito(id, dia = today()) {
   if (busy || failed || !loaded || dia > today() || !state.habits.some(h => h.id === id)) return;
@@ -1590,13 +1595,18 @@ async function reload(manual=false){
 const itemQueAbre=n=>`<div class="routine-item"><span class="brand-mark">${icone('nota')}</span><a class="routine-title" data-action="edit-note" data-id="${n.id}">${escapeHtml(n.title||t('Sem título'))}</a></div>`;
 function cardCaixaDeEntrada({limite=0}={}){
   const notas=state.notes.filter(Kiro.inInbox).sort((a,b)=>(b.createdAt??b.updatedAt)-(a.createdAt??a.updatedAt));
-  return `<section class="card caixa-entrada"><div class="card-head"><h2>${t('Caixa de entrada')}</h2><span class="small-muted">${notas.length}</span></div>${cortar(notas,limite).map(n=>`<div class="routine-item"><span class="brand-mark">${icone('nota')}</span><a class="routine-title" data-action="edit-note" data-id="${n.id}">${escapeHtml(n.title||t('Sem título'))}</a><span class="caixa-acoes">${extraButton('inbox-mover',icone('pastas'),n.id,'icon-button',t('Mover para pasta'))}${extraButton('inbox-arquivar',icone('arquivar'),n.id,'icon-button',t('Arquivar (tirar da caixa)'))}</span></div>`).join('')||`<div class="empty">${t('Nada pendente. Tudo organizado.')}</div>`}</section>`;
+  return `<section class="card caixa-entrada"><div class="card-head"><h2>${icone('arquivar')}${t('Caixa de entrada')}</h2><span class="small-muted">${notas.length}</span></div>${cortar(notas,limite).map(n=>`<div class="routine-item"><span class="brand-mark">${icone('nota')}</span><a class="routine-title" data-action="edit-note" data-id="${n.id}">${escapeHtml(n.title||t('Sem título'))}</a><span class="caixa-acoes">${extraButton('inbox-mover',icone('pastas'),n.id,'icon-button',t('Mover para pasta'))}${extraButton('inbox-arquivar',icone('arquivar'),n.id,'icon-button',t('Arquivar (tirar da caixa)'))}</span></div>`).join('')||`<div class="empty">${t('Nada pendente. Tudo organizado.')}</div>`}</section>`;
 }
+let filtroDaRevisao='todas';
 function cardParaRevisar({limite=0}={}){
   const {loose,forgotten}=Kiro.toReview(state.notes);
   if(!loose.length&&!forgotten.length)return '';
-  const lista=(titulo,notas)=>notas.length?`<h3 class="revisar-titulo">${titulo}</h3>${notas.map(itemQueAbre).join('')}`:'';
-  return `<section class="card para-revisar"><div class="card-head"><h2>${t('Para revisar')}</h2></div>${lista(t('Soltas'),cortar(loose,limite))}${lista(t('Esquecidas'),cortar(forgotten,limite))}</section>`;
+  const grupos=[['soltas',t('Soltas'),loose],['esquecidas',t('Esquecidas'),forgotten]].filter(([,,notas])=>notas.length);
+  if(!grupos.some(([id])=>id===filtroDaRevisao))filtroDaRevisao='todas';
+  const aba=(id,rotulo,n)=>`<button type="button" class="segmento-botao" data-revisar-aba="${id}" aria-pressed="${filtroDaRevisao===id}">${rotulo}${n===undefined?'':` <span class="segmento-contagem">${n}</span>`}</button>`;
+  const abas=grupos.length>1?`<div class="segmentos-compactos" role="group" aria-label="${t('Filtrar')}">${aba('todas',t('Todas'))}${grupos.map(([id,rotulo,notas])=>aba(id,rotulo,notas.length)).join('')}</div>`:'';
+  const lista=([id,titulo,notas])=>`<div class="revisar-grupo" data-grupo="${id}"><h3 class="revisar-titulo">${titulo}</h3>${cortar(notas,limite).map(itemQueAbre).join('')}</div>`;
+  return `<section class="card para-revisar" data-filtro="${filtroDaRevisao}"><div class="card-head"><h2>${icone('sumario')}${t('Para revisar')}</h2></div>${abas}${grupos.map(lista).join('')}</section>`;
 }
 // Tirar da caixa de entrada (e, se vier uma pasta, mover para ela) numa gravação só.
 async function tirarDaCaixa(id,folderId){
@@ -1609,8 +1619,9 @@ const extraButton=(action,label,id='',cls='secondary',nome='')=>`<button type="b
 function enhanceView(){
   if(currentView!=='today')return;
   // Captura numa faixa própria logo abaixo da frase, na largura dos cards: não depende de quantas linhas a frase ocupa.
-  $('.page-head').insertAdjacentHTML('afterend',`<div class="hoje-acoes"><form id="capture-form" class="capture add-link"><label for="capture-text" class="sr-only">${t('Captura rápida')}</label>${icone('mais')}<input id="capture-text" required autocomplete="off" placeholder="${t('Capturar uma ideia, pergunta ou lembrete…')}" /><kbd class="atalho" title="${t('De qualquer tela')}">${teclaDe('captura')}</kbd><button class="primary">${t('Guardar')}</button></form>${extraButton('daily',`${icone('calendario')} ${t('Nota diária')}`,'','secondary')}</div>`);
+  $('.page-head').insertAdjacentHTML('afterend',`<div class="hoje-acoes"><form id="capture-form" class="capture add-link"><label for="capture-text" class="sr-only">${t('Captura rápida')}</label>${icone('mais')}<input id="capture-text" required autocomplete="off" placeholder="${t('Capturar uma ideia, pergunta ou lembrete…')}" /><kbd class="atalho" title="${t('De qualquer tela')}">${teclaDe('captura')}</kbd><button class="primary captura-enviar" aria-label="${t('Guardar')}" title="${t('Guardar')} (Enter)">${icone('direita')}</button></form>${extraButton('daily',`${icone('calendario')} ${t('Nota diária')}`,'','secondary')}</div>`);
   $('#capture-form').onsubmit=async e=>{e.preventDefault();if(await capturar($('#capture-text').value))$('#capture-text')?.focus();};
+  document.querySelectorAll('[data-revisar-aba]').forEach(b=>b.onclick=()=>{filtroDaRevisao=b.dataset.revisarAba;const card=b.closest('.para-revisar');card.dataset.filtro=filtroDaRevisao;card.querySelectorAll('[data-revisar-aba]').forEach(x=>x.setAttribute('aria-pressed',String(x===b)));});
   desenharPaineisDosPlugins();
 }
 // Título de uma nota nascida de um texto (captura, cartão do fluxo): a primeira linha sem sintaxe.

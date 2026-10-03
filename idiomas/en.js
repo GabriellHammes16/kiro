@@ -189,6 +189,7 @@
     'Nenhuma.': 'None.',
     'Nenhum.': 'None.',
     'Filtrar': 'Filter',
+    'Todas': 'All',
     'Filtrar links de volta': 'Filter backlinks',
     'Menções vinculadas ({n})': 'Linked mentions ({n})',
     'Menções não vinculadas ({n})': 'Unlinked mentions ({n})',

@@ -2,11 +2,11 @@
    Uma classe por tema no <html> (e no mini-card de Configurações). Só cores; o resto
    do visual continua em styles.css. Pares de texto/fundo passam 4.5:1 (WCAG AA). */
 
-/* Clássicos (o primeiro é a identidade do Kiro) */
+/* Clássicos (o primeiro é a identidade do Kiro: preto neutro e branco, sem matiz) */
 .tema-kiro {
-  --bg:#0B0F14; --panel:#1A1F26; --panel-raised:#232A33; --sidebar-bg:#11161D; --content-bg:#0B0F14; --campo:#12171E;
-  --ink:#E5E7EB; --muted:#94A3B8; --line:#2A3340;
-  --acento:#9273FF; --acento-2:#3B82F6; --acento-forte:#6B4AE8; --acento-escuro:#5836C7; --acento-texto:#000000; --primario-texto:#FFFFFF;
+  --bg:#0A0A0A; --panel:#161616; --panel-raised:#1E1E1E; --sidebar-bg:#111111; --content-bg:#0A0A0A; --campo:#121212;
+  --ink:#EDEDED; --muted:#A1A1A1; --line:#2A2A2A;
+  --acento:#EDEDED; --acento-2:#A1A1A1; --acento-forte:#D4D4D4; --acento-escuro:#A3A3A3; --acento-texto:#0A0A0A; --primario-texto:#0A0A0A;
 }
 /* Claro: fundo branco, texto grafite e o roxo do Kiro mais escuro para manter 4.5:1. */
 .tema-claro {

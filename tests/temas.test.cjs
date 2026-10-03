@@ -88,7 +88,7 @@ test('temas.css define todas as variáveis para cada tema e o seletor de cada sk
 
 test('tema Kiro em temas.css bate com o :root de styles.css', () => {
   const classico = blocoDoTema(ler('temas.css'), 'kiro');
-  assert.equal(classico.acento, '#9273FF');
+  assert.equal(classico.acento, '#EDEDED');
   const root = Object.assign({}, ...[...ler('styles.css').matchAll(/:root\s*\{([^}]*)\}/g)].map(m => variaveis(m[1])));
   for (const v of ['bg', 'panel', 'ink', 'muted', 'line', 'acento']) assert.equal(classico[v], root[v], `--${v}`);
 });

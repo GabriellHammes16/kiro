@@ -49,7 +49,7 @@ async function prepararCorretor(sessao) {
 }
 function createWindow() {
   const window = new BrowserWindow({ width: 1280, height: 820, minWidth: 900, minHeight: 620, backgroundColor: '#0a0a0a', title: 'Kiro',
-    ...(JANELA_PROPRIA ? { titleBarStyle: 'hidden', titleBarOverlay: { color: '#11161D', symbolColor: '#E5E7EB', height: ALTURA_DA_BARRA } } : {}), icon: join(__dirname, '..', 'kiro-logo.png'), webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true, preload: join(__dirname, 'preload.cjs') } });
+    ...(JANELA_PROPRIA ? { titleBarStyle: 'hidden', titleBarOverlay: { color: '#111111', symbolColor: '#EDEDED', height: ALTURA_DA_BARRA } } : {}), icon: join(__dirname, '..', 'kiro-logo.png'), webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true, preload: join(__dirname, 'preload.cjs') } });
   window.loadFile(join(__dirname, '..', 'index.html'));
   // Depois da página, para não atrasar a abertura.
   window.webContents.once('did-finish-load', () => prepararCorretor(window.webContents.session).catch(() => { /* sem corretor, o app segue */ }));
