@@ -183,7 +183,7 @@
     return carregando;
   }
 
-  function montar(elemento, { texto, aoMudar, existe, aoTeclar, aoMoverCursor, aoColar, aoMenu, ortografia, widgets, rotulo }) {
+  function montar(elemento, { texto, aoMudar, existe, aoTeclar, aoMoverCursor, aoColar, aoMenu, ortografia, widgets, rotulo, placeholder }) {
     const { state: S, view: V, commands: C, language: L, markdown: M } = CM();
     // Elementos desenhados (etapa 2): onde um widget substitui o texto, a etapa 1 não esconde nada.
     const desenhados = widgets && root.KiroWidgets ? root.KiroWidgets.extensao({ ...widgets, t }) : null;
@@ -270,7 +270,7 @@
           ]),
           M.markdown({ base: M.markdownLanguage }),
           V.EditorView.lineWrapping,
-          V.placeholder(t('Clique para escrever. [[Nome da nota]] conecta ideias e #tag marca a nota.')),
+          V.placeholder(placeholder ?? t('Clique para escrever. [[Nome da nota]] conecta ideias e #tag marca a nota.')),
           V.EditorView.contentAttributes.of({ spellcheck: 'false', 'aria-label': rotulo || t('Conteúdo da nota') }),
           ...(desenhados ?? []),
           aoVivo,

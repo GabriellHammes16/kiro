@@ -1930,7 +1930,7 @@ let editorDoCartao = null;
 function montarEditorDoCartao(elemento, { texto }) {
   if (!window.CM || !window.KiroEditor) return null;
   const base = opcoesDoEditor({ atual: () => editorDoCartao, menu: () => [] });
-  const editor = KiroEditor.montar(elemento, { texto, rotulo: t('Texto do cartão'), ortografia: base.ortografia, widgets: base.widgets, aoMenu: base.aoMenu });
+  const editor = KiroEditor.montar(elemento, { texto, rotulo: t('Texto do cartão'), placeholder: '', ortografia: base.ortografia, widgets: base.widgets, aoMenu: base.aoMenu });
   editorDoCartao = editor;
   const destruir = editor.destruir;
   editor.destruir = () => { if (editorDoCartao === editor) editorDoCartao = null; destruir(); };
@@ -3281,7 +3281,7 @@ function montarNivel(itens, area) {
       linha.addEventListener('click', async () => {
         fecharMenuContexto();
         // a área do editor da nota não é um nó: vale enquanto for a do editor aberto
-        if (area.inserir ? editorDaNota?.editor.area() === area : document.body.contains(area)) await item.acao(area);
+        if (area.inserir ? [editorDaNota?.editor, editorDoCartao].some(e => e?.area() === area) : document.body.contains(area)) await item.acao(area);
       });
     }
     nivel.appendChild(linha);
