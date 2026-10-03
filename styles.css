@@ -216,9 +216,8 @@ select:focus-visible, textarea:focus-visible, .tree-row:focus-visible {
 .doc-title:focus { border-bottom-color:var(--line); }
 .doc-title::placeholder { color:#4a4a4a; }
 .doc-details { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:16px; margin:8px 0 14px; display:grid; gap:12px; }
-/* Corpo da nota: sempre desenhado, ocupando a página. O bloco clicado vira um
-   campo com a mesma tipografia do texto: sem moldura, sem alça de redimensionar
-   e sem rolagem própria — ele cresce junto com o que se escreve. */
+/* Corpo da nota: sempre desenhado, ocupando a página. O editor ao vivo desenha
+   a nota com a tipografia da leitura, sem moldura nem rolagem própria. */
 .doc-corpo { flex:1 0 auto; padding:10px 0 26px; cursor:text; }
 @media (max-width:780px) { .doc-title { font-size:25px; } }
 
@@ -483,7 +482,6 @@ body, button, input, textarea, select { font-family:var(--fonte-interface); }
 .doc-corpo code, .doc-corpo pre, .code-lang { font-family:var(--fonte-codigo); }
 /* Números de mesma largura: contagens e datas param de dançar ao mudar. */
 .tree-meta, .note-meta, .small-muted, .task-info, .nav-item b, #save-status, .crumbs { font-variant-numeric:tabular-nums; }
-/* Item de lista em edição: o campo ocupa o lugar do texto, sem folga extra. */
 .md-tarefa input { cursor:pointer; }
 /* Equações desenhadas pelo KaTeX. A rolagem evita que uma fórmula larga estoure a página. */
 .math-bloco { margin:0 0 14px; padding:6px 0; overflow-x:auto; overflow-y:hidden; }
@@ -1317,22 +1315,23 @@ div.fluxo-editor { overflow:auto; }
 :is(.doc-corpo, .fluxo-editor) .cm-cursor { border-left-color:var(--acento); }
 /* Modo simples: o editor não carregou e o corpo vira um textarea comum. */
 .doc-corpo-simples { display:block; width:100%; min-height:60vh; padding:0; border:0; outline:none; background:transparent; color:inherit; font:inherit; line-height:inherit; resize:vertical; }
-.doc-corpo .ed-negrito { font-weight:700; }
-.doc-corpo .ed-italico { font-style:italic; }
-.doc-corpo .ed-tachado { text-decoration:line-through; }
-.doc-corpo .ed-h1,.doc-corpo .ed-h2,.doc-corpo .ed-h3,.doc-corpo .ed-h4,.doc-corpo .ed-h5,.doc-corpo .ed-h6 { line-height:1.3; letter-spacing:-.4px; font-weight:700; }
-.doc-corpo .ed-h1 { font-size:26px; } .doc-corpo .ed-h2 { font-size:21px; } .doc-corpo .ed-h3 { font-size:17px; } .doc-corpo .ed-h4,.doc-corpo .ed-h5,.doc-corpo .ed-h6 { font-size:14px; }
-.doc-corpo .ed-realce { background:color-mix(in srgb, var(--acento) 28%, transparent); color:color-mix(in srgb, var(--acento) 19%, var(--realce-base, white)); border-radius:3px; padding:0 3px; }
-.doc-corpo .ed-codigo { font-family:var(--fonte-codigo); font-size:.9em; background:var(--campo); border:1px solid var(--line); border-radius:8px; padding:1px 5px; }
-.doc-corpo .ed-link { color:var(--acento); }
-.doc-corpo .ed-wikilink { color:var(--acento); cursor:pointer; text-decoration:none; border-bottom:1px solid color-mix(in srgb, var(--acento) 32%, transparent); }
-.doc-corpo .ed-wikilink-ausente { color:color-mix(in srgb, var(--acento) 45%, var(--muted)); cursor:pointer; border-bottom:1px dashed color-mix(in srgb, var(--acento) 32%, transparent); }
-.doc-corpo .ed-etiqueta { color:var(--acento); }
-.doc-corpo .ed-citacao { border-left:3px solid var(--accent); background:color-mix(in srgb, var(--acento-forte) 7%, transparent); padding-left:16px; }
-.doc-corpo .ed-regua { border-bottom:1px solid var(--line); }
-.doc-corpo .ed-codigo-bloco { font-family:var(--fonte-codigo); background:var(--campo); }
-.doc-corpo .ed-marcador { color:var(--muted); }
-.doc-corpo .ed-erro { text-decoration:underline wavy #e5484d; text-decoration-skip-ink:none; text-underline-offset:3px; }
+:is(.doc-corpo, .fluxo-editor) .ed-negrito { font-weight:700; }
+:is(.doc-corpo, .fluxo-editor) .ed-italico { font-style:italic; }
+:is(.doc-corpo, .fluxo-editor) .ed-tachado { text-decoration:line-through; }
+:is(.doc-corpo, .fluxo-editor) .ed-h1,:is(.doc-corpo, .fluxo-editor) .ed-h2,:is(.doc-corpo, .fluxo-editor) .ed-h3,:is(.doc-corpo, .fluxo-editor) .ed-h4,:is(.doc-corpo, .fluxo-editor) .ed-h5,:is(.doc-corpo, .fluxo-editor) .ed-h6 { line-height:1.3; letter-spacing:-.4px; font-weight:700; }
+:is(.doc-corpo, .fluxo-editor) .ed-h1 { font-size:26px; } :is(.doc-corpo, .fluxo-editor) .ed-h2 { font-size:21px; } :is(.doc-corpo, .fluxo-editor) .ed-h3 { font-size:17px; } :is(.doc-corpo, .fluxo-editor) .ed-h4,:is(.doc-corpo, .fluxo-editor) .ed-h5,:is(.doc-corpo, .fluxo-editor) .ed-h6 { font-size:14px; }
+:is(.doc-corpo, .fluxo-editor) .ed-realce { background:color-mix(in srgb, var(--acento) 28%, transparent); color:color-mix(in srgb, var(--acento) 19%, var(--realce-base, white)); border-radius:3px; padding:0 3px; }
+:is(.doc-corpo, .fluxo-editor) .ed-codigo { font-family:var(--fonte-codigo); font-size:.9em; background:var(--campo); border:1px solid var(--line); border-radius:8px; padding:1px 5px; }
+:is(.doc-corpo, .fluxo-editor) .ed-link { color:var(--acento); }
+:is(.doc-corpo, .fluxo-editor) .ed-wikilink { color:var(--acento); cursor:pointer; text-decoration:none; border-bottom:1px solid color-mix(in srgb, var(--acento) 32%, transparent); }
+:is(.doc-corpo, .fluxo-editor) .ed-wikilink-ausente { color:color-mix(in srgb, var(--acento) 45%, var(--muted)); cursor:pointer; border-bottom:1px dashed color-mix(in srgb, var(--acento) 32%, transparent); }
+:is(.doc-corpo, .fluxo-editor) .ed-etiqueta { color:var(--acento); }
+:is(.doc-corpo, .fluxo-editor) .ed-citacao { border-left:3px solid var(--accent); background:color-mix(in srgb, var(--acento-forte) 7%, transparent); padding-left:16px; }
+:is(.doc-corpo, .fluxo-editor) .ed-regua { border-bottom:1px solid var(--line); }
+:is(.doc-corpo, .fluxo-editor) .ed-codigo-bloco { font-family:var(--fonte-codigo); background:var(--campo); }
+:is(.doc-corpo, .fluxo-editor) .ed-marcador { color:var(--muted); }
+:is(.doc-corpo, .fluxo-editor) .ed-erro { text-decoration:underline wavy #e5484d; text-decoration-skip-ink:none; text-underline-offset:3px; }
+.fluxo-editor .ed-h1 { font-size:1.4em; } .fluxo-editor .ed-h2 { font-size:1.25em; } .fluxo-editor .ed-h3 { font-size:1.1em; } .fluxo-editor .ed-h4,.fluxo-editor .ed-h5,.fluxo-editor .ed-h6 { font-size:1em; }
 /* Elementos desenhados no editor (tarefa, imagem, fórmula, código, callout, comentário): a mesma cara da leitura. */
 :is(.doc-corpo, .fluxo-editor) .cm-editor .ed-caixa { margin:0 6px 0 0; accent-color:var(--accent); vertical-align:middle; cursor:pointer; }
 :is(.doc-corpo, .fluxo-editor) .cm-editor .md-imagem { position:relative; display:inline-block; max-width:100%; vertical-align:bottom; line-height:0; border-radius:6px; }

@@ -981,8 +981,8 @@ async function vincularMencaoNaOutraNota(id) {
   state.notes = state.notes.map(n => n.id === id ? { ...n, body: corpoAntigo, updatedAt: atualizadoAntigo } : n);
 }
 // Rola a nota em edição até o título cujo início na fonte é `pos` — a mesma âncora
-// (data-pos) que renderizarMarkdown grava. Sem elemento (ex.: bloco em edição, virou
-// <textarea>), não faz nada: nunca rola para o título errado.
+// (data-pos) que renderizarMarkdown grava. Sem elemento (ex.: editor não montado, modo
+// simples), não faz nada: nunca rola para o título errado.
 function rolarParaTitulo(pos) {
   // pos conta \r\n como 2 caracteres; no editor cada quebra de linha conta 1.
   if (editorDaNota && $('#doc-corpo')?.contains(editorDaNota.editor.dom)) return editorDaNota.editor.rolarPara(editing.body.slice(0, pos).replace(/\r\n/g, '\n').length);
@@ -1929,7 +1929,7 @@ let editorDoCartao = null;
 function montarEditorDoCartao(elemento, { texto }) {
   if (!window.CM || !window.KiroEditor) return null;
   const base = opcoesDoEditor({ atual: () => editorDoCartao, menu: () => [] });
-  const editor = KiroEditor.montar(elemento, { texto, rotulo: t('Texto do cartão'), placeholder: '', ortografia: base.ortografia, widgets: base.widgets, aoMenu: base.aoMenu });
+  const editor = KiroEditor.montar(elemento, { texto, rotulo: t('Texto do cartão'), placeholder: '', ortografia: base.ortografia, existe: base.existe, widgets: base.widgets, aoMenu: base.aoMenu });
   editorDoCartao = editor;
   const destruir = editor.destruir;
   editor.destruir = () => { if (editorDoCartao === editor) editorDoCartao = null; destruir(); };
@@ -2478,7 +2478,7 @@ function renderizarMarkdown(fonte, base = 0) {
       // ```kiro:<id>: o plug-in desenha depois; a fonte fica na nota, intacta.
       const doPlugin = cerca[1].trim().match(/^kiro:([a-z0-9][a-z0-9-]{1,39})$/);
       if (doPlugin) {
-        const fonteDoBloco = corpo.join('\n');
+        const fonteDoBloco = corpo.join('\n').replace(/\r$/gm, ''); // a mesma fonte que o editor manda (sem \r)
         saida.push(htmlDoBlocoPlugin(doPlugin[1], fonteDoBloco, abrir(inicio, ate)));
         avancar(ate - i);
         i = j + 1;
@@ -2744,7 +2744,7 @@ async function colarImagens(campo, arquivos) {
     catch (erro) { status(t('Não foi possível guardar a imagem: {erro}', { erro: mensagemDoErro(erro) }), true); }
   }
   if (!trechos.length || !editing) return;
-  // Se o bloco fechou enquanto a imagem era gravada, ela entra no fim da nota.
+  // Se o editor saiu de cena enquanto a imagem era gravada, ela entra no fim da nota.
   const destino = editorDaNota?.editor.area() === campo ? campo : abrirNoFim();
   if (!destino) return;
   // Cada imagem vira um parágrafo próprio, separado do texto em volta por linha em branco.
@@ -2862,7 +2862,7 @@ async function copiarSelecao(area, recortar) {
 }
 const TABELA = '| Coluna | Coluna |\n| --- | --- |\n|  |  |\n';
 const temSelecao = area => area.selectionStart !== area.selectionEnd;
-// No bloco em edição o texto é cru: o link aparece entre colchetes e não é
+// No editor o texto é cru: o link aparece entre colchetes e não é
 // clicável. Isto acha o [[...]] que contém o cursor para que o menu possa
 // oferecer o mesmo destino que o modo de leitura abre com um clique.
 function wikilinkNoCursor(area) {
@@ -2970,7 +2970,7 @@ const aoTeclarNoMenu = e => { if (e.key === 'Escape') { e.preventDefault(); e.st
 function montarNivel(itens, area) {
   const nivel = document.createElement('div');
   nivel.className = 'ctx-menu';
-  // O menu não toma o foco: a ação precisa encontrar aberto o bloco em edição.
+  // O menu não toma o foco: a ação precisa encontrar o editor com o foco.
   nivel.addEventListener('mousedown', e => e.preventDefault());
   for (const item of itens) {
     if (item.separador) { nivel.appendChild(Object.assign(document.createElement('div'), { className: 'ctx-sep' })); continue; }

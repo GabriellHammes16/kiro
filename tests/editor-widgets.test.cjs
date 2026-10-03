@@ -178,3 +178,9 @@ test('Ctrl+Enter: trocas das tarefas das linhas pedidas', () => {
   assert.deepEqual(W.trocasDasTarefas(s, [1, 2, 3], arvore), [{ from: 3, to: 4, insert: 'x' }, { from: 17, to: 18, insert: ' ' }]);
   assert.deepEqual(W.trocasDasTarefas(s, [2], arvore), []);
 });
+
+test('bloco de plug-in: mesma regra de cerca da leitura (3 crases exatas; 4 não vale)', () => {
+  const tipos = t => achar(t).els.filter(e => e.tipo === 'blocoPlugin').length;
+  assert.equal(tipos('```kiro:abc\nx\n```'), 1);
+  assert.equal(tipos('````kiro:abc\nx\n````'), 0);
+});

@@ -35,7 +35,7 @@
           const fechada = no.node.getChildren('CodeMark').length > 1;
           // Mesma regra da leitura: cerca no início da linha, fechada, id válido.
           if (plugin) {
-            if (fechada && primeira.from === no.from && primeira.text.startsWith('```')) {
+            if (fechada && primeira.from === no.from && /^```[^`]*$/.test(primeira.text)) {
               const fonte = ultima.number - primeira.number > 1 ? doc.sliceString(doc.line(primeira.number + 1).from, doc.line(ultima.number - 1).to) : '';
               els.push({ tipo: 'blocoPlugin', de: primeira.from, ate: ultima.to, id: plugin[1], fonte });
             }
