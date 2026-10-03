@@ -97,4 +97,3 @@ etapa 2 e o instalador.
 
 - Tabelas e notas de rodapé desenhadas (a leitura não as desenha).
 - Editor novo em outros campos (título, buscas, rótulos de seta).
-- Traduções para chinês (etapa futura dos idiomas).

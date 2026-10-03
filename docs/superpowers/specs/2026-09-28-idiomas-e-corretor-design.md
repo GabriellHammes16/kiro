@@ -8,21 +8,17 @@ A interface do Kiro passa a existir em vários idiomas, escolhidos nas Configura
 editor ganha um corretor ortográfico que reconhece sozinho se a pessoa escreve em português
 ou inglês — a interface pode estar em inglês e as notas em português.
 
-O trabalho tem duas etapas, cada uma com spec, plano e versão próprios:
-
-1. **Etapa 1 (esta spec):** mecanismo de tradução, seletor de idioma, corretor com
-   ligar/desligar e sugestões no menu do botão direito, datas e ordenação por idioma, e a
-   tradução completa para o **inglês** (a prova do mecanismo).
-2. **Etapa 2:** traduções para **chinês simplificado** (`zh-CN`) e **chinês tradicional**
-   (`zh-TW`). Com a base pronta, é escrever os arquivos de tradução e somar os
-   códigos ao seletor e à detecção do idioma do sistema.
+Escopo: mecanismo de tradução, seletor de idioma, corretor com ligar/desligar e sugestões no
+menu do botão direito, datas e ordenação por idioma, e a tradução completa para o **inglês**.
+Um idioma novo, no futuro, é um arquivo de tradução somado ao seletor e à detecção do idioma
+do sistema.
 
 ## Decisões
 
 | Assunto | Decisão |
 |---|---|
 | Abordagem | A frase em português é a chave: `t('Sem título')`; um arquivo por idioma mapeia `'Sem título' → 'Untitled'` |
-| Idiomas (ao fim das duas etapas) | Português do Brasil (padrão), inglês, chinês simplificado, chinês tradicional |
+| Idiomas | Português do Brasil (padrão) e inglês |
 | Onde se escolhe | Configurações → **Sistema**, primeira linha: "Idioma" |
 | Onde grava | `localStorage`, chave `kiro.idioma` (preferência de tela, como a aparência; não vai para o cofre) |
 | Primeira abertura | Segue `navigator.language` se for um idioma suportado; senão, português |
@@ -52,11 +48,11 @@ no Node por `module.exports`, para os testes). Expõe:
   idioma + opções e um `Intl.Collator` por idioma (`numeric: true`); o cache é refeito só
   quando o idioma muda.
 - `IDIOMAS` — lista do seletor, cada um com o nome no próprio idioma
-  (`Português`, `English`; na etapa 2 `简体中文`, `繁體中文`).
+  (`Português`, `English`).
 
 ### Arquivos de tradução
 
-`idiomas/en.js` (etapa 2: `zh-CN.js`, `zh-TW.js`) registra um objeto
+`idiomas/en.js` registra um objeto
 `{ 'frase em português': 'tradução', … }` em `KiroIdiomas`. Não existe arquivo de português: o
 texto do código já é o português.
 
@@ -100,11 +96,6 @@ nova sem título ganha "Sem título" no idioma atual.
 - A página não tem como saber se a palavra sob o clique está errada, então o botão direito
   continua abrindo o menu do Kiro; **Shift + botão direito** abre o menu nativo do navegador,
   com as sugestões dele.
-
-### Chinês
-
-A interface fica em chinês; o corretor continua verificando português e inglês, e os
-ideogramas não são sublinhados.
 
 ## Desempenho
 
