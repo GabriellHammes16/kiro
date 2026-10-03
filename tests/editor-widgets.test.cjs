@@ -139,3 +139,42 @@ test('código em lista ou citação: linguagem sem marcador e Copiar sem > nem c
   c = achar('```js\nx\n\ny\n```').els.find(e => e.tipo === 'cabecalhoCodigo');
   assert.equal(c.codigo, 'x\n\ny');
 });
+
+test('bloco de plug-in: id, fonte, posições; não vira cabeçalho de código', () => {
+  const texto = 'a\n```kiro:word-count\nx\ny\n```\nb';
+  const { s, els } = achar(texto);
+  const b = els.find(e => e.tipo === 'blocoPlugin');
+  assert.equal(b.id, 'word-count');
+  assert.equal(b.fonte, 'x\ny');
+  assert.equal(fatia(s, b), '```kiro:word-count\nx\ny\n```');
+  assert.ok(!els.some(e => e.tipo === 'cabecalhoCodigo'));
+});
+
+test('bloco de plug-in com \\r\\n: fonte com \\n e linhas certas', () => {
+  const { s, els } = achar('a\r\n```kiro:x1\r\nfonte\r\nmais\r\n```', '\r\n');
+  const b = els.find(e => e.tipo === 'blocoPlugin');
+  assert.equal(b.fonte, 'fonte\nmais');
+  assert.equal(s.doc.lineAt(b.de).number, 2);
+  assert.equal(s.doc.lineAt(b.ate).number, 5);
+});
+
+test('bloco de plug-in: id inválido, sem fechamento ou recuado não é bloco; vazio tem fonte vazia', () => {
+  for (const texto of ['```kiro:X\na\n```', '```kiro:a\na\n```', '```kiro:ok-id\nsem fim', '- ```kiro:ok-id\n  a\n  ```']) {
+    assert.ok(!achar(texto).els.some(e => e.tipo === 'blocoPlugin'), texto);
+  }
+  assert.equal(achar('```kiro:ok-id\n```').els.find(e => e.tipo === 'blocoPlugin').fonte, '');
+});
+
+test('soBlocos inclui o bloco de plug-in', () => {
+  const s = estado('```kiro:ok-id\nfonte\n```\n\n$$\nx\n$$');
+  const arvore = CM.language.ensureSyntaxTree(s, s.doc.length, 5000);
+  const tipos = W.acharElementos(s, 0, s.doc.length, { arvore, soBlocos: true }).map(e => e.tipo);
+  assert.deepEqual(tipos, ['blocoPlugin', 'formulaBloco']);
+});
+
+test('Ctrl+Enter: trocas das tarefas das linhas pedidas', () => {
+  const s = estado('- [ ] a\ntexto\n- [x] b');
+  const arvore = CM.language.ensureSyntaxTree(s, s.doc.length, 5000);
+  assert.deepEqual(W.trocasDasTarefas(s, [1, 2, 3], arvore), [{ from: 3, to: 4, insert: 'x' }, { from: 17, to: 18, insert: ' ' }]);
+  assert.deepEqual(W.trocasDasTarefas(s, [2], arvore), []);
+});

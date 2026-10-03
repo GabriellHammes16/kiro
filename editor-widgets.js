@@ -1,5 +1,5 @@
 // Elementos desenhados no editor (etapa 2 da visualização ao vivo): tarefa, imagem, fórmulas,
-// cabeçalho do bloco de código, callout e comentário. Esta primeira metade é pura — acha os
+// cabeçalho do bloco de código, bloco de plug-in, callout e comentário. Esta primeira metade é pura — acha os
 // elementos no texto, com a mesma regra da leitura (renderizarMarkdown) — e roda no Node.
 (function (root) {
   const CM = () => root.CM;
@@ -31,8 +31,15 @@
           codigo.push([no.from, no.to]);
           const primeira = doc.lineAt(no.from), ultima = doc.lineAt(no.to);
           const ci = no.node.getChild('CodeInfo'), info = ci ? state.sliceDoc(ci.from, ci.to).trim() : '';
-          if (!/^kiro:/.test(info)) {
-            const fechada = no.node.getChildren('CodeMark').length > 1;
+          const plugin = /^kiro:([a-z0-9][a-z0-9-]{1,39})$/.exec(info);
+          const fechada = no.node.getChildren('CodeMark').length > 1;
+          // Mesma regra da leitura: cerca no início da linha, fechada, id válido.
+          if (plugin) {
+            if (fechada && primeira.from === no.from && primeira.text.startsWith('```')) {
+              const fonte = ultima.number - primeira.number > 1 ? doc.sliceString(doc.line(primeira.number + 1).from, doc.line(ultima.number - 1).to) : '';
+              els.push({ tipo: 'blocoPlugin', de: primeira.from, ate: ultima.to, id: plugin[1], fonte });
+            }
+          } else if (!/^kiro:/.test(info)) {
             // Tira de cada linha só os `>` das citações em volta e o recuo da cerca (item de lista).
             let citacoes = 0;
             for (let p = no.node.parent; p; p = p.parent) if (p.name === 'Blockquote') citacoes++;
@@ -85,7 +92,7 @@
       }
       n = fim;
     }
-    if (soBlocos) return els.sort((x, y) => x.de - y.de);   // só cabeçalhos de código e $$: não se sobrepõem entre si
+    if (soBlocos) return els.sort((x, y) => x.de - y.de);   // só blocos (código, plug-in e $$): não se sobrepõem entre si
     const foraDeTudo = (a, b) => !emCodigo(a, b) && !blocos.some(([x, y]) => a < y && b > x);
     for (let n = doc.lineAt(de).number; n <= doc.lineAt(ate).number; n++) {
       const l = doc.line(n);
@@ -108,7 +115,7 @@
 
     // Remove overlapping elements: priority comentario > formulaBloco > imagem > formula
     // Tasks, callouts, and code headers never overlap these
-    const prioridade = { comentario: 0, formulaBloco: 1, imagem: 2, formula: 3, tarefa: 4, callout: 4, cabecalhoCodigo: 4 };
+    const prioridade = { comentario: 0, formulaBloco: 1, imagem: 2, formula: 3, tarefa: 4, callout: 4, cabecalhoCodigo: 4, blocoPlugin: 4 };
     const sobrepostos = new Set();
     for (let i = 0; i < els.length; i++) {
       if (sobrepostos.has(i)) continue;
@@ -132,9 +139,19 @@
   const trocaDaTarefa = (state, el) => ({ from: el.de + 1, to: el.de + 2, insert: el.feito ? ' ' : 'x' });
   const trocaDaLargura = (el, largura) => ({ from: el.de, to: el.ate, insert: `![[${el.caminho}|${largura}]]` });
 
+  // Ctrl+Enter: as tarefas das linhas pedidas (as do cursor ou da seleção).
+  function trocasDasTarefas(state, numeros, arvore) {
+    const changes = [];
+    for (const n of numeros) {
+      const l = state.doc.line(n);
+      for (const el of acharElementos(state, l.from, l.to, { arvore, blocos: [] })) if (el.tipo === 'tarefa') changes.push(trocaDaTarefa(state, el));
+    }
+    return changes;
+  }
+
   // ---- Metade do CodeMirror: desenha os elementos no editor. Em linha: ViewPlugin (só o que se vê);
   // blocos ($$ e cabeçalho de código): StateField, porque só ele pode vir com widgets de bloco. ----
-  const BLOCOS = new Set(['formulaBloco', 'cabecalhoCodigo']);
+  const BLOCOS = new Set(['formulaBloco', 'cabecalhoCodigo', 'blocoPlugin']);
 
   function extensao(opcoes = {}) {
     const { state: S, view: V, language: L } = CM();
@@ -205,6 +222,7 @@
     class Formula extends V.WidgetType {
       constructor(tex, bloco) { super(); this.tex = tex; this.bloco = bloco; }
       eq(o) { return o.tex === this.tex && o.bloco === this.bloco; }
+      get estimatedHeight() { return this.bloco ? 48 : -1; }
       toDOM() {
         const e = document.createElement(this.bloco ? 'div' : 'span');
         if (this.bloco) e.className = 'math-bloco';
@@ -222,6 +240,7 @@
     class CabecalhoDoCodigo extends V.WidgetType {
       constructor(linguagem, codigo) { super(); this.linguagem = linguagem; this.codigo = codigo; }
       eq(o) { return o.linguagem === this.linguagem && o.codigo === this.codigo; }
+      get estimatedHeight() { return 34; }
       toDOM() {
         const e = document.createElement('div');
         e.className = 'code-area-cabecalho';
@@ -234,6 +253,37 @@
         return e;
       }
       ignoreEvent(ev) { return Boolean(ev.target?.closest?.('button')); }
+    }
+
+    class BlocoDePlugin extends V.WidgetType {
+      constructor(id, fonte) { super(); this.id = id; this.fonte = fonte; }
+      eq(o) { return o.id === this.id && o.fonte === this.fonte; }   // digitar em outro lugar não recria o desenho (nem a moldura)
+      get estimatedHeight() { return 120; }
+      toDOM(view) {
+        const e = document.createElement('div');
+        e.className = 'ed-plugin';
+        e.innerHTML = opcoes.desenharBlocoPlugin ? opcoes.desenharBlocoPlugin(this.id, this.fonte) : '';
+        e.addEventListener('mousedown', ev => {
+          if (ev.button !== 0 || ev.target.closest('a, button, input, select, textarea, iframe')) return;
+          ev.preventDefault();   // clicar no desenho mostra a fonte: cursor no início do bloco
+          view.dispatch({ selection: { anchor: view.posAtDOM(e) } });
+          view.focus();
+        });
+        // Link desenhado por plug-in nunca navega a janela: http(s) abre fora; o resto não faz nada.
+        e.addEventListener('click', ev => {
+          const a = ev.target.closest('a');
+          if (!a) return;
+          ev.preventDefault();
+          const destino = a.getAttribute('href') || '';
+          if (/^https?:\/\//i.test(destino)) opcoes.abrirSite?.(destino);
+        });
+        // O plug-in desenha depois (e a moldura muda de altura): o editor mede de novo.
+        e._observador = new ResizeObserver(() => view.requestMeasure());
+        e._observador.observe(e);
+        return e;
+      }
+      destroy(dom) { dom._observador?.disconnect(); }
+      ignoreEvent() { return true; }   // os cliques são tratados acima ou são do plug-in
     }
 
     // Em linha. Devolve também as faixas cobertas por widgets: a etapa 1 não pode esconder nada ali dentro
@@ -285,7 +335,9 @@
         let tocada = false;
         for (let n = ini; n <= fim; n++) if (linhas.has(n)) tocada = true;
         if (tocada) continue;
-        const widget = el.tipo === 'formulaBloco' ? new Formula(el.tex, true) : new CabecalhoDoCodigo(el.linguagem, el.codigo);
+        const widget = el.tipo === 'formulaBloco' ? new Formula(el.tex, true)
+          : el.tipo === 'blocoPlugin' ? new BlocoDePlugin(el.id, el.fonte)
+          : new CabecalhoDoCodigo(el.linguagem, el.codigo);
         decos.push(V.Decoration.replace({ widget, block: true }).range(el.de, el.ate));
         faixas.push([el.de, el.ate]);
       }
@@ -301,14 +353,15 @@
       provide: f => V.EditorView.decorations.from(f, v => v.decos),
     });
 
-    // Cliques em links só fora da linha do cursor (nela o CodeMirror posiciona o cursor).
+    // Cliques em links fora da linha do cursor; com Ctrl/Cmd, em qualquer linha.
     const cliques = V.EditorView.domEventHandlers({
       mousedown(e, view) {
-        if (e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return false;
+        const comMod = e.ctrlKey || e.metaKey;   // Ctrl+clique abre o link mesmo na linha do cursor
+        if (e.button !== 0 || e.shiftKey || e.altKey) return false;
         const alvo = e.target.closest?.('.ed-wikilink, .ed-wikilink-ausente, .ed-link, .ed-etiqueta');
         if (!alvo) return false;
         const pos = view.posAtDOM(alvo), linha = view.state.doc.lineAt(pos);
-        if (linhasDaSelecao(view.state).has(linha.number)) return false;
+        if (!comMod && linhasDaSelecao(view.state).has(linha.number)) return false;
         if (alvo.matches('.ed-etiqueta')) { const rel = pos - linha.from, m = root.KiroEditor.marcacoesDoKiro(linha.text).find(x => x.tipo === 'etiqueta' && x.de <= rel && rel < x.ate); if (m) opcoes.buscarEtiqueta?.(linha.text.slice(m.de, m.ate)); e.preventDefault(); return true; }
         if (alvo.matches('.ed-link')) {
           for (let n = L.syntaxTree(view.state).resolveInner(pos, 1); n; n = n.parent) {
@@ -327,13 +380,24 @@
       },
     });
 
-    const ext = [campoDosBlocos, pluginEmLinha, cliques];
+    // Ctrl+Enter (Cmd+Enter): marca/desmarca as tarefas das linhas do cursor ou da seleção, como no Obsidian.
+    const teclas = S.Prec.high(V.keymap.of([{
+      key: 'Mod-Enter',
+      run: view => {
+        const changes = trocasDasTarefas(view.state, [...linhasDaSelecao(view.state)]);
+        if (!changes.length) return false;
+        view.dispatch({ changes, userEvent: 'input' });
+        return true;
+      },
+    }]));
+
+    const ext = [campoDosBlocos, pluginEmLinha, cliques, teclas];
     // faixas cobertas por widgets, para a etapa 1 não esconder nada dentro delas
     ext.ocupadas = view => [...emLinha(view).faixas, ...view.state.field(campoDosBlocos).faixas];
     return ext;
   }
 
-  const api = { extensao, acharElementos, trocaDaTarefa, trocaDaLargura, ehImagem, lerImagem };
+  const api = { extensao, acharElementos, trocaDaTarefa, trocaDaLargura, trocasDasTarefas, ehImagem, lerImagem };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.KiroWidgets = api;
 })(globalThis);
