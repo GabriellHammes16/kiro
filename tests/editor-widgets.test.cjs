@@ -114,3 +114,23 @@ test('soBlocos: mesmos blocos do caminho completo, sem elementos em linha', () =
   assert.equal(so.length, 3);
   assert.deepEqual(so, cheio);
 });
+
+test('faixa visível com blocos: $$ dentro de código acima não engole os elementos abaixo', () => {
+  const texto = '```php\n$$nome = 1;\n```\n\n' + 'x\n'.repeat(5) + 'veja $x^2$ e ![[a.png]] e %%c%%';
+  const s = estado(texto), arvore = CM.language.ensureSyntaxTree(s, s.doc.length, 5000);
+  const blocos = W.acharElementos(s, 0, s.doc.length, { arvore, soBlocos: true }).filter(e => e.tipo === 'formulaBloco');
+  assert.equal(blocos.length, 0);
+  const de = s.doc.line(10).from;
+  const els = W.acharElementos(s, de, s.doc.length, { arvore, blocos });
+  assert.deepEqual(els.map(e => e.tipo), ['formula', 'imagem', 'comentario']);
+});
+
+test('código em lista ou citação: linguagem sem marcador e Copiar sem > nem cerca', () => {
+  let c = achar('- ```js\n  x\n  ```').els.find(e => e.tipo === 'cabecalhoCodigo');
+  assert.equal(c.linguagem, 'js');
+  c = achar('> > ```py\n> > a\n> > b\n> > ```').els.find(e => e.tipo === 'cabecalhoCodigo');
+  assert.equal(c.linguagem, 'py');
+  assert.equal(c.codigo, 'a\nb');
+  c = achar('```js\nx\n\ny\n```').els.find(e => e.tipo === 'cabecalhoCodigo');
+  assert.equal(c.codigo, 'x\n\ny');
+});

@@ -16,7 +16,7 @@
   const IMAGEM_NA_LINHA = /!\[\[([^\][\n]+)\]\]/g;
   const COMENTARIO = /%%([^\n%]+)%%/g;
 
-  function acharElementos(state, de, ate, { arvore, soBlocos } = {}) {
+  function acharElementos(state, de, ate, { arvore, soBlocos, blocos: dados } = {}) {
     const doc = state.doc, els = [], codigo = [];
     const tree = arvore || CM().language.syntaxTree(state);
     tree.iterate({
@@ -30,14 +30,13 @@
         if (no.name === 'FencedCode') {
           codigo.push([no.from, no.to]);
           const primeira = doc.lineAt(no.from), ultima = doc.lineAt(no.to);
-          // Strip leading > for blockquotes first, then the fence marker
-          let info = primeira.text.replace(/^>\s?/, '').trim();
-          info = info.replace(/^\s*(```|~~~)/, '').trim();
+          const ci = no.node.getChild('CodeInfo'), info = ci ? state.sliceDoc(ci.from, ci.to).trim() : '';
           if (!/^kiro:/.test(info)) {
-            const fechada = ultima.number > primeira.number && /^\s*(```|~~~)\s*$/.test(ultima.text);
-            const corpoAte = fechada ? doc.line(ultima.number - 1).to : no.to;
-            const corpoDe = Math.min(primeira.to + 1, doc.length);
-            els.push({ tipo: 'cabecalhoCodigo', de: primeira.from, ate: primeira.to, linguagem: info, codigo: corpoDe <= corpoAte ? doc.sliceString(corpoDe, corpoAte) : '', blocoDe: no.from, blocoAte: no.to });
+            const fechada = no.node.getChildren('CodeMark').length > 1;
+            const noCitacao = (() => { for (let p = no.node.parent; p; p = p.parent) if (p.name === 'Blockquote') return true; return false; })();
+            const corpo = [];
+            for (let n = primeira.number + 1; n <= (fechada ? ultima.number - 1 : ultima.number); n++) corpo.push(noCitacao ? doc.line(n).text.replace(/^(\s*>)+ ?/, '') : doc.line(n).text);
+            els.push({ tipo: 'cabecalhoCodigo', de: primeira.from, ate: primeira.to, linguagem: info, codigo: corpo.join('\n'), blocoDe: no.from, blocoAte: no.to });
           }
           return false;
         }
@@ -56,8 +55,10 @@
     const emCodigo = (a, b) => codigo.some(([x, y]) => a < y && b > x);
     // Blocos $$ (a árvore do Markdown não os conhece): mesma regra de renderizarMarkdown.
     // Scan from line 1 (not from de) to catch blocks that intersect [de, ate]
+    // `blocos` (opção): os blocos $$ já achados na nota inteira; evita refazer a procura sem conhecer o código acima de [de, ate].
     const blocos = [];
-    for (let n = 1; n <= doc.lines; n++) {
+    if (dados) for (const e of dados) { blocos.push([e.de, e.ate]); if (e.de < ate && e.ate > de) els.push(e); }
+    for (let n = 1; !dados && n <= doc.lines; n++) {
       const l = doc.line(n);
       const m = /^\$\$(.*)$/.exec(l.text);
       if (!m || emCodigo(l.from, l.to)) continue;
@@ -162,6 +163,7 @@
           e.preventDefault();   // não move o cursor
           const el = elementoEm(view, 'tarefa', view.posAtDOM(i));
           if (el) view.dispatch({ changes: trocaDaTarefa(view.state, el), userEvent: 'input' });
+          view.focus();
         });
         return i;
       }
@@ -238,8 +240,9 @@
       if (guardado?.chave === chave) return guardado;
       const linhas = linhasDaSelecao(state), doc = state.doc, decos = [], faixas = [], vistos = new Set();
       const cobre = (a, b, deco) => { decos.push(deco.range(a, b)); faixas.push([a, b]); };
+      const formulas = state.field(campoDosBlocos).els.filter(e => e.tipo === 'formulaBloco');
       for (const { from, to } of view.visibleRanges) {
-        for (const el of acharElementos(state, from, to, { arvore: arvoreAte(state, to) })) {
+        for (const el of acharElementos(state, from, to, { arvore: arvoreAte(state, to), blocos: formulas })) {
           if (BLOCOS.has(el.tipo) || vistos.has(el.de)) continue;
           vistos.add(el.de);
           if (el.tipo === 'callout') for (const l of el.linhas) decos.push(V.Decoration.line({ class: 'ed-citacao md-destaque' }).range(l));
@@ -301,7 +304,7 @@
         if (!alvo) return false;
         const pos = view.posAtDOM(alvo), linha = view.state.doc.lineAt(pos);
         if (linhasDaSelecao(view.state).has(linha.number)) return false;
-        if (alvo.matches('.ed-etiqueta')) { const rel = pos - linha.from, m = root.KiroEditor.marcacoesDoKiro(linha.text).find(x => x.tipo === 'etiqueta' && x.de <= rel && rel < x.ate); if (m) opcoes.buscarEtiqueta?.(linha.text.slice(m.de + 1, m.ate)); e.preventDefault(); return true; }
+        if (alvo.matches('.ed-etiqueta')) { const rel = pos - linha.from, m = root.KiroEditor.marcacoesDoKiro(linha.text).find(x => x.tipo === 'etiqueta' && x.de <= rel && rel < x.ate); if (m) opcoes.buscarEtiqueta?.(linha.text.slice(m.de, m.ate)); e.preventDefault(); return true; }
         if (alvo.matches('.ed-link')) {
           for (let n = L.syntaxTree(view.state).resolveInner(pos, 1); n; n = n.parent) {
             if (n.name !== 'Link') continue;
