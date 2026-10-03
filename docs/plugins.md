@@ -667,6 +667,15 @@ interface, kept in sync when the user switches theme, so plain CSS like
 `--acento-forte`, `--acento-escuro`, `--acento-texto`, `--primario-texto`,
 `--fonte-interface`, `--fonte-leitura`, `--fonte-codigo`.
 
+Prefer the derived tokens for states and meaning, so the plugin follows the user's
+accent color, skin and light/dark mode without hardcoding anything:
+`--surface-hover`, `--surface-active`, `--selected` (backgrounds for hover, pressed
+and selected rows), `--accent-soft`, `--accent-text` (accent for text: darker on
+light themes so it stays readable), `--focus-ring`, `--border-strong`,
+`--text-disabled`, `--placeholder`, `--danger`, `--warning`, `--success`, `--info`,
+`--shadow-sm`, `--shadow-md`, `--raio-controle` and `--raio-card` (corner radius of
+controls and cards).
+
 ### Example
 
 `examples/plugins/habit-heatmap/` draws a heatmap of habit completions with

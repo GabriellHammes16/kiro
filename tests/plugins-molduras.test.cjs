@@ -66,9 +66,10 @@ test('injeção do kiro-frame.js vem sempre no início do documento (ou logo ap�
   assert.equal(P.injetarScriptsDaMoldura('<!doctype html><!-- <head> --><html><script src="a.js"></script></html>', '/kiro-frame.js'), `<!doctype html>${tag}<!-- <head> --><html><script src="a.js"></script></html>`);
 });
 
-test('variáveis do tema incluem as 15 cores e as fontes', () => {
-  assert.equal(P.VARIAVEIS_DO_TEMA.length, 18);
-  for (const v of ['--bg', '--ink', '--acento', '--primario-texto', '--fonte-interface', '--fonte-codigo', '--fonte-leitura']) assert.ok(P.VARIAVEIS_DO_TEMA.includes(v), v);
+test('variáveis do tema incluem as 15 cores, as fontes e os tokens derivados', () => {
+  assert.equal(P.VARIAVEIS_DO_TEMA.length, 35);
+  assert.equal(new Set(P.VARIAVEIS_DO_TEMA).size, P.VARIAVEIS_DO_TEMA.length);
+  for (const v of ['--bg', '--ink', '--acento', '--primario-texto', '--fonte-interface', '--fonte-codigo', '--fonte-leitura', '--surface-hover', '--accent-text', '--focus-ring', '--danger', '--raio-card']) assert.ok(P.VARIAVEIS_DO_TEMA.includes(v), v);
 });
 
 test('readPluginFile serve .js, .html e .css e recusa o resto', async t => {

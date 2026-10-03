@@ -24,7 +24,7 @@ test('aparência padrão: vazio, lixo ou nada viram Escuro Clássico + Padrão',
     assert.equal(a.tema, PADRAO.tema, `tema para ${JSON.stringify(salvo)}`);
     assert.equal(a.skin, PADRAO.skin, `skin para ${JSON.stringify(salvo)}`);
   }
-  assert.deepEqual(APARENCIA_PADRAO, { tema: 'kiro', skin: 'padrao', sidebar: '#11161D', content: '#0B0F14', acento: '#9273FF' });
+  assert.deepEqual(APARENCIA_PADRAO, { tema: 'kiro', skin: 'padrao', sidebar: '#11161D', content: '#0B0F14', acento: '#9273FF', destaque: '' });
   assert.deepEqual(classesDaAparencia(aparenciaValida(undefined)), ['tema-kiro', 'skin-padrao']);
 });
 
@@ -53,6 +53,19 @@ test('ids desconhecidos e cores inválidas caem no padrão', () => {
   assert.equal(p.sidebar, APARENCIA_PADRAO.sidebar);
   assert.equal(p.content, APARENCIA_PADRAO.content);
   assert.equal(p.acento, APARENCIA_PADRAO.acento);
+});
+
+test('destaque vale em qualquer tema e é independente dele; inválido volta a seguir o tema', () => {
+  for (const tema of ['kiro', 'claro', 'neon-tokyo', 'personalizado']) {
+    const a = aparenciaValida(JSON.parse(JSON.stringify({ tema, destaque: '#57CC99' })));
+    assert.equal(a.tema, tema);
+    assert.equal(a.destaque, '#57CC99');
+  }
+  for (const lixo of [undefined, '', 'red', '#12', 'url(x)', 7]) assert.equal(aparenciaValida({ tema: 'claro', destaque: lixo }).destaque, '');
+  // Salvo de antes do destaque: segue a cor do tema, e o acento do Personalizado continua sendo a base dele.
+  const antigo = aparenciaValida({ tema: 'personalizado', skin: 'padrao', sidebar: '#112233', content: '#0A0B0C', acento: '#FF8800' });
+  assert.equal(antigo.destaque, '');
+  assert.equal(antigo.acento, '#FF8800');
 });
 
 test('migração: salvo antigo sem tema vira personalizado só se tinha cores próprias', () => {

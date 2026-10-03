@@ -117,7 +117,10 @@
     return tag + texto;
   }
   const VARIAVEIS_DO_TEMA = ['--bg', '--panel', '--panel-raised', '--sidebar-bg', '--content-bg', '--campo', '--ink', '--muted', '--line',
-    '--acento', '--acento-2', '--acento-forte', '--acento-escuro', '--acento-texto', '--primario-texto', '--fonte-interface', '--fonte-leitura', '--fonte-codigo'];
+    '--acento', '--acento-2', '--acento-forte', '--acento-escuro', '--acento-texto', '--primario-texto', '--fonte-interface', '--fonte-leitura', '--fonte-codigo',
+    // Tokens derivados (styles.css): estados, cores semânticas e forma, para o plug-in seguir destaque, skin e claro/escuro sem cor fixa.
+    '--accent-soft', '--accent-text', '--focus-ring', '--surface-hover', '--surface-active', '--selected', '--border-strong', '--text-disabled', '--placeholder',
+    '--danger', '--warning', '--success', '--info', '--shadow-sm', '--shadow-md', '--raio-controle', '--raio-card'];
 
   function validarManifesto(bruto, { versaoDoKiro } = {}) {
     const recusa = erro => ({ ok: false, erro });

@@ -243,7 +243,8 @@
     ['terminal', 'Terminal', frase('Fonte mono e cantos retos.')], ['suave', frase('Suave'), frase('Cantos redondos e sombras leves.')], ['sharp', 'Sharp', frase('Cantos retos, bordas marcadas.')],
     ['neon', 'Neon', frase('Brilho sutil no destaque.')], ['paper', 'Paper', frase('Textura de papel ilustrado.')],
   ];
-  const APARENCIA_PADRAO = Object.freeze({ tema: 'kiro', skin: 'padrao', sidebar: '#11161D', content: '#0B0F14', acento: '#9273FF' });
+  // destaque: '' segue a cor do tema; um hex vale por cima de qualquer tema (acento é só a base do Personalizado).
+  const APARENCIA_PADRAO = Object.freeze({ tema: 'kiro', skin: 'padrao', sidebar: '#11161D', content: '#0B0F14', acento: '#9273FF', destaque: '' });
   const corValida = v => text(v) && /^#[0-9a-f]{6}$/i.test(v);
   // Luminância relativa e razão de contraste (WCAG).
   function luminancia(hex) {
@@ -269,7 +270,7 @@
       : s.tema === undefined && ['sidebar', 'content', 'acento'].some(k => cores[k].toLowerCase() !== APARENCIA_PADRAO[k].toLowerCase()) ? 'personalizado'
       : APARENCIA_PADRAO.tema;
     const skin = SKINS.some(([id]) => id === s.skin) ? s.skin : APARENCIA_PADRAO.skin;
-    return { tema, skin, ...cores };
+    return { tema, skin, ...cores, destaque: corValida(s.destaque) ? s.destaque : '' };
   }
   const classesDaAparencia = a => { const v = aparenciaValida(a); return [`tema-${v.tema}`, `skin-${v.skin}`]; };
   // ---- Painel da direita: menções não vinculadas, sumário e árvore de etiquetas ----

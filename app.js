@@ -2127,7 +2127,9 @@ function bindGraph() {
   // Aparência sem refazer o desenho: tamanho, cor, grossura, setas, busca e rótulos.
   function pintar() {
     const busca = Kiro.normalize(grafoOpcoes.busca.trim());
-    tela.style.setProperty('--grafo-solta', corValida(grafoOpcoes.corSolta) ? grafoOpcoes.corSolta : GRAFO_PADRAO.corSolta);
+    // Cor padrão = a do tema (--graph-node); só uma cor escolhida no painel vai inline.
+    const corSolta = corValida(grafoOpcoes.corSolta) && grafoOpcoes.corSolta.toUpperCase() !== GRAFO_PADRAO.corSolta ? grafoOpcoes.corSolta : '';
+    if (corSolta) tela.style.setProperty('--grafo-solta', corSolta); else tela.style.removeProperty('--grafo-solta');
     for (const no of nos) {
       const r = raio(no);
       no.circulo.setAttribute('r', r);
@@ -2156,7 +2158,7 @@ function bindGraph() {
     if (linhaResumo) linhaResumo.textContent = textoDoResumo(nos, ligacoes);
     medir();
     espalhar(false);
-    svg.innerHTML = '<defs><marker id="grafo-seta" viewBox="0 0 8 8" refX="9" refY="4" markerWidth="5" markerHeight="5" orient="auto"><path d="M0 0 8 4 0 8z" fill="#4a4a56" /></marker></defs>';
+    svg.innerHTML = '<defs><marker id="grafo-seta" viewBox="0 0 8 8" refX="9" refY="4" markerWidth="5" markerHeight="5" orient="auto"><path d="M0 0 8 4 0 8z" style="fill:var(--graph-edge)" /></marker></defs>';
     camera = document.createElementNS(ns, 'g');
     grupoArestas = document.createElementNS(ns, 'g');
     grupoNos = document.createElementNS(ns, 'g');
@@ -3931,6 +3933,16 @@ const ACENTOS = [['#C77DFF',frase('Roxo')],['#4EA8DE',frase('Azul')],['#4CC9F0',
 function lerAparencia() {
   try { return Kiro.aparenciaValida(JSON.parse(lerPreferencia('aparencia') || '{}')); } catch { return Kiro.aparenciaValida({}); }
 }
+// Variações do destaque a partir de uma cor só: tons para botão e o texto que fica legível por cima.
+const PROPRIEDADES_DO_ACENTO = ['--acento', '--acento-forte', '--acento-escuro', '--acento-texto', '--primario-texto'];
+function pintarAcento(raiz, acento) {
+  const texto = contraste(acento, '#000000') >= contraste(acento, '#FFFFFF') ? '#111114' : '#FFFFFF';
+  raiz.setProperty('--acento', acento);
+  raiz.setProperty('--acento-forte', `color-mix(in srgb, ${acento} 78%, black)`);
+  raiz.setProperty('--acento-escuro', `color-mix(in srgb, ${acento} 64%, black)`);
+  raiz.setProperty('--acento-texto', texto);
+  raiz.setProperty('--primario-texto', texto);
+}
 function aplicarAparencia(valores) {
   const a = Kiro.aparenciaValida(valores || lerAparencia());
   temaDosIcones = a.tema;
@@ -3938,21 +3950,15 @@ function aplicarAparencia(valores) {
   const html = document.documentElement, raiz = html.style;
   html.classList.remove(...[...html.classList].filter(c => /^(tema|skin)-/.test(c)));
   html.classList.add(...Kiro.classesDaAparencia(a));
-  // Tema pronto traz as próprias variáveis (temas.css); só o Personalizado usa as cores manuais inline.
-  if (a.tema !== 'personalizado') {
-    ['--sidebar-bg', '--content-bg', '--acento', '--acento-forte', '--acento-escuro', '--acento-texto'].forEach(p => raiz.removeProperty(p));
-    return a;
+  // Tema pronto traz as próprias variáveis (temas.css); o Personalizado põe fundos e acento inline,
+  // e o destaque escolhido vale por cima de qualquer tema.
+  ['--sidebar-bg', '--content-bg', ...PROPRIEDADES_DO_ACENTO].forEach(p => raiz.removeProperty(p));
+  if (a.tema === 'personalizado') {
+    raiz.setProperty('--sidebar-bg', a.sidebar);
+    raiz.setProperty('--content-bg', a.content);
+    if (a.acento.toLowerCase() !== APARENCIA_PADRAO.acento.toLowerCase()) pintarAcento(raiz, a.acento);
   }
-  raiz.setProperty('--sidebar-bg', a.sidebar);
-  raiz.setProperty('--content-bg', a.content);
-  const acento = a.acento;
-  if (acento.toLowerCase() === APARENCIA_PADRAO.acento.toLowerCase()) ['--acento', '--acento-forte', '--acento-escuro', '--acento-texto'].forEach(p => raiz.removeProperty(p));
-  else {
-    raiz.setProperty('--acento', acento);
-    raiz.setProperty('--acento-forte', `color-mix(in srgb, ${acento} 78%, black)`);
-    raiz.setProperty('--acento-escuro', `color-mix(in srgb, ${acento} 64%, black)`);
-    raiz.setProperty('--acento-texto', contraste(acento, '#000000') >= contraste(acento, '#FFFFFF') ? '#111114' : '#FFFFFF');
-  }
+  if (a.destaque) pintarAcento(raiz, a.destaque);
   return a;
 }
 // Botões da janela (app desktop) com as cores do tema: fundo da faixa e cor do texto.
@@ -4351,10 +4357,10 @@ async function showSettings(aba = abaDasConfiguracoes) {
       <div class="cfg-personalizado" id="cfg-personalizado" ${cores.tema === 'personalizado' ? '' : 'hidden'}>
       ${cor('sidebar', t('Fundo da barra lateral'), cores.sidebar)}
       ${cor('content', t('Fundo da área de texto'), cores.content)}
-      <div class="cfg-linha cfg-linha-coluna">${texto(t('Cor de destaque'), t('Botões, ícones, links e o grafo.'), 'acento-rotulo')}
-        <div class="amostras" role="radiogroup" aria-labelledby="acento-rotulo">${ACENTOS.map(([hex, nome]) => `<label class="amostra" style="--cor-pasta:${hex}" title="${t(nome)}"><input type="radio" name="acento" value="${hex}" ${hex.toLowerCase() === cores.acento.toLowerCase() ? 'checked' : ''} /><span class="sr-only">${t(nome)}</span></label>`).join('')}<label class="cor-ponto cor-livre" title="${t('Outra cor')}"><input type="color" data-cor="acento" value="${cores.acento}" aria-label="${t('Outra cor de destaque')}" /></label></div>
-        <p class="cfg-aviso" id="acento-aviso" hidden>${t('Essa cor tem pouco contraste com o fundo: textos e ícones podem ficar difíceis de ler.')}</p>
       </div>
+      <div class="cfg-linha cfg-linha-coluna">${texto(t('Cor de destaque'), t('Seleção, foco, links e ação principal, em qualquer tema.'), 'acento-rotulo')}
+        <div class="amostras" role="radiogroup" aria-labelledby="acento-rotulo"><label class="amostra" data-cor-pasta="" title="${t('Do tema')}"><input type="radio" name="destaque" value="" ${cores.destaque ? '' : 'checked'} /><span class="sr-only">${t('Do tema')}</span></label>${ACENTOS.map(([hex, nome]) => `<label class="amostra" style="--cor-pasta:${hex}" title="${t(nome)}"><input type="radio" name="destaque" value="${hex}" ${hex.toLowerCase() === cores.destaque.toLowerCase() ? 'checked' : ''} /><span class="sr-only">${t(nome)}</span></label>`).join('')}<label class="cor-ponto cor-livre" title="${t('Outra cor')}"><input type="color" id="destaque-livre" value="${cores.destaque || cores.acento}" aria-label="${t('Outra cor de destaque')}" /></label></div>
+        <p class="cfg-aviso" id="acento-aviso" hidden>${t('Essa cor tem pouco contraste com o fundo: textos e ícones podem ficar difíceis de ler.')}</p>
       </div>
       <div class="cfg-linha cfg-linha-coluna">${texto(t('Skin'), '', 'skin-rotulo')}
         <div class="skins" role="radiogroup" aria-labelledby="skin-rotulo">${SKINS.map(([id, nome, desc]) => `<label class="skin-opcao"><input type="radio" name="skin" value="${id}" class="sr-only" ${cores.skin === id ? 'checked' : ''} /><span class="skin-nome">${t(nome)}</span><span class="skin-desc">${t(desc)}</span></label>`).join('')}</div>
@@ -4525,18 +4531,21 @@ async function showSettings(aba = abaDasConfiguracoes) {
     tema: 'personalizado',
     sidebar: document.querySelector('[data-cor="sidebar"]').value,
     content: document.querySelector('[data-cor="content"]').value,
-    acento: document.querySelector('[data-cor="acento"]').value,
   });
   // O card Personalizado mostra as cores manuais atuais.
   const gravarCores = () => { const a = corAtual(); gravarAparencia(a); document.querySelector('.tema-opcao.tema-personalizado').style.cssText = estiloPersonalizado(a); };
   // Aparência, Sistema e Plug-ins agem na hora: não contam como alteração pendente ao fechar a janela.
   for (const tipo of ['input', 'change']) document.querySelectorAll('.cfg-aparencia, [data-painel="sistema"], [data-painel="plugins"]').forEach(el => el.addEventListener(tipo, e => e.stopPropagation()));
-  const avisar = () => { const a = lerAparencia(); $('#acento-aviso').hidden = contraste(a.acento, a.content) >= 3; };
-  document.querySelectorAll('input[name="acento"]').forEach(r => r.onchange = () => { document.querySelector('[data-cor="acento"]').value = r.value; gravarCores(); avisar(); });
+  // Compara o destaque e o fundo que estão de fato na tela (tema, Personalizado ou destaque escolhido).
+  const avisar = () => {
+    const css = getComputedStyle(document.documentElement), [acento, fundo] = ['--acento', '--content-bg'].map(v => css.getPropertyValue(v).trim());
+    $('#acento-aviso').hidden = !corValida(acento) || !corValida(fundo) || contraste(acento, fundo) >= 3;
+  };
+  const gravarDestaque = destaque => { gravarAparencia({ ...lerAparencia(), destaque }); avisar(); };
+  document.querySelectorAll('input[name="destaque"]').forEach(r => r.onchange = () => { if (r.value) $('#destaque-livre').value = r.value; gravarDestaque(r.value); });
+  $('#destaque-livre').oninput = e => { document.querySelectorAll('input[name="destaque"]').forEach(r => r.checked = r.value.toLowerCase() === e.target.value.toLowerCase()); gravarDestaque(e.target.value); };
   avisar();
-  document.querySelectorAll('[data-cor]').forEach(campo => {
-    campo.oninput = () => { if (campo.dataset.cor === 'acento') document.querySelectorAll('input[name="acento"]').forEach(r => r.checked = r.value.toLowerCase() === campo.value.toLowerCase()); gravarCores(); avisar(); };
-  });
+  document.querySelectorAll('[data-cor]').forEach(campo => { campo.oninput = () => { gravarCores(); avisar(); }; });
   // Tema e skin aplicam na hora; o Personalizado abre os controles de cor.
   document.querySelectorAll('input[name="tema"]').forEach(r => r.onchange = () => { gravarAparencia({ ...lerAparencia(), tema: r.value }); $('#cfg-personalizado').hidden = r.value !== 'personalizado'; avisar(); });
   document.querySelectorAll('input[name="skin"]').forEach(r => r.onchange = () => gravarAparencia({ ...lerAparencia(), skin: r.value }));
@@ -4544,8 +4553,7 @@ async function showSettings(aba = abaDasConfiguracoes) {
     gravarAparencia({ ...APARENCIA_PADRAO });
     document.querySelector('[data-cor="sidebar"]').value = APARENCIA_PADRAO.sidebar;
     document.querySelector('[data-cor="content"]').value = APARENCIA_PADRAO.content;
-    document.querySelector('[data-cor="acento"]').value = APARENCIA_PADRAO.acento;
-    document.querySelectorAll('input[name="acento"]').forEach(r => r.checked = r.value === APARENCIA_PADRAO.acento);
+    document.querySelectorAll('input[name="destaque"]').forEach(r => r.checked = r.value === APARENCIA_PADRAO.destaque);
     document.querySelectorAll('input[name="tema"], input[name="skin"]').forEach(r => r.checked = r.value === APARENCIA_PADRAO.tema || r.value === APARENCIA_PADRAO.skin);
     document.querySelector('.tema-opcao.tema-personalizado').style.cssText = estiloPersonalizado(APARENCIA_PADRAO);
     $('#cfg-personalizado').hidden = true;
