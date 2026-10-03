@@ -1548,3 +1548,28 @@ html:not(.papel-em-video) .papel-so-video { display:none; }
 /* Tarefa concluída: risca só o nome; descrição, data e notas ficam legíveis. */
 .done + .task-title:has(> .task-nome) { text-decoration:none; }
 .done + .task-title > .task-nome { text-decoration:line-through; color:var(--muted); }
+
+/* ---- Tarefas → Por status: seções com arrastar ---- */
+.tarefas-barra { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:var(--esp-2); margin:0 0 var(--esp-3); }
+.tarefas-barra .tarefas-abas, .tarefas-barra .tarefas-visao { margin:0; }
+.tarefas-visao .segmento-botao .icone { width:14px; height:14px; }
+.tarefas-lista.por-status { padding-top:var(--esp-3); }
+.status-secao { margin:0 0 var(--esp-3); padding:var(--esp-1) var(--esp-2) var(--esp-2); border:1px solid transparent; border-radius:var(--raio-controle); transition:background var(--rapido) var(--curva), border-color var(--rapido) var(--curva); }
+.status-secao.alvo { background:var(--accent-soft); border-color:var(--focus-ring); border-style:dashed; }
+.status-secao h2 { display:flex; align-items:center; gap:8px; margin:0 0 4px; font-size:12px; font-weight:600; color:var(--muted); text-transform:uppercase; letter-spacing:.06em; }
+.status-recolher { display:inline-flex; align-items:center; gap:8px; padding:0; border:0; background:none; color:inherit; font:inherit; letter-spacing:inherit; text-transform:inherit; cursor:pointer; }
+.status-recolher:hover { color:var(--ink); }
+.status-secao.recolhida .status-itens { display:none; }
+.status-item { border-radius:var(--raio-controle); cursor:grab; }
+.status-item:hover { background:var(--surface-hover); }
+.status-item:focus-visible { outline:2px solid var(--focus-ring); outline-offset:1px; }
+.status-item.arrastando { opacity:.4; }
+.status-item .task-item { padding-left:var(--esp-2); padding-right:var(--esp-2); }
+.status-item:last-child .task-item { border-bottom:0; }
+.status-vazio { margin:0; padding:var(--esp-2); color:var(--text-disabled); font-size:var(--fs-secundario); }
+/* Marca do status: a forma diz o status, não só a cor. */
+.status-marca { position:relative; width:12px; height:12px; flex:0 0 auto; border-radius:50%; border:1.5px solid var(--border-strong); }
+[data-status="andamento"] .status-marca { border-color:var(--acento); background:linear-gradient(90deg, var(--acento) 50%, transparent 50%); }
+[data-status="pausado"] .status-marca { border-color:var(--warning); }
+[data-status="pausado"] .status-marca::after { content:""; position:absolute; inset:2.5px 2.5px; border-inline:1.5px solid var(--warning); }
+[data-status="concluido"] .status-marca { border-color:var(--acento); background:var(--acento); }

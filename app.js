@@ -351,10 +351,27 @@ function renderTasks() {
   const dasNotas = tarefasDasNotas().filter(x => !x.feita);
   const atrasadas = abertas.filter(x => x.due < hoje), paraHoje = abertas.filter(x => x.due === hoje), proximas = abertas.filter(x => x.due > hoje);
   const abas = [['todas', t('Todas'), abertas.length + dasNotas.length], ['hoje', t('Hoje'), atrasadas.length + paraHoje.length], ['proximas', t('Próximas'), proximas.length], ['notas', t('Nas notas'), dasNotas.length], ['feitas', t('Concluídas'), feitas.length]];
+  const visao = lerPreferencia('tarefasVisao') === 'status' ? 'status' : 'data';
+  // Por status, "Nas notas" e "Concluídas" não são filtros (concluído é uma seção): vale "Todas".
+  if (visao === 'status' && ['notas', 'feitas'].includes(filtroDasTarefas)) filtroDasTarefas = 'todas';
   const f = filtroDasTarefas;
+  const abasVisiveis = visao === 'status' ? abas.filter(([id]) => !['notas', 'feitas'].includes(id)) : abas;
   const grupo = (titulo, itens, linha = taskRow, classe = '') => itens.length ? `<div class="task-group ${classe}"><h2>${titulo}<span class="task-group-conta">${itens.length}</span></h2>${itens.map(linha).join('')}</div>` : '';
   const porData = lista => GRUPOS_DE_DATA.map(([id, nome]) => grupo(t(nome), lista.filter(x => grupoDaData(x.due, hoje) === id), taskRow, id === 'atrasadas' ? 'grupo-atrasado' : '')).join('');
-  const corpo = f === 'feitas' ? grupo(t('Concluídas'), feitas)
+  // Por status: uma seção por status; a tarefa se arrasta entre elas (ou ← → com o foco nela).
+  const porStatus = () => {
+    const doFiltro = x => f === 'hoje' ? x.due <= hoje : f === 'proximas' ? x.due > hoje : true;
+    const lista = state.tasks.filter(doFiltro);
+    const aberto = lerPreferencia('tarefasConcluidoAberto') === '1';
+    return Kiro.STATUS_DA_TAREFA.map(st => {
+      const itens = lista.filter(x => Kiro.statusDaTarefa(x) === st).sort((a, b) => st === 'concluido' ? b.due.localeCompare(a.due) : a.due.localeCompare(b.due) || ordemDaPrioridade(a) - ordemDaPrioridade(b));
+      const recolhida = st === 'concluido' && !aberto;
+      return `<section class="status-secao${recolhida ? ' recolhida' : ''}" data-status="${st}"><h2>${st === 'concluido' ? `<button type="button" class="status-recolher" data-recolher-concluido aria-expanded="${!recolhida}">` : ''}<span class="status-marca" aria-hidden="true"></span>${t(ROTULOS_DE_STATUS[st])}<span class="task-group-conta">${itens.length}</span>${st === 'concluido' ? '</button>' : ''}</h2>
+        <div class="status-itens">${itens.map(x => `<div class="status-item" draggable="true" tabindex="0" data-tarefa="${x.id}" aria-label="${escapeHtml(x.title)}">${taskRow(x)}</div>`).join('') || `<p class="status-vazio">${t('Arraste uma tarefa para cá.')}</p>`}</div></section>`;
+    }).join('');
+  };
+  const corpo = visao === 'status' ? porStatus()
+    : f === 'feitas' ? grupo(t('Concluídas'), feitas)
     : f === 'notas' ? grupo(t('Nas notas'), dasNotas, linhaDaTarefaDaNota)
     : f === 'hoje' ? porData([...atrasadas, ...paraHoje])
     : f === 'proximas' ? porData(proximas)
@@ -364,9 +381,60 @@ function renderTasks() {
   const numero = (valor, rotulo, classe = '') => `<div class="resumo-item ${classe}"><b>${valor}</b><span>${rotulo}</span></div>`;
   return `${head(t("Organização"), t("Tarefas"), t("Concentre-se no que realmente importa hoje."), `<button class="primary" id="add-task">${icone('mais')} ${t('Nova tarefa')}</button>`)}
   <div class="tarefas-resumo">${numero(abertas.length, t('Em aberto'))}${numero(atrasadas.length, t('Atrasadas'), atrasadas.length ? 'alerta' : '')}${numero(paraHoje.length, t('Para hoje'))}<div class="resumo-item resumo-progresso"><b>${pct}%</b><span>${t('{feitas} de {total} concluídas', { feitas: feitas.length, total })}</span><div class="progress"><div style="width:${pct}%"></div></div></div></div>
-  <div class="segmentos-compactos tarefas-abas" role="group" aria-label="${t('Filtrar')}">${abas.map(([id, rotulo, n]) => `<button type="button" class="segmento-botao" data-tarefas-aba="${id}" aria-pressed="${f === id}">${rotulo} <span class="segmento-contagem">${n}</span></button>`).join('')}</div>
-  <section class="card tarefas-lista">${corpo || `<div class="empty">${vazio}</div>`}</section>`;
+  <div class="tarefas-barra"><div class="segmentos-compactos tarefas-abas" role="group" aria-label="${t('Filtrar')}">${abasVisiveis.map(([id, rotulo, n]) => `<button type="button" class="segmento-botao" data-tarefas-aba="${id}" aria-pressed="${f === id}">${rotulo} <span class="segmento-contagem">${n}</span></button>`).join('')}</div>
+  <div class="segmentos-compactos tarefas-visao" role="group" aria-label="${t('Organizar por')}">${[['data', 'calendario', t('Por data')], ['status', 'tarefas', t('Por status')]].map(([id, ic, r]) => `<button type="button" class="segmento-botao" data-tarefas-visao="${id}" aria-pressed="${visao === id}">${icone(ic)} ${r}</button>`).join('')}</div></div>
+  <section class="card tarefas-lista${visao === 'status' ? ' por-status' : ''}">${corpo || `<div class="empty">${vazio}</div>`}</section>`;
 }
+const ROTULOS_DE_STATUS = { 'nao-comecado': frase('Não começado'), andamento: frase('Em andamento'), pausado: frase('Pausado'), concluido: frase('Concluído') };
+const gravarPreferencia = (chave, valor) => { try { localStorage.setItem(`kiro.${chave}`, valor); } catch { /* janela privada: vale só nesta sessão */ } };
+// Leva a tarefa a outro status (Concluído marca como feita) e devolve o foco a ela.
+function moverStatusDaTarefa(id, destino) {
+  const tarefa = state.tasks.find(x => x.id === id);
+  if (!tarefa || busy || failed || !loaded || Kiro.statusDaTarefa(tarefa) === destino) return;
+  state.tasks = state.tasks.map(x => x.id === id ? Kiro.moverTarefa(x, destino) : x);
+  save(); render();
+  document.querySelector(`[data-tarefa="${CSS.escape(id)}"]`)?.focus();
+}
+document.addEventListener('click', e => {
+  const v = e.target.closest?.('[data-tarefas-visao]');
+  if (v) { gravarPreferencia('tarefasVisao', v.dataset.tarefasVisao); render(); $(`[data-tarefas-visao="${v.dataset.tarefasVisao}"]`)?.focus(); return; }
+  if (e.target.closest?.('[data-recolher-concluido]')) { gravarPreferencia('tarefasConcluidoAberto', lerPreferencia('tarefasConcluidoAberto') === '1' ? '0' : '1'); render(); return; }
+});
+let tarefaArrastada = null;
+document.addEventListener('dragstart', e => {
+  const item = e.target.closest?.('[data-tarefa]');
+  if (!item) return;
+  tarefaArrastada = item.dataset.tarefa;
+  item.classList.add('arrastando');
+  e.dataTransfer.effectAllowed = 'move';
+  e.dataTransfer.setData('text/kiro-tarefa', tarefaArrastada);
+});
+const limparStatusAlvo = () => document.querySelectorAll('.status-secao.alvo').forEach(x => x.classList.remove('alvo'));
+document.addEventListener('dragover', e => {
+  const secao = tarefaArrastada && e.target.closest?.('.status-secao');
+  limparStatusAlvo();
+  if (!secao) return;
+  e.preventDefault();
+  secao.classList.add('alvo');
+});
+document.addEventListener('drop', e => {
+  const secao = tarefaArrastada && e.target.closest?.('.status-secao');
+  limparStatusAlvo();
+  if (!secao) return;
+  e.preventDefault();
+  const id = tarefaArrastada; tarefaArrastada = null;
+  moverStatusDaTarefa(id, secao.dataset.status);
+});
+document.addEventListener('dragend', () => { tarefaArrastada = null; limparStatusAlvo(); document.querySelectorAll('.status-item.arrastando').forEach(x => x.classList.remove('arrastando')); });
+document.addEventListener('keydown', e => {
+  const item = e.target.closest?.('[data-tarefa]');
+  if (!item || e.target !== item || !['ArrowLeft', 'ArrowRight'].includes(e.key)) return;
+  e.preventDefault();
+  const tarefa = state.tasks.find(x => x.id === item.dataset.tarefa), ordem = Kiro.STATUS_DA_TAREFA;
+  if (!tarefa) return;
+  const i = ordem.indexOf(Kiro.statusDaTarefa(tarefa)) + (e.key === 'ArrowRight' ? 1 : -1);
+  if (i >= 0 && i < ordem.length) moverStatusDaTarefa(tarefa.id, ordem[i]);
+});
 document.addEventListener('click', e => {
   const b = e.target.closest?.('[data-tarefas-aba]');
   if (!b) return;
@@ -3896,7 +3964,7 @@ const pastaPorNome = valor => {
   return p.id;
 };
 const notaParaPlugin = n => ({ id: n.id, title: n.title || '', body: n.body || '', tags: [...(n.tags || [])], folder: caminhoDaPasta(n.folderId), createdAt: n.createdAt || null, updatedAt: n.updatedAt || null });
-const tarefaParaPlugin = t => ({ id: t.id, title: t.title, description: t.description || '', due: t.due, priority: t.priority, done: !!t.done, noteId: t.noteId || '' });
+const tarefaParaPlugin = t => ({ id: t.id, title: t.title, description: t.description || '', due: t.due, priority: t.priority, done: !!t.done, status: Kiro.statusDaTarefa(t), noteId: t.noteId || '' });
 const descricaoDoPlugin = v => String(v ?? '').trim().slice(0, 5000);
 const etiquetas = v => Array.isArray(v) ? v.map(t => String(t).trim()).filter(Boolean).slice(0, 30) : [];
 const notaDoPlugin = id => { const n = getNote(String(id || '')); if (!n) throw new Error(t('Nota não encontrada.')); return n; };
@@ -4008,6 +4076,7 @@ async function executarMetodo(id, metodo, args) {
       if (campos.due !== undefined && /^\d{4}-\d{2}-\d{2}$/.test(campos.due)) nova.due = campos.due;
       if (campos.priority !== undefined && ['Baixa', 'Média', 'Alta'].includes(campos.priority)) nova.priority = campos.priority;
       if (campos.done !== undefined) nova.done = !!campos.done;
+      if (campos.status !== undefined && Kiro.STATUS_DA_TAREFA.includes(campos.status)) Object.assign(nova, Kiro.moverTarefa(nova, campos.status));
       if (campos.description !== undefined) { const d = descricaoDoPlugin(campos.description); if (d) nova.description = d; else delete nova.description; }
       if (!nova.title) throw new Error(t('A tarefa precisa de um título.'));
       state.tasks = state.tasks.map(t => t.id === tarefa.id ? nova : t);

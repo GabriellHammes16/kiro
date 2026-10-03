@@ -23,3 +23,23 @@ test('notas que citam uma tarefa e a citação pronta para colar', () => {
   assert.deepEqual(domain.notesCitingTask(notas, 't1').map(n => n.id), ['a', 'c']);
   assert.equal(domain.taskReference({ id: 't1', title: 'Ler [cap|3]\nfim' }), '[[tarefa:t1|Ler cap 3 fim]]');
 });
+
+test('status da tarefa: feita é "concluido"; andamento/pausado guardados; resto "nao-comecado"', () => {
+  assert.equal(domain.statusDaTarefa(tarefa()), 'nao-comecado');
+  assert.equal(domain.statusDaTarefa(tarefa({ status: 'andamento' })), 'andamento');
+  assert.equal(domain.statusDaTarefa(tarefa({ status: 'pausado', done: true })), 'concluido');
+  assert.doesNotThrow(() => domain.validateState(estado([tarefa({ status: 'pausado' })])));
+  assert.throws(() => domain.validateState(estado([tarefa({ status: 'inventado' })])));
+});
+
+test('mover tarefa de status: concluir marca done e guarda o status de antes; reabrir volta a ele', () => {
+  const andando = tarefa({ status: 'andamento' });
+  const feita = domain.moverTarefa(andando, 'concluido');
+  assert.equal(feita.done, true);
+  assert.equal(feita.status, 'andamento', 'guarda de onde veio');
+  assert.equal(domain.statusDaTarefa(domain.moverTarefa(feita, 'pausado')), 'pausado');
+  const reaberta = domain.moverTarefa(feita, 'nao-comecado');
+  assert.equal(reaberta.done, false);
+  assert.ok(!('status' in reaberta), 'não começado não guarda campo');
+  assert.equal(domain.moverTarefa(andando, 'lixo'), andando);
+});

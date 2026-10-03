@@ -31,7 +31,7 @@ Three complete working examples live in this repository: `examples/plugins/word-
 that calls a web API with `kiro.fetch`), `examples/plugins/habit-heatmap/`
 (a frame — see [Frames (custom UI)](#frames-custom-ui) below) and
 `examples/plugins/kanban-tasks/` (a Kanban board of your tasks as a frame page, plus a frame panel with a miniature of the pending columns on Today,
-with drag & drop between columns) and `examples/plugins/lista-tarefas/` (a to-do list by status — not started, in progress, paused, done — as a page and a Today card, with the status rules in a plain `estados.js` the tests load too). `npm run dev`
+with drag & drop between columns). `npm run dev`
 copies all of them into the example vault. Copying one of these folders is the
 fastest way to start.
 
@@ -238,10 +238,12 @@ kiro.habits.list() / kiro.habits.mark(id, date)
 kiro.folders.create(path)
 ```
 
-A task is `{ id, title, description, due, priority, done, noteId }`: `due` is
+A task is `{ id, title, description, due, priority, done, status, noteId }`: `due` is
 `YYYY-MM-DD`, `priority` is `'Baixa'`, `'Média'` or `'Alta'`, `description` is
 free text up to 5000 characters (empty string when there is none) and `noteId`
-is the associated note or `''`. `create` and `update` accept the same fields;
+is the associated note or `''`. `status` is `'nao-comecado'`, `'andamento'`, `'pausado'` or
+`'concluido'` (the same sections as Tasks → By status); `update` accepts it, and moving to
+`'concluido'` sets `done`. `create` and `update` accept the same fields;
 sending `description: ''` removes it.
 
 A note can cite a task with `[[tarefa:<id>|Title]]`. The id is what counts —

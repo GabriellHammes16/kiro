@@ -8,6 +8,18 @@
   function safeUrl(value) {
     try { const url = new URL(value); return ['http:', 'https:'].includes(url.protocol) ? url.href : ''; } catch { return ''; }
   }
+  // Status da tarefa além de feita/não feita: só 'andamento' e 'pausado' são guardados (status da tarefa).
+  // Sem campo é "não começado"; done=true é "concluído" e mantém o status de antes, para reabrir onde estava.
+  const STATUS_GUARDADOS = ['andamento', 'pausado'];
+  const STATUS_DA_TAREFA = ['nao-comecado', 'andamento', 'pausado', 'concluido'];
+  const statusDaTarefa = t => t.done ? 'concluido' : STATUS_GUARDADOS.includes(t.status) ? t.status : 'nao-comecado';
+  function moverTarefa(t, destino) {
+    if (!STATUS_DA_TAREFA.includes(destino)) return t;
+    if (destino === 'concluido') return { ...t, done: true };
+    const nova = { ...t, done: false };
+    if (STATUS_GUARDADOS.includes(destino)) nova.status = destino; else delete nova.status;
+    return nova;
+  }
   function validateState(value) {
     const fail = () => { throw new Error(frase('Dados inválidos. O cofre não foi alterado.')); };
     if (!value || typeof value !== 'object') fail();
@@ -26,7 +38,7 @@
       if (n.file !== undefined && (!text(n.file) || /(^[\\/]|:|(^|[\\/])\.\.([\\/]|$))/.test(n.file) || !/\.md$/i.test(n.file))) fail();
       if (n.folderId && !id(n.folderId)) fail();
     }
-    for (const t of value.tasks) if (!date(t.due) || !['Baixa', 'Média', 'Alta'].includes(t.priority) || typeof t.done !== 'boolean' || (t.noteId && !id(t.noteId)) || (t.description !== undefined && (!text(t.description) || t.description.length > 5000))) fail();
+    for (const t of value.tasks) if (!date(t.due) || !['Baixa', 'Média', 'Alta'].includes(t.priority) || typeof t.done !== 'boolean' || (t.noteId && !id(t.noteId)) || (t.description !== undefined && (!text(t.description) || t.description.length > 5000)) || (t.status !== undefined && !STATUS_GUARDADOS.includes(t.status))) fail();
     for (const r of value.routine || []) if (!date(r.date) || typeof r.done !== 'boolean') fail();
     for (const h of value.habits || []) {
       if (!validFrequency(h.frequency) || (h.createdAt !== undefined && (!Number.isFinite(h.createdAt) || Math.abs(h.createdAt) > 8.64e15))) fail();
@@ -403,7 +415,7 @@
     return atalhos;
   }
 
-  const api = { taskLinks, notesCitingTask, taskReference, ATALHOS_EDITAVEIS, combinacaoDoEvento, rotuloDaCombinacao, problemaDoAtalho, atalhosValidos, TEMAS, SKINS, APARENCIA_PADRAO, luminancia, contraste, corValida, aparenciaValida, classesDaAparencia, FOLDER_COLORS, folderColor, habitStats, habitDays, withHabits, validFrequency, localDate, safeUrl, validateState, normalize, isImagePath, wikiLinks, tags, findLinkedNote, mentions, fluxosQueCitam, inInbox, withoutInbox, toReview, linkQuery, linkSuggestions, validFolderName, folderPaths, descendants, upgradeBackup, pathKey, mencoesNaoVinculadas, vincularMencao, sumario, arvoreDeEtiquetas, podeVincular };
+  const api = { STATUS_DA_TAREFA, statusDaTarefa, moverTarefa, taskLinks, notesCitingTask, taskReference, ATALHOS_EDITAVEIS, combinacaoDoEvento, rotuloDaCombinacao, problemaDoAtalho, atalhosValidos, TEMAS, SKINS, APARENCIA_PADRAO, luminancia, contraste, corValida, aparenciaValida, classesDaAparencia, FOLDER_COLORS, folderColor, habitStats, habitDays, withHabits, validFrequency, localDate, safeUrl, validateState, normalize, isImagePath, wikiLinks, tags, findLinkedNote, mentions, fluxosQueCitam, inInbox, withoutInbox, toReview, linkQuery, linkSuggestions, validFolderName, folderPaths, descendants, upgradeBackup, pathKey, mencoesNaoVinculadas, vincularMencao, sumario, arvoreDeEtiquetas, podeVincular };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Kiro = api;
 })(globalThis);
