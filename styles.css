@@ -1476,3 +1476,7 @@ div.fluxo-editor { overflow:auto; }
 /* Ícone do plug-in ao lado do nome em Configurações → Plug-ins. */
 .cfg-titulo-plugin { display:inline-flex; align-items:center; gap:8px; }
 .cfg-titulo-plugin > .icone { width:16px; height:16px; color:var(--muted); }
+
+/* Papel de parede em vídeo: a opção de seguir o "menos movimento" do sistema só aparece com vídeo. */
+html:not(.papel-em-video) .papel-so-video { display:none; }
+.papel-segue-sistema { position:relative; display:flex; align-items:center; justify-content:space-between; gap:12px; max-width:420px; }

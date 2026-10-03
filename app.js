@@ -530,11 +530,16 @@ const VEU_PADRAO = 60, LADO_MAXIMO_DO_PAPEL = 3840, LIMITE_DO_PAPEL_ANIMADO = 20
 let urlDoPapel = null;
 const semAnimacao = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
 // Papel animado: GIF vai como imagem (o navegador anima); vídeo (MP4/WebM) toca num <video> fixo atrás de
-// tudo, sem som e em laço. Para na tela de Pastas, com a janela escondida e para quem pede menos movimento.
+// tudo, sem som e em laço. Para na tela de Pastas e com a janela escondida.
+// Escolher um vídeo já é pedir movimento: ele toca mesmo com "menos movimento" no sistema (o Windows liga isso
+// ao desligar os efeitos de animação, e o vídeo ficava parado no primeiro quadro). Quem quiser seguir o
+// sistema liga a opção em Configurações → Papel de parede.
+const videoSegueOSistema = () => lerPreferencia('papelVideoSegueSistema') === '1';
+const pausarPorMovimento = () => videoSegueOSistema() && semAnimacao();
 function sincronizarVideoDoPapel() {
   const video = document.querySelector('#papel-video');
   if (!video) return;
-  const parar = semAnimacao() || document.hidden || document.querySelector('.app-shell')?.classList.contains('cofre-aberto');
+  const parar = pausarPorMovimento() || document.hidden || document.querySelector('.app-shell')?.classList.contains('cofre-aberto');
   if (parar) video.pause(); else video.play().catch(() => { /* sem permissão de tocar: fica o primeiro quadro */ });
 }
 // Opacidade dos cartões: as cores de painel do tema, com transparência, só na área de conteúdo e só com
@@ -591,7 +596,7 @@ async function aplicarPapelDeParede() {
     }
     video.src = url;
     sincronizarVideoDoPapel();
-    if (previa) previa.append(Object.assign(document.createElement('video'), { src: url, muted: true, loop: true, autoplay: !semAnimacao(), playsInline: true }));
+    if (previa) previa.append(Object.assign(document.createElement('video'), { src: url, muted: true, loop: true, autoplay: !pausarPorMovimento(), playsInline: true }));
   }
   html.style.setProperty('--papel-veu', `${Number.isFinite(veu) ? veu : VEU_PADRAO}%`);
 }
@@ -4393,6 +4398,7 @@ async function showSettings(aba = abaDasConfiguracoes) {
       <div class="cfg-linha cfg-linha-coluna" id="cfg-papel"${document.documentElement.classList.contains('com-papel-de-parede') ? ' data-tem-papel' : ''}>${texto(t('Imagem ou vídeo'))}
         <div class="papel-controles"><span class="papel-previa" aria-hidden="true"></span><label class="secondary cfg-pequeno papel-escolher">${icone('imagem')} ${t('Escolher arquivo')}<input type="file" accept="image/*,video/mp4,video/webm" id="papel-arquivo" class="sr-only" /></label><button type="button" class="secondary cfg-pequeno papel-so-com" id="papel-remover">${icone('lixeira')} ${t('Remover')}</button></div>
         <label class="papel-veu papel-so-com"><span class="small-muted">${t('Suavizar a imagem')}</span><input type="range" id="papel-veu" min="0" max="90" step="5" value="${lerPreferencia('papelDeParedeVeu') ?? VEU_PADRAO}" /></label>
+        <label class="cfg-chave papel-so-video papel-segue-sistema"><span class="small-muted">${t('Pausar o vídeo quando o sistema pede menos movimento')}</span><input type="checkbox" id="papel-segue-sistema" ${videoSegueOSistema() ? 'checked' : ''} /><span class="interruptor" aria-hidden="true"></span></label>
         <label class="papel-veu papel-so-com"><span class="small-muted">${t('Opacidade dos cartões')}</span><input type="range" id="papel-opacidade" min="30" max="100" step="5" value="${lerPreferencia('papelOpacidadeCartoes') ?? 100}" /></label>
         <p class="cfg-aviso" id="papel-erro" role="status" hidden></p>
       </div>
@@ -4448,6 +4454,8 @@ async function showSettings(aba = abaDasConfiguracoes) {
     const arquivo = e.target.files?.[0];
     e.target.value = '';
     if (!arquivo) return;
+    // Arrastar o arquivo para o seletor pula o filtro accept: vídeo que o Chromium não toca (MOV, MKV, AVI) vira aviso, não tela parada.
+    if (arquivo.type.startsWith('video/') && !['video/mp4', 'video/webm'].includes(arquivo.type)) { erroDoPapel.textContent = t('Esse formato de vídeo não toca no Kiro. Use MP4 ou WebM.'); erroDoPapel.hidden = false; return; }
     const animado = arquivo.type.startsWith('video/') || arquivo.type === 'image/gif';
     if (animado && arquivo.size > LIMITE_DO_PAPEL_ANIMADO) { erroDoPapel.textContent = t('Arquivo grande demais: GIF ou vídeo de até 200 MB.'); erroDoPapel.hidden = false; return; }
     let imagem;
@@ -4458,6 +4466,11 @@ async function showSettings(aba = abaDasConfiguracoes) {
     catch { erroDoPapel.textContent = t('Não foi possível guardar a imagem neste navegador (janela privada ou sem espaço).'); erroDoPapel.hidden = false; return; }
     erroDoPapel.hidden = true;
     await aplicarPapelDeParede();
+  });
+  $('#papel-segue-sistema')?.addEventListener('change', e => {
+    e.stopPropagation(); modalDirty = false;
+    try { localStorage.setItem('kiro.papelVideoSegueSistema', e.target.checked ? '1' : '0'); } catch { /* janela privada: vale só nesta sessão */ }
+    sincronizarVideoDoPapel();
   });
   $('#papel-remover')?.addEventListener('click', async () => {
     try { await papelGuardado('apagar'); } catch { /* sem IndexedDB: nada guardado */ }
