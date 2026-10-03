@@ -207,36 +207,47 @@
       if (/^https?:\/\/\S+$/i.test(limpo)) return void adicionarNo({ type: 'link', url: limpo, width: 320, height: 100 }, p);
       adicionarNo({ type: 'text', text: limpo, width: 320, height: F.alturaEstimada(limpo) }, p);
     }
-    // Editar texto: um <textarea> no lugar do conteúdo. Ao terminar, o cartão cresce se o
-    // texto renderizado não couber (nunca encolhe sozinho).
+    // Editar texto: o editor do app (opcoes.montarEditor) ou, sem ele, um <textarea> no lugar do
+    // conteúdo. Ao terminar, o cartão cresce se o texto renderizado não couber (nunca encolhe sozinho).
     function editar(idNo) {
       const c = no(idNo), el = elDoCartao(idNo);
       if (!c || c.type !== 'text' || !el) return;
       terminarEdicao();
-      const area = document.createElement('textarea');
-      area.className = 'fluxo-editor';
-      area.value = c.text;
-      area.setAttribute('aria-label', t('Texto do cartão'));
-      el.querySelector('.fluxo-conteudo').replaceChildren(area);
+      const conteudo = el.querySelector('.fluxo-conteudo');
+      let campo = document.createElement('div');
+      campo.className = 'fluxo-editor';
+      conteudo.replaceChildren(campo);
+      const ed = opcoes.montarEditor?.(campo, { texto: c.text }) || null;
+      if (!ed) {
+        campo = document.createElement('textarea');
+        campo.className = 'fluxo-editor';
+        campo.value = c.text;
+        campo.setAttribute('aria-label', t('Texto do cartão'));
+        conteudo.replaceChildren(campo);
+      }
+      const valor = () => (ed ? ed.texto() : campo.value);
       el.classList.add('editando');
       let feito = false;
       const concluir = gravar => {
         if (feito) return;
         feito = true; editor = null;
+        const texto = valor();
+        ed?.destruir();
         const atual = no(idNo);
-        if (!gravar || !atual || area.value === atual.text) return void desenhar();
-        let novo = F.editarCartao(canvas, idNo, { text: area.value });
-        const altura = alturaDoTexto(area.value, atual.width);
+        if (!gravar || !atual || texto === atual.text) return void desenhar();
+        let novo = F.editarCartao(canvas, idNo, { text: texto });
+        const altura = alturaDoTexto(texto, atual.width);
         if (altura > atual.height) novo = F.redimensionar(novo, idNo, atual.width, encaixarPraCima(altura));
         mudar(novo);
       };
       editor = { concluir };
-      area.addEventListener('keydown', e => {
+      campo.addEventListener('keydown', e => {
         e.stopPropagation();   // Delete, Ctrl+Z etc. são do texto, não do fluxo
         if (e.key === 'Escape') { e.preventDefault(); concluir(true); raiz.focus({ preventScroll: true }); }
       });
-      area.addEventListener('blur', () => concluir(true));
-      area.focus();
+      // Sair do cartão grava (também quando o salvamento automático tira o foco: destino nulo).
+      campo.addEventListener('focusout', e => { if (!campo.contains(e.relatedTarget)) concluir(true); });
+      if (ed) ed.focar('fim'); else campo.focus();
     }
     function terminarEdicao() { editor?.concluir(true); }
     // Rótulo: um <input> sobre o meio da curva. Enter ou sair gravam; Esc desiste. Vazio tira o rótulo.

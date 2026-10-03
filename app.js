@@ -478,6 +478,7 @@ function aplicarCorretor() {
   else document.documentElement.setAttribute('spellcheck', 'false');
   window.cadernoDesktop?.definirCorretor?.(corretorLigado);
   editorDaNota?.editor.definirOrtografia(corretorLigado);
+  editorDoCartao?.definirOrtografia(corretorLigado);
   if (corretorLigado && editorDaNota) iniciarOrtografia();   // sem editor montado, a montagem agenda
 }
 // Corretor próprio (ortografia.js): carregado em segundo plano depois que a primeira nota aparece,
@@ -499,7 +500,7 @@ async function iniciarOrtografia() {
   ortografiaIniciada = true;
   try {
     await aplicarDicionarioDoCofre();
-    if (!ortografiaOuvindo) { ortografiaOuvindo = true; KiroOrtografia.aoMudar(() => editorDaNota?.editor.redesenharOrtografia()); }
+    if (!ortografiaOuvindo) { ortografiaOuvindo = true; KiroOrtografia.aoMudar(() => { editorDaNota?.editor.redesenharOrtografia(); editorDoCartao?.redesenharOrtografia(); }); }
     await KiroOrtografia.carregar();
   } catch {
     ortografiaIniciada = false;
@@ -816,12 +817,14 @@ function abrirLinkDoFluxo(url) {
   window.open(seguro, '_blank', 'noopener,noreferrer');
 }
 function montarFluxos() {
+  window.KiroEditor?.carregar().catch(() => {});   // o cartão abre com o editor novo já na primeira edição
   for (const host of document.querySelectorAll('.fluxo-host')) {
     const fluxo = getFluxo(host.dataset.fluxo);
     if (!fluxo?.canvas) continue;
     KiroFluxoTela.montar(host, {
       id: fluxo.id, titulo: fluxo.title, canvas: fluxo.canvas,
       markdown: renderizarMarkdown, icone,
+      montarEditor: montarEditorDoCartao,
       menu: (evento, itens) => abrirMenuContexto(evento, document.body, itens),
       chaveDaVista: 'kiro.fluxoVista:' + (state.vaultPath || ''),
       aoMudar: canvas => mudarFluxo(fluxo.id, canvas),
@@ -1856,7 +1859,7 @@ function bindEditor(){
 let editorDaNota = null; // { chave, editor }
 let montagemDoEditor = Promise.resolve(null);   // a montagem em curso (ou a última): quem precisa do editor espera por ela
 const chaveDaNota = nota => nota.id || 'rascunho';
-function opcoesDoEditor() {
+function opcoesDoEditor({ atual = () => editorDaNota?.editor, menu = menuDaNota } = {}) {
   return {
     ortografia: { ativa: corretorLigado, errada: p => KiroOrtografia.errada(p) },
     aoMudar: texto => { if (!editing) return; editing.body = texto; editorDirty = true; estadoDoc(); },
@@ -1872,7 +1875,7 @@ function opcoesDoEditor() {
     },
     aoMenu: evento => {
       if (evento.shiftKey && !window.cadernoDesktop) return;
-      const editor = editorDaNota.editor, area = editor.area();
+      const editor = atual(), area = editor.area();
       const alvo = corretorLigado && KiroOrtografia.pronto() ? editor.palavraEm(evento.clientX, evento.clientY) : null;
       if (alvo && KiroOrtografia.errada(alvo.palavra)) {
         evento.preventDefault();
@@ -1881,9 +1884,11 @@ function opcoesDoEditor() {
           adicionar: p => adicionarAoDicionario(p),
           t,
         });
-        return abrirMenuContexto(evento, area, [...doCorretor, { separador: true }, ...menuDaNota()]);
+        return abrirMenuContexto(evento, area, [...doCorretor, ...(menu().length ? [{ separador: true }, ...menu()] : [])]);
       }
-      abrirMenuContexto(evento, area);
+      const itens = menu();
+      if (!itens.length) return;   // sem itens (cartão do Fluxo): o menu do navegador
+      abrirMenuContexto(evento, area, itens);
     },
     widgets: {
       desenharFormula: (tex, bloco) => matematica(tex, bloco),
@@ -1917,6 +1922,19 @@ async function montarEditorDaNota(corpo) {
   const editor = KiroEditor.montar(corpo, { texto: editing.body, ...opcoesDoEditor() });
   editorDaNota = { chave, editor };
   setTimeout(iniciarOrtografia, 0);   // fora do caminho da abertura
+  return editor;
+}
+// Cartão de texto do Fluxo: o mesmo editor do corpo da nota (corretor, fórmulas, links), sem o
+// salvar da nota nem as sugestões de [[. Sem o CodeMirror carregado, o Fluxo usa o textarea.
+let editorDoCartao = null;
+function montarEditorDoCartao(elemento, { texto }) {
+  if (!window.CM || !window.KiroEditor) return null;
+  const base = opcoesDoEditor({ atual: () => editorDoCartao, menu: () => [] });
+  const editor = KiroEditor.montar(elemento, { texto, rotulo: t('Texto do cartão'), ortografia: base.ortografia, widgets: base.widgets, aoMenu: base.aoMenu });
+  editorDoCartao = editor;
+  const destruir = editor.destruir;
+  editor.destruir = () => { if (editorDoCartao === editor) editorDoCartao = null; destruir(); };
+  setTimeout(iniciarOrtografia, 0);
   return editor;
 }
 // ---- Grafo de conexões ----

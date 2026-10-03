@@ -1291,6 +1291,8 @@ html.janela-propria #barra-titulo { position:fixed; top:0; left:0; right:0; z-in
 .fluxo-barra { position:absolute; left:50%; bottom:16px; transform:translateX(-50%); display:flex; gap:4px; align-items:center; padding:4px; border:1px solid var(--line); border-radius:10px; background:var(--panel); }
 .fluxo-zoom { min-width:56px; border:0; background:none; color:var(--muted); font:inherit; cursor:pointer; }
 .fluxo-editor { display:block; width:100%; height:100%; box-sizing:border-box; resize:none; border:0; padding:0; background:transparent; color:inherit; font:inherit; line-height:inherit; outline:none; user-select:text; }
+div.fluxo-editor { overflow:auto; }
+.fluxo-editor .cm-editor { height:100%; }
 .fluxo-cartao.editando { box-shadow:0 0 0 2px var(--acento); }
 .fluxo-cartao.editando > .fluxo-alca { display:none; }
 .fluxo-medida { position:absolute; left:0; top:0; height:auto; visibility:hidden; pointer-events:none; }
@@ -1312,11 +1314,11 @@ html.janela-propria #barra-titulo { position:fixed; top:0; left:0; right:0; z-in
 .painel-fluxo:hover, .painel-fluxo:focus-visible { background:color-mix(in srgb, var(--line) 45%, transparent); }
 
 /* Editor da nota (CodeMirror): mesma cara da leitura (.doc-corpo …), aplicada às linhas e trechos do editor. */
-.doc-corpo .cm-editor { background:transparent; font:inherit; color:inherit; }
-.doc-corpo .cm-editor.cm-focused { outline:none; }
-.doc-corpo .cm-content { padding:0; caret-color:var(--acento); font-family:inherit; line-height:inherit; }
-.doc-corpo .cm-line { padding:0; }
-.doc-corpo .cm-cursor { border-left-color:var(--acento); }
+:is(.doc-corpo, .fluxo-editor) .cm-editor { background:transparent; font:inherit; color:inherit; }
+:is(.doc-corpo, .fluxo-editor) .cm-editor.cm-focused { outline:none; }
+:is(.doc-corpo, .fluxo-editor) .cm-content { padding:0; caret-color:var(--acento); font-family:inherit; line-height:inherit; }
+:is(.doc-corpo, .fluxo-editor) .cm-line { padding:0; }
+:is(.doc-corpo, .fluxo-editor) .cm-cursor { border-left-color:var(--acento); }
 /* Modo simples: o editor não carregou e o corpo vira um textarea comum. */
 .doc-corpo-simples { display:block; width:100%; min-height:60vh; padding:0; border:0; outline:none; background:transparent; color:inherit; font:inherit; line-height:inherit; resize:vertical; }
 .doc-corpo .ed-negrito { font-weight:700; }
@@ -1336,22 +1338,22 @@ html.janela-propria #barra-titulo { position:fixed; top:0; left:0; right:0; z-in
 .doc-corpo .ed-marcador { color:var(--muted); }
 .doc-corpo .ed-erro { text-decoration:underline wavy #e5484d; text-decoration-skip-ink:none; text-underline-offset:3px; }
 /* Elementos desenhados no editor (tarefa, imagem, fórmula, código, callout, comentário): a mesma cara da leitura. */
-.doc-corpo .cm-editor .ed-caixa { margin:0 6px 0 0; accent-color:var(--accent); vertical-align:middle; cursor:pointer; }
-.doc-corpo .cm-editor .md-imagem { position:relative; display:inline-block; max-width:100%; vertical-align:bottom; line-height:0; border-radius:6px; }
-.doc-corpo .cm-editor .md-imagem img { display:block; max-width:100%; height:auto; border-radius:6px; cursor:zoom-in; }
-.doc-corpo .cm-editor .md-alca { position:absolute; right:-5px; bottom:-5px; width:14px; height:14px; border-radius:50%; background:var(--acento); border:2px solid var(--content-bg,#0B0F14); cursor:nwse-resize; opacity:0; transition:opacity .15s ease; }
-.doc-corpo .cm-editor .md-imagem:hover .md-alca, .doc-corpo .cm-editor .md-imagem.redimensionando .md-alca { opacity:1; }
-.doc-corpo .cm-editor .md-imagem:hover, .doc-corpo .cm-editor .md-imagem.redimensionando { outline:1px solid color-mix(in srgb, var(--acento) 45%, transparent); outline-offset:2px; }
-.doc-corpo .cm-editor .md-imagem.redimensionando { user-select:none; }
-.doc-corpo .cm-editor .math-bloco { display:block; margin:0 0 14px; padding:6px 0; overflow-x:auto; overflow-y:hidden; }
-.doc-corpo .cm-editor .math-bloco .katex-display { margin:0; }
-.doc-corpo .cm-editor .code-area-cabecalho { display:flex; justify-content:space-between; align-items:center; gap:10px; padding:7px 9px 7px 13px; background:var(--panel-raised); border:1px solid var(--line); border-radius:12px 12px 0 0; }
-.doc-corpo .cm-editor .code-lang { color:var(--muted); font-size:12px; text-transform:uppercase; letter-spacing:1px; font-weight:700; }
-.doc-corpo .cm-editor .code-copy { padding:4px 11px; font-size:12px; }
-.doc-corpo .cm-editor .md-destaque { border-left-color:var(--acento); }
-.doc-corpo .cm-editor .md-destaque-tipo { display:block; font-size:12px; text-transform:uppercase; letter-spacing:1px; color:var(--acento); font-weight:700; margin-bottom:5px; }
-.doc-corpo .cm-editor .md-comentario { color:#6a6a76; font-style:italic; }
-.doc-corpo .cm-editor .ed-plugin { cursor:pointer; }
-.doc-corpo .cm-editor .ed-plugin .plugin-bloco { margin:0 0 14px; cursor:auto; }
+:is(.doc-corpo, .fluxo-editor) .cm-editor .ed-caixa { margin:0 6px 0 0; accent-color:var(--accent); vertical-align:middle; cursor:pointer; }
+:is(.doc-corpo, .fluxo-editor) .cm-editor .md-imagem { position:relative; display:inline-block; max-width:100%; vertical-align:bottom; line-height:0; border-radius:6px; }
+:is(.doc-corpo, .fluxo-editor) .cm-editor .md-imagem img { display:block; max-width:100%; height:auto; border-radius:6px; cursor:zoom-in; }
+:is(.doc-corpo, .fluxo-editor) .cm-editor .md-alca { position:absolute; right:-5px; bottom:-5px; width:14px; height:14px; border-radius:50%; background:var(--acento); border:2px solid var(--content-bg,#0B0F14); cursor:nwse-resize; opacity:0; transition:opacity .15s ease; }
+:is(.doc-corpo, .fluxo-editor) .cm-editor .md-imagem:hover .md-alca, :is(.doc-corpo, .fluxo-editor) .cm-editor .md-imagem.redimensionando .md-alca { opacity:1; }
+:is(.doc-corpo, .fluxo-editor) .cm-editor .md-imagem:hover, :is(.doc-corpo, .fluxo-editor) .cm-editor .md-imagem.redimensionando { outline:1px solid color-mix(in srgb, var(--acento) 45%, transparent); outline-offset:2px; }
+:is(.doc-corpo, .fluxo-editor) .cm-editor .md-imagem.redimensionando { user-select:none; }
+:is(.doc-corpo, .fluxo-editor) .cm-editor .math-bloco { display:block; margin:0 0 14px; padding:6px 0; overflow-x:auto; overflow-y:hidden; }
+:is(.doc-corpo, .fluxo-editor) .cm-editor .math-bloco .katex-display { margin:0; }
+:is(.doc-corpo, .fluxo-editor) .cm-editor .code-area-cabecalho { display:flex; justify-content:space-between; align-items:center; gap:10px; padding:7px 9px 7px 13px; background:var(--panel-raised); border:1px solid var(--line); border-radius:12px 12px 0 0; }
+:is(.doc-corpo, .fluxo-editor) .cm-editor .code-lang { color:var(--muted); font-size:12px; text-transform:uppercase; letter-spacing:1px; font-weight:700; }
+:is(.doc-corpo, .fluxo-editor) .cm-editor .code-copy { padding:4px 11px; font-size:12px; }
+:is(.doc-corpo, .fluxo-editor) .cm-editor .md-destaque { border-left-color:var(--acento); }
+:is(.doc-corpo, .fluxo-editor) .cm-editor .md-destaque-tipo { display:block; font-size:12px; text-transform:uppercase; letter-spacing:1px; color:var(--acento); font-weight:700; margin-bottom:5px; }
+:is(.doc-corpo, .fluxo-editor) .cm-editor .md-comentario { color:#6a6a76; font-style:italic; }
+:is(.doc-corpo, .fluxo-editor) .cm-editor .ed-plugin { cursor:pointer; }
+:is(.doc-corpo, .fluxo-editor) .cm-editor .ed-plugin .plugin-bloco { margin:0 0 14px; cursor:auto; }
 /* O tema padrão do CodeMirror põe monospace no .cm-scroller: o texto da nota usa a fonte da leitura. */
-.doc-corpo .cm-scroller { font-family:inherit; line-height:inherit; }
+:is(.doc-corpo, .fluxo-editor) .cm-scroller { font-family:inherit; line-height:inherit; }
