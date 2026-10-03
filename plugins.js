@@ -122,6 +122,13 @@
     '--accent-soft', '--accent-text', '--focus-ring', '--surface-hover', '--surface-active', '--selected', '--border-strong', '--text-disabled', '--placeholder',
     '--danger', '--warning', '--success', '--info', '--shadow-sm', '--shadow-md', '--raio-controle', '--raio-card'];
 
+  // Ícone do plug-in (manifest.icon): o nome de um ícone do Kiro (segue o pacote de ícones do tema) ou o
+  // desenho de um <path> em 24×24 (o atributo d), traçado no estilo dos outros ícones. Nunca SVG/HTML do
+  // plug-in: o ícone é desenhado na janela do Kiro, fora da moldura isolada, então só passam letras de path.
+  const NOME_DE_ICONE = /^[a-z][a-z0-9-]{1,39}$/;
+  const CAMINHO_DE_ICONE = /^\s*[Mm][MmLlHhVvCcSsQqTtAaZz0-9eE.,+\-\s]{0,1999}$/;
+  const iconeValido = v => typeof v === 'string' && (NOME_DE_ICONE.test(v) || CAMINHO_DE_ICONE.test(v));
+
   function validarManifesto(bruto, { versaoDoKiro } = {}) {
     const recusa = erro => ({ ok: false, erro });
     if (!bruto || typeof bruto !== 'object' || Array.isArray(bruto)) return recusa(frase('O manifesto precisa ser um objeto JSON.'));
@@ -171,7 +178,9 @@
       if (!arquivoDeTela(p.file)) return recusa(frase('page.file precisa ser um arquivo .html da pasta do plug-in, sem barra.'));
       page = { title: p.title, file: p.file };
     }
-    return { ok: true, manifesto: { id: bruto.id, name: bruto.name, author: bruto.author, description: bruto.description || '', version: bruto.version, minKiro: bruto.minKiro, permissions, network, secrets, settings, page } };
+    if (bruto.icon !== undefined && !iconeValido(bruto.icon)) return recusa(frase('O campo icon precisa ser o nome de um ícone do Kiro ou o desenho de um caminho SVG (o atributo d de um path), com até 2000 caracteres.'));
+    const icon = bruto.icon === undefined ? '' : bruto.icon.trim();
+    return { ok: true, manifesto: { id: bruto.id, name: bruto.name, author: bruto.author, description: bruto.description || '', version: bruto.version, minKiro: bruto.minKiro, permissions, network, secrets, settings, page, icon } };
   }
 
   /**
@@ -396,7 +405,7 @@
   const deveEntregar = (evento, permissoes) =>
     evento === 'day' ? true : (evento === 'save' || evento === 'create') && (permissoes || []).includes('notes:read');
 
-  const api = { PERMISSOES, METODOS, CABECALHOS_PROIBIDOS, validarPedidoDeRede, eventosDaGravacao, deveEntregar, painelParaHtml, higienizarHtml, planoDeCarga, validarManifesto, compararVersoes, comparar, precisaConsentir, rotuloDaPermissao, metodosPermitidos, podeChamar, ALTURA_DA_MOLDURA, VARIAVEIS_DO_TEMA, validarMoldura, validarOpcoesDoPainel, arquivoDeTela, tipoDoArquivoDoPlugin, cspDaMoldura, injetarScriptsDaMoldura };
+  const api = { CAMINHO_DE_ICONE, PERMISSOES, METODOS, CABECALHOS_PROIBIDOS, validarPedidoDeRede, eventosDaGravacao, deveEntregar, painelParaHtml, higienizarHtml, planoDeCarga, validarManifesto, compararVersoes, comparar, precisaConsentir, rotuloDaPermissao, metodosPermitidos, podeChamar, ALTURA_DA_MOLDURA, VARIAVEIS_DO_TEMA, validarMoldura, validarOpcoesDoPainel, arquivoDeTela, tipoDoArquivoDoPlugin, cspDaMoldura, injetarScriptsDaMoldura };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.KiroPlugins = api;
 })(globalThis);

@@ -22,6 +22,15 @@ test('manifesto inválido é recusado com motivo', () => {
   assert.match(P.validarManifesto('nada', { versaoDoKiro: '0.15.0' }).erro, /manifesto/i);
 });
 
+test('ícone do manifesto: nome de ícone do Kiro ou caminho SVG; nada de marcação', () => {
+  assert.equal(validar().manifesto.icon, '');
+  assert.equal(validar({ icon: 'tarefas' }).manifesto.icon, 'tarefas');
+  assert.equal(validar({ icon: ' M4 5h4v14H4z M10 5h4v9h-4z ' }).manifesto.icon, 'M4 5h4v14H4z M10 5h4v9h-4z');
+  for (const ruim of ['<svg><path d="M0 0"/></svg>', 'M4 5" onload="alert(1)', 'javascript:alert(1)', 'url(x)', 'A', 7, {}, 'M' + '1'.repeat(2000)]) {
+    assert.match(validar({ icon: ruim }).erro, /icon/, JSON.stringify(ruim).slice(0, 40));
+  }
+});
+
 test('configurações do manifesto: mesmo formato das opções de painel, recusadas se inválidas', () => {
   assert.deepEqual(validar().manifesto.settings, []);
   const semanas = { key: 'semanas', type: 'number', label: 'Semanas no mapa', default: 26, min: 4, max: 52 };

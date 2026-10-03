@@ -392,6 +392,7 @@ const TRACOS = {
   // Temas (cards de Aparência): um desenho por tema; os de anime são homenagens em traço, sem logos.
   'tema-claro': '<circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4"/>',
   'tema-kiro': '<path d="M19 14.8A7.8 7.8 0 1 1 9.2 5a6.2 6.2 0 0 0 9.8 9.8z"/>',
+  'tema-grafite': '<path d="M4.5 19.5l1.1-4.4L15.4 5.3a2.1 2.1 0 0 1 3 3L8.6 18.1z"/><path d="M13.4 7.3l3 3"/>',
   'tema-escuro-azul': '<path d="M12 3.5c3.3 4.1 5.8 7.2 5.8 10.6a5.8 5.8 0 0 1-11.6 0C6.2 10.7 8.7 7.6 12 3.5z"/>',
   'tema-escuro-verde': '<path d="M5.5 18.5C4.5 10.5 9.5 5 19.5 4.5 19 14.5 13.5 19.5 5.5 18.5z"/><path d="M4 20l9-9"/>',
   'tema-escuro-ambar': '<path d="M6.5 3.5h11M6.5 20.5h11"/><path d="M8 3.5c0 5 4 5.5 4 8.5s-4 3.5-4 8.5M16 3.5c0 5-4 5.5-4 8.5s4 3.5 4 8.5"/><path d="M9.8 18.6h4.4" stroke-width="2.5"/>',
@@ -3444,6 +3445,16 @@ const molduraHtml = (id, arquivo, altura, chave) =>
 const temaAtual = () => { const css = getComputedStyle(document.documentElement); return Object.fromEntries(KiroPlugins.VARIAVEIS_DO_TEMA.map(v => [v, css.getPropertyValue(v).trim()])); };
 const molduraDe = janela => [...document.querySelectorAll('iframe.plugin-moldura')].find(f => f.contentWindow === janela);
 
+// Ícone do plug-in (manifest.icon, validado em plugins.js): nome de um ícone do Kiro, que segue o pacote do tema,
+// ou o desenho de um <path> no traço do Kiro. Sem ícone (ou nome desconhecido), a peça de quebra-cabeça.
+const nomeDoIconeDoPlugin = m => { const v = m?.icon || ''; return TRACOS[v] ? v : v && KiroPlugins.CAMINHO_DE_ICONE.test(v) ? '' : 'plugin'; };
+function iconeDoPlugin(m, classe = '') {
+  const nome = nomeDoIconeDoPlugin(m);
+  return nome ? icone(nome, classe) : `<svg class="icone${classe ? ' ' + classe : ''}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="${escapeHtml(m.icon.trim())}"/></svg>`;
+}
+// Na barra lateral, ícone com nome vai por data-icone, para ser redesenhado quando o tema troca.
+const iconeNaLateral = m => { const nome = nomeDoIconeDoPlugin(m); return nome ? `<span class="rotulo-icone" data-icone="${nome}"></span>` : `<span class="rotulo-icone">${iconeDoPlugin(m)}</span>`; };
+
 // Plug-ins com `page` no manifesto ganham um item no grupo "Plug-ins" da barra lateral.
 function desenharNavDosPlugins() {
   const nav = document.querySelector('#nav-plugins');
@@ -3451,7 +3462,7 @@ function desenharNavDosPlugins() {
   const comPagina = [...pluginsAtivos].filter(([, e]) => e.manifesto?.page);
   nav.hidden = !comPagina.length;
   nav.innerHTML = comPagina.length ? `<p class="nav-grupo">${t('Plug-ins')}</p>${comPagina.map(([id, e]) =>
-    `<button class="nav-item${currentView === `plugin:${id}` ? ' active' : ''}" data-view="plugin:${escapeHtml(id)}"><span class="rotulo-icone" data-icone="plugin"></span><span class="rotulo">${escapeHtml(e.manifesto.page.title)}</span></button>`).join('')}` : '';
+    `<button class="nav-item${currentView === `plugin:${id}` ? ' active' : ''}" data-view="plugin:${escapeHtml(id)}">${iconeNaLateral(e.manifesto)}<span class="rotulo">${escapeHtml(e.manifesto.page.title)}</span></button>`).join('')}` : '';
   for (const b of nav.querySelectorAll('.nav-item')) b.onclick = () => { if (loaded) irPara(b.dataset.view); };
   desenharIconesFixos();
   aplicarLateralCompacta();   // os itens novos também ganham a dica no modo compacto
@@ -3601,7 +3612,7 @@ const seletorDoPainel = (id, painel) => `.plugin-painel[data-plugin="${CSS.escap
 // Um card por painel registrado; o cabeçalho traz o rótulo do painel e o nome do plug-in.
 function cartaoDoPainel(id, painel) {
   const nome = escapeHtml(pluginsAtivos.get(id)?.manifesto?.name || id);
-  return `<section class="card plugin-painel" data-plugin="${escapeHtml(id)}" data-painel="${escapeHtml(painel.id)}"><div class="card-head"><h2>${escapeHtml(painel.label)}</h2><span class="plugin-fonte">${nome}</span></div><div class="plugin-conteudo">${conteudoDosPaineis.get(chaveDoPainel(id, painel.id)) || `<div class="empty">${t('Carregando…')}</div>`}</div></section>`;
+  return `<section class="card plugin-painel" data-plugin="${escapeHtml(id)}" data-painel="${escapeHtml(painel.id)}"><div class="card-head"><h2>${iconeDoPlugin(pluginsAtivos.get(id)?.manifesto)}${escapeHtml(painel.label)}</h2><span class="plugin-fonte">${nome}</span></div><div class="plugin-conteudo">${conteudoDosPaineis.get(chaveDoPainel(id, painel.id)) || `<div class="empty">${t('Carregando…')}</div>`}</div></section>`;
 }
 const painelDoPlugin = (id, painelId) => pluginsAtivos.get(id)?.paineis?.find(p => p.id === painelId);
 const opcoesDoPainel = (id, painel) => KiroHoje.opcoesEfetivas(hojeLayout || { cartoes: [] }, `plugin:${id}:${painel.id}`, painel.opcoes);
@@ -4107,12 +4118,12 @@ function linhaDoPlugin({ id, manifesto }, situacao, erro = '', chaves = {}, conf
   const ligado = situacao === 'ativo' || situacao === 'parou';
   // Único lugar onde os comandos rodam; a nota aberta segue aberta por baixo do modal.
   const comandos = situacao === 'ativo' ? (pluginsAtivos.get(id)?.comandos || [])
-    .map(c => `<button type="button" class="secondary cfg-pequeno" data-comando-plugin="${escapeHtml(id)}" data-comando="${escapeHtml(c.id)}">${icone('plugin')} ${escapeHtml(c.label)}</button>`)
+    .map(c => `<button type="button" class="secondary cfg-pequeno" data-comando-plugin="${escapeHtml(id)}" data-comando="${escapeHtml(c.id)}">${iconeDoPlugin(m)} ${escapeHtml(c.label)}</button>`)
     .join('') : '';
   // Manifesto inválido não tem o que ligar; o que parou nesta sessão ainda pode ser desligado.
   const chave = m ? `<label class="cfg-chave"><input type="checkbox" data-plugin-id="${escapeHtml(id)}" ${ligado ? 'checked' : ''} aria-label="${ligado ? t('Desativar {nome}', { nome }) : t('Ativar {nome}', { nome })}" /><span class="interruptor" aria-hidden="true"></span></label>` : '';
   return `<div class="cfg-linha cfg-plugin"><span class="cfg-texto">
-    <span class="cfg-titulo">${nome}</span>
+    <span class="cfg-titulo cfg-titulo-plugin">${m ? iconeDoPlugin(m) : ''}${nome}</span>
     <span class="small-muted">${m ? t('Versão {versao} · por {autor}', { versao: escapeHtml(m.version), autor: escapeHtml(m.author) }) : t('Pasta {id}', { id: escapeHtml(id) })}</span>
     ${m?.description ? `<span class="small-muted">${escapeHtml(m.description)}</span>` : ''}
     ${m ? itensDePermissao(m, novas, hostsNovos) : ''}

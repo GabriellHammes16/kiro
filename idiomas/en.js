@@ -696,6 +696,7 @@
     'Grupo': 'Group',
   // domain.js — temas, skins e atalhos
   'Claro': 'Light',
+  'Grafite': 'Graphite',
   'Escuro Azul': 'Dark Blue',
   'Escuro Verde': 'Dark Green',
   'Escuro Âmbar': 'Dark Amber',
@@ -752,6 +753,7 @@
   'O campo secrets precisa ser uma lista.': 'The secrets field must be a list.',
   'Cada item de secrets precisa ser um objeto.': 'Each item in secrets must be an object.',
   'O campo page precisa ser um objeto { title, file }.': 'The page field must be an object { title, file }.',
+  'O campo icon precisa ser o nome de um ícone do Kiro ou o desenho de um caminho SVG (o atributo d de um path), com até 2000 caracteres.': 'The icon field must be the name of a Kiro icon or an SVG path drawing (the d attribute of a path), up to 2000 characters.',
   'O título da página (page.title) é obrigatório e vai até 40 caracteres.': 'The page title (page.title) is required and can be up to 40 characters.',
   'page.file precisa ser um arquivo .html da pasta do plug-in, sem barra.': 'page.file must be an .html file in the plugin folder, without a slash.',
   'Não foi possível abrir o Kiro': 'Could not open Kiro',

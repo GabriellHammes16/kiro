@@ -1,9 +1,10 @@
 {
   "id": "kanban-tasks",
   "name": "Quadro de Tarefas",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "author": "Kiro",
   "description": "Quadro Kanban das tarefas: em preparação, a fazer, em progresso e finalizado. Arrasta os cartões entre colunas.",
+  "icon": "M4.5 5h4v14h-4zM10 5h4v9h-4zM15.5 5h4v6h-4z",
   "minKiro": "0.17.7",
   "permissions": [
     "tasks:read",

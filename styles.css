@@ -1472,3 +1472,7 @@ div.fluxo-editor { overflow:auto; }
 
 /* Etiqueta no texto: pílula sutil, para se distinguir mesmo quando o destaque é da cor do texto (tema Kiro). */
 :is(.doc-corpo, .fluxo-editor) :is(.md-tag, .ed-etiqueta) { padding:0 4px; border-radius:4px; background:var(--accent-soft); }
+
+/* Ícone do plug-in ao lado do nome em Configurações → Plug-ins. */
+.cfg-titulo-plugin { display:inline-flex; align-items:center; gap:8px; }
+.cfg-titulo-plugin > .icone { width:16px; height:16px; color:var(--muted); }

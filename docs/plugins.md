@@ -63,6 +63,7 @@ fastest way to start.
 | `secrets` | Optional list of API keys the user types in. See [Secrets](#secrets). |
 | `settings` | Optional list of plugin settings the user changes in Settings → Plug-ins. See [Plugin settings](#plugin-settings). Needs `minKiro` 0.17.7 or newer. |
 | `page` | Optional `{ title, file }`. Gives the plugin its own full-page screen, opened from a "Plug-ins" entry in the sidebar. `title` is 1–40 characters; `file` must match `[a-z0-9][a-z0-9._-]{0,60}\.html` — no slash, no subfolder. See [Frames (custom UI)](#frames-custom-ui). |
+| `icon` | Optional. Shown in the sidebar entry, the plugin's cards on Today, its row in Settings → Plug-ins and its command buttons. Either the name of a Kiro icon (e.g. `"tarefas"`, `"calendario"`, `"grafico"`, `"notas"`, `"link"`), which follows the icon pack of the user's theme, or your own drawing as the `d` attribute of an SVG path on a 24×24 grid, e.g. `"M4.5 5h4v14h-4zM10 5h4v9h-4z"` — Kiro strokes it like its own icons (1.75 line, no fill, current text color). Only path letters, digits, spaces, `.`, `,`, `-` and `+` are accepted, up to 2000 characters; SVG or HTML markup is refused. An unknown icon name falls back to the default puzzle piece. Needs Kiro 0.20.3 or newer; older versions ignore the field. |
 
 An invalid manifest does not disable one feature — it stops the plugin from
 loading at all, and the reason is shown in Settings → Plug-ins.
