@@ -1390,7 +1390,15 @@ div.fluxo-editor { overflow:auto; }
 :is(.doc-corpo, .fluxo-editor) .cm-editor .md-imagem.redimensionando { user-select:none; }
 :is(.doc-corpo, .fluxo-editor) .cm-editor .math-bloco { display:block; margin:0 0 14px; padding:6px 0; overflow-x:auto; overflow-y:hidden; }
 :is(.doc-corpo, .fluxo-editor) .cm-editor .math-bloco .katex-display { margin:0; }
-:is(.doc-corpo, .fluxo-editor) .cm-editor .code-area-cabecalho { display:flex; justify-content:space-between; align-items:center; gap:10px; padding:7px 9px 7px 13px; background:var(--panel-raised); border:1px solid var(--line); border-radius:var(--raio-card) var(--raio-card) 0 0; }
+/* Bloco de código no editor: a caixa é desenhada nas próprias linhas (abertura, corpo e fechamento),
+   então continua inteira com o cursor na cerca, quando o texto da cerca aparece. */
+:is(.doc-corpo, .fluxo-editor) .cm-line.ed-codigo-bloco { padding:0 14px; border-inline:1px solid var(--line); font-size:.88em; line-height:1.65; }
+:is(.doc-corpo, .fluxo-editor) .cm-line.ed-codigo-inicio { margin-top:6px; border-top:1px solid var(--line); border-radius:var(--raio-card) var(--raio-card) 0 0; background:var(--panel-raised); }
+:is(.doc-corpo, .fluxo-editor) .cm-line.ed-codigo-fim { margin-bottom:6px; padding-bottom:4px; border-bottom:1px solid var(--line); border-radius:0 0 var(--raio-card) var(--raio-card); }
+:is(.doc-corpo, .fluxo-editor) .cm-line.ed-codigo-inicio + .cm-line.ed-codigo-bloco { padding-top:8px; }
+:is(.doc-corpo, .fluxo-editor) .cm-editor .code-area-cabecalho { display:flex; justify-content:space-between; align-items:center; gap:10px; margin-top:6px; padding:5px 8px 5px 14px; background:var(--panel-raised); border:1px solid var(--line); border-radius:var(--raio-card) var(--raio-card) 0 0; font-family:var(--fonte-interface); line-height:1.4; }
+/* O cabeçalho é um bloco à parte (não uma linha): o corpo logo abaixo começa com um respiro. */
+:is(.doc-corpo, .fluxo-editor) .cm-editor .code-area-cabecalho + .cm-line.ed-codigo-bloco { padding-top:8px; }
 :is(.doc-corpo, .fluxo-editor) .cm-editor .code-lang { color:var(--muted); font-size:12px; text-transform:uppercase; letter-spacing:1px; font-weight:600; }
 :is(.doc-corpo, .fluxo-editor) .cm-editor .code-copy { padding:4px 11px; font-size:12px; }
 :is(.doc-corpo, .fluxo-editor) .cm-editor .md-destaque { border-left-color:var(--acento); }

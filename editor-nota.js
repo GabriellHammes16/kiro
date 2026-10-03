@@ -92,9 +92,18 @@
           linhasDe(no.from, no.to, 'ed-codigo-bloco');
           excluir.push([no.from, no.to]);
           const primeira = state.doc.lineAt(no.from), ultima = state.doc.lineAt(no.to);
-          if (ultima.number > primeira.number + 1) r.estilos.push([state.doc.line(primeira.number + 1).from, state.doc.line(ultima.number - 1).to, 'ed-sem-corretor']);
-          esconder(primeira.from, primeira.to);
-          if (/^\s*(```|~~~)/.test(ultima.text) && ultima.number > primeira.number) esconder(ultima.from, ultima.to);
+          // Primeira e última linha fecham a caixa (cantos e bordas); bloco sem cerca de fim fica aberto embaixo.
+          r.linhas.push([primeira.from, 'ed-codigo-inicio']);
+          if (ultima.number > primeira.number && /^\s*(```|~~~)/.test(ultima.text)) r.linhas.push([ultima.from, 'ed-codigo-fim']);
+          r.estilos.push([primeira.from, ultima.to, 'ed-sem-corretor']);   // corpo e cercas (a linguagem, ex.: "js", não é palavra)
+          // Mesma regra do cabeçalho (editor-widgets: "o bloco todo"): com o cursor em qualquer linha do bloco,
+          // as duas cercas aparecem; antes a de abertura sumia e deixava uma linha vazia no lugar do cabeçalho.
+          let tocado = false;
+          for (let n = primeira.number; n <= ultima.number && !tocado; n++) tocado = linhasDoCursor.has(n);
+          if (!tocado) {
+            esconder(primeira.from, primeira.to);
+            if (/^\s*(```|~~~)/.test(ultima.text) && ultima.number > primeira.number) esconder(ultima.from, ultima.to);
+          }
           return false;
         }
       },

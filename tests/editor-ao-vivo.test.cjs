@@ -90,6 +90,20 @@ test('citação, régua e bloco de código', () => {
   assert.ok(r.estilos.some(([a, b, c]) => c === 'ed-sem-corretor' && texto.slice(a, b).includes('let a')));
 });
 
+test('bloco de código: abertura e fim marcados; com o cursor em qualquer linha, as duas cercas aparecem', () => {
+  const texto = 'antes\n\n```js\nlet a\n```\n\n.';
+  const corpo = texto.indexOf('let a');
+  const linhaDe = classe => ver(texto).linhas.filter(([, c]) => c === classe).map(([a]) => texto.slice(a, texto.indexOf('\n', a)));
+  assert.deepEqual(linhaDe('ed-codigo-inicio'), ['```js']);
+  assert.deepEqual(linhaDe('ed-codigo-fim'), ['```']);
+  assert.deepEqual(fatias(texto, ver(texto).esconder), ['```js', '```'], 'longe do bloco: as duas cercas somem');
+  assert.deepEqual(fatias(texto, ver(texto, { cursor: corpo }).esconder), [], 'cursor no corpo: nenhuma cerca some (antes a de abertura virava linha vazia)');
+  const r = ver(texto, { cursor: 0 });
+  assert.ok(r.estilos.some(([a, b, c]) => c === 'ed-sem-corretor' && texto.slice(a, b) === '```js\nlet a\n```'), 'o corretor ignora o bloco todo, inclusive a linguagem');
+  // Bloco sem cerca de fim: fica aberto embaixo.
+  assert.deepEqual(ver('```\nx').linhas.filter(([, c]) => c === 'ed-codigo-fim'), []);
+});
+
 test('seleção de várias linhas mostra os símbolos em todas', () => {
   const texto = '**a**\n**b**\n**c**';
   const r = ver(texto, { cursor: 0, cursorFim: texto.length });
