@@ -462,7 +462,7 @@
   'Arraste uma tarefa para cá.': 'Drag a task here.',
   'Organizar por': 'Organize by',
   'Por data': 'By date',
-  'Por status': 'By status',
+  'Lista': 'List',
   'Não começado': 'Not started',
   'Em andamento': 'In progress',
   'Pausado': 'Paused',

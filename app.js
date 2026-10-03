@@ -368,11 +368,12 @@ function renderTasks() {
   const dasNotas = tarefasDasNotas().filter(x => !x.feita);
   const atrasadas = abertas.filter(x => x.due < hoje), paraHoje = abertas.filter(x => x.due === hoje), proximas = abertas.filter(x => x.due > hoje);
   const abas = [['todas', t('Todas'), abertas.length + dasNotas.length], ['hoje', t('Hoje'), atrasadas.length + paraHoje.length], ['proximas', t('Próximas'), proximas.length], ['notas', t('Nas notas'), dasNotas.length], ['feitas', t('Concluídas'), feitas.length]];
-  const visao = lerPreferencia('tarefasVisao') === 'status' ? 'status' : 'data';
+  // Por data, ou por status em lista (seções empilhadas) ou em colunas (lado a lado, como um quadro).
+  const visao = ['status', 'colunas'].includes(lerPreferencia('tarefasVisao')) ? lerPreferencia('tarefasVisao') : 'data', porStatusAtivo = visao !== 'data';
   // Por status, "Nas notas" e "Concluídas" não são filtros (concluído é uma seção): vale "Todas".
-  if (visao === 'status' && ['notas', 'feitas'].includes(filtroDasTarefas)) filtroDasTarefas = 'todas';
+  if (porStatusAtivo && ['notas', 'feitas'].includes(filtroDasTarefas)) filtroDasTarefas = 'todas';
   const f = filtroDasTarefas;
-  const abasVisiveis = visao === 'status' ? abas.filter(([id]) => !['notas', 'feitas'].includes(id)) : abas;
+  const abasVisiveis = porStatusAtivo ? abas.filter(([id]) => !['notas', 'feitas'].includes(id)) : abas;
   const grupo = (titulo, itens, linha = taskRow, classe = '') => itens.length ? `<div class="task-group ${classe}"><h2>${titulo}<span class="task-group-conta">${itens.length}</span></h2>${itens.map(linha).join('')}</div>` : '';
   const porData = lista => GRUPOS_DE_DATA.map(([id, nome]) => grupo(t(nome), lista.filter(x => grupoDaData(x.due, hoje) === id), taskRow, id === 'atrasadas' ? 'grupo-atrasado' : '')).join('');
   // Por status: uma seção por status; a tarefa se arrasta entre elas (ou ← → com o foco nela).
@@ -382,12 +383,12 @@ function renderTasks() {
     const aberto = lerPreferencia('tarefasConcluidoAberto') === '1';
     return Kiro.STATUS_DA_TAREFA.map(st => {
       const itens = lista.filter(x => Kiro.statusDaTarefa(x) === st).sort((a, b) => st === 'concluido' ? b.due.localeCompare(a.due) : a.due.localeCompare(b.due) || ordemDaPrioridade(a) - ordemDaPrioridade(b));
-      const recolhida = st === 'concluido' && !aberto;
-      return `<section class="status-secao${recolhida ? ' recolhida' : ''}" data-status="${st}"><h2>${st === 'concluido' ? `<button type="button" class="status-recolher" data-recolher-concluido aria-expanded="${!recolhida}">` : ''}<span class="status-marca" aria-hidden="true"></span>${t(ROTULOS_DE_STATUS[st])}<span class="task-group-conta">${itens.length}</span>${st === 'concluido' ? '</button>' : ''}</h2>
+      const recolhida = visao === 'status' && st === 'concluido' && !aberto;   // em colunas, nada recolhe
+      return `<section class="status-secao${recolhida ? ' recolhida' : ''}" data-status="${st}"><h2>${st === 'concluido' && visao === 'status' ? `<button type="button" class="status-recolher" data-recolher-concluido aria-expanded="${!recolhida}">` : ''}<span class="status-marca" aria-hidden="true"></span>${t(ROTULOS_DE_STATUS[st])}<span class="task-group-conta">${itens.length}</span>${st === 'concluido' && visao === 'status' ? '</button>' : ''}</h2>
         <div class="status-itens">${itens.map(x => `<div class="status-item" draggable="true" tabindex="0" data-tarefa="${x.id}" aria-label="${escapeHtml(x.title)}">${taskRow(x)}</div>`).join('') || `<p class="status-vazio">${t('Arraste uma tarefa para cá.')}</p>`}</div></section>`;
     }).join('');
   };
-  const corpo = visao === 'status' ? porStatus()
+  const corpo = porStatusAtivo ? porStatus()
     : f === 'feitas' ? grupo(t('Concluídas'), feitas)
     : f === 'notas' ? grupo(t('Nas notas'), dasNotas, linhaDaTarefaDaNota)
     : f === 'hoje' ? porData([...atrasadas, ...paraHoje])
@@ -399,8 +400,8 @@ function renderTasks() {
   return `${head(t("Organização"), t("Tarefas"), t("Concentre-se no que realmente importa hoje."), `<button class="primary" id="add-task">${icone('mais')} ${t('Nova tarefa')}</button>`)}
   <div class="tarefas-resumo">${numero(abertas.length, t('Em aberto'))}${numero(atrasadas.length, t('Atrasadas'), atrasadas.length ? 'alerta' : '')}${numero(paraHoje.length, t('Para hoje'))}<div class="resumo-item resumo-progresso"><b>${pct}%</b><span>${t('{feitas} de {total} concluídas', { feitas: feitas.length, total })}</span><div class="progress"><div style="width:${pct}%"></div></div></div></div>
   <div class="tarefas-barra"><div class="segmentos-compactos tarefas-abas" role="group" aria-label="${t('Filtrar')}">${abasVisiveis.map(([id, rotulo, n]) => `<button type="button" class="segmento-botao" data-tarefas-aba="${id}" aria-pressed="${f === id}">${rotulo} <span class="segmento-contagem">${n}</span></button>`).join('')}</div>
-  <div class="segmentos-compactos tarefas-visao" role="group" aria-label="${t('Organizar por')}">${[['data', 'calendario', t('Por data')], ['status', 'tarefas', t('Por status')]].map(([id, ic, r]) => `<button type="button" class="segmento-botao" data-tarefas-visao="${id}" aria-pressed="${visao === id}">${icone(ic)} ${r}</button>`).join('')}</div></div>
-  <section class="card tarefas-lista${visao === 'status' ? ' por-status' : ''}">${corpo || `<div class="empty">${vazio}</div>`}</section>`;
+  <div class="segmentos-compactos tarefas-visao" role="group" aria-label="${t('Organizar por')}">${[['data', 'calendario', t('Por data')], ['status', 'lista-marcadores', t('Lista')], ['colunas', 'colunas', t('Colunas')]].map(([id, ic, r]) => `<button type="button" class="segmento-botao" data-tarefas-visao="${id}" aria-pressed="${visao === id}">${icone(ic)} ${r}</button>`).join('')}</div></div>
+  <section class="card tarefas-lista${porStatusAtivo ? ' por-status' : ''}${visao === 'colunas' ? ' por-colunas' : ''}">${corpo || `<div class="empty">${vazio}</div>`}</section>`;
 }
 const ROTULOS_DE_STATUS = { 'nao-comecado': frase('Não começado'), andamento: frase('Em andamento'), pausado: frase('Pausado'), concluido: frase('Concluído') };
 const gravarPreferencia = (chave, valor) => { try { localStorage.setItem(`kiro.${chave}`, valor); } catch { /* janela privada: vale só nesta sessão */ } };
@@ -525,6 +526,7 @@ const TRACOS = {
   salvar: '<path d="M5 6.5A1.5 1.5 0 0 1 6.5 5h9L19 8.5V18a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 5 18z"/><path d="M8.5 5v4.5h6M8.5 19.5v-5h7v5"/>',
   detalhes: '<path d="M4.5 8h8M17 8h2.5M4.5 16h3M12 16h7.5"/><circle cx="14.5" cy="8" r="2.2"/><circle cx="9.5" cy="16" r="2.2"/>',
   // Modo Personalizar do Hoje: alça de arrastar, largura e esconder.
+  colunas: '<rect x="3.5" y="4.5" width="17" height="15" rx="2"/><path d="M9.2 4.5v15M14.8 4.5v15"/>',
   arrastar: '<path d="M9 6h.01M15 6h.01M9 12h.01M15 12h.01M9 18h.01M15 18h.01" stroke-width="3"/>',
   'largura-inteira': '<path d="M4 12h16M7.5 8.5 4 12l3.5 3.5M16.5 8.5 20 12l-3.5 3.5"/>',
   'largura-normal': '<path d="M3.5 12H10M14 12h6.5M6.5 8.5 10 12l-3.5 3.5M17.5 8.5 14 12l3.5 3.5"/>',

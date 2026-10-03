@@ -1573,3 +1573,15 @@ html:not(.papel-em-video) .papel-so-video { display:none; }
 [data-status="pausado"] .status-marca { border-color:var(--warning); }
 [data-status="pausado"] .status-marca::after { content:""; position:absolute; inset:2.5px 2.5px; border-inline:1.5px solid var(--warning); }
 [data-status="concluido"] .status-marca { border-color:var(--acento); background:var(--acento); }
+
+/* Tarefas → Colunas: as mesmas seções de status lado a lado, como um quadro. */
+/* Quatro colunas numa linha quando cabem; duas, depois uma, conforme a largura da própria área. */
+.tarefas-lista.por-colunas { display:grid; grid-template-columns:repeat(4, minmax(0, 1fr)); gap:var(--esp-3); align-items:start; padding:0; background:transparent; border:0; container-type:inline-size; }
+@media (max-width:1100px) { .tarefas-lista.por-colunas { grid-template-columns:repeat(2, minmax(0, 1fr)); } }
+@media (max-width:640px) { .tarefas-lista.por-colunas { grid-template-columns:1fr; } }
+.por-colunas .status-secao { min-height:160px; margin:0; padding:var(--esp-3) var(--esp-2) var(--esp-2); border:1px solid var(--line); background:var(--panel); }
+.por-colunas .status-secao.alvo { border-style:dashed; }
+.por-colunas .status-secao h2 { padding:0 var(--esp-1) var(--esp-2); margin:0 0 var(--esp-1); border-bottom:1px solid var(--line); }
+.por-colunas .task-item { flex-wrap:wrap; row-gap:4px; min-height:0; padding-top:var(--esp-2); padding-bottom:var(--esp-2); }
+.por-colunas .task-title { min-width:0; overflow-wrap:anywhere; }
+.por-colunas .task-item .priority { margin-left:auto; }
