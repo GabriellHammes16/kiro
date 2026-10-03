@@ -1437,7 +1437,7 @@ function folderModal(folder={title:"",description:"",parentId:""}) { modal(folde
 let busy=false, failed=false, loaded=false, modalDirty=false, lastDay=today();
 let aguardandoCofre=false;   // primeira abertura no aplicativo: nada é lido até escolher o cofre
 // null = ainda não semeado; na primeira exibição a árvore abre inteira.
-let expanded=null, renderedView=null, editing=null, editorDirty=false, grafoRaf=null, blocoAberto=null;
+let expanded=null, renderedView=null, editing=null, editorDirty=false, grafoRaf=null;
 // Mudança num fluxo vai direto para `state` e é gravada depois de uma pausa. Enquanto houver
 // uma pendente, a releitura automática não roda (ela trocaria `state` e perderia a mudança).
 let fluxoPendente=false, timerDoFluxo=null;
@@ -1820,7 +1820,6 @@ function desenharLinksDoc(){
 }
 function bindEditor(){
   const titulo=$('#doc-title'), corpo=$('#doc-corpo');
-  blocoAberto=null; // o campo da nota anterior saiu junto com o HTML antigo
   const sujar=()=>{editorDirty=true;estadoDoc();};
   titulo.oninput=()=>{editing.title=titulo.value;sujar();};
   // Enter ou seta para baixo no título descem para o texto, como num processador de texto.
@@ -2591,11 +2590,7 @@ async function copiarBloco(botao) {
   botao.classList.add('copiado');
   setTimeout(() => { botao.textContent = t('Copiar'); botao.classList.remove('copiado'); }, 1400);
 }
-// ---- Edição no lugar ----
-// A nota fica sempre desenhada e não há modos para alternar. Clicar num bloco
-// troca só aquele bloco pelo seu Markdown, num campo que cresce com o texto; ao
-// sair dele, o bloco volta a ser desenhado. É o Live Preview do Obsidian.
-// blocoAberto = { campo, inicio, tamanho, separador }: onde o campo está na fonte.
+// ---- Notas e links ----
 
 // Sai da nota pelo fluxo normal (salva se preciso) e filtra a tela Notas pela etiqueta.
 async function buscarEtiqueta(texto) {
@@ -2609,96 +2604,6 @@ function seguirWikilink(link, painel) {
   const alvo = link.dataset.id ? getNote(link.dataset.id) : notaVazia({ title: link.dataset.alvo });
   return abrirNota(alvo, { painel });
 }
-const ajustarAltura = campo => { campo.style.height = 'auto'; campo.style.height = campo.scrollHeight + 'px'; };
-
-// Enquanto se digita, os blocos seguintes mudam de lugar na fonte. Manter data-pos
-// e data-fim em dia faz o próximo clique abrir o trecho certo sem redesenhar a nota.
-function deslocarBlocos(depoisDe, delta) {
-  if (!delta) return;
-  for (const bloco of $('#doc-corpo').querySelectorAll('[data-pos]')) {
-    const pos = Number(bloco.dataset.pos), fim = Number(bloco.dataset.fim);
-    if (pos > depoisDe) { bloco.dataset.pos = pos + delta; bloco.dataset.fim = fim + delta; }
-    // A lista em volta do item em edição cresce junto com ele.
-    else if (fim >= depoisDe) bloco.dataset.fim = fim + delta;
-  }
-}
-
-function montarCampo(valor) {
-  const campo = document.createElement('textarea');
-  campo.className = 'bloco-editor';
-  campo.value = valor;
-  campo.rows = 1;
-  campo.setAttribute('aria-label', t('Conteúdo da nota'));
-  campo.addEventListener('input', () => { aoDigitar(campo); atualizarSugestoes(campo); });
-  campo.addEventListener('keydown', teclaNoBloco);
-  campo.addEventListener('click', () => atualizarSugestoes(campo));
-  campo.addEventListener('keyup', evento => { if (/^(ArrowLeft|ArrowRight|Home|End)$/.test(evento.key)) atualizarSugestoes(campo); });
-  campo.addEventListener('paste', aoColarOuSoltar);
-  campo.addEventListener('drop', aoColarOuSoltar);
-  // Adiado: um prompt do menu tira o foco por um instante e o devolve. Só fecha
-  // se, passado o evento, o foco realmente foi para outro lugar.
-  campo.addEventListener('focusout', () => setTimeout(() => {
-    if (blocoAberto?.campo === campo && document.activeElement !== campo) fecharBloco();
-  }, 0));
-  return campo;
-}
-
-function ativarCampo(campo, posicao, cursor) {
-  blocoAberto = { campo, ...posicao };
-  ajustarAltura(campo);
-  campo.focus({ preventScroll: true });
-  campo.scrollIntoView({ block: 'nearest' });
-  const alvo = Math.max(0, Math.min(cursor, campo.value.length));
-  campo.setSelectionRange(alvo, alvo);
-  return campo;
-}
-
-function aoDigitar(campo) {
-  const bloco = blocoAberto;
-  if (bloco?.campo !== campo) return;
-  // Parágrafo novo no fim da nota: a linha em branco que o separa só entra
-  // quando algo é escrito, para um clique à toa não sujar a nota.
-  if (bloco.separador) { editing.body += bloco.separador; bloco.separador = ''; }
-  editing.body = editing.body.slice(0, bloco.inicio) + campo.value + editing.body.slice(bloco.inicio + bloco.tamanho);
-  deslocarBlocos(bloco.inicio, campo.value.length - bloco.tamanho);
-  bloco.tamanho = campo.value.length;
-  ajustarAltura(campo);
-  editorDirty = true; estadoDoc();
-}
-
-function fecharBloco() {
-  fecharSugestoes();
-  const bloco = blocoAberto;
-  if (!bloco) return;
-  blocoAberto = null;
-  if (!bloco.campo.isConnected) return;
-  // Item de lista: redesenha a lista inteira, porque a linha editada pode ter
-  // deixado de ser item — ou virado outro tipo de bloco.
-  const lista = bloco.item?.parentElement.closest('[data-pos]');
-  const alvo = lista || bloco.campo;
-  const inicio = lista ? Number(lista.dataset.pos) : bloco.inicio;
-  const fonte = lista ? editing.body.slice(inicio, Number(lista.dataset.fim)) : bloco.campo.value;
-  const molde = document.createElement('template');
-  molde.innerHTML = renderizarMarkdown(fonte, inicio);
-  alvo.replaceWith(molde.content);
-}
-
-function abrirBloco(elemento, cursor = Infinity) {
-  fecharBloco();
-  if (!elemento?.isConnected) return abrirNoFim();
-  const inicio = Number(elemento.dataset.pos), fim = Number(elemento.dataset.fim);
-  const campo = montarCampo(editing.body.slice(inicio, fim));
-  // O campo herda o tamanho do título e a fonte do código, para o texto não pular.
-  if (/^H[1-6]$/.test(elemento.tagName)) {
-    const estilo = getComputedStyle(elemento);
-    Object.assign(campo.style, { fontSize: estilo.fontSize, fontWeight: estilo.fontWeight, lineHeight: estilo.lineHeight });
-  }
-  if (elemento.classList.contains('code-area') || elemento.classList.contains('plugin-bloco')) campo.classList.add('bloco-codigo');
-  const item = elemento.tagName === 'LI' ? elemento : null;
-  if (item) item.replaceChildren(campo); else elemento.replaceWith(campo);
-  return ativarCampo(campo, { inicio, tamanho: fim - inicio, separador: '', item }, cursor);
-}
-
 // Cursor no fim do texto da nota. Sem editor montado (ainda carregando, ou no modo simples
 // quando o editor não carregou) devolve null: quem chama desiste, em vez de abrir um segundo
 // editor sobre o mesmo texto.
@@ -2708,77 +2613,8 @@ function abrirNoFim() {
   return editorDaNota.editor.area();
 }
 
-function abrirNoPonto(evento) {
-  const bloco = evento.target.closest('[data-pos]');
-  if (!bloco || !$('#doc-corpo').contains(bloco)) return abrirNoFim();
-  return abrirBloco(bloco, cursorNoBloco(bloco, evento));
-}
-
-// Salvar redesenha a nota; isto devolve o cursor ao bloco em que se escrevia.
-function retomarBloco({ inicio, cursor }) {
-  const bloco = $('#doc-corpo')?.querySelector(`[data-pos="${inicio}"]`);
-  if (bloco) abrirBloco(bloco, cursor);
-}
-
-// Onde, no Markdown do bloco, fica o ponto clicado. O texto desenhado não tem os
-// colchetes, asteriscos e cercas da fonte: a fonte é percorrida consumindo só os
-// caracteres que batem com o texto visível até o ponto do clique.
-function cursorNoBloco(bloco, evento) {
-  const fonte = editing.body.slice(Number(bloco.dataset.pos), Number(bloco.dataset.fim));
-  const faixa = document.createRange();
-  const ponto = document.caretPositionFromPoint?.(evento.clientX, evento.clientY);
-  if (ponto) faixa.setEnd(ponto.offsetNode, ponto.offset);
-  else {
-    const antigo = document.caretRangeFromPoint?.(evento.clientX, evento.clientY);
-    if (!antigo) return fonte.length;
-    faixa.setEnd(antigo.startContainer, antigo.startOffset);
-  }
-  // Bloco de plug-in: o desenho não corresponde à fonte; o cursor vai para o texto do bloco.
-  if (bloco.classList.contains('plugin-bloco')) return (fonte.indexOf('\n') + 1) || fonte.length;
-  let origem = bloco, k = 0;
-  const codigo = bloco.querySelector('pre code');
-  if (codigo) {
-    // Legenda e botão Copiar não existem na fonte: conta a partir do código,
-    // logo depois da cerca de abertura.
-    k = fonte.indexOf('\n') + 1;
-    if (!codigo.contains(faixa.endContainer)) return k || fonte.length;
-    origem = codigo;
-  }
-  if (!origem.contains(faixa.endContainer)) return fonte.length;
-  faixa.setStart(origem, 0);
-  const visivel = faixa.toString();
-  let j = 0;
-  while (k < fonte.length && j < visivel.length) { if (fonte[k] === visivel[j]) j++; k++; }
-  return k;
-}
-
-function teclaNoBloco(evento) {
-  const campo = evento.currentTarget;
-  if (sugestao?.campo === campo && teclaNaSugestao(evento)) return;
-  if (evento.key === 'Escape') { evento.preventDefault(); evento.stopPropagation(); fecharBloco(); return; }
-  if (evento.key !== 'ArrowUp' && evento.key !== 'ArrowDown') return;
-  if (evento.shiftKey || evento.altKey || evento.ctrlKey || evento.metaKey) return;
-  if (campo.selectionStart !== campo.selectionEnd) return;
-  const subir = evento.key === 'ArrowUp';
-  // Só troca de bloco com o cursor já na ponta: dentro do texto a seta continua
-  // andando pelas linhas, inclusive as quebradas pela largura da página.
-  if (campo.selectionStart !== (subir ? 0 : campo.value.length)) return;
-  const referencia = blocoAberto?.item || campo;
-  let vizinho = subir ? referencia.previousElementSibling : referencia.nextElementSibling;
-  while (vizinho && !vizinho.dataset.pos) vizinho = subir ? vizinho.previousElementSibling : vizinho.nextElementSibling;
-  if (!vizinho && blocoAberto?.item) {
-    const lista = blocoAberto.item.parentElement.closest('[data-pos]');
-    vizinho = subir ? lista?.previousElementSibling : lista?.nextElementSibling;
-  }
-  // Caindo numa lista, a edição começa pelo item da ponta, não pela lista toda.
-  if (/^(UL|OL)$/.test(vizinho?.tagName)) vizinho = subir ? vizinho.lastElementChild : vizinho.firstElementChild;
-  if (!vizinho) return;
-  evento.preventDefault();
-  abrirBloco(vizinho, subir ? Infinity : 0);
-}
-
 // ---- Sugestões de [[link]] ----
-// A lista não toma o foco: o teclado continua no campo e teclaNoBloco a consulta primeiro.
+// A lista não toma o foco: o teclado continua no campo e a tecla é tratada pelo editor, que consulta a lista primeiro.
 let sugestao = null; // { campo, lista, titulos, indice, inicio }
 function fecharSugestoes() { sugestao?.lista.remove(); sugestao = null; }
 // A lista é fixa na tela: se a página rolar, fecha em vez de ficar longe do cursor.
@@ -2814,7 +2650,7 @@ function inserirSugestao(i) {
   const { campo, titulos, inicio } = sugestao;
   fecharSugestoes();
   campo.setSelectionRange(inicio, campo.selectionStart);
-  inserirTexto(campo, titulos[i] + ']]'); // dispara input: aoDigitar marca a nota como alterada
+  inserirTexto(campo, titulos[i] + ']]'); // dispara input: o editor marca a nota como alterada
 }
 function teclaNaSugestao(evento) {
   if (evento.ctrlKey || evento.altKey || evento.metaKey) return false;
@@ -2909,24 +2745,16 @@ async function colarImagens(campo, arquivos) {
   }
   if (!trechos.length || !editing) return;
   // Se o bloco fechou enquanto a imagem era gravada, ela entra no fim da nota.
-  const destino = (campo.inserir ? editorDaNota?.editor.area() === campo : campo.isConnected && blocoAberto?.campo === campo) ? campo : abrirNoFim();
+  const destino = editorDaNota?.editor.area() === campo ? campo : abrirNoFim();
   if (!destino) return;
   // Cada imagem vira um parágrafo próprio, separado do texto em volta por linha em branco.
   const texto = destino.value, anterior = texto.slice(0, destino.selectionStart), seguinte = texto.slice(destino.selectionEnd);
   const antes = !anterior || anterior.endsWith('\n\n') ? '' : anterior.endsWith('\n') ? '\n' : '\n\n';
   const depois = !seguinte || seguinte.startsWith('\n\n') ? '' : seguinte.startsWith('\n') ? '\n' : '\n\n';
   inserirTexto(destino, antes + trechos.join('\n\n') + depois);
-  // Fecha o bloco para a imagem aparecer na hora, em vez do ![[...]] cru.
-  fecharBloco();
   status(trechos.length > 1 ? t('{n} imagens coladas', { n: trechos.length }) : t('Imagem colada'));
 }
-function aoColarOuSoltar(evento) {
-  const arquivos = imagensDoEvento(evento.clipboardData || evento.dataTransfer);
-  if (!arquivos.length) return;
-  evento.preventDefault();
-  colarImagens(evento.currentTarget, arquivos);
-}
-// Ctrl+V com a nota aberta mas nenhum bloco em edição: a imagem entra no fim da nota.
+// Ctrl+V com a nota aberta mas o editor sem foco: a imagem entra no fim da nota.
 document.addEventListener('paste', evento => {
   if (!editing || editorDaNota?.editor.temFoco() || evento.defaultPrevented || !$('#doc-corpo')) return;
   if (evento.target.closest?.('input, textarea, select, [contenteditable]')) return;
@@ -2940,47 +2768,6 @@ document.addEventListener('paste', evento => {
 // Arquivo solto fora da nota não deve abrir a imagem no lugar do aplicativo.
 window.addEventListener('dragover', evento => { if (evento.dataTransfer?.types.includes('Files')) evento.preventDefault(); });
 window.addEventListener('drop', evento => { if (evento.dataTransfer?.types.includes('Files')) evento.preventDefault(); });
-
-// Alça no canto da imagem: arrastar muda a largura na hora e, ao soltar, grava
-// |largura no ![[...]] da fonte — o mesmo formato do Obsidian.
-function redimensionarImagem(alca, inicio) {
-  const moldura = alca.closest('.md-imagem'), img = moldura.querySelector('img'), bloco = moldura.closest('[data-pos]');
-  if (!bloco || !img.naturalWidth) return;
-  fecharBloco();
-  const indice = [...bloco.querySelectorAll('.md-imagem')].indexOf(moldura);
-  const larguraInicial = Math.round(img.getBoundingClientRect().width);
-  const limite = $('#doc-corpo').clientWidth;
-  let largura = larguraInicial;
-  moldura.classList.add('redimensionando');
-  const mover = evento => {
-    largura = Math.round(Math.min(limite, Math.max(48, larguraInicial + evento.clientX - inicio.clientX)));
-    img.style.width = largura + 'px';
-  };
-  const soltar = () => {
-    document.removeEventListener('pointermove', mover);
-    document.removeEventListener('pointerup', soltar);
-    document.removeEventListener('pointercancel', soltar);
-    moldura.classList.remove('redimensionando');
-    if (largura !== larguraInicial) gravarLarguraDaImagem(bloco, indice, largura);
-  };
-  document.addEventListener('pointermove', mover);
-  document.addEventListener('pointerup', soltar);
-  document.addEventListener('pointercancel', soltar);
-}
-function gravarLarguraDaImagem(bloco, indice, largura) {
-  if (!bloco.isConnected) return;
-  const inicio = Number(bloco.dataset.pos), fim = Number(bloco.dataset.fim);
-  const fonte = editing.body.slice(inicio, fim);
-  const achado = imagensNaFonte(fonte)[indice];
-  if (!achado) return;
-  const trecho = fonte.slice(0, achado.inicio) + `![[${achado.imagem.caminho}|${largura}]]` + fonte.slice(achado.fim);
-  editing.body = editing.body.slice(0, inicio) + trecho + editing.body.slice(fim);
-  deslocarBlocos(inicio, trecho.length - fonte.length);
-  const molde = document.createElement('template');
-  molde.innerHTML = renderizarMarkdown(trecho, inicio);
-  bloco.replaceWith(molde.content);
-  editorDirty = true; estadoDoc();
-}
 
 // Clicar na imagem abre ela inteira sobre a nota; Esc ou um clique fecham. O
 // Markdown da imagem continua a um clique do botão direito, como nos outros blocos.
@@ -3010,80 +2797,6 @@ function fecharImagemInteira() {
   telaDeImagem = null;
   document.body.classList.remove('com-imagem-inteira');
   document.removeEventListener('keydown', aoTeclarNaImagem, true);
-}
-
-// Marcar e desmarcar uma tarefa é trocar [ ] por [x] na linha, como no Obsidian.
-function marcarTarefa(caixa) {
-  const inicio = Number(caixa.closest('[data-pos]')?.dataset.pos);
-  if (!Number.isInteger(inicio)) return;
-  fecharBloco();
-  const item = $('#doc-corpo').querySelector(`[data-pos="${inicio}"]`);
-  if (!item) return;
-  const linha = editing.body.slice(inicio, Number(item.dataset.fim));
-  const trocada = linha.replace(/^(\s*(?:[-*+]|\d+\.)\s+\[)([ xX])(\])/, (_, antes, marca, depois) => antes + (marca === ' ' ? 'x' : ' ') + depois);
-  if (trocada === linha) return;
-  editing.body = editing.body.slice(0, inicio) + trocada + editing.body.slice(inicio + linha.length);
-  const alvo = item.parentElement.closest('[data-pos]') || item;
-  const molde = document.createElement('template');
-  molde.innerHTML = renderizarMarkdown(editing.body.slice(Number(alvo.dataset.pos), Number(alvo.dataset.fim)), Number(alvo.dataset.pos));
-  alvo.replaceWith(molde.content);
-  editorDirty = true; estadoDoc();
-}
-
-function bindCorpo(corpo) {
-  corpo.addEventListener('mousedown', evento => {
-    if (evento.button === 1) return;
-    const alca = evento.target.closest('.md-alca');
-    if (alca && evento.button === 0) { evento.preventDefault(); return void redimensionarImagem(alca, evento); }
-    // A caixa de tarefa se vira sozinha; o item não entra em edição por causa dela.
-    if (evento.target.closest('.md-tarefa input')) return;
-    if (blocoAberto?.campo === evento.target) return; // dentro do campo aberto: comportamento normal
-    // Links e o botão Copiar agem no click. Segurar o foco evita que o bloco aberto
-    // feche e mude a altura da página entre apertar e soltar o botão do mouse.
-    if (evento.button === 0 && evento.target.closest('a, button, .md-imagem img, .md-tag')) return void evento.preventDefault();
-    evento.preventDefault();
-    abrirNoPonto(evento);
-  });
-  corpo.addEventListener('click', evento => {
-    // Link desenhado por plug-in nunca navega a janela: http(s) abre fora (no
-    // aplicativo, o setWindowOpenHandler manda ao navegador do sistema); o resto não faz nada.
-    const linkDoPlugin = evento.target.closest('.plugin-bloco a');
-    if (linkDoPlugin) {
-      evento.preventDefault();
-      const destino = linkDoPlugin.getAttribute('href') || '';
-      if (/^https?:\/\//i.test(destino)) window.open(destino, '_blank', 'noopener,noreferrer');
-      return;
-    }
-    const copiar = evento.target.closest('.code-copy');
-    if (copiar) return void copiarBloco(copiar);
-    const imagem = evento.target.closest('.md-imagem img');
-    if (imagem) { evento.preventDefault(); return void abrirImagemInteira(imagem.src, imagem.alt); }
-    const etiqueta = evento.target.closest('.md-tag');
-    if (etiqueta) return void buscarEtiqueta(etiqueta.textContent);
-    const link = evento.target.closest('.wikilink');
-    if (link) { evento.preventDefault(); seguirWikilink(link); }
-  });
-  // O botão direito já abriu o bloco no mousedown; o menu age sobre ele. Shift + botão direito
-  // deixa o menu do navegador (na versão web, é onde ficam as sugestões de ortografia).
-  corpo.addEventListener('contextmenu', evento => {
-    if (evento.shiftKey && !window.cadernoDesktop) return;
-    const area = blocoAberto?.campo ?? abrirNoPonto(evento);
-    if (podeCorrigir(evento)) return esperarCorretor(evento, area, menuDaNota());
-    abrirMenuContexto(evento, area);
-  });
-  // change cobre mouse e teclado (espaço na caixa focada).
-  corpo.addEventListener('change', evento => { if (evento.target.matches('.md-tarefa input[type="checkbox"]')) marcarTarefa(evento.target); });
-  corpo.addEventListener('dragover', evento => { if (evento.dataTransfer?.types.includes('Files')) evento.preventDefault(); });
-  // Solto sobre o texto desenhado: abre o bloco no ponto e insere lá.
-  corpo.addEventListener('drop', evento => {
-    if (evento.defaultPrevented) return;
-    const arquivos = imagensDoEvento(evento.dataTransfer);
-    if (!arquivos.length) return;
-    evento.preventDefault();
-    colarImagens(blocoAberto?.campo ?? abrirNoPonto(evento), arquivos);
-  });
-  // Imagem que não existe mais no cofre: mostra o nome no lugar de um ícone quebrado.
-  corpo.addEventListener('error', evento => { if (evento.target.tagName === 'IMG') evento.target.closest('.md-imagem')?.classList.add('quebrada'); }, true);
 }
 
 // ---- Menu de contexto do corpo da nota ----
@@ -3164,7 +2877,7 @@ function wikilinkNoCursor(area) {
   return null;
 }
 function menuDaNota() {
-  const destino = wikilinkNoCursor(editorDaNota?.editor.area() ?? blocoAberto?.campo);
+  const destino = wikilinkNoCursor(editorDaNota?.editor.area());
   return [
     ...(destino ? [
       { rotulo: t('Ir para "{alvo}"', { alvo: destino.alvo }), icone: icone('ir-para'), acao: () => abrirNota(destino.nota || notaVazia({ title: destino.alvo })) },

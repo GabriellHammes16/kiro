@@ -169,7 +169,7 @@ select:focus-visible, textarea:focus-visible, .tree-row:focus-visible {
   outline: 2px solid var(--acento); outline-offset: 2px;
 }
 /* Escrever não precisa de moldura: o cursor já mostra onde o foco está. */
-.doc-title:focus, .doc-title:focus-visible, .bloco-editor:focus, .bloco-editor:focus-visible { outline: none; }
+.doc-title:focus, .doc-title:focus-visible { outline: none; }
 
 /* Entrada da tela, só quando a view muda de fato. */
 @keyframes viewEnter { from { opacity:0; transform:translateY(9px); } to { opacity:1; transform:none; } }
@@ -220,9 +220,6 @@ select:focus-visible, textarea:focus-visible, .tree-row:focus-visible {
    campo com a mesma tipografia do texto: sem moldura, sem alça de redimensionar
    e sem rolagem própria — ele cresce junto com o que se escreve. */
 .doc-corpo { flex:1 0 auto; padding:10px 0 26px; cursor:text; }
-.bloco-editor { display:block; width:100%; margin:0 0 14px; padding:0; border:0; outline:none; background:transparent;
-  color:var(--ink); font:inherit; line-height:inherit; letter-spacing:inherit; resize:none; overflow:hidden; white-space:pre-wrap; }
-.bloco-editor.bloco-codigo { font-family:ui-monospace,Consolas,monospace; font-size:13px; line-height:1.6; }
 @media (max-width:780px) { .doc-title { font-size:25px; } }
 
 /* Tela "IA e integrações": caixas de permissão. */
@@ -471,7 +468,7 @@ body.com-imagem-inteira { overflow:hidden; }
 ::-webkit-scrollbar-thumb { background:#2E2E38; border:3px solid transparent; background-clip:content-box; border-radius:8px; }
 ::-webkit-scrollbar-thumb:hover { background:#3F3F4D; background-clip:content-box; }
 ::selection { background:color-mix(in srgb, var(--acento-forte) 34%, transparent); color:color-mix(in srgb, var(--acento) 14%, var(--realce-base, white)); }
-.doc-title, .bloco-editor { caret-color:var(--acento); }
+.doc-title { caret-color:var(--acento); }
 /* A nota aberta fica marcada na árvore, para não se perder entre as pastas. */
 .tree-row.ativa { background:var(--accent-soft); color:color-mix(in srgb, var(--acento) 19%, var(--realce-base, white)); }
 .tree-row.ativa::before { opacity:1; transform:scaleY(1); }
@@ -480,14 +477,13 @@ body.com-imagem-inteira { overflow:hidden; }
 
 /* Leitura na serifa, interface e código em Plex. A nota vira documento; o resto, ferramenta. */
 body, button, input, textarea, select { font-family:var(--fonte-interface); }
-.doc-title, .doc-corpo, .bloco-editor { font-family:var(--fonte-leitura); }
+.doc-title, .doc-corpo { font-family:var(--fonte-leitura); }
 .doc-title { letter-spacing:-.4px; }
 .doc-corpo { font-size:17px; line-height:1.75; }
-.doc-corpo code, .doc-corpo pre, .bloco-editor.bloco-codigo, .code-lang { font-family:var(--fonte-codigo); }
+.doc-corpo code, .doc-corpo pre, .code-lang { font-family:var(--fonte-codigo); }
 /* Números de mesma largura: contagens e datas param de dançar ao mudar. */
 .tree-meta, .note-meta, .small-muted, .task-info, .nav-item b, #save-status, .crumbs { font-variant-numeric:tabular-nums; }
 /* Item de lista em edição: o campo ocupa o lugar do texto, sem folga extra. */
-.doc-corpo li > .bloco-editor { margin:0; }
 .md-tarefa input { cursor:pointer; }
 /* Equações desenhadas pelo KaTeX. A rolagem evita que uma fórmula larga estoure a página. */
 .math-bloco { margin:0 0 14px; padding:6px 0; overflow-x:auto; overflow-y:hidden; }
