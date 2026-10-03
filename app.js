@@ -6,15 +6,32 @@ let currentView = "today";
 
 async function loadFromVault() { return window.cadernoDesktop ? window.cadernoDesktop.loadState() : api('state'); }
 // `origem` é o id do plug-in que pediu a gravação (null quando vem da interface).
-async function save(origem = null) {
+// O que esta janela leu do cofre por último: a base da mescla quando o cofre muda por fora.
+let estadoBase = null;
+const doCofre = lido => { estadoBase = structuredClone(lido); return lido; };
+// O cofre mudou por fora (outro editor, sincronização, um assistente gravando notas): relê e mescla
+// em três vias. Só devolve true sem conflito; mudança dos dois lados na mesma coisa continua barrando.
+async function mesclarComOCofre(local) {
+  if (!estadoBase) return false;
+  const disco = await loadFromVault(); Kiro.validateState(disco);
+  if (disco.revision === local.revision) return false;   // o cofre não mudou: o erro é outro
+  const { estado, conflitos } = Kiro.mesclarEstados(estadoBase, local, disco);
+  if (conflitos.length) return false;
+  state = estado; doCofre(disco);
+  // Nota aberta sem edição pendente que mudou lá fora: o editor passa a mostrar a versão do disco.
+  if (editing?.id && !editorDirty) { const n = getNote(editing.id); if (n) editing = { ...n, tags: [...(n.tags || [])], links: [...(n.links || [])] }; }
+  return true;
+}
+async function save(origem = null, tentativa = 0) {
   if (busy || failed || !loaded) return false;
   const snapshot = structuredClone(state);
   setBusy(true); status(t('Salvando…'));
   try {
     Kiro.validateState(snapshot);
-    state = window.cadernoDesktop ? await window.cadernoDesktop.saveState(snapshot) : await api('state', snapshot);
+    state = doCofre(window.cadernoDesktop ? await window.cadernoDesktop.saveState(snapshot) : await api('state', snapshot));
     status(t('Salvo no cofre')); render(); eventosDoCofre(origem); return true;
   } catch (error) {
+    if (tentativa < 2 && await mesclarComOCofre(snapshot).catch(() => false)) { setBusy(false); return save(origem, tentativa + 1); }
     failed = true; status(mensagemDoErro(error) + ' ' + t('Suas alterações continuam nesta janela. Exporte-as antes de recarregar.'), true); return false;
   } finally { setBusy(false); }
 }
@@ -1725,7 +1742,7 @@ async function reload(manual=false){
     const saved=await loadFromVault();Kiro.validateState(saved);
     if(!loaded||manual)await carregarHoje();
     const changed=state.revision!==saved.revision||!loaded;
-    state=saved;loaded=true;failed=false;eventosDoCofre(null);
+    state=doCofre(saved);loaded=true;failed=false;eventosDoCofre(null);
     if(manual){fluxoPendente=false;clearTimeout(timerDoFluxo);}
     // Recarregar de propósito descarta a edição: a nota aberta volta ao que está no cofre.
     // Releitura automática com a nota aberta sem alterações: ela passa a mostrar o que está no cofre
@@ -3293,7 +3310,7 @@ async function showTrash(){
       if(!await gravarFluxoPendente())return;
       setBusy(true);status(t('Restaurando…'));
       try{
-        state=await restaurarDoCofre({entryId:b.dataset.restore,revision:state.revision});
+        state=doCofre(await restaurarDoCofre({entryId:b.dataset.restore,revision:state.revision}));
         fluxoPendente=false;clearTimeout(timerDoFluxo);
         expanded=null;closeModal(true);render();status(t('Restaurado do cofre'));
       }catch(erro){
@@ -4984,7 +5001,7 @@ async function escolherOutroCofre(){
   // Uma mudança de fluxo ainda não salva não pode ser descartada pela troca de cofre.
   if(!await gravarFluxoPendente())return;
   setBusy(true);
-  try{const saved=await window.cadernoDesktop.chooseVault();if(saved){Kiro.validateState(saved);state=saved;fluxoPendente=false;clearTimeout(timerDoFluxo);loaded=true;failed=false;expanded=null;editing=null;
+  try{const saved=await window.cadernoDesktop.chooseVault();if(saved){Kiro.validateState(saved);state=doCofre(saved);fluxoPendente=false;clearTimeout(timerDoFluxo);loaded=true;failed=false;expanded=null;editing=null;
     // Plug-ins são do cofre: desliga os do anterior já (antes de ler o layout, para não entrarem no
     // hoje.json do novo) e carrega os que este cofre permite.
     carregarPlugins();await carregarHoje();personalizandoHoje=false;render();

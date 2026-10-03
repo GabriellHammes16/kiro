@@ -415,7 +415,38 @@
     return atalhos;
   }
 
-  const api = { STATUS_DA_TAREFA, statusDaTarefa, moverTarefa, taskLinks, notesCitingTask, taskReference, ATALHOS_EDITAVEIS, combinacaoDoEvento, rotuloDaCombinacao, problemaDoAtalho, atalhosValidos, TEMAS, SKINS, APARENCIA_PADRAO, luminancia, contraste, corValida, aparenciaValida, classesDaAparencia, FOLDER_COLORS, folderColor, habitStats, habitDays, withHabits, validFrequency, localDate, safeUrl, validateState, normalize, isImagePath, wikiLinks, tags, findLinkedNote, mentions, fluxosQueCitam, inInbox, withoutInbox, toReview, linkQuery, linkSuggestions, validFolderName, folderPaths, descendants, upgradeBackup, pathKey, mencoesNaoVinculadas, vincularMencao, sumario, arvoreDeEtiquetas, podeVincular };
+  // ---- Mescla em três vias, quando o cofre mudou por fora (outro editor, sincronização, um assistente) ----
+  // base = o que esta janela leu por último; local = a janela agora; disco = o cofre agora.
+  // Por item (nota, tarefa, hábito, pasta, fluxo, dia de hábito): só um lado mudou → vale esse lado;
+  // os dois mudaram igual → tanto faz; os dois mudaram diferente → conflito, e quem chama não salva.
+  // Compara só o conteúdo: arquivo e data de modificação mudam sozinhos quando o disco é relido.
+  const CONTEUDO = {
+    notes: n => [n.title, n.body, n.tags || [], n.links || [], n.folderId || ''],
+    folders: f => [f.title, f.parentId || '', f.description || '', f.color || ''],
+    fluxos: f => [f.title, f.folderId || '', f.canvas ?? null],
+  };
+  function mesclarLista(colecao, base, local, disco, conflitos) {
+    const porId = lista => new Map((lista || []).map(x => [x.id, x]));
+    const B = porId(base), L = porId(local), D = porId(disco), saida = [];
+    const conteudo = x => x === undefined ? undefined : JSON.stringify((CONTEUDO[colecao] || (y => y))(x));
+    for (const id of new Set([...L.keys(), ...D.keys()])) {
+      const b = conteudo(B.get(id)), l = conteudo(L.get(id)), d = conteudo(D.get(id));
+      let fica = L.get(id);
+      if (l === b) fica = D.get(id);
+      else if (d !== b && d !== l) conflitos.push({ colecao, id, titulo: (L.get(id) || D.get(id) || B.get(id))?.title || id });
+      if (fica) saida.push(fica);
+    }
+    return saida;
+  }
+  function mesclarEstados(base, local, disco) {
+    const conflitos = [];
+    const lista = chave => mesclarLista(chave, base[chave], local[chave], disco[chave], conflitos);
+    const comoLista = log => Object.entries(log || {}).map(([id, dias]) => ({ id, dias }));
+    const habitLog = Object.fromEntries(mesclarLista('habitLog', comoLista(base.habitLog), comoLista(local.habitLog), comoLista(disco.habitLog), conflitos).map(x => [x.id, x.dias]));
+    const estado = { ...disco, notes: lista('notes'), tasks: lista('tasks'), habits: lista('habits'), habitLog, folders: lista('folders'), fluxos: lista('fluxos'), revision: disco.revision };
+    return { estado, conflitos };
+  }
+  const api = { mesclarEstados, STATUS_DA_TAREFA, statusDaTarefa, moverTarefa, taskLinks, notesCitingTask, taskReference, ATALHOS_EDITAVEIS, combinacaoDoEvento, rotuloDaCombinacao, problemaDoAtalho, atalhosValidos, TEMAS, SKINS, APARENCIA_PADRAO, luminancia, contraste, corValida, aparenciaValida, classesDaAparencia, FOLDER_COLORS, folderColor, habitStats, habitDays, withHabits, validFrequency, localDate, safeUrl, validateState, normalize, isImagePath, wikiLinks, tags, findLinkedNote, mentions, fluxosQueCitam, inInbox, withoutInbox, toReview, linkQuery, linkSuggestions, validFolderName, folderPaths, descendants, upgradeBackup, pathKey, mencoesNaoVinculadas, vincularMencao, sumario, arvoreDeEtiquetas, podeVincular };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Kiro = api;
 })(globalThis);
