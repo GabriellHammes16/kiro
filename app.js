@@ -82,7 +82,7 @@ function renderToday() {
     ? `<div class="hoje-faixa-inteira">${desenhar(f.id)}</div>`
     : `<div class="today-grid hoje-colunas" style="--hoje-colunas:${l.colunas}" data-hoje-fim="${escapeHtml(lista.slice(idx + 1).find(x => x.tipo === 'inteira')?.id || '')}">${f.colunas.map((ids, i) => `<div class="stack" data-hoje-coluna="${i}">${ids.map(desenhar).join('')}</div>`).join('')}</div>`).join('');
   const botao = `<button type="button" class="secondary" data-hoje-acao="personalizar" aria-pressed="${personalizandoHoje}">${personalizandoHoje ? t('Concluir') : `${icone('realce')} ${t('Personalizar')}`}</button>`;
-  return `${head(formatDate(today()), saudacao(), fraseNoTopo ? `<span class="frase-do-dia">${escapeHtml(fraseDoDia())}</span>` : '', botao)}<div class="hoje-faixas${personalizandoHoje ? ' personalizando' : ''}">${faixas}</div>${personalizandoHoje ? rodapeDaPersonalizacao(catalogo, l) : ''}`;
+  return `${head(formatDate(today()), saudacao(), fraseNoTopo ? `<span class="frase-do-dia">${escapeHtml(fraseDoDia())}</span>` : '', botao)}${personalizandoHoje ? rodapeDaPersonalizacao(catalogo, l) : ''}<div class="hoje-faixas${personalizandoHoje ? ' personalizando' : ''}">${faixas}</div>`;
 }
 // Cartões do Kiro e dos plug-ins num catálogo só: o layout decide onde e se aparecem.
 const LIMITE_DA_LISTA = { key: 'limite', type: 'number', label: frase('Quantos mostrar (0 = todos)'), default: 0, min: 0, max: 50 };
@@ -389,6 +389,11 @@ const TRACOS = {
   selecionar: '<path d="M5 8.5V6.8A1.8 1.8 0 0 1 6.8 5H8.5M15.5 5h1.7A1.8 1.8 0 0 1 19 6.8v1.7M19 15.5v1.7a1.8 1.8 0 0 1-1.8 1.8h-1.7M8.5 19H6.8A1.8 1.8 0 0 1 5 17.2v-1.7"/>',
   salvar: '<path d="M5 6.5A1.5 1.5 0 0 1 6.5 5h9L19 8.5V18a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 5 18z"/><path d="M8.5 5v4.5h6M8.5 19.5v-5h7v5"/>',
   detalhes: '<path d="M4.5 8h8M17 8h2.5M4.5 16h3M12 16h7.5"/><circle cx="14.5" cy="8" r="2.2"/><circle cx="9.5" cy="16" r="2.2"/>',
+  // Modo Personalizar do Hoje: alça de arrastar, largura e esconder.
+  arrastar: '<path d="M9 6h.01M15 6h.01M9 12h.01M15 12h.01M9 18h.01M15 18h.01" stroke-width="3"/>',
+  'largura-inteira': '<path d="M4 12h16M7.5 8.5 4 12l3.5 3.5M16.5 8.5 20 12l-3.5 3.5"/>',
+  'largura-normal': '<path d="M3.5 12H10M14 12h6.5M6.5 8.5 10 12l-3.5 3.5M17.5 8.5 14 12l3.5 3.5"/>',
+  esconder: '<path d="M3.5 12s3-6 8.5-6 8.5 6 8.5 6-3 6-8.5 6-8.5-6-8.5-6z"/><circle cx="12" cy="12" r="2.5"/><path d="M4.5 4.5l15 15"/>',
   // Temas (cards de Aparência): um desenho por tema; os de anime são homenagens em traço, sem logos.
   'tema-claro': '<circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4"/>',
   'tema-kiro': '<path d="M19 14.8A7.8 7.8 0 1 1 9.2 5a6.2 6.2 0 0 0 9.8 9.8z"/>',
@@ -1625,7 +1630,10 @@ const extraButton=(action,label,id='',cls='secondary',nome='')=>`<button type="b
 function enhanceView(){
   if(currentView!=='today')return;
   // Captura numa faixa própria logo abaixo da frase, na largura dos cards: não depende de quantas linhas a frase ocupa.
-  $('.page-head').insertAdjacentHTML('afterend',`<div class="hoje-acoes"><form id="capture-form" class="capture add-link"><label for="capture-text" class="sr-only">${t('Captura rápida')}</label>${icone('mais')}<input id="capture-text" required autocomplete="off" placeholder="${t('Capturar uma ideia, pergunta ou lembrete…')}" /><kbd class="atalho" title="${t('De qualquer tela')}">${teclaDe('captura')}</kbd><button class="primary captura-enviar" aria-label="${t('Guardar')}" title="${t('Guardar')} (Enter)">${icone('direita')}</button></form>${extraButton('daily',`${icone('calendario')} ${t('Nota diária')}`,'','secondary')}</div>`);
+  $('.page-head').insertAdjacentHTML('afterend',`<div class="hoje-acoes"><form id="capture-form" class="capture add-link"><label for="capture-text" class="sr-only">${t('Captura rápida')}</label>${icone('mais')}<input id="capture-text" required autocomplete="off" placeholder="${t('Capturar uma ideia, pergunta ou lembrete…')}" /><kbd class="atalho" title="${t('De qualquer tela')}">${teclaDe('captura')}</kbd><button class="primary captura-enviar" aria-label="${t('Guardar')}" title="${t('Guardar')} (Enter)">${icone('direita')}</button></form></div>`);
+  // A nota diária já tem botão na barra lateral: na faixa da captura fica o Personalizar, que sai do cabeçalho.
+  const personalizar=$('.page-head [data-hoje-acao="personalizar"]');
+  if(personalizar)$('.hoje-acoes').append(personalizar);
   $('#capture-form').onsubmit=async e=>{e.preventDefault();if(await capturar($('#capture-text').value))$('#capture-text')?.focus();};
   document.querySelectorAll('[data-revisar-aba]').forEach(b=>b.onclick=()=>{filtroDaRevisao=b.dataset.revisarAba;const card=b.closest('.para-revisar');card.dataset.filtro=filtroDaRevisao;card.querySelectorAll('[data-revisar-aba]').forEach(x=>x.setAttribute('aria-pressed',String(x===b)));});
   desenharPaineisDosPlugins();
@@ -3198,16 +3206,12 @@ function cartaoEmEdicao(c, l, html) {
   const cartao = l.cartoes.find(x => x.id === c.id);
   const indice = catalogoDaHoje().findIndex(x => x.id === c.id);
   const corpo = html || `<section class="card"><div class="card-head"><h2>${escapeHtml(c.titulo)}</h2></div><div class="empty">${t('Nada agora.')}</div></section>`;
-  const lateral = cartao.largura === 'normal'
-    ? `${botaoDaHoje('esquerda', '←', t('Coluna à esquerda'), cartao.coluna === 0 ? ' disabled' : '')}${botaoDaHoje('direita', '→', t('Coluna à direita'), cartao.coluna >= l.colunas - 1 ? ' disabled' : '')}`
-    : '';
-  return `<div class="hoje-cartao" data-hoje-id="${escapeHtml(c.id)}" draggable="true">
+  // Ordem e coluna se mudam arrastando o cartão (pelo teclado: Configurações → Hoje); aqui só largura, opções e esconder.
+  return `<div class="hoje-cartao" data-hoje-id="${escapeHtml(c.id)}" draggable="true" title="${t('Arraste para mover')}">
     <div class="hoje-ferramentas" role="toolbar" aria-label="${escapeHtml(c.titulo)}">
-      <span class="hoje-alca" aria-hidden="true">⠿</span><span class="hoje-nome">${escapeHtml(c.titulo)}</span>
-      ${botaoDaHoje('subir', '↑', t('Subir'))}${botaoDaHoje('descer', '↓', t('Descer'))}${lateral}
-      ${botaoDaHoje('largura', cartao.largura === 'inteira' ? '⇥⇤' : '⇤⇥', cartao.largura === 'inteira' ? t('Largura normal') : t('Largura inteira'))}
+      ${botaoDaHoje('largura', icone(cartao.largura === 'inteira' ? 'largura-normal' : 'largura-inteira'), cartao.largura === 'inteira' ? t('Largura normal') : t('Largura inteira'))}
       ${popoverDeOpcoes(c, l, 'tela', indice)}
-      ${botaoDaHoje('esconder', '×', t('Esconder {titulo}', { titulo: escapeHtml(c.titulo) }))}
+      ${botaoDaHoje('esconder', icone('esconder'), t('Esconder {titulo}', { titulo: escapeHtml(c.titulo) }))}
     </div>
     <div class="hoje-cartao-corpo" inert>${corpo}</div>
   </div>`;
@@ -3215,6 +3219,7 @@ function cartaoEmEdicao(c, l, html) {
 function rodapeDaPersonalizacao(catalogo, l) {
   const escondidos = catalogo.filter(c => l.ocultos.includes(c.id));
   return `<div class="hoje-rodape">
+    <p class="hoje-instrucao">${icone('arrastar')}<span>${t('Arraste os cartões para trocar a ordem ou a coluna. Passe o mouse sobre um cartão para mudar a largura, as opções ou escondê-lo.')}</span></p>
     <div class="hoje-escondidos"><span class="small-muted">${t('Cartões escondidos:')}</span>${escondidos.map(c => `<button type="button" class="chip" data-hoje-acao="mostrar" data-hoje-id="${escapeHtml(c.id)}">${icone('mais')} ${escapeHtml(c.titulo)}</button>`).join('') || `<span class="small-muted">${t('nenhum')}</span>`}</div>
     <div class="hoje-colunas-escolha" role="group" aria-label="${t('Colunas')}"><span class="small-muted">${t('Colunas:')}</span>${[1, 2, 3].map(n => `<button type="button" class="chip" data-hoje-acao="colunas" data-valor="${n}" aria-pressed="${n === l.colunas}" aria-label="${n > 1 ? t('{n} colunas', { n }) : t('{n} coluna', { n })}">${n}</button>`).join('')}</div>
     <button type="button" class="secondary cfg-pequeno" data-hoje-acao="restaurar">${icone('recarregar')} ${t('Restaurar padrão')}</button>
@@ -3234,8 +3239,6 @@ function acaoDaHoje(acao, id, valor, botao) {
   const fns = {
     subir: () => KiroHoje.subir(l, id, idsVisiveisDaHoje(l, catalogo)),
     descer: () => KiroHoje.descer(l, id, idsVisiveisDaHoje(l, catalogo)),
-    esquerda: () => { const fim = KiroHoje.fimDaFaixa(l, id); return KiroHoje.mover(l, id, { coluna: cartao.coluna - 1, antes: fim, noFim: !fim }); },
-    direita: () => { const fim = KiroHoje.fimDaFaixa(l, id); return KiroHoje.mover(l, id, { coluna: cartao.coluna + 1, antes: fim, noFim: !fim }); },
     largura: () => KiroHoje.definirLargura(l, id, cartao.largura === 'inteira' ? 'normal' : 'inteira'),
     esconder: () => KiroHoje.esconder(l, id),
     mostrar: () => KiroHoje.mostrar(l, id),
@@ -4769,6 +4772,7 @@ document.addEventListener('dragstart', e => {
   if (!c) return;
   e.dataTransfer.setData('text/kiro-cartao', c.dataset.hojeId);
   e.dataTransfer.effectAllowed = 'move';
+  c.classList.add('arrastando');
 });
 document.addEventListener('dragover', e => {
   if (!e.dataTransfer.types.includes('text/kiro-cartao')) return;
@@ -4787,7 +4791,7 @@ document.addEventListener('drop', e => {
   e.preventDefault();
   mudarHoje(l => KiroHoje.mover(l, id, alvo.coluna === undefined ? { antes: alvo.antes } : { coluna: alvo.coluna, antes: alvo.antes, noFim: alvo.noFim }));
 });
-document.addEventListener('dragend', limparAlvosDaHoje);
+document.addEventListener('dragend', () => { limparAlvosDaHoje(); document.querySelectorAll('.hoje-cartao.arrastando').forEach(c => c.classList.remove('arrastando')); });
 document.addEventListener('click',e=>{
   const extra=e.target.closest('[data-extra]');if(extra){e.preventDefault();extraAction(extra.dataset.extra,extra.dataset.id);return;}
   const el=e.target.closest('[data-action]');if(el){e.preventDefault();action(el.dataset.action,el.dataset.id,e);return;}

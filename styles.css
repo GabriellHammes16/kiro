@@ -1259,8 +1259,6 @@ html.janela-propria #barra-titulo { position:fixed; top:0; left:0; right:0; z-in
 .hoje-faixas.personalizando .hoje-colunas > .stack { min-height:96px; border:1px dashed var(--line); border-radius:12px; padding:var(--esp-3); }
 .hoje-cartao { display:grid; gap:var(--esp-2); }
 .hoje-ferramentas { display:flex; align-items:center; gap:var(--esp-1); flex-wrap:wrap; font-size:13px; }
-.hoje-alca { cursor:grab; color:var(--muted); padding:0 var(--esp-1); }
-.hoje-nome { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--muted); }
 .hoje-cartao-corpo { opacity:.85; }
 .hoje-alvo { outline:2px solid var(--focus-ring); outline-offset:2px; }
 .hoje-rodape { display:flex; flex-wrap:wrap; gap:var(--esp-4); align-items:center; margin-top:var(--esp-5); }
@@ -1480,3 +1478,26 @@ div.fluxo-editor { overflow:auto; }
 /* Papel de parede em vídeo: a opção de seguir o "menos movimento" do sistema só aparece com vídeo. */
 html:not(.papel-em-video) .papel-so-video { display:none; }
 .papel-segue-sistema { position:relative; display:flex; align-items:center; justify-content:space-between; gap:12px; max-width:420px; }
+
+/* ---- Hoje → Personalizar: cartão com ferramentas flutuantes e instruções no topo ---- */
+.hoje-rodape { margin:0 0 var(--esp-5); padding:var(--esp-3) var(--esp-4); border:1px solid var(--line); border-radius:var(--raio-card); background:var(--panel); }
+.hoje-instrucao { flex-basis:100%; display:flex; align-items:center; gap:var(--esp-2); margin:0; color:var(--ink); font-size:var(--fs-secundario); }
+.hoje-instrucao .icone { width:16px; height:16px; color:var(--muted); flex:0 0 auto; }
+.hoje-cartao { position:relative; display:block; cursor:grab; }
+.hoje-cartao:active { cursor:grabbing; }
+.hoje-cartao.arrastando { opacity:.4; }
+.hoje-cartao-corpo { opacity:1; }
+.hoje-faixas.personalizando .hoje-cartao-corpo > .card.cartao-frase { padding:var(--esp-4) var(--esp-5); border:1px solid var(--line); }
+.hoje-faixas.personalizando .hoje-cartao:hover .hoje-cartao-corpo > .card { border-color:var(--acento); }
+/* Na borda de cima do cartão: não cobre o título. */
+.hoje-faixas.personalizando .stack { gap:calc(var(--esp-5) + 6px); padding-top:calc(var(--esp-3) + 10px); }
+.hoje-faixas.personalizando .hoje-faixa-inteira { padding-top:12px; }
+.hoje-ferramentas { position:absolute; top:-14px; right:12px; z-index:2; opacity:0; transition:opacity var(--rapido) var(--curva); display:flex; align-items:center; gap:2px; padding:3px; border:1px solid var(--line); border-radius:var(--raio-controle); background:var(--panel-raised); box-shadow:var(--shadow-sm); cursor:default; }
+.hoje-ferramentas .icon-button { min-width:26px; min-height:26px; padding:0; }
+.hoje-ferramentas .icon-button .icone { width:15px; height:15px; }
+.hoje-ferramentas .icon-button:disabled { opacity:.3; cursor:default; }
+.hoje-escondidos .chip { display:inline-flex; align-items:center; gap:4px; }
+.hoje-escondidos .chip .icone { width:14px; height:14px; }
+/* As ferramentas aparecem só no cartão sob o mouse, com foco do teclado ou com as opções abertas; em tela de toque, sempre. */
+.hoje-cartao:is(:hover, :focus-within) > .hoje-ferramentas, .hoje-ferramentas:has(:popover-open) { opacity:1; }
+@media (hover:none) { .hoje-ferramentas { opacity:1; } }
