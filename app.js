@@ -4556,7 +4556,7 @@ async function showSettings(aba = abaDasConfiguracoes) {
   const estiloPersonalizado = a => `--sidebar-bg:${a.sidebar};--content-bg:${a.content};--acento:${a.acento}`;
   const opcaoTema = ([id, nome]) => `<label class="tema-opcao tema-${id}"${id === 'personalizado' ? ` style="${estiloPersonalizado(cores)}"` : ''}><input type="radio" name="tema" value="${id}" class="sr-only" ${cores.tema === id ? 'checked' : ''} /><span class="tema-amostra" aria-hidden="true"><i class="tema-lateral"></i><span class="tema-tela"><b></b><b></b><em></em></span>${icone(`tema-${id}`, 'tema-icone')}</span><span class="tema-nome">${t(nome)}</span></label>`;
   const botao = (id, rotulo, nomeIcone) => `<button type="button" class="secondary cfg-pequeno" id="${id}">${icone(nomeIcone)} ${rotulo}</button>`;
-  const DETALHES = { read: t('Buscar e ler o conteúdo das notas.'), create: t('Criar notas e pastas novas.'), update: t('Alterar texto, título, etiquetas e pasta.'), delete: t('A nota vai para a lixeira e pode ser restaurada.') };
+  const DETALHES = { read: t('Buscar e ler notas e tarefas.'), create: t('Criar notas, pastas e tarefas novas.'), update: t('Alterar notas (texto, título, etiquetas e pasta) e tarefas (campos e status).'), delete: t('A nota vai para a lixeira e pode ser restaurada. A tarefa é excluída de vez.') };
   if (!ABAS_CFG.some(([id]) => id === aba)) aba = 'personalizacao';
   const painel = (id, conteudo) => `<div class="cfg-painel" data-painel="${id}" role="tabpanel" id="painel-${id}" aria-labelledby="aba-${id}" ${id === aba ? '' : 'hidden'}>${conteudo}</div>`;
   modal(t('Configurações'), `<div class="cfg">

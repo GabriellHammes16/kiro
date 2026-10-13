@@ -648,3 +648,57 @@ test('update_fluxo respeita a permissão de alterar e emite fluxo.updated', asyn
   await config.save({ permissions: { update: false } });
   await assert.rejects(toolkit.call('update_fluxo', { id: base.fluxo.id, update_nodes: [{ id: base.ids.a, text: 'y' }] }, cliente), codigo('PERMISSION_DENIED'));
 });
+
+test('tarefas: criar, listar, editar, mudar status e excluir pela API de agentes', async t => {
+  const { toolkit, config, events } = await montar(t);
+  const vistos = [];
+  for (const nome of ['task.created', 'task.updated', 'task.deleted']) events.on(nome, c => vistos.push(nome));
+  const nota = await toolkit.call('create_note', { title: 'Plano', content: 'x' }, cliente);
+
+  const criada = await toolkit.call('create_task', { title: 'Ler capítulo 3', due: '2026-10-20', priority: 'Alta', description: 'Páginas 40 a 60', note: 'Plano' }, cliente);
+  assert.equal(criada.success, true);
+  assert.equal(criada.task.status, 'nao-comecado');
+  assert.equal(criada.task.note.id, nota.note.id);
+
+  const padrao = await toolkit.call('create_task', { title: 'Sem nada' }, cliente);
+  assert.match(padrao.task.due, /^\d{4}-\d{2}-\d{2}$/);
+  assert.equal(padrao.task.priority, 'Média');
+
+  let r = await toolkit.call('set_task_status', { id: criada.task.id, status: 'andamento' }, cliente);
+  assert.equal(r.task.status, 'andamento');
+  r = await toolkit.call('set_task_status', { id: criada.task.id, status: 'pausado' }, cliente);
+  assert.equal(r.task.status, 'pausado');
+  r = await toolkit.call('set_task_status', { id: criada.task.id, status: 'concluido' }, cliente);
+  assert.equal(r.task.done, true);
+  r = await toolkit.call('set_task_status', { id: criada.task.id, status: 'andamento' }, cliente);
+  assert.equal(r.task.done, false);
+  assert.equal(r.task.status, 'andamento');
+
+  r = await toolkit.call('update_task', { id: criada.task.id, title: 'Ler capítulo 4', description: '', note: '', priority: 'Baixa' }, cliente);
+  assert.equal(r.task.title, 'Ler capítulo 4');
+  assert.equal(r.task.description, '');
+  assert.equal(r.task.note, null);
+  assert.equal(r.task.priority, 'Baixa');
+
+  const lista = await toolkit.call('list_tasks', { status: 'andamento' }, cliente);
+  assert.deepEqual(lista.tasks.map(x => x.title), ['Ler capítulo 4']);
+  assert.equal((await toolkit.call('list_tasks', {}, cliente)).tasks.length, 2);
+
+  // Excluir vem desligado, como as notas; ligado, apaga em definitivo (tarefa não tem lixeira).
+  await assert.rejects(toolkit.call('delete_task', { id: padrao.task.id }, cliente), codigo('PERMISSION_DENIED'));
+  await permitirExclusao(config);
+  const apagada = await toolkit.call('delete_task', { id: padrao.task.id }, cliente);
+  assert.equal(apagada.deleted.title, 'Sem nada');
+  assert.equal((await toolkit.call('list_tasks', {}, cliente)).tasks.length, 1);
+  assert.deepEqual([...new Set(vistos)].sort(), ['task.created', 'task.deleted', 'task.updated']);
+});
+
+test('tarefas: entradas inválidas são recusadas com motivo', async t => {
+  const { toolkit } = await montar(t);
+  await assert.rejects(toolkit.call('create_task', { title: '   ' }, cliente), codigo('INVALID_INPUT'));
+  await assert.rejects(toolkit.call('create_task', { title: 'x', due: '20/10/2026' }, cliente), codigo('INVALID_INPUT'));
+  await assert.rejects(toolkit.call('create_task', { title: 'x', priority: 'Urgente' }, cliente), codigo('INVALID_INPUT'));
+  await assert.rejects(toolkit.call('create_task', { title: 'x', note: 'Nota que não existe' }, cliente), codigo('NOTE_NOT_FOUND', 'INVALID_INPUT'));
+  await assert.rejects(toolkit.call('set_task_status', { id: 'nao-existe', status: 'pausado' }, cliente), codigo('TASK_NOT_FOUND'));
+  await assert.rejects(toolkit.call('set_task_status', { id: 'x', status: 'feito' }, cliente), codigo('INVALID_INPUT'));
+});

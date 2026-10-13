@@ -153,6 +153,13 @@ class KiroAgentApi {
     };
     this.metadata = { read: (a, c) => this.readMetadata(a, c), update: (a, c) => this.updateMetadata(a, c) };
     this.trash = { list: (a, c) => this.listTrash(a, c), restore: (a, c) => this.restoreNote(a, c) };
+    this.tasks = {
+      list: (a, c) => this.listTasks(a, c),
+      create: (a, c) => this.createTask(a, c),
+      update: (a, c) => this.updateTask(a, c),
+      setStatus: (a, c) => this.setTaskStatus(a, c),
+      delete: (a, c) => this.deleteTask(a, c),
+    };
   }
 
   // ---------------------------------------------------------------- internos
@@ -871,6 +878,116 @@ class KiroAgentApi {
     const atual = (depois.fluxos || []).find(f => f.id === resultado.id);
     this.events.emitVaultEvent('fluxo.updated', { id: resultado.id, path: atual?.file, source: 'agent', clientId: contexto.clientId });
     return { success: true, fluxo: this.#resumoFluxo(depois, atual), ids: resultado.ids, revisionBefore: antes.revision, revision: depois.revision };
+  }
+
+  // ---------------------------------------------------------------- tarefas
+  // Mesmas regras da interface (domain.js): status 'nao-comecado' | 'andamento' | 'pausado' | 'concluido';
+  // concluir marca done e guarda o status de antes, para reabrir onde estava.
+
+  #acharTarefa(state, id) {
+    const tarefa = state.tasks.find(x => x.id === String(id ?? ''));
+    if (!tarefa) throw new AgentError('TASK_NOT_FOUND', `Tarefa não encontrada: ${id}. Use list_tasks para ver os ids.`);
+    return tarefa;
+  }
+
+  #resumoTarefa(state, x) {
+    const nota = x.noteId ? state.notes.find(n => n.id === x.noteId) : null;
+    return {
+      id: x.id, title: x.title, description: x.description || '', due: x.due, priority: x.priority,
+      status: domain.statusDaTarefa(x), done: Boolean(x.done), overdue: !x.done && x.due < localDate(),
+      note: nota ? { id: nota.id, title: nota.title, path: nota.file || null } : null,
+      citedIn: domain.notesCitingTask(state.notes, x.id).map(n => ({ id: n.id, title: n.title, path: n.file || null })),
+    };
+  }
+
+  // Campos da tarefa vindos do agente, já validados; só os que vieram. note "" tira a nota associada.
+  #camposDaTarefa(state, args, criando) {
+    const campos = {};
+    if (args.title !== undefined || criando) {
+      const titulo = String(args.title ?? '').trim();
+      if (!titulo) throw new AgentError('INVALID_INPUT', 'title não pode ficar vazio.');
+      if (titulo.length > 200) throw new AgentError('INVALID_INPUT', 'title passa de 200 caracteres.');
+      campos.title = titulo;
+    }
+    if (args.due !== undefined) {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(String(args.due)) || Number.isNaN(Date.parse(`${args.due}T12:00:00`))) throw new AgentError('INVALID_INPUT', 'due deve ser uma data AAAA-MM-DD.');
+      campos.due = String(args.due);
+    }
+    if (args.priority !== undefined) {
+      if (!['Baixa', 'Média', 'Alta'].includes(args.priority)) throw new AgentError('INVALID_INPUT', 'priority deve ser "Baixa", "Média" ou "Alta".');
+      campos.priority = args.priority;
+    }
+    if (args.description !== undefined) {
+      const d = String(args.description).trim();
+      if (d.length > 5000) throw new AgentError('INVALID_INPUT', 'description passa de 5000 caracteres.');
+      campos.description = d;
+    }
+    if (args.note !== undefined) {
+      if (String(args.note).trim() === '') campos.noteId = '';
+      else {
+        const nota = this.#notaPorReferencia(state, args.note);
+        if (!nota) throw new AgentError('NOTE_NOT_FOUND', `Nota não encontrada: ${args.note}. Passe o caminho (.md) ou o título exato.`);
+        campos.noteId = nota.id;
+      }
+    }
+    return campos;
+  }
+
+  #aplicar(tarefa, campos) {
+    const nova = { ...tarefa, ...campos };
+    if (!nova.description) delete nova.description;
+    if (!nova.noteId) delete nova.noteId;
+    return nova;
+  }
+
+  async listTasks(args = {}) {
+    const state = await this.load();
+    let lista = state.tasks;
+    if (args.status) lista = lista.filter(x => domain.statusDaTarefa(x) === args.status);
+    lista = [...lista].sort((a, b) => Number(a.done) - Number(b.done) || a.due.localeCompare(b.due));
+    return { tasks: lista.slice(0, this.#limite(args.limit, MAX_LIMITE)).map(x => this.#resumoTarefa(state, x)), total: lista.length };
+  }
+
+  async createTask(args = {}, contexto = {}) {
+    const id = randomUUID();
+    const { antes, depois } = await this.#mutate(state => {
+      const campos = this.#camposDaTarefa(state, args, true);
+      const nova = this.#aplicar({ id, title: campos.title, due: localDate(), priority: 'Média', done: false }, campos);
+      state.tasks = [args.status ? domain.moverTarefa(nova, args.status) : nova, ...state.tasks];
+    });
+    this.events.emitVaultEvent('task.created', { id, source: 'agent', clientId: contexto.clientId });
+    return { success: true, task: this.#resumoTarefa(depois, depois.tasks.find(x => x.id === id)), revisionBefore: antes.revision, revision: depois.revision };
+  }
+
+  async updateTask(args = {}, contexto = {}) {
+    const { antes, depois } = await this.#mutate(state => {
+      const tarefa = this.#acharTarefa(state, args.id);
+      let nova = this.#aplicar(tarefa, this.#camposDaTarefa(state, args, false));
+      if (args.status) nova = domain.moverTarefa(nova, args.status);
+      state.tasks = state.tasks.map(x => x.id === tarefa.id ? nova : x);
+    });
+    this.events.emitVaultEvent('task.updated', { id: args.id, source: 'agent', clientId: contexto.clientId });
+    return { success: true, task: this.#resumoTarefa(depois, depois.tasks.find(x => x.id === args.id)), revisionBefore: antes.revision, revision: depois.revision };
+  }
+
+  async setTaskStatus(args = {}, contexto = {}) {
+    if (!domain.STATUS_DA_TAREFA.includes(args.status)) throw new AgentError('INVALID_INPUT', `status deve ser um de: ${domain.STATUS_DA_TAREFA.join(', ')}.`);
+    const { antes, depois } = await this.#mutate(state => {
+      const tarefa = this.#acharTarefa(state, args.id);
+      state.tasks = state.tasks.map(x => x.id === tarefa.id ? domain.moverTarefa(x, args.status) : x);
+    });
+    this.events.emitVaultEvent('task.updated', { id: args.id, source: 'agent', clientId: contexto.clientId });
+    return { success: true, task: this.#resumoTarefa(depois, depois.tasks.find(x => x.id === args.id)), revisionBefore: antes.revision, revision: depois.revision };
+  }
+
+  async deleteTask(args = {}, contexto = {}) {
+    const { antes, depois, resultado } = await this.#mutate(state => {
+      const tarefa = this.#acharTarefa(state, args.id);
+      state.tasks = state.tasks.filter(x => x.id !== tarefa.id);
+      return { id: tarefa.id, title: tarefa.title };
+    });
+    this.events.emitVaultEvent('task.deleted', { id: resultado.id, source: 'agent', clientId: contexto.clientId });
+    return { success: true, deleted: resultado, recoverable: false, revisionBefore: antes.revision, revision: depois.revision };
   }
 
   async describeVault() {

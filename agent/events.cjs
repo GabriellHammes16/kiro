@@ -4,7 +4,7 @@
 // sem que a Agent API precise conhecer nenhum desses consumidores.
 const { EventEmitter } = require('node:events');
 
-const NOMES = ['note.created', 'note.updated', 'note.deleted', 'note.moved', 'note.restored', 'folder.created', 'fluxo.created', 'fluxo.updated'];
+const NOMES = ['note.created', 'note.updated', 'note.deleted', 'note.moved', 'note.restored', 'folder.created', 'fluxo.created', 'fluxo.updated', 'task.created', 'task.updated', 'task.deleted'];
 
 class KiroEvents extends EventEmitter {
   emitVaultEvent(nome, carga) {

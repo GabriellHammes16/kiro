@@ -22,6 +22,15 @@ const alvoFluxo = {
   path: { type: 'string', description: 'Caminho do fluxo relativo ao cofre, terminando em .canvas, por exemplo "Estudos/Python.canvas".' },
 };
 
+const STATUS_DA_TAREFA = { type: 'string', enum: ['nao-comecado', 'andamento', 'pausado', 'concluido'], description: 'Status: "nao-comecado", "andamento" (em andamento), "pausado" ou "concluido". "concluido" marca a tarefa como feita; sair dele reabre.' };
+const CAMPOS_DA_TAREFA = {
+  title: { type: 'string', maxLength: 200, description: 'O que precisa ser feito.' },
+  due: { type: 'string', description: 'Data AAAA-MM-DD (fuso local).' },
+  priority: { type: 'string', enum: ['Baixa', 'Média', 'Alta'], description: 'Prioridade.' },
+  description: { type: 'string', maxLength: 5000, description: 'Detalhes da tarefa. "" apaga a descrição.' },
+  note: { type: 'string', description: 'Nota associada: caminho relativo (.md) ou título exato. "" tira a nota associada.' },
+};
+
 const FERRAMENTAS = [
   {
     name: 'create_note',
@@ -321,6 +330,51 @@ const FERRAMENTAS = [
     },
     run: (api, args, ctx) => api.updateFluxo(args, ctx),
     target: (args, resultado) => resultado?.fluxo?.path || args.path || args.id,
+  },
+  {
+    name: 'list_tasks',
+    risk: 'read',
+    permission: 'read',
+    description: 'Lista as tarefas do Kiro: id, título, descrição, data (due), prioridade, status (nao-comecado, andamento, pausado, concluido), se está atrasada, a nota associada e as notas que a citam. Abertas primeiro, por data. Filtre por status para ver, por exemplo, só o que está em andamento.',
+    inputSchema: { type: 'object', properties: { status: STATUS_DA_TAREFA, limit: { type: 'number', description: 'Máximo de tarefas devolvidas (padrão e teto: 200).' } } },
+    run: (api, args, ctx) => api.listTasks(args, ctx),
+    target: () => 'tasks',
+  },
+  {
+    name: 'create_task',
+    risk: 'write',
+    permission: 'create',
+    description: 'Cria uma tarefa no Kiro. Sem due, vence hoje; sem priority, fica "Média"; sem status, entra como "nao-comecado". A tarefa aparece na aba Tarefas, no Hoje e no grafo (ligada à nota associada, se houver).',
+    inputSchema: { type: 'object', properties: { ...CAMPOS_DA_TAREFA, status: STATUS_DA_TAREFA }, required: ['title'] },
+    run: (api, args, ctx) => api.createTask(args, ctx),
+    target: (args, resultado) => resultado?.task?.id || args.title,
+  },
+  {
+    name: 'update_task',
+    risk: 'write',
+    permission: 'update',
+    description: 'Edita uma tarefa pelo id (de list_tasks). Muda só os campos enviados: título, data, prioridade, descrição, nota associada e, se vier, o status. Para só trocar o status, prefira set_task_status.',
+    inputSchema: { type: 'object', properties: { id: { type: 'string', description: 'Id da tarefa.' }, ...CAMPOS_DA_TAREFA, status: STATUS_DA_TAREFA }, required: ['id'] },
+    run: (api, args, ctx) => api.updateTask(args, ctx),
+    target: args => args.id,
+  },
+  {
+    name: 'set_task_status',
+    risk: 'write',
+    permission: 'update',
+    description: 'Muda o status de uma tarefa: "nao-comecado", "andamento" (em andamento), "pausado" ou "concluido". Concluir marca como feita no Kiro; voltar de "concluido" reabre a tarefa.',
+    inputSchema: { type: 'object', properties: { id: { type: 'string', description: 'Id da tarefa.' }, status: STATUS_DA_TAREFA }, required: ['id', 'status'] },
+    run: (api, args, ctx) => api.setTaskStatus(args, ctx),
+    target: args => `${args.id}:${args.status}`,
+  },
+  {
+    name: 'delete_task',
+    risk: 'destructive',
+    permission: 'delete',
+    description: 'Exclui uma tarefa pelo id. Atenção: tarefas não vão para a lixeira; a exclusão é definitiva. Para tirar uma tarefa do caminho sem apagar, use set_task_status com "concluido".',
+    inputSchema: { type: 'object', properties: { id: { type: 'string', description: 'Id da tarefa.' } }, required: ['id'] },
+    run: (api, args, ctx) => api.deleteTask(args, ctx),
+    target: args => args.id,
   },
   {
     name: 'get_vault_info',

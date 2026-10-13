@@ -118,7 +118,8 @@ quem fez o quê.
 `kiro_create_note_link`, `kiro_get_recent_notes`, `kiro_get_daily_note`, `kiro_get_habits`,
 `kiro_add_tag`, `kiro_remove_tag`, `kiro_search_by_tag`,
 `kiro_get_vault_info`, `kiro_list_fluxos`, `kiro_read_fluxo`, `kiro_create_fluxo`,
-`kiro_update_fluxo`.
+`kiro_update_fluxo`, `kiro_list_tasks`, `kiro_create_task`, `kiro_update_task`,
+`kiro_set_task_status`, `kiro_delete_task`.
 
 Schemas e níveis de risco estão em [agent-api.md](./agent-api.md).
 

@@ -147,6 +147,22 @@ Exemplo: "transforma a nota Listas num fluxo". O agente lê a nota com `read_not
   "ids": { "raiz": "3f9c…", "criar": "a01b…", "ex1": "…", "metodos": "…", "append": "…" } }
 ```
 
+### Tarefas
+
+Mesmas regras da aba Tarefas: status `nao-comecado`, `andamento`, `pausado` ou `concluido`;
+concluir marca a tarefa como feita e guarda o status de antes, para reabrir onde estava.
+
+| Ferramenta | Risco | Permissão | O que faz |
+|---|---|---|---|
+| `list_tasks` | read | read | Lista id, título, descrição, `due`, prioridade, status, `overdue`, nota associada e notas que citam a tarefa. Filtro opcional por `status`. |
+| `create_task` | write | create | `{ title, due?, priority?, description?, note?, status? }`. Sem `due` vence hoje; sem `priority`, "Média". `note` é caminho `.md` ou título exato. |
+| `update_task` | write | update | Por `id`, muda só os campos enviados (inclusive `status`). `description: ""` e `note: ""` apagam. |
+| `set_task_status` | write | update | `{ id, status }`: o jeito curto de concluir, pôr em andamento, pausar ou reabrir. |
+| `delete_task` | destructive | delete | Exclui por `id`. **Definitivo**: tarefa não tem lixeira (`recoverable: false`). |
+
+- Eventos: `task.created`, `task.updated` e `task.deleted`.
+- Erro próprio: `TASK_NOT_FOUND` (id inexistente).
+
 ### Schemas
 
 Exemplos. `toolkit.list()` devolve o schema completo de cada ferramenta.
@@ -241,7 +257,8 @@ alterações legível.
 ## Eventos
 
 `agent/events.cjs` emite `note.created`, `note.updated`, `note.deleted`,
-`note.moved`, `note.restored` e `folder.created`, com `source` e `clientId`.
+`note.moved`, `note.restored`, `folder.created`, `fluxo.created`, `fluxo.updated`,
+`task.created`, `task.updated` e `task.deleted`, com `source` e `clientId`.
 
 ```js
 const { events } = createKiroAgent({ vaultDirectory });
