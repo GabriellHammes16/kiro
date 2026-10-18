@@ -34,6 +34,9 @@ const ARQUIVOS_DO_KIRO = new Set(['plugin-worker.js', 'plugins.js', 'kiro-frame.
 // com as cores do tema (a página manda as cores por 'janela:cores'). No macOS fica a janela padrão.
 const JANELA_PROPRIA = process.platform !== 'darwin';
 const ALTURA_DA_BARRA = 32;
+// No Linux a borda da janela vem do tema GTK do sistema (claro por padrão, uma moldura branca em volta do
+// Kiro). A variante escura do Adwaita deixa a borda escura como o app; quem definiu GTK_THEME mantém o seu.
+if (process.platform === 'linux' && !process.env.GTK_THEME) process.env.GTK_THEME = 'Adwaita:dark';
 // Dicionários embutidos (dicionarios/*.bdic) vão para a pasta onde o Chromium os procura, então
 // ele não baixa nada. Sem a pasta (corretor do sistema), só ativa os idiomas.
 async function prepararCorretor(sessao) {
