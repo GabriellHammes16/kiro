@@ -6,7 +6,7 @@
     "name": "Gabriel",
     "email": "164125568+GabriellHammes16@users.noreply.github.com"
   },
-  "homepage": "https://github.com/GabriellHammes16",
+  "homepage": "https://github.com/GabriellHammes16/kiro",
   "desktopName": "kiro.desktop",
   "private": true,
   "main": "electron/main.cjs",
