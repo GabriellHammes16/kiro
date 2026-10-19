@@ -26,9 +26,9 @@ function arquivoDeConfiguracaoDesktop() {
     if (process.platform === 'darwin') return path.join(casa, 'Library', 'Application Support', nome, 'vault-settings.json');
     return path.join(process.env.XDG_CONFIG_HOME || path.join(casa, '.config'), nome, 'vault-settings.json');
   };
-  // Quem instalou o aplicativo como KUROI tem a escolha de cofre guardada com o nome antigo.
-  const atual = pasta('Kiro');
-  return fsSync.existsSync(atual) ? atual : (fsSync.existsSync(pasta('KUROI')) ? pasta('KUROI') : atual);
+  // No Linux o Electron usa o nome do pacote (kiro). Quem instalou o aplicativo como KUROI tem a
+  // escolha de cofre guardada com o nome antigo.
+  return ['Kiro', 'kiro', 'KUROI'].map(pasta).find(a => fsSync.existsSync(a)) || pasta('Kiro');
 }
 
 /**

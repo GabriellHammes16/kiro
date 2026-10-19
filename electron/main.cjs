@@ -29,14 +29,12 @@ const CSP_DO_WORKER = "default-src 'none'; script-src 'self' kiro-plugin:; conne
 // (vault.pluginPath aceita só [a-z0-9-]), então nunca colide com a pasta de um plug-in.
 const HOST_DO_KIRO = 'kiro.app';
 const ARQUIVOS_DO_KIRO = new Set(['plugin-worker.js', 'plugins.js', 'kiro-frame.js']);
-// Janela como a do Obsidian (Windows e Linux): sem a barra de título do sistema; os botões de
-// minimizar, maximizar e fechar são os do sistema, desenhados por cima da faixa do app e pintados
-// com as cores do tema (a página manda as cores por 'janela:cores'). No macOS fica a janela padrão.
-const JANELA_PROPRIA = process.platform !== 'darwin';
+// Janela como a do Obsidian (Windows): sem a barra de título do sistema; os botões de minimizar,
+// maximizar e fechar são os do sistema, desenhados por cima da faixa do app e pintados com as cores
+// do tema (a página manda as cores por 'janela:cores'). No macOS e no Linux fica a janela padrão: no
+// Linux a barra sobreposta depende do tema GTK e do compositor (borda branca, falhas no Wayland).
+const JANELA_PROPRIA = process.platform === 'win32';
 const ALTURA_DA_BARRA = 32;
-// No Linux a borda da janela vem do tema GTK do sistema (claro por padrão, uma moldura branca em volta do
-// Kiro). A variante escura do Adwaita deixa a borda escura como o app; quem definiu GTK_THEME mantém o seu.
-if (process.platform === 'linux' && !process.env.GTK_THEME) process.env.GTK_THEME = 'Adwaita:dark';
 // Dicionários embutidos (dicionarios/*.bdic) vão para a pasta onde o Chromium os procura, então
 // ele não baixa nada. Sem a pasta (corretor do sistema), só ativa os idiomas.
 async function prepararCorretor(sessao) {
@@ -62,6 +60,12 @@ function createWindow() {
   });
   window.webContents.on('will-navigate', event => event.preventDefault());
   window.webContents.setWindowOpenHandler(({ url }) => { if (/^https?:/i.test(url)) shell.openExternal(url); return { action: 'deny' }; });
+}
+// No Linux, o registro do Chromium (inclui erros do console da página) vai para ~/.config/kiro/kiro.log,
+// recriado a cada abertura: é o que se pede a quem relata um problema numa distro que não temos.
+if (process.platform === 'linux') {
+  app.commandLine.appendSwitch('enable-logging', 'file');
+  app.commandLine.appendSwitch('log-file', join(app.getPath('userData'), 'kiro.log'));
 }
 if (!app.requestSingleInstanceLock()) app.quit();
 else app.whenReady().then(async () => {
