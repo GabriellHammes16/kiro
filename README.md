@@ -8,6 +8,7 @@ Notas em Markdown, conexões entre ideias, estudos, tarefas e rotina. Funciona o
 - Navegador: `npm start`, depois abra http://localhost:4173.
 - Testes: `npm test`.
 - Instalador Windows: `npm run build:win`.
+- Linux (`.AppImage` e `.deb`): `npm run build:linux`, rodado dentro de um Linux. No Windows, pelo WSL: copie o projeto para dentro do Ubuntu (sem `node_modules`), rode `npm ci` e depois `npm run build:linux`. No Linux, o registro de cada abertura fica em `~/.config/kiro/kiro.log`.
 
 ## Desenvolver pela versão web
 
