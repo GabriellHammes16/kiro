@@ -82,11 +82,13 @@ createServer(async (request, response) => {
       return send(response, 200, await vault.restore(JSON.parse(bruto)));
     }
     if (request.url === '/api/agent-config' && request.method === 'GET') return send(response, 200, await agentConfig.load());
-    if (['/api/backup-status', '/api/backup-config', '/api/backup-run'].includes(request.url)) {
+    if (['/api/backup-status', '/api/backup-config', '/api/backup-run', '/api/backup-drive-connect', '/api/backup-drive-disconnect'].includes(request.url)) {
       if (!mesmaOrigem(request)) return send(response, 403, { error: frase('Só a própria página do Kiro pode usar esta rota.') });
       if (request.url === '/api/backup-status' && request.method === 'GET') return send(response, 200, await agendadorBackup.obterStatus());
       if (request.url === '/api/backup-config' && request.method === 'POST') return send(response, 200, await agendadorBackup.salvarConfig(await lerJson(request, 8192)));
       if (request.url === '/api/backup-run' && request.method === 'POST') return send(response, 200, await agendadorBackup.executarAgora(await lerJson(request, 1024)));
+      if (request.url === '/api/backup-drive-connect' && request.method === 'POST') return send(response, 200, await agendadorBackup.conectarGoogleDrive({ ...(await lerJson(request, 4096)), aguardar: false }));
+      if (request.url === '/api/backup-drive-disconnect' && request.method === 'POST') return send(response, 200, await agendadorBackup.desconectarGoogleDrive());
       return send(response, 404, { error: frase('Não encontrado.') });
     }
     if (request.url === '/api/agent-config' && request.method === 'POST') {

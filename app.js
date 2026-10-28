@@ -5146,6 +5146,8 @@ const backupApi = {
   executar: opcoes => window.cadernoDesktop ? window.cadernoDesktop.runBackupNow(opcoes) : api('backup-run', opcoes || {}),
   escolherPasta: () => window.cadernoDesktop ? window.cadernoDesktop.chooseBackupFolder() : Promise.resolve(null),
   abrirPasta: () => window.cadernoDesktop ? window.cadernoDesktop.openBackupFolder() : Promise.resolve(''),
+  conectarDrive: cred => window.cadernoDesktop ? window.cadernoDesktop.connectGoogleDrive(cred) : api('backup-drive-connect', cred),
+  desconectarDrive: () => window.cadernoDesktop ? window.cadernoDesktop.disconnectGoogleDrive() : api('backup-drive-disconnect', {}),
 };
 const DIAS_BACKUP = [[0, frase('Domingo')], [1, frase('Segunda-feira')], [2, frase('Terça-feira')], [3, frase('Quarta-feira')], [4, frase('Quinta-feira')], [5, frase('Sexta-feira')], [6, frase('Sábado')]];
 
@@ -5158,20 +5160,34 @@ async function conteudoDaAbaBackup() {
   let info;
   try { info = await backupApi.status(); }
   catch (erro) { return `<p class="cfg-aviso">${t('Não foi possível ler o backup: {erro}', { erro: escapeHtml(mensagemDoErro(erro)) })}</p>`; }
-  const { config, estado, drives = [] } = info;
+  const { config, estado, drives = [], nuvemConectada = false, temClientSecret = false } = info;
   const texto = (titulo, detalhe = '') => `<span class="cfg-texto"><span class="cfg-titulo">${titulo}</span>${detalhe ? `<span class="small-muted">${detalhe}</span>` : ''}</span>`;
   const botao = (id, rotulo, nomeIcone, extra = '') => `<button type="button" class="secondary cfg-pequeno" id="${id}"${extra}>${icone(nomeIcone)} ${rotulo}</button>`;
   const ultimaCopiaMs = Math.max(0, ...Object.values(estado?.ultimasCopias || {}).map(n => Number(n) || 0));
   const botoesDrive = drives.map(d => `<button type="button" class="secondary cfg-pequeno" data-backup-drive="${escapeHtml(d)}">${icone('pasta-aberta')} ${t('Usar Google Drive ({caminho})', { caminho: escapeHtml(d) })}</button>`).join('');
-  const blocoDestino = window.cadernoDesktop
+  const blocoPasta = window.cadernoDesktop
     ? `<code class="cfg-caminho">${escapeHtml(config.destino || t('Nenhuma pasta escolhida.'))}</code>
        <div class="cfg-botoes">${botao('cfg-backup-escolher', t('Escolher pasta'), 'pastas')}${botoesDrive}${config.destino ? botao('cfg-backup-abrir', t('Abrir pasta de backup'), 'pasta-aberta') : ''}</div>`
     : `<div class="cfg-botoes"><input type="text" id="cfg-backup-destino" value="${escapeHtml(config.destino)}" placeholder="${t('Caminho completo da pasta (ex.: G:\\Meu Drive)')}" aria-label="${t('Pasta de destino do backup')}" /><button type="button" class="secondary cfg-pequeno" id="cfg-backup-salvar-destino">${t('Salvar pasta')}</button>${botoesDrive}</div>`;
+  const estadoConta = nuvemConectada
+    ? (config.nuvem?.email ? t('Conectado como {email}', { email: escapeHtml(config.nuvem.email) }) : t('Conta Google conectada.'))
+    : t('Nenhuma conta Google conectada.');
+  const blocoNuvem = `<span class="small-muted">${estadoConta}</span>
+    <div class="cfg-botoes">
+      <input type="text" id="cfg-backup-client-id" value="${escapeHtml(config.nuvem?.clientId || '')}" placeholder="${t('Client ID do Google Cloud')}" aria-label="${t('Client ID do Google Cloud')}" autocomplete="off" spellcheck="false" />
+      <input type="password" id="cfg-backup-client-secret" value="" placeholder="${temClientSecret ? t('Client Secret salvo (em branco mantém)') : t('Client Secret do Google Cloud')}" aria-label="${t('Client Secret do Google Cloud')}" autocomplete="off" spellcheck="false" />
+      ${botao('cfg-backup-conectar-drive', nuvemConectada ? t('Reconectar Google Drive') : t('Conectar ao Google Drive'), 'link')}
+      ${nuvemConectada ? botao('cfg-backup-desconectar-drive', t('Desconectar'), 'fechar') : ''}
+    </div>
+    <details class="small-muted"><summary>${t('Como obter o Client ID gratuito no Google Cloud')}</summary><p>${t('1. No Google Cloud Console, ative a Google Drive API. 2. Em Tela de permissão OAuth, adicione seu e-mail como usuário de teste. 3. Em Credenciais → Criar credenciais → ID do cliente OAuth, escolha "App para computador" e cole o Client ID e o Client Secret acima.')}</p></details>`;
+  const emNuvem = config.modo === 'nuvem';
   const c = config.copias;
   return `<section class="cfg-grupo">
-    <header class="cfg-grupo-topo">${texto(t('Backup e espelho'), t('Grava automaticamente numa pasta sincronizada (como o Google Drive para Desktop). Só funciona enquanto o Kiro está aberto.'))}</header>
+    <header class="cfg-grupo-topo">${texto(t('Backup e espelho'), t('Grava numa pasta sincronizada no computador ou envia direto para o seu Google Drive na nuvem. Só funciona enquanto o Kiro está aberto.'))}</header>
     <label class="cfg-linha cfg-chave">${texto(t('Ativar backup e espelho automáticos'), t('Quando ligado, mantém o espelho em dia e cria as cópias nas frequências escolhidas.'))}<input type="checkbox" data-backup-campo="ligado" ${config.ligado ? 'checked' : ''} /><span class="interruptor" aria-hidden="true"></span></label>
-    <div class="cfg-linha cfg-linha-coluna">${texto(t('Pasta de destino'), t('O Kiro cria uma subpasta Kiro/<nome-do-cofre> dentro do destino escolhido.'))}${blocoDestino}</div>
+    <div class="cfg-linha">${texto(t('Onde guardar o backup'))}<div class="segmentos" role="radiogroup" aria-label="${t('Onde guardar o backup')}"><label class="segmento"><input type="radio" name="cfg-backup-modo" value="pasta" ${!emNuvem ? 'checked' : ''} /><span>${t('Pasta no PC')}</span></label><label class="segmento"><input type="radio" name="cfg-backup-modo" value="nuvem" ${emNuvem ? 'checked' : ''} /><span>${t('Google Drive (nuvem)')}</span></label></div></div>
+    <div class="cfg-linha cfg-linha-coluna" ${emNuvem ? 'hidden' : ''}>${texto(t('Pasta de destino'), t('O Kiro cria uma subpasta Kiro/<nome-do-cofre> dentro do destino escolhido.'))}${blocoPasta}</div>
+    <div class="cfg-linha cfg-linha-coluna" ${emNuvem ? '' : 'hidden'}>${texto(t('Conta do Google Drive (sem app no PC)'), t('Envia direto para a pasta Kiro/<nome-do-cofre> na sua nuvem do Google Drive.'))}${blocoNuvem}</div>
     <label class="cfg-linha cfg-chave">${texto(t('Espelho contínuo das notas'), t('Mantém uma cópia aberta das notas (.md) e anexos em espelho/, pronta para ler no Drive ou usar no NotebookLM.'))}<input type="checkbox" data-backup-campo="espelho" ${config.espelho ? 'checked' : ''} /><span class="interruptor" aria-hidden="true"></span></label>
   </section>
   <section class="cfg-grupo">
@@ -5218,8 +5234,12 @@ async function redesenharAbaBackup() {
 function lerFormularioBackup(painel) {
   const campo = k => painel.querySelector(`[data-backup-campo="${k}"]`);
   const copia = (tipo, prop) => painel.querySelector(`[data-backup-copia="${tipo}"][data-backup-prop="${prop}"]`);
+  const modo = painel.querySelector('input[name="cfg-backup-modo"]:checked')?.value === 'nuvem' ? 'nuvem' : 'pasta';
+  const clientId = painel.querySelector('#cfg-backup-client-id')?.value.trim() || '';
   const parcial = {
     ligado: !!campo('ligado')?.checked,
+    modo,
+    nuvem: { clientId },
     espelho: !!campo('espelho')?.checked,
     copias: {
       horas: { ligado: !!copia('horas', 'ligado')?.checked, intervalo: Number(copia('horas', 'intervalo')?.value || 6), manter: Number(copia('horas', 'manter')?.value || 8) },
@@ -5236,11 +5256,12 @@ function lerFormularioBackup(painel) {
 function ligarAbaBackup(painel) {
   if (!painel) return;
   painel.addEventListener('change', async evento => {
-    if (evento.target.id === 'cfg-backup-destino') return;
+    if (['cfg-backup-destino', 'cfg-backup-client-id', 'cfg-backup-client-secret'].includes(evento.target.id)) return;
     const msg = painel.querySelector('#backup-msg');
     try {
       await backupApi.salvar(lerFormularioBackup(painel));
-      if (msg) msg.textContent = t('Salvo');
+      if (evento.target.name === 'cfg-backup-modo') await redesenharAbaBackup();
+      else if (msg) msg.textContent = t('Salvo');
     } catch (erro) {
       status(t('Não foi possível salvar: {erro}', { erro: mensagemDoErro(erro) }), true);
       redesenharAbaBackup();
@@ -5249,7 +5270,7 @@ function ligarAbaBackup(painel) {
   painel.addEventListener('click', async evento => {
     const driveBtn = evento.target.closest('[data-backup-drive]');
     if (driveBtn) {
-      try { await backupApi.salvar({ destino: driveBtn.dataset.backupDrive }); await redesenharAbaBackup(); }
+      try { await backupApi.salvar({ modo: 'pasta', destino: driveBtn.dataset.backupDrive }); await redesenharAbaBackup(); }
       catch (erro) { status(t('Não foi possível salvar: {erro}', { erro: mensagemDoErro(erro) }), true); }
       return;
     }
@@ -5265,6 +5286,30 @@ function ligarAbaBackup(painel) {
     }
     if (evento.target.closest('#cfg-backup-abrir')) {
       try { await backupApi.abrirPasta(); }
+      catch (erro) { status(mensagemDoErro(erro), true); }
+      return;
+    }
+    const botaoConectar = evento.target.closest('#cfg-backup-conectar-drive');
+    if (botaoConectar) {
+      const clientId = painel.querySelector('#cfg-backup-client-id')?.value.trim() || '';
+      const campoSecret = painel.querySelector('#cfg-backup-client-secret');
+      const clientSecret = campoSecret?.value.trim() || '';
+      if (campoSecret) campoSecret.value = '';
+      const msg = painel.querySelector('#backup-msg');
+      botaoConectar.disabled = true;
+      if (msg) msg.textContent = t('Conclua a autorização no navegador…');
+      try {
+        const res = await backupApi.conectarDrive({ clientId, clientSecret });
+        if (res?.urlAutorizacao && !window.cadernoDesktop) window.open(res.urlAutorizacao, '_blank', 'noopener,noreferrer');
+        await redesenharAbaBackup();
+      } catch (erro) {
+        await redesenharAbaBackup();
+        status(mensagemDoErro(erro), true);
+      }
+      return;
+    }
+    if (evento.target.closest('#cfg-backup-desconectar-drive')) {
+      try { await backupApi.desconectarDrive(); await redesenharAbaBackup(); }
       catch (erro) { status(mensagemDoErro(erro), true); }
       return;
     }

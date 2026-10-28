@@ -233,3 +233,147 @@ test('agendador salva configuração fora do cofre, executa backup e registra er
   assert.ok(status2.estado.ultimasCopias.manual > 0);
   agendador.parar();
 });
+
+test('modo nuvem: OAuth local, espelho incremental e rotação de .zip direto na API do Google Drive', async t => {
+  const http = require('node:http');
+  const dirCofre = await pastaTemp(t);
+  const dirConfig = await pastaTemp(t);
+  const vault = new Vault(dirCofre);
+  let estado = await vault.load();
+  const agoraMs = Date.now();
+  estado = await vault.save({
+    ...estado,
+    notes: [
+      { id: 'n-nuvem-1', title: 'Nota Nuvem 1', body: 'Conteúdo na nuvem', tags: [], links: [], folderId: '', createdAt: agoraMs, updatedAt: agoraMs },
+      { id: 'n-nuvem-2', title: 'Nota Nuvem 2', body: 'Segunda nota', tags: [], links: [], folderId: '', createdAt: agoraMs, updatedAt: agoraMs },
+    ],
+  });
+
+  // Simulador em memória da API do Google Drive v3 + OAuth2
+  let seqId = 1;
+  const arquivosDrive = new Map(); // id -> { id, name, mimeType, parents, appProperties, dados }
+  const responderJson = (status, obj) => ({
+    status,
+    headers: {},
+    body: Buffer.from(JSON.stringify(obj)),
+    text: () => JSON.stringify(obj),
+    json: () => obj,
+  });
+
+  const requisitarFalso = async (url, opcoes = {}) => {
+    const u = new URL(url);
+    if (u.hostname === 'oauth2.googleapis.com' && u.pathname === '/token') {
+      return responderJson(200, { access_token: 'tok-acesso', refresh_token: 'tok-refresh' });
+    }
+    if (u.pathname === '/drive/v3/about') {
+      return responderJson(200, { user: { emailAddress: 'gabriel@example.com' } });
+    }
+    if (u.pathname === '/drive/v3/files' && (!opcoes.method || opcoes.method === 'GET')) {
+      const q = u.searchParams.get('q') || '';
+      const parentMatch = q.match(/'([^']+)' in parents/);
+      const parentId = parentMatch ? parentMatch[1] : '';
+      const soPastas = q.includes("mimeType = 'application/vnd.google-apps.folder'");
+      const semPastas = q.includes("mimeType != 'application/vnd.google-apps.folder'");
+      const nomeMatch = q.match(/name = '([^']+)'/);
+      const lista = [...arquivosDrive.values()].filter(f => {
+        if (parentId && !f.parents.includes(parentId)) return false;
+        if (soPastas && f.mimeType !== 'application/vnd.google-apps.folder') return false;
+        if (semPastas && f.mimeType === 'application/vnd.google-apps.folder') return false;
+        if (nomeMatch && f.name !== nomeMatch[1]) return false;
+        return true;
+      });
+      return responderJson(200, { files: lista });
+    }
+    if (u.pathname === '/drive/v3/files' && opcoes.method === 'POST') {
+      const meta = JSON.parse(String(opcoes.body));
+      const id = `drv-${seqId++}`;
+      const item = { id, name: meta.name, mimeType: meta.mimeType, parents: meta.parents || [], appProperties: meta.appProperties || {} };
+      arquivosDrive.set(id, item);
+      return responderJson(200, item);
+    }
+    if (u.pathname.startsWith('/upload/drive/v3/files')) {
+      const textoCorpo = opcoes.body.toString('utf8');
+      const jsonMatch = textoCorpo.match(/Content-Type: application\/json[^\r\n]*\r\n\r\n([\s\S]*?)\r\n--/);
+      const meta = JSON.parse(jsonMatch[1]);
+      if (opcoes.method === 'PATCH') {
+        const id = decodeURIComponent(u.pathname.split('/').pop());
+        const atual = arquivosDrive.get(id);
+        atual.name = meta.name || atual.name;
+        atual.appProperties = { ...atual.appProperties, ...(meta.appProperties || {}) };
+        return responderJson(200, atual);
+      }
+      const id = `drv-${seqId++}`;
+      const item = { id, name: meta.name, mimeType: 'application/octet-stream', parents: meta.parents || [], appProperties: meta.appProperties || {} };
+      arquivosDrive.set(id, item);
+      return responderJson(200, item);
+    }
+    if (u.pathname.startsWith('/drive/v3/files/') && opcoes.method === 'DELETE') {
+      const id = decodeURIComponent(u.pathname.split('/').pop());
+      arquivosDrive.delete(id);
+      return responderJson(204, {});
+    }
+    throw new Error(`URL inesperada no teste: ${url}`);
+  };
+
+  let dataAtual = new Date(2026, 9, 10, 10, 0, 0);
+  const agendador = criarAgendadorDeBackup({
+    arquivo: path.join(dirConfig, 'backup.json'),
+    obterCofre: () => vault,
+    cifrar: v => `cifrado:${v}`,
+    decifrar: v => (v.startsWith('cifrado:') ? v.slice(8) : ''),
+    requisitarDrive: requisitarFalso,
+    abrirUrl: async urlAuth => {
+      // Simula o navegador redirecionando de volta para o servidor local do Kiro
+      const parsed = new URL(urlAuth);
+      const redirectUri = parsed.searchParams.get('redirect_uri');
+      const state = parsed.searchParams.get('state');
+      await new Promise((resolve, reject) => {
+        http.get(`${redirectUri}?code=cod-teste&state=${encodeURIComponent(state)}`, res => {
+          res.resume();
+          res.on('end', resolve);
+        }).on('error', reject);
+      });
+    },
+    atrasoInicialMs: 0,
+    intervaloChecagemMs: 0,
+    relogio: () => dataAtual,
+  });
+
+  const aposConectar = await agendador.conectarGoogleDrive({ clientId: 'meu-client-id', clientSecret: 'meu-segredo' });
+  assert.equal(aposConectar.nuvemConectada, true);
+  assert.equal(aposConectar.temClientSecret, true);
+  assert.equal(aposConectar.config.nuvem.email, 'gabriel@example.com');
+  assert.equal(aposConectar.config.modo, 'nuvem');
+
+  // Liga o backup na nuvem com limite de 2 cópias diárias
+  await agendador.salvarConfig({
+    ligado: true,
+    modo: 'nuvem',
+    espelho: true,
+    copias: {
+      horas: { ligado: false, intervalo: 6, manter: 4 },
+      diaria: { ligado: true, manter: 2 },
+      semanal: { ligado: false, dia: 0, manter: 4 },
+      mensal: { ligado: false, manter: 12 },
+    },
+  });
+  await agendador.aguardarFila();
+
+  const mdNoDrive = () => [...arquivosDrive.values()].filter(f => f.name.endsWith('.md'));
+  const zipsNoDrive = () => [...arquivosDrive.values()].filter(f => f.name.endsWith('.zip')).map(f => f.name).sort();
+  assert.equal(mdNoDrive().length, 2);
+  assert.deepEqual(zipsNoDrive(), ['kiro-2026-10-10.zip']);
+
+  // Apaga uma nota e avança 2 dias para testar remoção no espelho e rotação de .zip na nuvem
+  await vault.save({ ...estado, notes: [estado.notes[0]] });
+  dataAtual = new Date(2026, 9, 11, 10, 0, 0);
+  await agendador.executarAgora({ espelho: true, copia: false });
+  assert.equal(mdNoDrive().length, 1);
+  assert.deepEqual(zipsNoDrive(), ['kiro-2026-10-10.zip', 'kiro-2026-10-11.zip']);
+
+  dataAtual = new Date(2026, 9, 12, 10, 0, 0);
+  await agendador.executarAgora({ espelho: false, copia: false });
+  assert.deepEqual(zipsNoDrive(), ['kiro-2026-10-11.zip', 'kiro-2026-10-12.zip']);
+
+  agendador.parar();
+});

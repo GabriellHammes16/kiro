@@ -112,7 +112,13 @@ else app.whenReady().then(async () => {
   }
   vault = primeiraVez ? null : new Vault(directory);
   let agentConfig = primeiraVez ? null : new AgentConfig(directory);
-  const agendadorBackup = criarAgendadorDeBackup({ arquivo: join(app.getPath('userData'), 'backup.json'), obterCofre: () => vault });
+  const agendadorBackup = criarAgendadorDeBackup({
+    arquivo: join(app.getPath('userData'), 'backup.json'),
+    obterCofre: () => vault,
+    cifrar: v => (safeStorage.isEncryptionAvailable() ? safeStorage.encryptString(v).toString('base64') : v),
+    decifrar: v => (safeStorage.isEncryptionAvailable() ? safeStorage.decryptString(Buffer.from(v, 'base64')) : v),
+    abrirUrl: url => shell.openExternal(url),
+  });
   agendadorBackup.iniciar();
   ipcMain.handle('vault:first-run', () => (primeiraVez ? { primeiraVez: true, padrao: directory } : { primeiraVez: false }));
   // Boas-vindas: 'padrao' usa Documentos/Kiro/vault; 'criar' e 'abrir' perguntam a pasta.
@@ -295,6 +301,8 @@ else app.whenReady().then(async () => {
     return agendadorBackup.salvarConfig({ destino: result.filePaths[0] });
   });
   ipcMain.handle('backup:open', async () => shell.openPath(await agendadorBackup.pastaDoCofreNoDestino()));
+  ipcMain.handle('backup:drive:connect', (_event, credenciais) => agendadorBackup.conectarGoogleDrive(credenciais));
+  ipcMain.handle('backup:drive:disconnect', () => agendadorBackup.desconectarGoogleDrive());
   ipcMain.handle('vault:choose', async event => {
     const result = await dialog.showOpenDialog(BrowserWindow.fromWebContents(event.sender), { title: t('Abrir pasta como cofre Kiro'), properties: ['openDirectory', 'createDirectory'] });
     if (result.canceled) return null;

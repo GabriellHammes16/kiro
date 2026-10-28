@@ -26,7 +26,9 @@ const EXCLUIR_DA_COPIA = new Set(['.kiro.lock', '.trash', '.history']);
 const LIMITES = { intervalo: [1, 24], horas: [1, 48], diaria: [1, 60], semanal: [1, 52], mensal: [1, 36] };
 const configPadrao = () => ({
   ligado: false,
+  modo: 'pasta',
   destino: '',
+  nuvem: { clientId: '', email: '' },
   espelho: true,
   copias: {
     horas: { ligado: false, intervalo: 6, manter: 8 },
@@ -41,9 +43,15 @@ const inteiro = (valor, [min, max], padrao) => { const n = Math.round(Number(val
 function normalizarConfig(entrada = {}) {
   const base = configPadrao(), e = entrada && typeof entrada === 'object' ? entrada : {};
   const c = e.copias && typeof e.copias === 'object' ? e.copias : {};
+  const n = e.nuvem && typeof e.nuvem === 'object' ? e.nuvem : {};
   const config = {
     ligado: e.ligado === true,
+    modo: e.modo === 'nuvem' ? 'nuvem' : 'pasta',
     destino: typeof e.destino === 'string' ? e.destino.trim().slice(0, 1024) : '',
+    nuvem: {
+      clientId: typeof n.clientId === 'string' ? n.clientId.trim().slice(0, 256) : '',
+      email: typeof n.email === 'string' ? n.email.trim().slice(0, 256) : '',
+    },
     espelho: e.espelho === undefined ? base.espelho : e.espelho === true,
     copias: {},
   };
@@ -323,7 +331,33 @@ async function detectarGoogleDrive({ plataforma = process.platform, home = requi
   return candidatos.filter((_, i) => resultados[i]);
 }
 
+/** Lista os arquivos do cofre que entram no espelho (.md e anexos). */
+function listarParaEspelho(cofre) {
+  return listar(cofre, paraEspelho);
+}
+
+/** Gera um Buffer .zip com todos os arquivos do cofre (usado para o envio direto à nuvem). */
+async function gerarBufferZipDoCofre(cofre, { exclusivo = f => f() } = {}) {
+  const os = require('node:os');
+  const temp = path.join(os.tmpdir(), `kiro-nuvem-${randomUUID()}.zip.tmp`);
+  const lidos = new Map();
+  const lista = await exclusivo(async () => {
+    const arquivos = await listar(cofre, paraCopia);
+    for (const f of arquivos) if (f.size <= LEITURA_COERENTE) {
+      try { lidos.set(f.rel, await fs.readFile(f.abs)); } catch (erro) { if (erro.code !== 'ENOENT') throw erro; }
+    }
+    return arquivos;
+  });
+  const lerDepois = async f => { try { return await fs.readFile(f.abs); } catch (erro) { if (erro.code === 'ENOENT') return null; throw erro; } };
+  const entradas = lista.map(f => ({ nome: f.rel, mtimeMs: f.mtimeMs, ler: async () => { const d = lidos.get(f.rel); lidos.delete(f.rel); return d || (f.size > LEITURA_COERENTE ? lerDepois(f) : null); } }));
+  try {
+    await gravarZip(temp, entradas);
+    return await fs.readFile(temp);
+  } finally { await fs.rm(temp, { force: true }); }
+}
+
 module.exports = {
   TIPOS, MARCA, MANTER_MANUAL, configPadrao, normalizarConfig, copiasAtrasadas, nomeDaCopia,
   resolverRaiz, espelhar, gerarCopia, gravarZip, rotacionar, detectarGoogleDrive, crc32,
+  listarParaEspelho, gerarBufferZipDoCofre,
 };

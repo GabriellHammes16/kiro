@@ -1,10 +1,11 @@
 // Agendador de backup automático, compartilhado entre o app desktop e o servidor web.
-// Guarda as configurações e o histórico de execuções em backup.json, fora do cofre e por
-// computador (indexado pelo caminho do cofre), pois cada máquina tem seu caminho do Drive.
+// Guarda as configurações, tokens OAuth cifrados e histórico de execuções em backup.json,
+// fora do cofre e por computador (indexado pelo caminho do cofre).
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const { createHash, randomUUID } = require('node:crypto');
 const backup = require('./backup.cjs');
+const googleDrive = require('./google-drive.cjs');
 // Marca a frase para tradução na tela (idiomas.js); aqui o texto segue em português.
 const frase = f => f;
 
@@ -28,7 +29,7 @@ const estadoPadrao = () => ({
 });
 
 function normalizarEstado(entrada = {}) {
-  const base = estadoPadrao(), e = entrada && typeof entrada === 'object' ? entrada : {};
+  const e = entrada && typeof entrada === 'object' ? entrada : {};
   const u = e.ultimasCopias && typeof e.ultimasCopias === 'object' ? e.ultimasCopias : {};
   const num = v => (Number.isFinite(Number(v)) && Number(v) > 0 ? Math.round(Number(v)) : 0);
   return {
@@ -45,14 +46,24 @@ function normalizarEstado(entrada = {}) {
   };
 }
 
+function normalizarSegredos(entrada = {}) {
+  const s = entrada && typeof entrada === 'object' ? entrada : {};
+  return {
+    clientSecret: typeof s.clientSecret === 'string' ? s.clientSecret : '',
+    refreshToken: typeof s.refreshToken === 'string' ? s.refreshToken : '',
+  };
+}
+
 /**
- * Cria o agendador de backup.
- * `obterCofre`: () => Vault | null
- * `arquivo`: caminho completo de backup.json (fora do cofre)
+ * Cria o agendador de backup (modo pasta local e modo nuvem Google Drive).
  */
 function criarAgendadorDeBackup({
   arquivo,
   obterCofre,
+  cifrar = v => v,
+  decifrar = v => v,
+  abrirUrl = null,
+  requisitarDrive = undefined,
   atrasoEspelhoMs = ATRASO_ESPELHO_MS,
   intervaloChecagemMs = INTERVALO_CHECAGEM_MS,
   atrasoInicialMs = ATRASO_INICIAL_MS,
@@ -65,6 +76,17 @@ function criarAgendadorDeBackup({
   let timerChecagem = null;
   let timerInicial = null;
   let espelhoPendente = false;
+  let fluxoOAuthAtivo = null;
+
+  const abrirSegredo = textoCifrado => {
+    if (!textoCifrado || typeof textoCifrado !== 'string') return '';
+    try { const v = decifrar(textoCifrado); return typeof v === 'string' ? v : ''; } catch { return ''; }
+  };
+
+  const guardarSegredo = texto => {
+    if (!texto || typeof texto !== 'string') return '';
+    return cifrar(texto);
+  };
 
   const enfileirarArquivo = fn => {
     const p = filaArquivo.then(fn);
@@ -98,6 +120,7 @@ function criarAgendadorDeBackup({
       return {
         config: backup.normalizarConfig(reg.config),
         estado: normalizarEstado(reg.estado),
+        segredos: normalizarSegredos(reg.segredos),
       };
     });
   }
@@ -110,11 +133,13 @@ function criarAgendadorDeBackup({
       const proximo = await modificador({
         config: backup.normalizarConfig(atual.config),
         estado: normalizarEstado(atual.estado),
+        segredos: normalizarSegredos(atual.segredos),
       });
       cofres[k] = {
         cofre: cofreDir,
         config: backup.normalizarConfig(proximo.config),
         estado: normalizarEstado(proximo.estado),
+        segredos: normalizarSegredos(proximo.segredos),
       };
       await gravarTudo(cofres);
       return cofres[k];
@@ -141,9 +166,19 @@ function criarAgendadorDeBackup({
     let v;
     try { v = cofreAtual(); } catch (e) { if (exigirDestino) throw e; return null; }
     const cofreDir = v.directory;
-    const { config, estado } = await lerRegistro(cofreDir);
+    const { config, estado, segredos } = await lerRegistro(cofreDir);
     if (!forcarEspelho && !forcarCopia && !config.ligado) return null;
-    if (!config.destino) {
+
+    const emNuvem = config.modo === 'nuvem';
+    const refreshToken = abrirSegredo(segredos.refreshToken);
+    const clientSecret = abrirSegredo(segredos.clientSecret);
+
+    if (emNuvem) {
+      if (!config.nuvem.clientId || !refreshToken) {
+        if (exigirDestino) throw new Error(frase('Conecte sua conta do Google Drive antes de fazer o backup na nuvem.'));
+        return null;
+      }
+    } else if (!config.destino) {
       if (exigirDestino) throw new Error(frase('Escolha a pasta de destino do backup.'));
       return null;
     }
@@ -151,24 +186,54 @@ function criarAgendadorDeBackup({
     const agora = relogio();
     const agoraMs = agora.getTime();
     try {
-      const raiz = await backup.resolverRaiz(cofreDir, config.destino);
       let fezEspelho = false;
       const copiasFeitas = [];
-
       const deveEspelhar = forcarEspelho || (config.ligado && config.espelho && (espelhoPendente || !estado.ultimoEspelho));
-      if (deveEspelhar) {
-        espelhoPendente = false;
-        await backup.espelhar(cofreDir, raiz);
-        fezEspelho = true;
-      }
-
       const exclusivo = typeof v.exclusive === 'function' ? op => v.exclusive(op) : op => op();
-      if (forcarCopia) {
-        await backup.gerarCopia(cofreDir, raiz, 'manual', { agora, manter: backup.MANTER_MANUAL, exclusivo });
-        copiasFeitas.push('manual');
-      }
-      if (config.ligado) {
-        const atrasadas = backup.copiasAtrasadas(config, estado.ultimasCopias, agora);
+      const atrasadas = config.ligado ? backup.copiasAtrasadas(config, estado.ultimasCopias, agora) : [];
+
+      if (emNuvem) {
+        if (deveEspelhar || forcarCopia || atrasadas.length) {
+          const accessToken = await googleDrive.obterAccessToken({
+            clientId: config.nuvem.clientId,
+            clientSecret,
+            refreshToken,
+          }, requisitarDrive);
+          const cliente = googleDrive.criarClienteDrive(accessToken, requisitarDrive);
+          const pastaCofreId = await googleDrive.garantirRaizNaNuvem(cliente, cofreDir);
+
+          if (deveEspelhar) {
+            espelhoPendente = false;
+            const arquivos = await backup.listarParaEspelho(cofreDir);
+            await googleDrive.espelharNaNuvem(cliente, pastaCofreId, arquivos);
+            fezEspelho = true;
+          }
+
+          if (forcarCopia || atrasadas.length) {
+            const bufferZip = await backup.gerarBufferZipDoCofre(cofreDir, { exclusivo });
+            if (forcarCopia) {
+              const nome = backup.nomeDaCopia('manual', agora);
+              await googleDrive.enviarCopiaParaNuvem(cliente, pastaCofreId, 'manual', nome, bufferZip, backup.MANTER_MANUAL);
+              copiasFeitas.push('manual');
+            }
+            for (const tipo of atrasadas) {
+              const nome = backup.nomeDaCopia(tipo, agora);
+              await googleDrive.enviarCopiaParaNuvem(cliente, pastaCofreId, tipo, nome, bufferZip, config.copias[tipo].manter);
+              copiasFeitas.push(tipo);
+            }
+          }
+        }
+      } else {
+        const raiz = await backup.resolverRaiz(cofreDir, config.destino);
+        if (deveEspelhar) {
+          espelhoPendente = false;
+          await backup.espelhar(cofreDir, raiz);
+          fezEspelho = true;
+        }
+        if (forcarCopia) {
+          await backup.gerarCopia(cofreDir, raiz, 'manual', { agora, manter: backup.MANTER_MANUAL, exclusivo });
+          copiasFeitas.push('manual');
+        }
         for (const tipo of atrasadas) {
           await backup.gerarCopia(cofreDir, raiz, tipo, { agora, manter: config.copias[tipo].manter, exclusivo });
           copiasFeitas.push(tipo);
@@ -184,7 +249,7 @@ function criarAgendadorDeBackup({
           return reg;
         });
       }
-      return { raiz, fezEspelho, copiasFeitas };
+      return { fezEspelho, copiasFeitas };
     } catch (erro) {
       const msg = erro?.message || String(erro);
       await atualizarRegistro(cofreDir, reg => {
@@ -201,6 +266,7 @@ function criarAgendadorDeBackup({
     if (timerEspelho) { clearTimeout(timerEspelho); timerEspelho = null; }
     if (timerChecagem) { clearInterval(timerChecagem); timerChecagem = null; }
     if (timerInicial) { clearTimeout(timerInicial); timerInicial = null; }
+    if (fluxoOAuthAtivo) { fluxoOAuthAtivo.cancelar(); fluxoOAuthAtivo = null; }
   }
 
   function iniciar() {
@@ -220,6 +286,11 @@ function criarAgendadorDeBackup({
     }
   }
 
+  const temDestinoConfigurado = (config, segredos) =>
+    config.modo === 'nuvem'
+      ? Boolean(config.nuvem.clientId && abrirSegredo(segredos.refreshToken))
+      : Boolean(config.destino);
+
   return {
     iniciar,
     parar: limparTimers,
@@ -234,29 +305,98 @@ function criarAgendadorDeBackup({
     },
     async obterStatus() {
       const v = cofreAtual();
-      const [{ config, estado }, drives] = await Promise.all([
+      const [{ config, estado, segredos }, drives] = await Promise.all([
         lerRegistro(v.directory),
         backup.detectarGoogleDrive(),
       ]);
-      return { config, estado, rodando, drives };
+      return {
+        config,
+        estado,
+        rodando,
+        drives,
+        nuvemConectada: Boolean(config.nuvem.clientId && abrirSegredo(segredos.refreshToken)),
+        temClientSecret: Boolean(abrirSegredo(segredos.clientSecret)),
+      };
     },
     async salvarConfig(parcial = {}) {
       const v = cofreAtual();
       const salvo = await atualizarRegistro(v.directory, reg => {
+        const p = parcial && typeof parcial === 'object' ? parcial : {};
         const mesclado = {
           ...reg.config,
-          ...(parcial && typeof parcial === 'object' ? parcial : {}),
+          ...p,
+          nuvem: {
+            ...reg.config.nuvem,
+            ...(p.nuvem && typeof p.nuvem === 'object' ? p.nuvem : {}),
+          },
           copias: {
             ...reg.config.copias,
-            ...(parcial && typeof parcial.copias === 'object' ? parcial.copias : {}),
+            ...(p.copias && typeof p.copias === 'object' ? p.copias : {}),
           },
         };
-        const novaConfig = backup.normalizarConfig(mesclado);
-        return { config: novaConfig, estado: reg.estado };
+        if (typeof p.clientSecret === 'string' && p.clientSecret.trim()) {
+          reg.segredos.clientSecret = guardarSegredo(p.clientSecret.trim());
+        }
+        return { config: backup.normalizarConfig(mesclado), estado: reg.estado, segredos: reg.segredos };
       });
-      if (salvo.config.ligado && salvo.config.destino) {
+      if (salvo.config.ligado && temDestinoConfigurado(salvo.config, salvo.segredos)) {
         executarEmFila(() => rodarCiclo());
       }
+      return this.obterStatus();
+    },
+    async conectarGoogleDrive({ clientId = '', clientSecret = '', aguardar = true } = {}) {
+      const v = cofreAtual();
+      const regAtual = await lerRegistro(v.directory);
+      const idFinal = (typeof clientId === 'string' && clientId.trim()) || regAtual.config.nuvem.clientId;
+      const secretFinal = (typeof clientSecret === 'string' && clientSecret.trim()) || abrirSegredo(regAtual.segredos.clientSecret);
+      if (!idFinal) throw new Error(frase('Informe o Client ID do Google Cloud para conectar.'));
+
+      await atualizarRegistro(v.directory, reg => {
+        reg.config.modo = 'nuvem';
+        reg.config.nuvem.clientId = idFinal;
+        if (typeof clientSecret === 'string' && clientSecret.trim()) {
+          reg.segredos.clientSecret = guardarSegredo(clientSecret.trim());
+        }
+        return reg;
+      });
+
+      if (fluxoOAuthAtivo) fluxoOAuthAtivo.cancelar();
+      const fluxo = await googleDrive.iniciarFluxoOAuth({
+        clientId: idFinal,
+        clientSecret: secretFinal,
+        requisitar: requisitarDrive,
+      });
+      fluxoOAuthAtivo = fluxo;
+
+      const concluir = fluxo.aguardarConclusao().then(async resultado => {
+        if (fluxoOAuthAtivo === fluxo) fluxoOAuthAtivo = null;
+        const salvo = await atualizarRegistro(v.directory, reg => {
+          reg.config.modo = 'nuvem';
+          reg.config.nuvem.clientId = idFinal;
+          reg.config.nuvem.email = resultado.email || '';
+          if (resultado.refreshToken) reg.segredos.refreshToken = guardarSegredo(resultado.refreshToken);
+          reg.estado.ultimoErro = '';
+          reg.estado.ultimoErroEm = 0;
+          return reg;
+        });
+        if (salvo.config.ligado) executarEmFila(() => rodarCiclo());
+        return this.obterStatus();
+      });
+
+      if (typeof abrirUrl === 'function') await abrirUrl(fluxo.urlAutorizacao);
+      if (!aguardar) {
+        concluir.catch(() => {});
+        return { urlAutorizacao: fluxo.urlAutorizacao };
+      }
+      return concluir;
+    },
+    async desconectarGoogleDrive() {
+      const v = cofreAtual();
+      await atualizarRegistro(v.directory, reg => {
+        reg.config.nuvem.email = '';
+        reg.segredos.refreshToken = '';
+        return reg;
+      });
       return this.obterStatus();
     },
     async executarAgora({ espelho = true, copia = true } = {}) {
@@ -268,7 +408,6 @@ function criarAgendadorDeBackup({
       const { config } = await lerRegistro(v.directory);
       return backup.resolverRaiz(v.directory, config.destino);
     },
-    // Usado pelos testes para esperar a fila terminar.
     aguardarFila: () => filaExecucao,
   };
 }

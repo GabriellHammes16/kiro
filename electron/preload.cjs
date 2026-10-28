@@ -51,5 +51,7 @@ contextBridge.exposeInMainWorld('cadernoDesktop', {
   saveBackupConfig: parcial => ipcRenderer.invoke('backup:config:set', parcial),
   runBackupNow: opcoes => ipcRenderer.invoke('backup:run', opcoes),
   chooseBackupFolder: () => ipcRenderer.invoke('backup:choose'),
-  openBackupFolder: () => ipcRenderer.invoke('backup:open')
+  openBackupFolder: () => ipcRenderer.invoke('backup:open'),
+  connectGoogleDrive: credenciais => ipcRenderer.invoke('backup:drive:connect', credenciais),
+  disconnectGoogleDrive: () => ipcRenderer.invoke('backup:drive:disconnect')
 });
