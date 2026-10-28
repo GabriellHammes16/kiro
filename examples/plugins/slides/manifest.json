@@ -1,0 +1,12 @@
+{
+  "id": "slides",
+  "name": "Apresentação",
+  "version": "1.0.0",
+  "author": "Kiro",
+  "description": "Apresente uma nota como slides: cada título vira um slide.",
+  "minKiro": "0.20.3",
+  "permissions": ["notes:read"],
+  "network": [],
+  "icon": "M4 5h16v11H4zM9 20h6M12 16v4",
+  "page": { "title": "Apresentação", "file": "page.html" }
+}

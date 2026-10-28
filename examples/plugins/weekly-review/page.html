@@ -1,0 +1,11 @@
+<!doctype html>
+<html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Revisão semanal</title><link rel="stylesheet" href="style.css"></head>
+<body><main>
+  <header class="topo"><div><p class="eyebrow">RITUAL DE FECHAMENTO</p><h1>Revisão semanal</h1><p id="intervalo" class="muted">Preparando sua semana…</p></div><div class="topo-acoes"><button id="atualizar" class="secundario" type="button">Atualizar dados</button><button id="salvar" class="primario" type="button">Salvar revisão como nota</button></div></header>
+  <section class="metricas" aria-label="Resumo da semana"><div><strong id="nNotas">—</strong><span>notas recentes</span></div><div><strong id="nTarefas">—</strong><span>tarefas abertas</span></div><div><strong id="nAtrasadas">—</strong><span>atrasadas</span></div></section>
+  <p class="limite">A leitura considera até 500 notas recentes do cofre.</p>
+  <section class="colunas"><article class="painel"><p class="eyebrow">REGISTROS</p><h2>Notas da semana</h2><ul id="notas" class="lista"></ul></article><article class="painel"><p class="eyebrow">EM MOVIMENTO</p><h2>Próximos passos</h2><div id="tarefas" class="tarefas"></div></article></section>
+  <section class="reflexao"><div class="intro"><p class="eyebrow">UM MOMENTO PARA PENSAR</p><h2>O que merece sua atenção?</h2><p class="muted">Suas respostas ficam neste formulário até a revisão ser salva.</p></div><div class="campos"><label>O que avançou<textarea id="advanced" rows="3"></textarea></label><label>O que ficou pendente<textarea id="pending" rows="3"></textarea></label><label>Prioridade da próxima semana<textarea id="priority" rows="3"></textarea></label></div></section>
+  <section class="preview"><div class="preview-head"><div><p class="eyebrow">PRÉVIA</p><h2>Sua revisão em Markdown</h2></div></div><pre id="markdown"></pre></section>
+  <p id="status" class="status" role="status" aria-live="polite"></p>
+</main><script src="modelo.js"></script><script src="page.js"></script></body></html>

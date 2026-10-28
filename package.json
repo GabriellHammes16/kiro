@@ -1,6 +1,6 @@
 {
   "name": "kiro",
-  "version": "0.21.2",
+  "version": "0.24.0",
   "description": "Segundo cérebro local-first: notas, tarefas, hábitos e fluxos.",
   "author": {
     "name": "Gabriel",
@@ -16,6 +16,7 @@
     "dev:reset": "node dev/seed.cjs --reset",
     "test": "node --test tests/*.test.cjs",
     "vendor:codemirror": "node scripts/build-codemirror.mjs",
+    "vendor:pdfjs": "node scripts/build-pdfjs.mjs",
     "vendor:ortografia": "node scripts/build-ortografia.mjs",
     "desktop": "electron .",
     "desktop:dev": "electron . --dev-vault",
@@ -77,6 +78,43 @@
       "fluxo.js",
       "corretor.js",
       "node_modules/**"
+    ],
+    "extraResources": [
+      {
+        "from": "examples/plugins/focus-pomodoro",
+        "to": "plugins/focus-pomodoro",
+        "filter": [
+          "manifest.json",
+          "*.js",
+          "*.html",
+          "*.css"
+        ]
+      },
+      {
+        "from": "examples/plugins/flashcards",
+        "to": "plugins/flashcards",
+        "filter": [
+          "manifest.json",
+          "*.js",
+          "*.html",
+          "*.css"
+        ]
+      },
+      {
+        "from": "examples/plugins/weekly-review",
+        "to": "plugins/weekly-review",
+        "filter": [
+          "manifest.json",
+          "*.js",
+          "*.html",
+          "*.css"
+        ]
+      },
+      {
+        "from": "examples/plugins/slides",
+        "to": "plugins/slides",
+        "filter": ["manifest.json", "*.js", "*.html", "*.css"]
+      }
     ]
   },
   "dependencies": {
@@ -95,6 +133,7 @@
     "electron": "^44.1.1",
     "electron-builder": "^26.15.3",
     "esbuild": "^0.28.2",
-    "hunspell-asm": "^4.0.2"
+    "hunspell-asm": "^4.0.2",
+    "pdfjs-dist": "^4.10.38"
   }
 }

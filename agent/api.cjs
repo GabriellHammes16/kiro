@@ -964,7 +964,7 @@ class KiroAgentApi {
       const tarefa = this.#acharTarefa(state, args.id);
       let nova = this.#aplicar(tarefa, this.#camposDaTarefa(state, args, false));
       if (args.status) nova = domain.moverTarefa(nova, args.status);
-      state.tasks = state.tasks.map(x => x.id === tarefa.id ? nova : x);
+      state.tasks = domain.criarProximas(state.tasks.map(x => x.id === tarefa.id ? nova : x), state.tasks, randomUUID);
     });
     this.events.emitVaultEvent('task.updated', { id: args.id, source: 'agent', clientId: contexto.clientId });
     return { success: true, task: this.#resumoTarefa(depois, depois.tasks.find(x => x.id === args.id)), revisionBefore: antes.revision, revision: depois.revision };
@@ -974,7 +974,7 @@ class KiroAgentApi {
     if (!domain.STATUS_DA_TAREFA.includes(args.status)) throw new AgentError('INVALID_INPUT', `status deve ser um de: ${domain.STATUS_DA_TAREFA.join(', ')}.`);
     const { antes, depois } = await this.#mutate(state => {
       const tarefa = this.#acharTarefa(state, args.id);
-      state.tasks = state.tasks.map(x => x.id === tarefa.id ? domain.moverTarefa(x, args.status) : x);
+      state.tasks = domain.criarProximas(state.tasks.map(x => x.id === tarefa.id ? domain.moverTarefa(x, args.status) : x), state.tasks, randomUUID);
     });
     this.events.emitVaultEvent('task.updated', { id: args.id, source: 'agent', clientId: contexto.clientId });
     return { success: true, task: this.#resumoTarefa(depois, depois.tasks.find(x => x.id === args.id)), revisionBefore: antes.revision, revision: depois.revision };

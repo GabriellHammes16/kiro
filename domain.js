@@ -5,6 +5,23 @@
   const text = value => typeof value === 'string';
   const id = value => text(value) && /^[a-zA-Z0-9_-]{1,100}$/.test(value);
   const date = value => text(value) && /^\d{4}-\d{2}-\d{2}$/.test(value) && Number.isFinite(Date.parse(value)) && new Date(value).toISOString().slice(0, 10) === value;
+  const dataLocal = (ano, mes, dia) => { const d = new Date(0); d.setFullYear(ano, mes - 1, dia); d.setHours(12, 0, 0, 0); return d; };
+  function calendarioDoMes(valor) {
+    if (!date(valor)) return null;
+    const [ano, mes] = valor.split('-').map(Number), deslocamento = (dataLocal(ano, mes, 1).getDay() + 6) % 7;
+    return Array.from({ length: 42 }, (_, i) => {
+      const d = dataLocal(ano, mes, i - deslocamento + 1);
+      return { date: localDate(d), inMonth: d.getFullYear() === ano && d.getMonth() === mes - 1 };
+    });
+  }
+  function somarMeses(valor, n) {
+    if (!date(valor) || !Number.isInteger(n)) return null;
+    const [ano, mes, dia] = valor.split('-').map(Number), indice = mes - 1 + n;
+    const novoAno = ano + Math.floor(indice / 12), novoMes = (indice % 12 + 12) % 12;
+    if (novoAno < 0 || novoAno > 9999) return null;
+    const ultimoDia = dataLocal(novoAno, novoMes + 2, 0).getDate();
+    return localDate(dataLocal(novoAno, novoMes + 1, Math.min(dia, ultimoDia)));
+  }
   function safeUrl(value) {
     try { const url = new URL(value); return ['http:', 'https:'].includes(url.protocol) ? url.href : ''; } catch { return ''; }
   }
@@ -38,7 +55,7 @@
       if (n.file !== undefined && (!text(n.file) || /(^[\\/]|:|(^|[\\/])\.\.([\\/]|$))/.test(n.file) || !/\.md$/i.test(n.file))) fail();
       if (n.folderId && !id(n.folderId)) fail();
     }
-    for (const t of value.tasks) if (!date(t.due) || !['Baixa', 'Média', 'Alta'].includes(t.priority) || typeof t.done !== 'boolean' || (t.noteId && !id(t.noteId)) || (t.description !== undefined && (!text(t.description) || t.description.length > 5000)) || (t.status !== undefined && !STATUS_GUARDADOS.includes(t.status))) fail();
+    for (const t of value.tasks) if (!date(t.due) || !['Baixa', 'Média', 'Alta'].includes(t.priority) || typeof t.done !== 'boolean' || (t.noteId && !id(t.noteId)) || (t.description !== undefined && (!text(t.description) || t.description.length > 5000)) || (t.status !== undefined && !STATUS_GUARDADOS.includes(t.status)) || (t.repeat !== undefined && !validRepeat(t.repeat)) || (t.repeatNextId !== undefined && !id(t.repeatNextId))) fail();
     for (const r of value.routine || []) if (!date(r.date) || typeof r.done !== 'boolean') fail();
     for (const h of value.habits || []) {
       if (!validFrequency(h.frequency) || (h.createdAt !== undefined && (!Number.isFinite(h.createdAt) || Math.abs(h.createdAt) > 8.64e15))) fail();
@@ -111,6 +128,52 @@
       const dia = addDays(hoje, i - n + 1);
       return { date: dia, done: feitos.has(dia), due: (!inicio || dia >= inicio) && (f.type !== 'days' || f.days.includes(weekday(dia))) };
     });
+  }
+  // Tarefa recorrente: repeat = { every: 'day'|'week'|'month' } ou { every: 'days', n: 2..365 }. Sem o campo, não repete.
+  function validRepeat(r) {
+    if (!r || typeof r !== 'object' || Array.isArray(r)) return false;
+    if (r.every === 'days') return Number.isInteger(r.n) && r.n >= 1 && r.n <= 365;
+    return ['day', 'week', 'month'].includes(r.every) && r.n === undefined;
+  }
+  // Próximo prazo depois de `due`. Mês sem o dia (31 em fevereiro) cai no último dia do mês.
+  // shortcut: o mês parte do prazo anterior e não volta a 31, rever se houver escolha do dia fixo.
+  function proximoPrazo(due, repeat) {
+    if (!date(due) || !validRepeat(repeat)) return null;
+    if (repeat.every === 'day') return addDays(due, 1);
+    if (repeat.every === 'week') return addDays(due, 7);
+    if (repeat.every === 'days') return addDays(due, repeat.n);
+    const [y, m, d] = partes(due);
+    return localDate(new Date(y, m, Math.min(d, new Date(y, m + 1, 0).getDate())));
+  }
+  // Ao concluir uma tarefa recorrente, a próxima ocorrência (aberta, com o prazo seguinte); senão null.
+  function proximaOcorrencia(tarefa, novoId) {
+    const due = tarefa && tarefa.repeat && proximoPrazo(tarefa.due, tarefa.repeat);
+    if (!due) return null;
+    const { status, repeatNextId, ...resto } = tarefa;
+    return { ...resto, id: novoId, due, done: false };
+  }
+  // O vínculo fica mesmo se a próxima tarefa for apagada: reabrir não emite outra ocorrência.
+  function criarProximas(tarefas, antes, novoId) {
+    const novas = [];
+    const atualizadas = tarefas.map(tarefa => {
+      if (!tarefa.done || !tarefa.repeat || tarefa.repeatNextId || !antes.some(a => a.id === tarefa.id && !a.done)) return tarefa;
+      const proxima = proximaOcorrencia(tarefa, novoId());
+      if (!proxima) return tarefa;
+      novas.push(proxima);
+      return { ...tarefa, repeatNextId: proxima.id };
+    });
+    return [...novas, ...atualizadas];
+  }
+  // Lembretes: quais avisos sair agora. `ultimo` guarda o dia do último aviso de cada tipo.
+  // Avisa a partir do horário (HH:MM) e no máximo uma vez por dia; só se houver algo a avisar.
+  function avisosDeHoje({ agora = new Date(), tarefas = [], habitos = [], habitLog = {}, horas = {}, ultimo = {} } = {}) {
+    const hoje = localDate(agora), hm = `${String(agora.getHours()).padStart(2, '0')}:${String(agora.getMinutes()).padStart(2, '0')}`;
+    const pendentes = tarefas.filter(t => !t.done && t.due <= hoje).length;
+    const faltam = habitos.filter(h => { const d = habitStats(h, habitLog[h.id] || [], hoje); return d.dueToday && !d.doneToday && (h.frequency.type !== 'weekly' || d.weekCount < h.frequency.times); }).length;
+    return {
+      tarefas: ultimo.tarefas !== hoje && hm >= (horas.tarefas || '09:00') ? pendentes : 0,
+      habitos: ultimo.habitos !== hoje && hm >= (horas.habitos || '20:00') ? faltam : 0,
+    };
   }
   function habitStats(habit, dias = [], hoje = localDate()) {
     const feitos = new Set(dias), f = habit.frequency, inicio = habit.createdAt ? localDate(new Date(habit.createdAt)) : '';
@@ -201,7 +264,52 @@
     return validateState(withHabits(data));
   }
   const normalize = value => String(value).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
-  const isImagePath = value => /\.(png|jpe?g|gif|webp|avif|bmp)$/i.test(value.trim());
+  const isImagePath = value => /\.(png|jpe?g|gif|webp|avif|bmp)$/i.test(String(value || '').trim());
+  const isPdfPath = value => /\.pdf$/i.test(String(value || '').split('#')[0].trim());
+  const isAudioPath = value => /\.(wav|mp3|webm)$/i.test(String(value || '').trim());
+  const isAttachmentPath = value => isImagePath(value) || isPdfPath(value) || isAudioPath(value);
+  function csvParaTabela(texto) {
+    if(typeof texto!=='string'||texto.length>1024*1024)return null;
+    const linhas=[], linha=[];let campo='',aspas=false,fechado=false;
+    for(let i=0;i<texto.length;i++){
+      const c=texto[i];
+      if(aspas){if(c==='"'){if(texto[i+1]==='"'){campo+='"';i++;}else{aspas=false;fechado=true;}}else campo+=c;continue;}
+      if(c==='"'){if(campo||fechado)return null;aspas=true;continue;}
+      if(c===','||c==='\n'||c==='\r'){
+        linha.push(campo);campo='';fechado=false;
+        if(c!==','){if(c==='\r'&&texto[i+1]==='\n')i++;linhas.push(linha.splice(0));}
+      }else{if(fechado)return null;campo+=c;}
+    }
+    if(aspas)return null;
+    if(campo||linha.length||fechado)linhas.push([...linha,campo]);
+    if(linhas.length<2||linhas[0].length<2||linhas.some(l=>l.length!==linhas[0].length)||linhas.some(l=>l.every(c=>!c.trim())))return null;
+    if(linhas.every(l=>l.every(c=>c.trim().split(/\s+/).length>=3)))return null;
+    if(linhas.every(l=>l.every(c=>c.trim().split(/\s+/).length>=3)))return null;
+    const celula=c=>c.replace(/\\/g,'\\\\').replace(/\|/g,'\\|').replace(/\r?\n/g,'<br>');
+    const formatar=l=>'| '+l.map(celula).join(' | ')+' |';
+    return [formatar(linhas[0]),formatar(linhas[0].map(()=> '---')),...linhas.slice(1).map(formatar)].join('\n');
+  }
+  function celulasTabela(linha){
+    if(!/^\s*\|/.test(linha)||! /\|\s*$/.test(linha))return null;
+    const texto=linha.trim().slice(1,-1), celulas=[];let campo='';
+    for(let i=0;i<texto.length;i++){if(texto[i]==='\\'&&i+1<texto.length){campo+=texto[i]+texto[++i];}else if(texto[i]==='|'){celulas.push(campo.trim());campo='';}else campo+=texto[i];}
+    celulas.push(campo.trim());return celulas;
+  }
+  function lerPdf(dentro) {
+    const partes = String(dentro || '').split('|').map(s => s.trim());
+    const primeiro = partes[0] || '';
+    const hash = primeiro.indexOf('#');
+    const arquivo = (hash >= 0 ? primeiro.slice(0, hash) : primeiro).trim();
+    if (!isPdfPath(arquivo) || /[:\\]|\.\./.test(arquivo)) return null;
+    const frag = hash >= 0 ? primeiro.slice(hash + 1) : '';
+    const mPag = /^page=(\d+)$/i.exec(frag.trim());
+    const pagina = mPag ? Math.max(1, Number(mPag[1])) : null;
+    let altura = null;
+    for (const p of partes.slice(1)) {
+      if (/^\d{2,4}$/.test(p)) { const n = Number(p); if (n >= 120 && n <= 2000) altura = n; }
+    }
+    return { arquivo, pagina, altura };
+  }
   // ![[imagem.png]] embute uma imagem; não é ligação entre notas, então fica fora do grafo e dos backlinks.
   // [[tarefa:id|Título]] cita uma tarefa, não uma nota: fica fora do grafo de notas e dos backlinks (ver taskLinks).
   const CITACAO_DE_TAREFA = /(?<!!)\[\[tarefa:([^\]|\n]+)(?:\|[^\]\n]*)?\]\]/gi;
@@ -209,9 +317,9 @@
   const notesCitingTask = (notes, taskId) => notes.filter(n => taskLinks(n.body).includes(taskId));
   // Citação pronta para colar numa nota: o id não muda quando a tarefa troca de nome; o título é só o rótulo.
   const taskReference = task => `[[tarefa:${task.id}|${String(task.title).replace(/[\[\]|\n]+/g, ' ').replace(/\s+/g, ' ').trim()}]]`;
-  const wikiLinks = body => [...body.matchAll(/(!?)\[\[([^\]\n]+)\]\]/g)].filter(match => !(match[1] && isImagePath(match[2].split('|')[0])) && !/^tarefa:/i.test(match[2])).map(match => ({ target: match[2].split('|')[0].split('#')[0].trim(), label: (match[2].split('|')[1] || match[2]).trim() }));
+  const wikiLinks = body => [...body.matchAll(/(!?)\[\[([^\]\n]+)\]\]/g)].filter(match => !(match[1] && isAttachmentPath(match[2].split('|')[0])) && !/^tarefa:/i.test(match[2])).map(match => ({ target: match[2].split('|')[0].split('#')[0].trim(), label: (match[2].split('|')[1] || match[2]).trim() }));
   const tags = note => [...new Set([...(note.tags || []), ...[...note.body.matchAll(/(?:^|\s)#([\p{L}\p{N}_/-]+)/gu)].map(m => m[1])])];
-  const findLinkedNote = (notes, target) => notes.find(n => normalize(n.title) === normalize(target) || normalize((n.file || '').replace(/\.md$/i, '')) === normalize(target) || normalize((n.file || '').split('/').pop().replace(/\.md$/i, '')) === normalize(target));
+  const findLinkedNote = (notes, target) => { const alvo = normalize(String(target || '').split('#')[0].trim()); return alvo ? notes.find(n => normalize(n.title) === alvo || normalize((n.file || '').replace(/\.md$/i, '')) === alvo || normalize((n.file || '').split('/').pop().replace(/\.md$/i, '')) === alvo) : undefined; };
   // Notas que citam `note` com [[...]]; a própria nota não conta.
   const mentions = (notes, note) => notes.filter(n => n.id !== note.id && wikiLinks(n.body).some(l => findLinkedNote(notes, l.target)?.id === note.id));
   // Fluxos que citam a nota: um cartão de arquivo com o caminho dela ou um [[link]] para ela
@@ -239,7 +347,27 @@
   // Texto digitado depois de um [[ ainda aberto na linha do cursor; null fora de um link e em ![[ (imagem).
   const linkQuery = before => before.match(/(?<!!)\[\[([^\[\]\n]*)$/)?.[1] ?? null;
   // Títulos que começam com o texto vêm antes dos que só o contêm.
-  const linkSuggestions = (notes, query, limit = 8) => {
+  const linkSuggestions = (notes, query, limit = 8, notaAtual = null) => {
+    const bruto = String(query ?? '');
+    if (bruto.includes('#')) {
+      const hash = bruto.indexOf('#');
+      const alvoNota = bruto.slice(0, hash).trim();
+      const filtroBruto = bruto.slice(hash + 1);
+      const todas = notaAtual && !notes.some(n => n.id === notaAtual.id) ? [notaAtual, ...notes] : notes;
+      const nota = alvoNota ? findLinkedNote(todas, alvoNota) : notaAtual;
+      if (!nota || typeof nota.body !== 'string') return [];
+      const prefixo = alvoNota ? nota.title : '';
+      if (filtroBruto.startsWith('^')) {
+        const fq = normalize(filtroBruto.slice(1).trim());
+        const ids = [...new Set(blocosDaNota(nota.body).map(b => b.id))];
+        const comeca = ids.filter(id => normalize(id).startsWith(fq));
+        return [...comeca, ...ids.filter(id => !comeca.includes(id) && normalize(id).includes(fq))].slice(0, limit).map(id => `${prefixo}#^${id}`);
+      }
+      const fq = normalize(filtroBruto.trim());
+      const secs = [...new Set(sumario(nota.body).map(h => h.texto))];
+      const comeca = secs.filter(s => normalize(s).startsWith(fq));
+      return [...comeca, ...secs.filter(s => !comeca.includes(s) && normalize(s).includes(fq))].slice(0, limit).map(s => `${prefixo}#${s}`);
+    }
     const q = normalize(query.trim());
     const titulos = [...new Set(notes.map(n => n.title).filter(Boolean))];
     const comeca = titulos.filter(t => normalize(t).startsWith(q));
@@ -250,6 +378,7 @@
   const folderColor = value => FOLDER_COLORS.includes(value) ? value : '';
   // ---- Aparência: temas, skins e cores manuais (preferência da instalação, em localStorage) ----
   const TEMAS = [
+    ['liquid-glass', 'Liquid Glass', 'classicos'],
     ['kiro', 'Kiro', 'classicos'], ['grafite', frase('Grafite'), 'classicos'], ['claro', frase('Claro'), 'classicos'], ['escuro-azul', frase('Escuro Azul'), 'classicos'], ['escuro-verde', frase('Escuro Verde'), 'classicos'],
     ['escuro-ambar', frase('Escuro Âmbar'), 'classicos'], ['alto-contraste', frase('Alto Contraste'), 'classicos'], ['meia-noite', frase('Meia-noite'), 'classicos'], ['floresta', frase('Floresta'), 'classicos'],
     ['neon-tokyo', 'Neon Tokyo', 'anime'], ['sakura-night', 'Sakura Night', 'anime'], ['shonen-fire', 'Shonen Fire', 'anime'], ['studio-ghibli', 'Studio Ghibli', 'anime'],
@@ -262,7 +391,7 @@
     ['neon', 'Neon', frase('Brilho sutil no destaque.')], ['paper', 'Paper', frase('Textura de papel ilustrado.')],
   ];
   // destaque: '' segue a cor do tema; um hex vale por cima de qualquer tema (acento é só a base do Personalizado).
-  const APARENCIA_PADRAO = Object.freeze({ tema: 'kiro', skin: 'padrao', sidebar: '#11161D', content: '#0B0F14', acento: '#9273FF', destaque: '' });
+  const APARENCIA_PADRAO = Object.freeze({ tema: 'kiro', skin: 'padrao', sidebar: '#11161D', content: '#0B0F14', acento: '#9273FF', destaque: '', transparencia: 35 });
   const corValida = v => text(v) && /^#[0-9a-f]{6}$/i.test(v);
   // Luminância relativa e razão de contraste (WCAG).
   function luminancia(hex) {
@@ -288,7 +417,8 @@
       : s.tema === undefined && ['sidebar', 'content', 'acento'].some(k => cores[k].toLowerCase() !== APARENCIA_PADRAO[k].toLowerCase()) ? 'personalizado'
       : APARENCIA_PADRAO.tema;
     const skin = SKINS.some(([id]) => id === s.skin) ? s.skin : APARENCIA_PADRAO.skin;
-    return { tema, skin, ...cores, destaque: corValida(s.destaque) ? s.destaque : '' };
+    const transparencia = Number.isFinite(s.transparencia) ? Math.min(80, Math.max(0, Math.round(s.transparencia))) : APARENCIA_PADRAO.transparencia;
+    return { tema, skin, ...cores, destaque: corValida(s.destaque) ? s.destaque : '', transparencia };
   }
   const classesDaAparencia = a => { const v = aparenciaValida(a); return [`tema-${v.tema}`, `skin-${v.skin}`]; };
   // ---- Painel da direita: menções não vinculadas, sumário e árvore de etiquetas ----
@@ -380,6 +510,7 @@
     ['salvar', frase('Salvar a nota aberta'), '', 'Ctrl+S'],
     ['lateral', frase('Recolher a barra lateral'), frase('Alterna entre a barra completa e só os ícones.'), 'Ctrl+\\'],
     ['painelDireito', frase('Painel da direita'), frase('Links, sumário e etiquetas da nota, na tela de Pastas.'), 'Ctrl+Shift+L'],
+    ['acoesRapidas', frase('Ações rápidas'), '', 'Ctrl+K'],
   ];
   // Teclas que o sistema e o editor já usam: trocá-las quebraria copiar, colar, desfazer…
   const RESERVADOS = new Set(['Ctrl+C', 'Ctrl+V', 'Ctrl+X', 'Ctrl+Z', 'Ctrl+Y', 'Ctrl+A', 'Ctrl+Shift+Z', 'Ctrl+W', 'Ctrl+T', 'Ctrl+R', 'Ctrl+P', 'Ctrl+F', 'Alt+F4']);
@@ -406,6 +537,10 @@
       const c = s[id];
       return [id, combinacaoAceita(c) && !RESERVADOS.has(c) ? c : padrao(id)];
     }));
+    if (!Object.hasOwn(s, 'acoesRapidas')) {
+      const candidatos = ['Ctrl+K', 'Ctrl+Shift+P', 'Ctrl+Alt+K', ...Array.from({ length: 12 }, (_, i) => `F${i + 1}`)];
+      atalhos.acoesRapidas = candidatos.find(c => !RESERVADOS.has(c) && !Object.entries(atalhos).some(([id, valor]) => id !== 'acoesRapidas' && valor === c)) || 'Ctrl+K';
+    }
     // Repetido: quem não está no padrão volta para ele, até sobrar tudo distinto.
     for (let volta = 0; volta < ATALHOS_EDITAVEIS.length; volta++) {
       const repetidos = ATALHOS_EDITAVEIS.filter(([id]) => atalhos[id] !== padrao(id) && Object.keys(atalhos).some(o => o !== id && atalhos[o] === atalhos[id]));
@@ -414,6 +549,21 @@
     }
     return atalhos;
   }
+  function filtrarAcoes(acoes, consulta, limite = 12) {
+    const termos = normalize(consulta).trim().split(/\s+/).filter(Boolean);
+    const encontradas = acoes.filter(a => {
+      const texto = normalize(`${a.titulo} ${a.categoria}`);
+      return termos.every(termo => texto.includes(termo));
+    });
+    if (!termos.length) return encontradas.slice(0, limite);
+    const inicio = normalize(consulta).trim();
+    return [
+      ...encontradas.filter(a => normalize(a.titulo).startsWith(inicio)),
+      ...encontradas.filter(a => !normalize(a.titulo).startsWith(inicio)),
+    ].slice(0, limite);
+  }
+  const modelosPessoais = notas => notas.filter(n => (n.tags || []).some(tag => normalize(tag) === 'modelo'));
+  const expandirModelo = (corpo, valores) => String(corpo ?? '').replace(/\{\{(title|date)\}\}/g, (_, chave) => valores[chave]);
 
   // ---- Mescla em três vias, quando o cofre mudou por fora (outro editor, sincronização, um assistente) ----
   // base = o que esta janela leu por último; local = a janela agora; disco = o cofre agora.
@@ -446,7 +596,385 @@
     const estado = { ...disco, notes: lista('notes'), tasks: lista('tasks'), habits: lista('habits'), habitLog, folders: lista('folders'), fluxos: lista('fluxos'), revision: disco.revision };
     return { estado, conflitos };
   }
-  const api = { mesclarEstados, STATUS_DA_TAREFA, statusDaTarefa, moverTarefa, taskLinks, notesCitingTask, taskReference, ATALHOS_EDITAVEIS, combinacaoDoEvento, rotuloDaCombinacao, problemaDoAtalho, atalhosValidos, TEMAS, SKINS, APARENCIA_PADRAO, luminancia, contraste, corValida, aparenciaValida, classesDaAparencia, FOLDER_COLORS, folderColor, habitStats, habitDays, withHabits, validFrequency, localDate, safeUrl, validateState, normalize, isImagePath, wikiLinks, tags, findLinkedNote, mentions, fluxosQueCitam, inInbox, withoutInbox, toReview, linkQuery, linkSuggestions, validFolderName, folderPaths, descendants, upgradeBackup, pathKey, mencoesNaoVinculadas, vincularMencao, sumario, arvoreDeEtiquetas, podeVincular };
+  // Reescreve [[Título Antigo]], [[Título Antigo|apelido]] e [[Título Antigo#seção]] fora de blocos
+  // de código cercados (``` ou ~~~) e fora de código em linha (`...`).
+  function reescreverLinksPorTitulo(corpo, tituloAntigo, tituloNovo, { podeTrocar } = {}) {
+    const original = String(corpo ?? '');
+    const antigo = normalize(String(tituloAntigo || '').trim());
+    const novo = String(tituloNovo || '').trim();
+    if (!antigo || !novo || String(tituloAntigo || '').trim() === novo || /[|[\]#\n]/.test(novo)) {
+      return { corpo: original, trocas: 0 };
+    }
+    let cerca = null, trocas = 0;
+    const linhas = original.split('\n').map(linha => {
+      const mCerca = /^\s*(`{3,}|~{3,})/.exec(linha);
+      if (mCerca) {
+        if (!cerca) cerca = mCerca[1][0];
+        else if (mCerca[1][0] === cerca) cerca = null;
+        return linha;
+      }
+      if (cerca) return linha;
+      return linha.replace(/(`+[^`\n]*`+)|(?<!!)\[\[([^\]\n]+)\]\]/g, (m, codigo, inner) => {
+        if (codigo || /^tarefa:/i.test(inner)) return m;
+        const pipe = inner.indexOf('|');
+        const antesDoPipe = pipe < 0 ? inner : inner.slice(0, pipe);
+        const sufixoPipe = pipe < 0 ? '' : inner.slice(pipe);
+        const hash = antesDoPipe.indexOf('#');
+        const alvo = (hash < 0 ? antesDoPipe : antesDoPipe.slice(0, hash)).trim();
+        const sufixoHash = hash < 0 ? '' : antesDoPipe.slice(hash);
+        if (!alvo || normalize(alvo) !== antigo) return m;
+        if (podeTrocar && !podeTrocar(alvo)) return m;
+        const atualizado = `[[${novo}${sufixoHash}${sufixoPipe}]]`;
+        if (atualizado !== m) trocas++;
+        return atualizado;
+      });
+    });
+    return { corpo: linhas.join('\n'), trocas };
+  }
+  // Aplica a atualização de [[links]] em todas as notas e cartões de texto do Fluxo quando uma nota muda de título.
+  function aplicarRenomeacaoDeLinks(state, notaId, tituloAntigo, tituloNovo) {
+    if (!state || !notaId || !tituloAntigo || !tituloNovo || String(tituloAntigo).trim() === String(tituloNovo).trim()) {
+      return { state, notasAfetadas: 0, fluxosAfetados: 0, totalLinks: 0 };
+    }
+    const notasComTituloAntigo = (state.notes || []).map(n => n.id === notaId ? { ...n, title: tituloAntigo } : n);
+    const podeTrocar = alvo => {
+      const resolvida = findLinkedNote(notasComTituloAntigo, alvo);
+      return !resolvida || resolvida.id === notaId;
+    };
+    let notasAfetadas = 0, fluxosAfetados = 0, totalLinks = 0;
+    const notes = (state.notes || []).map(n => {
+      const { corpo, trocas } = reescreverLinksPorTitulo(n.body, tituloAntigo, tituloNovo, { podeTrocar });
+      if (!trocas) return n;
+      notasAfetadas++;
+      totalLinks += trocas;
+      return { ...n, body: corpo };
+    });
+    const fluxos = Array.isArray(state.fluxos) ? state.fluxos.map(f => {
+      if (!f || !f.canvas || !Array.isArray(f.canvas.nodes)) return f;
+      let mudouFluxo = false;
+      const nodes = f.canvas.nodes.map(no => {
+        if (!no || no.type !== 'text' || typeof no.text !== 'string') return no;
+        const { corpo, trocas } = reescreverLinksPorTitulo(no.text, tituloAntigo, tituloNovo, { podeTrocar });
+        if (!trocas) return no;
+        mudouFluxo = true;
+        totalLinks += trocas;
+        return { ...no, text: corpo };
+      });
+      if (mudouFluxo) fluxosAfetados++;
+      return mudouFluxo ? { ...f, canvas: { ...f.canvas, nodes } } : f;
+    }) : state.fluxos;
+    return { state: { ...state, notes, ...(fluxos !== undefined ? { fluxos } : {}) }, notasAfetadas, fluxosAfetados, totalLinks };
+  }
+  // Separa um alvo de [[wikilink]] em { target, anchor, blockId, ref }.
+  function parseWikiLink(alvoBruto) {
+    const texto = String(alvoBruto || '').split('|')[0].trim();
+    const hash = texto.indexOf('#');
+    if (hash < 0) return { target: texto, anchor: '', blockId: '', ref: '' };
+    const target = texto.slice(0, hash).trim();
+    const resto = texto.slice(hash + 1).trim();
+    if (resto.startsWith('^') && resto.slice(1).trim()) {
+      const blockId = resto.slice(1).trim();
+      return { target, anchor: '', blockId, ref: `#^${blockId}` };
+    }
+    return { target, anchor: resto, blockId: '', ref: resto ? `#${resto}` : '' };
+  }
+  // Identificadores de bloco (^meu-bloco no fim da linha) fora de blocos de código cercados.
+  function blocosDaNota(corpo) {
+    const itens = [];
+    let cerca = false, pos = 0, linhaNum = 0;
+    for (const linha of String(corpo || '').split('\n')) {
+      if (/^`{3,}/.test(linha)) { cerca = !cerca; pos += linha.length + 1; linhaNum++; continue; }
+      if (!cerca) {
+        const m = /(?:^|\s)\^([a-zA-Z0-9-]+)\s*$/.exec(linha);
+        if (m) itens.push({ id: m[1], pos, linha: linhaNum, texto: linha.slice(0, m.index).trim() });
+      }
+      pos += linha.length + 1;
+      linhaNum++;
+    }
+    return itens;
+  }
+  // Resolve uma âncora (#Subtítulo ou #^bloco) para { tipo, pos, linha, texto } dentro do corpo da nota.
+  function resolverAncoraNaNota(corpo, referencia) {
+    const ref = String(referencia || '').trim().replace(/^#/, '');
+    if (!ref) return null;
+    if (ref.startsWith('^')) {
+      const id = ref.slice(1).trim().toLowerCase();
+      if (!id) return null;
+      const b = blocosDaNota(corpo).find(x => x.id.toLowerCase() === id);
+      return b ? { tipo: 'bloco', id: b.id, pos: b.pos, linha: b.linha, texto: b.texto } : null;
+    }
+    const alvo = normalize(ref);
+    let cerca = false, pos = 0, linhaNum = 0;
+    for (const linha of String(corpo || '').split('\n')) {
+      if (/^`{3,}/.test(linha)) { cerca = !cerca; pos += linha.length + 1; linhaNum++; continue; }
+      if (!cerca) {
+        const h = /^(#{1,6})\s+(.*?)(?:\s+#+)?\s*$/.exec(linha);
+        if (h && h[2].trim() && normalize(h[2].trim()) === alvo) {
+          return { tipo: 'titulo', nivel: h[1].length, texto: h[2].trim(), pos, linha: linhaNum };
+        }
+      }
+      pos += linha.length + 1;
+      linhaNum++;
+    }
+    return null;
+  }
+  // ---- Etapa 2: Localizar e Substituir dentro da nota (Ctrl+F / Ctrl+H) ----
+  function buscarNoTexto(texto, termo, { diferenciarMaiusculas = false } = {}) {
+    const corpo = String(texto ?? ''), busca = String(termo ?? '');
+    if (!busca) return [];
+    const fonte = diferenciarMaiusculas ? corpo : corpo.toLowerCase();
+    const alvo = diferenciarMaiusculas ? busca : busca.toLowerCase();
+    const faixas = [];
+    let i = 0;
+    while (i <= fonte.length - alvo.length) {
+      const achou = fonte.indexOf(alvo, i);
+      if (achou < 0) break;
+      faixas.push({ de: achou, ate: achou + alvo.length });
+      i = achou + Math.max(1, alvo.length);
+    }
+    return faixas;
+  }
+  function substituirNoTexto(texto, faixa, substituto) {
+    const corpo = String(texto ?? ''), sub = String(substituto ?? '');
+    if (!faixa || typeof faixa.de !== 'number' || typeof faixa.ate !== 'number' || faixa.de < 0 || faixa.ate < faixa.de || faixa.ate > corpo.length) {
+      return { texto: corpo, novoCursor: 0 };
+    }
+    const novo = corpo.slice(0, faixa.de) + sub + corpo.slice(faixa.ate);
+    return { texto: novo, novoCursor: faixa.de + sub.length };
+  }
+  function substituirTodosNoTexto(texto, termo, substituto, opcoes = {}) {
+    const corpo = String(texto ?? ''), sub = String(substituto ?? '');
+    const faixas = buscarNoTexto(corpo, termo, opcoes);
+    if (!faixas.length) return { texto: corpo, trocas: 0 };
+    let out = '', ult = 0;
+    for (const f of faixas) {
+      out += corpo.slice(ult, f.de) + sub;
+      ult = f.ate;
+    }
+    out += corpo.slice(ult);
+    return { texto: out, trocas: faixas.length };
+  }
+
+  // ---- Etapa 5: Favoritos (Bookmarks) e grupos ----
+  const TIPOS_FAVORITO = ['nota', 'pasta', 'fluxo', 'busca'];
+  function limparItensFavoritos(itens) {
+    if (!Array.isArray(itens)) return [];
+    const vistos = new Set(), saida = [];
+    for (const it of itens) {
+      if (!it || typeof it !== 'object') continue;
+      if (it.tipo === 'grupo') {
+        const gid = text(it.id) ? it.id.trim() : '';
+        const titulo = text(it.titulo) ? it.titulo.trim() : '';
+        if (!gid || !titulo || vistos.has(`grupo:${gid}`)) continue;
+        vistos.add(`grupo:${gid}`);
+        saida.push({ tipo: 'grupo', id: gid, titulo, aberto: it.aberto !== false, itens: limparItensFavoritos(it.itens) });
+      } else if (TIPOS_FAVORITO.includes(it.tipo) && text(it.alvo)) {
+        const alvo = it.alvo.trim();
+        const chave = `${it.tipo}:${alvo}`;
+        if (!alvo || vistos.has(chave)) continue;
+        vistos.add(chave);
+        saida.push({ tipo: it.tipo, alvo, ...(text(it.titulo) ? { titulo: it.titulo.trim() } : {}) });
+      }
+    }
+    return saida;
+  }
+  function validarFavoritos(raw) {
+    const obj = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
+    return { itens: limparItensFavoritos(obj.itens) };
+  }
+  function ehFavorito(favoritos, tipo, alvo) {
+    const val = validarFavoritos(favoritos);
+    const chaveAlvo = String(alvo || '').trim();
+    const achar = lista => lista.some(it => it.tipo === 'grupo' ? achar(it.itens || []) : (it.tipo === tipo && it.alvo === chaveAlvo));
+    return achar(val.itens);
+  }
+  function alternarFavorito(favoritos, item) {
+    const val = validarFavoritos(favoritos);
+    if (!item || !TIPOS_FAVORITO.includes(item.tipo) || !text(item.alvo)) return val;
+    const alvo = item.alvo.trim();
+    if (ehFavorito(val, item.tipo, alvo)) {
+      const filtrar = lista => lista
+        .filter(it => !(it.tipo === item.tipo && it.alvo === alvo))
+        .map(it => it.tipo === 'grupo' ? { ...it, itens: filtrar(it.itens || []) } : it);
+      return { itens: filtrar(val.itens) };
+    }
+    const novo = { tipo: item.tipo, alvo, ...(text(item.titulo) ? { titulo: item.titulo.trim() } : {}) };
+    return { itens: [...val.itens, novo] };
+  }
+  function criarGrupoFavorito(favoritos, titulo, idGrupo = `grp-${Date.now().toString(36)}`) {
+    const val = validarFavoritos(favoritos);
+    const t = String(titulo || '').trim();
+    if (!t) return val;
+    return { itens: [...val.itens, { tipo: 'grupo', id: idGrupo, titulo: t, aberto: true, itens: [] }] };
+  }
+  function removerGrupoFavorito(favoritos, grupoId) {
+    const val = validarFavoritos(favoritos);
+    return { itens: val.itens.filter(it => !(it.tipo === 'grupo' && it.id === grupoId)) };
+  }
+  function moverParaGrupoFavorito(favoritos, item, grupoId) {
+    const val = validarFavoritos(favoritos);
+    if (!item || !TIPOS_FAVORITO.includes(item.tipo) || !text(item.alvo)) return val;
+    const alvo = item.alvo.trim();
+    let achado = { tipo: item.tipo, alvo, ...(text(item.titulo) ? { titulo: item.titulo.trim() } : {}) };
+    const semItem = val.itens
+      .filter(it => { if (it.tipo === item.tipo && it.alvo === alvo) { achado = it; return false; } return true; })
+      .map(it => {
+        if (it.tipo !== 'grupo') return it;
+        const rest = (it.itens || []).filter(sub => { if (sub.tipo === item.tipo && sub.alvo === alvo) { achado = sub; return false; } return true; });
+        return { ...it, itens: rest };
+      });
+    if (!grupoId) return { itens: [...semItem, achado] };
+    return {
+      itens: semItem.map(it => it.tipo === 'grupo' && it.id === grupoId ? { ...it, itens: [...(it.itens || []), achado] } : it),
+    };
+  }
+
+  // ---- Etapa 6: Linguagem de Consulta Rica (Busca e Grafo) ----
+  function tokenizarConsulta(str) {
+    const tokens = [];
+    const s = String(str ?? '');
+    let i = 0;
+    while (i < s.length) {
+      while (i < s.length && /\s/.test(s[i])) i++;
+      if (i >= s.length) break;
+      let negado = false;
+      if (s[i] === '-' && i + 1 < s.length && !/\s/.test(s[i + 1])) { negado = true; i++; }
+      if (s[i] === '(' || s[i] === ')') {
+        tokens.push({ tipo: s[i], negado });
+        i++;
+        continue;
+      }
+      let buf = '';
+      while (i < s.length && !/\s|[()]/.test(s[i])) {
+        if (s[i] === '"') {
+          i++;
+          buf += '"';
+          while (i < s.length && s[i] !== '"') buf += s[i++];
+          if (i < s.length && s[i] === '"') { buf += '"'; i++; }
+        } else {
+          buf += s[i++];
+        }
+      }
+      if (!negado && buf === 'OR') tokens.push({ tipo: 'OR' });
+      else if (buf) tokens.push({ tipo: 'ATOM', texto: buf, negado });
+    }
+    return tokens;
+  }
+  function criarAtomoConsulta(tok) {
+    const bruta = tok.texto;
+    const mOp = /^(tag|path|file|title|content):(.*)$/i.exec(bruta);
+    if (mOp) {
+      const campo = mOp[1].toLowerCase();
+      const val = mOp[2].replace(/^"(.*)"$/, '$1').trim();
+      return { tipo: 'OP', campo, valor: normalize(val), negado: Boolean(tok.negado) };
+    }
+    if (bruta.startsWith('#') && bruta.length > 1 && !bruta.includes(' ')) {
+      return { tipo: 'OP', campo: 'tag', valor: normalize(bruta.slice(1)), negado: Boolean(tok.negado) };
+    }
+    const fraseExata = bruta.startsWith('"') && bruta.endsWith('"') && bruta.length >= 2;
+    const limpo = fraseExata ? bruta.slice(1, -1) : bruta;
+    return { tipo: 'TERMO', valor: normalize(limpo), exato: fraseExata, negado: Boolean(tok.negado) };
+  }
+  function compilarConsulta(query) {
+    const tokens = tokenizarConsulta(query);
+    if (!tokens.length) return { tipo: 'VAZIA' };
+    let pos = 0;
+    function lerOu() {
+      let esq = lerE();
+      while (pos < tokens.length && tokens[pos].tipo === 'OR') {
+        pos++;
+        const dir = lerE();
+        if (dir) esq = esq ? { tipo: 'OR', esq, dir } : dir;
+      }
+      return esq;
+    }
+    function lerE() {
+      let esq = null;
+      while (pos < tokens.length && tokens[pos].tipo !== 'OR' && tokens[pos].tipo !== ')') {
+        const termo = lerPrimario();
+        if (termo) esq = esq ? { tipo: 'AND', esq, dir: termo } : termo;
+      }
+      return esq;
+    }
+    function lerPrimario() {
+      if (pos >= tokens.length) return null;
+      const t = tokens[pos++];
+      if (t.tipo === '(') {
+        const sub = lerOu();
+        if (pos < tokens.length && tokens[pos].tipo === ')') pos++;
+        if (!sub) return null;
+        return t.negado ? { ...sub, negado: !sub.negado } : sub;
+      }
+      if (t.tipo === 'ATOM') return criarAtomoConsulta(t);
+      return null;
+    }
+    return lerOu() || { tipo: 'VAZIA' };
+  }
+  function avaliarConsulta(ast, nota, contexto = {}) {
+    if (!ast || ast.tipo === 'VAZIA') return true;
+    if (!nota) return false;
+    const inv = (res, neg) => neg ? !res : res;
+    if (ast.tipo === 'AND') return inv(avaliarConsulta(ast.esq, nota, contexto) && avaliarConsulta(ast.dir, nota, contexto), ast.negado);
+    if (ast.tipo === 'OR') return inv(avaliarConsulta(ast.esq, nota, contexto) || avaliarConsulta(ast.dir, nota, contexto), ast.negado);
+    const titulo = normalize(nota.title || '');
+    const corpo = normalize(nota.body || '');
+    const arq = normalize((nota.file || nota.title || '').replace(/\.md$/i, ''));
+    const pasta = normalize(typeof contexto.caminhoDaPasta === 'function' ? (contexto.caminhoDaPasta(nota) || '') : (contexto.pasta || (nota.file && nota.file.includes('/') ? nota.file.slice(0, nota.file.lastIndexOf('/')) : '') || ''));
+    const etiqs = tags(nota).map(normalize);
+    if (ast.tipo === 'TERMO') {
+      if (!ast.valor) return inv(true, ast.negado);
+      const bate = titulo.includes(ast.valor) || corpo.includes(ast.valor) || etiqs.some(t => t.includes(ast.valor)) || pasta.includes(ast.valor);
+      return inv(bate, ast.negado);
+    }
+    if (ast.tipo === 'OP') {
+      const v = ast.valor;
+      if (!v) return inv(true, ast.negado);
+      let bate = false;
+      if (ast.campo === 'tag') {
+        const semHash = v.replace(/^#/, '');
+        bate = etiqs.some(t => t === semHash || t.startsWith(`${semHash}/`));
+      } else if (ast.campo === 'path') {
+        bate = pasta.includes(v) || normalize(nota.file || '').includes(v);
+      } else if (ast.campo === 'file' || ast.campo === 'title') {
+        bate = titulo.includes(v) || arq.includes(v);
+      } else if (ast.campo === 'content') {
+        bate = corpo.includes(v);
+      }
+      return inv(bate, ast.negado);
+    }
+    return true;
+  }
+  function filtrarNotasPorConsulta(notas, folders, query) {
+    const ast = compilarConsulta(query);
+    if (ast.tipo === 'VAZIA') return notas || [];
+    const caminhos = Array.isArray(folders) ? folderPaths(folders) : new Map();
+    const caminhoDaPasta = n => (n && n.folderId && caminhos.get(n.folderId)) || '';
+    return (notas || []).filter(n => avaliarConsulta(ast, n, { caminhoDaPasta }));
+  }
+
+  // ---- Etapa 7: Sincronia de rolagem entre linhas e posições ----
+  function posicaoParaLinha(corpo, pos) {
+    const texto = String(corpo ?? '');
+    const p = Math.max(0, Math.min(Number(pos) || 0, texto.length));
+    let linha = 0;
+    for (let i = 0; i < p; i++) if (texto.charCodeAt(i) === 10) linha++;
+    return linha;
+  }
+  function linhaParaPosicao(corpo, linhaFracionaria) {
+    const texto = String(corpo ?? '');
+    const alvo = Math.max(0, Math.floor(Number(linhaFracionaria) || 0));
+    if (alvo === 0) return 0;
+    let linha = 0;
+    for (let i = 0; i < texto.length; i++) {
+      if (texto.charCodeAt(i) === 10) {
+        linha++;
+        if (linha === alvo) return i + 1;
+      }
+    }
+    return texto.length;
+  }
+
+  const api = { criarProximas, validRepeat, proximoPrazo, proximaOcorrencia, avisosDeHoje, mesclarEstados, filtrarAcoes, modelosPessoais, expandirModelo, STATUS_DA_TAREFA, statusDaTarefa, moverTarefa, taskLinks, notesCitingTask, taskReference, ATALHOS_EDITAVEIS, combinacaoDoEvento, rotuloDaCombinacao, problemaDoAtalho, atalhosValidos, TEMAS, SKINS, APARENCIA_PADRAO, luminancia, contraste, corValida, aparenciaValida, classesDaAparencia, FOLDER_COLORS, folderColor, calendarioDoMes, somarMeses, habitStats, habitDays, withHabits, validFrequency, localDate, safeUrl, validateState, normalize, isImagePath, isPdfPath, isAudioPath, isAttachmentPath, csvParaTabela, celulasTabela, lerPdf, wikiLinks, parseWikiLink, blocosDaNota, resolverAncoraNaNota, tags, findLinkedNote, mentions, fluxosQueCitam, reescreverLinksPorTitulo, aplicarRenomeacaoDeLinks, buscarNoTexto, substituirNoTexto, substituirTodosNoTexto, validarFavoritos, ehFavorito, alternarFavorito, criarGrupoFavorito, removerGrupoFavorito, moverParaGrupoFavorito, compilarConsulta, avaliarConsulta, filtrarNotasPorConsulta, posicaoParaLinha, linhaParaPosicao, inInbox, withoutInbox, toReview, linkQuery, linkSuggestions, validFolderName, folderPaths, descendants, upgradeBackup, pathKey, mencoesNaoVinculadas, vincularMencao, sumario, arvoreDeEtiquetas, podeVincular };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Kiro = api;
 })(globalThis);

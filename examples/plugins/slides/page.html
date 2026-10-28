@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="pt-BR">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Apresentação</title><link rel="stylesheet" href="style.css"></head>
+<body>
+  <main>
+    <header class="topo"><div><p class="eyebrow">DE NOTA PARA PLATEIA</p><h1>Apresentação</h1></div></header>
+    <section id="escolha" aria-label="Escolher nota">
+      <label class="busca">Buscar nota pelo título<input id="busca" type="search" autocomplete="off" placeholder="Digite parte do título"></label>
+      <p id="resumo" class="muted" role="status">Carregando notas…</p>
+      <ul id="notas" class="notas"></ul>
+    </section>
+    <section id="apresentacao" aria-label="Slides" hidden>
+      <div class="barra">
+        <button id="voltar" class="secundario" type="button">Voltar à lista</button>
+        <span id="contador" class="contador" aria-live="polite"></span>
+        <button id="tela-cheia" class="secundario" type="button">Tela cheia</button>
+      </div>
+      <article class="slide">
+        <p id="nota" class="eyebrow"></p>
+        <h2 id="titulo" tabindex="-1"></h2>
+        <div id="corpo" class="corpo"></div>
+      </article>
+      <div class="navegacao">
+        <button id="anterior" class="secundario" type="button">← Anterior</button>
+        <button id="proximo" class="primario" type="button">Próximo →</button>
+      </div>
+      <p class="ajuda muted">Setas ← → ou espaço para navegar. Esc sai da apresentação.</p>
+    </section>
+    <p id="status" class="status" role="status" aria-live="polite"></p>
+  </main>
+  <script src="modelo.js"></script><script src="page.js"></script>
+</body></html>

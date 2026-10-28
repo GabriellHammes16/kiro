@@ -1,0 +1,12 @@
+{
+  "id": "weekly-review",
+  "name": "Revisão semanal",
+  "version": "1.0.0",
+  "author": "Kiro",
+  "description": "Revise suas notas e próximos passos da semana.",
+  "minKiro": "0.20.3",
+  "permissions": ["notes:read", "notes:write", "tasks:read"],
+  "network": [],
+  "icon": "calendario",
+  "page": { "title": "Revisão semanal", "file": "page.html" }
+}

@@ -8,11 +8,12 @@ import vaultModule from './vault.cjs';
 import agentModule from './agent/index.cjs';
 import ligacaoRede from './ligacao-rede-plugins.cjs';
 import segredosModule from './segredos-plugins.cjs';
+import agendadorBackupModule from './agendador-backup.cjs';
 import KiroPlugins from './plugins.js';
 // Marca a frase para tradução na tela (idiomas.js); aqui o texto segue em português.
 const frase = f => f;
 
-const { Vault } = vaultModule;
+const { Vault, ATTACHMENT_LIMIT } = vaultModule;
 const root = dirname(fileURLToPath(import.meta.url));
 // --dev: cofre de exemplo, recarga ao vivo e porta própria, para rodar junto do npm start.
 const dev = process.argv.includes('--dev');
@@ -22,7 +23,7 @@ const vault = new Vault(vaultDirectory);
 const devTools = dev ? (await import('./dev/devtools.mjs')).createDevTools(root) : null;
 if (dev && !process.env.KIRO_VAULT && !process.env.KUROI_VAULT) await (await import('./dev/seed.cjs')).default.semearSeVazio(vaultDirectory);
 const agentConfig = new agentModule.AgentConfig(vaultDirectory);
-const publicFiles = { '/': ['index.html', 'text/html'], '/index.html': ['index.html', 'text/html'], '/app.js': ['app.js', 'text/javascript'], '/idiomas.js': ['idiomas.js', 'text/javascript'], '/idiomas/en.js': ['idiomas/en.js', 'text/javascript'], '/corretor.js': ['corretor.js', 'text/javascript'], '/editor-nota.js': ['editor-nota.js', 'text/javascript'], '/editor-widgets.js': ['editor-widgets.js', 'text/javascript'], '/ortografia.js': ['ortografia.js', 'text/javascript'], '/domain.js': ['domain.js', 'text/javascript'], '/plugins.js': ['plugins.js', 'text/javascript'], '/abas.js': ['abas.js', 'text/javascript'], '/fluxo.js': ['fluxo.js', 'text/javascript'], '/fluxo-tela.js': ['fluxo-tela.js', 'text/javascript'],'/hoje.js': ['hoje.js', 'text/javascript'], '/icones-tema.js': ['icones-tema.js', 'text/javascript'], '/plugin-worker.js': ['plugin-worker.js', 'text/javascript'], '/kiro-frame.js': ['kiro-frame.js', 'text/javascript'],'/styles.css': ['styles.css', 'text/css'], '/temas.css': ['temas.css', 'text/css'],'/kiro-logo.png': ['kiro-logo.png', 'image/png'], '/kiro-abertura.png': ['kiro-abertura.png', 'image/png'] };
+const publicFiles = { '/': ['index.html', 'text/html'], '/index.html': ['index.html', 'text/html'], '/app.js': ['app.js', 'text/javascript'], '/idiomas.js': ['idiomas.js', 'text/javascript'], '/idiomas/en.js': ['idiomas/en.js', 'text/javascript'], '/corretor.js': ['corretor.js', 'text/javascript'], '/editor-nota.js': ['editor-nota.js', 'text/javascript'], '/editor-widgets.js': ['editor-widgets.js', 'text/javascript'], '/ortografia.js': ['ortografia.js', 'text/javascript'], '/domain.js': ['domain.js', 'text/javascript'], '/pdf-nota.js': ['pdf-nota.js', 'text/javascript'], '/plugins.js': ['plugins.js', 'text/javascript'], '/abas.js': ['abas.js', 'text/javascript'], '/fluxo.js': ['fluxo.js', 'text/javascript'], '/fluxo-tela.js': ['fluxo-tela.js', 'text/javascript'],'/hoje.js': ['hoje.js', 'text/javascript'], '/icones-tema.js': ['icones-tema.js', 'text/javascript'], '/plugin-worker.js': ['plugin-worker.js', 'text/javascript'], '/kiro-frame.js': ['kiro-frame.js', 'text/javascript'],'/styles.css': ['styles.css', 'text/css'], '/temas.css': ['temas.css', 'text/css'],'/kiro-logo.png': ['kiro-logo.png', 'image/png'], '/kiro-abertura.png': ['kiro-abertura.png', 'image/png'] };
 const allowedHosts = new Set([`localhost:${port}`, `127.0.0.1:${port}`]);
 const { version } = JSON.parse(await readFile(join(root, 'package.json'), 'utf8'));
 // Corpo JSON com teto de tamanho: o erro sobe para o catch e vira 400.
@@ -37,6 +38,10 @@ const lerJson = async (request, limite) => {
 const arquivoDeSegredos = process.env.KIRO_SEGREDOS_ARQUIVO
   || (process.platform === 'win32' ? join(process.env.APPDATA || join(homedir(), 'AppData', 'Roaming'), 'Kiro', 'plugin-secrets.json') : join(homedir(), '.config', 'Kiro', 'plugin-secrets.json'));
 const guarda = segredosModule.criarGuardaDeSegredos({ arquivo: arquivoDeSegredos, cifrar: v => v, decifrar: v => v });
+const arquivoDeBackup = process.env.KIRO_BACKUP_ARQUIVO
+  || (process.platform === 'win32' ? join(process.env.APPDATA || join(homedir(), 'AppData', 'Roaming'), 'Kiro', 'backup.json') : join(homedir(), '.config', 'Kiro', 'backup.json'));
+const agendadorBackup = agendadorBackupModule.criarAgendadorDeBackup({ arquivo: arquivoDeBackup, obterCofre: () => vault });
+agendadorBackup.iniciar();
 // KIRO_REDE_FALSA=1 é só para os testes (tests/plugins-ligacao-rede.test.cjs): troca o
 // transporte e o DNS por falsos que falham com o código KIRO_REDE_FALSA, sem abrir conexão
 // nem resolver nome. A troca só tira capacidade: ligada por engano, o kiro.fetch apenas falha.
@@ -62,13 +67,28 @@ createServer(async (request, response) => {
   if (request.headers.origin && ![`http://localhost:${port}`, `http://127.0.0.1:${port}`].includes(request.headers.origin)) return send(response, 403, { error: frase('Origem não permitida.') });
   try {
     if (request.url === '/api/state' && request.method === 'GET') return send(response, 200, await vault.load());
+    if (request.url === '/api/conflicts' && request.method === 'GET') {
+      if (!mesmaOrigem(request)) return send(response, 403, { error: frase('Origem não permitida.') });
+      return send(response, 200, await vault.conflictCopies());
+    }
     if (request.url === '/api/trash' && request.method === 'GET') return send(response, 200, await vault.trash());
+    if (request.method === 'POST' && ['/api/history', '/api/history-read', '/api/history-restore'].includes(request.url)) {
+      const pedido = await lerJson(request, 4096);
+      return send(response, 200, await (request.url === '/api/history' ? vault.history(pedido) : request.url === '/api/history-read' ? vault.readHistory(pedido) : vault.restoreHistory(pedido)));
+    }
     if (request.url === '/api/restore' && request.method === 'POST') {
       if (request.headers['content-type']?.split(';')[0] !== 'application/json') return send(response, 415, { error: frase('Use JSON.') });
       let bruto = ''; for await (const parte of request) { bruto += parte; if (bruto.length > 4096) return send(response, 413, { error: frase('Pedido grande demais.') }); }
       return send(response, 200, await vault.restore(JSON.parse(bruto)));
     }
     if (request.url === '/api/agent-config' && request.method === 'GET') return send(response, 200, await agentConfig.load());
+    if (['/api/backup-status', '/api/backup-config', '/api/backup-run'].includes(request.url)) {
+      if (!mesmaOrigem(request)) return send(response, 403, { error: frase('Só a própria página do Kiro pode usar esta rota.') });
+      if (request.url === '/api/backup-status' && request.method === 'GET') return send(response, 200, await agendadorBackup.obterStatus());
+      if (request.url === '/api/backup-config' && request.method === 'POST') return send(response, 200, await agendadorBackup.salvarConfig(await lerJson(request, 8192)));
+      if (request.url === '/api/backup-run' && request.method === 'POST') return send(response, 200, await agendadorBackup.executarAgora(await lerJson(request, 1024)));
+      return send(response, 404, { error: frase('Não encontrado.') });
+    }
     if (request.url === '/api/agent-config' && request.method === 'POST') {
       if (request.headers['content-type']?.split(';')[0] !== 'application/json') return send(response, 415, { error: frase('Use JSON.') });
       let bruto = ''; for await (const parte of request) { bruto += parte; if (bruto.length > 8192) return send(response, 413, { error: frase('Configuração grande demais.') }); }
@@ -78,7 +98,9 @@ createServer(async (request, response) => {
       if (request.headers['content-type']?.split(';')[0] !== 'application/json') return send(response, 415, { error: frase('Use JSON.') });
       let size = 0; const chunks = [];
       for await (const chunk of request) { size += chunk.length; if (size > 20 * 1024 * 1024) return send(response, 413, { error: frase('Backup maior que 20 MB.') }); chunks.push(chunk); }
-      return send(response, 200, await vault.save(JSON.parse(Buffer.concat(chunks).toString('utf8'))));
+      const salvo = await vault.save(JSON.parse(Buffer.concat(chunks).toString('utf8')));
+      agendadorBackup.aoSalvar();
+      return send(response, 200, salvo);
     }
     if (devTools && request.url === '/dev/events' && request.method === 'GET') return devTools.eventos(request, response);
     if (devTools && request.url === '/dev/reload.js' && request.method === 'GET') {
@@ -87,9 +109,9 @@ createServer(async (request, response) => {
     }
     if (request.url === '/api/anexo' && request.method === 'POST') {
       // O tipo declarado só filtra o pedido; o Vault confere a imagem pelo conteúdo.
-      if (!['image/png', 'image/jpeg', 'image/gif', 'image/webp'].includes(request.headers['content-type']?.split(';')[0])) return send(response, 415, { error: frase('Envie uma imagem PNG, JPEG, GIF ou WebP.') });
+      if (!['image/png', 'image/jpeg', 'image/gif', 'image/webp', 'application/pdf','audio/wav','audio/x-wav','audio/mpeg','audio/webm'].includes(request.headers['content-type']?.split(';')[0])) return send(response, 415, { error: frase('Envie uma imagem, PDF ou áudio suportado.') });
       let tamanho = 0; const partes = [];
-      for await (const parte of request) { tamanho += parte.length; if (tamanho > 20 * 1024 * 1024) return send(response, 413, { error: frase('Imagem maior que 20 MB.') }); partes.push(parte); }
+      for await (const parte of request) { tamanho += parte.length; if (tamanho > ATTACHMENT_LIMIT) return send(response, 413, { error: frase('Imagem maior que 250 MB.') }); partes.push(parte); }
       let nome = ''; try { nome = decodeURIComponent(request.headers['x-kiro-nome'] || ''); } catch { /* nome ilegível: a imagem recebe um nome gerado */ }
       return send(response, 200, await vault.saveAttachment({ name: nome, data: Buffer.concat(partes) }));
     }
@@ -98,8 +120,10 @@ createServer(async (request, response) => {
     if (request.method === 'GET' && rota.startsWith('/anexo/')) {
       try {
         const { data, type } = await vault.readAttachment(rota.slice('/anexo/'.length).split('/').map(decodeURIComponent).join('/'));
-        response.writeHead(200, { 'Content-Type': type, 'Cache-Control': 'no-cache', 'Content-Security-Policy': "default-src 'none'" });
-        return response.end(data);
+        const cspAnexo = type === 'application/pdf' ? "default-src 'none'; object-src 'self'; style-src 'unsafe-inline'" : "default-src 'none'";
+        const parte=vaultModule.attachmentRange(data,request.headers.range);
+        response.writeHead(parte.status, { 'Content-Type': type, 'Cache-Control': 'no-cache', 'Content-Security-Policy': cspAnexo,...parte.headers });
+        return response.end(parte.data);
       } catch { return send(response, 404, { error: frase('Imagem não encontrada.') }); }
     }
     // KaTeX embarcado: só os três tipos de arquivo que a página pede.
@@ -109,6 +133,15 @@ createServer(async (request, response) => {
         const corpo = await readFile(join(root, 'vendor', 'katex', ...katex[1].split('/')));
         const tipo = katex[1].endsWith('.js') ? 'text/javascript' : katex[1].endsWith('.css') ? 'text/css' : 'font/woff2';
         response.writeHead(200, { 'Content-Type': `${tipo}; charset=utf-8`, 'Cache-Control': 'max-age=86400' });
+        return response.end(corpo);
+      } catch { return send(response, 404, { error: frase('Arquivo não encontrado.') }); }
+    }
+    // PDF.js: a biblioteca e o worker que rasterizam o PDF da nota em pixels (pdf-nota.js).
+    const pdfjs = rota.match(/^\/vendor\/pdfjs\/pdf(\.worker)?\.min\.js$/);
+    if (request.method === 'GET' && pdfjs) {
+      try {
+        const corpo = await readFile(join(root, 'vendor', 'pdfjs', `pdf${pdfjs[1] || ''}.min.js`));
+        response.writeHead(200, { 'Content-Type': 'text/javascript; charset=utf-8', 'Cache-Control': 'max-age=86400' });
         return response.end(corpo);
       } catch { return send(response, 404, { error: frase('Arquivo não encontrado.') }); }
     }
@@ -149,6 +182,11 @@ createServer(async (request, response) => {
     // cada plug-in. Quem decide o que carregar é a página; aqui só se lê e grava.
     if (rota === '/api/version' && request.method === 'GET') return send(response, 200, { version });
     if (rota === '/api/plugins' && request.method === 'GET') return send(response, 200, await vault.listPlugins());
+    if (rota === '/api/plugin-inspect' && request.method === 'POST') {
+      if (!mesmaOrigem(request)) return send(response, 403, { error: frase('Origem não permitida.') });
+      const { id } = await lerJson(request, 4096);
+      return send(response, 200, await vault.inspectPlugin(id));
+    }
     if (rota === '/api/plugin-choices') {
       if (request.method === 'GET') return send(response, 200, await vault.readPluginChoices());
       if (request.method === 'POST') return send(response, 200, await vault.writePluginChoices(await lerJson(request, 64 * 1024)));
@@ -156,6 +194,10 @@ createServer(async (request, response) => {
     if (rota === '/api/home-layout') {
       if (request.method === 'GET') return send(response, 200, await vault.readHomeLayout());
       if (request.method === 'POST') return send(response, 200, await vault.writeHomeLayout(await lerJson(request, 256 * 1024)));
+    }
+    if (rota === '/api/favoritos') {
+      if (request.method === 'GET') return send(response, 200, await vault.readBookmarks());
+      if (request.method === 'POST') return send(response, 200, await vault.writeBookmarks(await lerJson(request, 256 * 1024)));
     }
     if (rota === '/api/dicionario') {
       if (request.method === 'GET') return send(response, 200, await vault.readDictionary());

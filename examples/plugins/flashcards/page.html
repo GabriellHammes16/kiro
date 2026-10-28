@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="pt-BR">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Flashcards</title><link rel="stylesheet" href="style.css"></head>
+<body>
+  <main>
+    <header><div><p class="eyebrow">UM POUCO, TODOS OS DIAS</p><h1>Flashcards</h1></div><button id="refresh" type="button">Atualizar</button></header>
+    <p id="summary" class="muted" role="status">Preparando suas revisões…</p>
+    <p id="error" role="alert" hidden></p>
+    <section id="study" aria-label="Cartão de revisão" hidden>
+      <div class="session"><span id="position"></span><span id="remaining"></span></div>
+      <progress id="progress" max="1" value="0" aria-label="Progresso da revisão"></progress>
+      <article class="card">
+        <p class="eyebrow" id="source"></p>
+        <h2 id="question" tabindex="-1"></h2>
+        <div id="answer-area" hidden><p class="eyebrow">RESPOSTA</p><p id="answer"></p></div>
+        <button id="reveal" class="primary" type="button">Revelar resposta</button>
+        <div id="rating" hidden><p class="muted">Como foi lembrar?</p><div class="ratings"><button id="wrong" type="button">Errei <span>Rever em 10 min</span></button><button id="right" class="primary" type="button">Lembrei <span id="next-interval"></span></button></div></div>
+      </article>
+    </section>
+    <section id="empty" class="empty" hidden><svg aria-hidden="true" viewBox="0 0 48 48" width="48" height="48"><rect x="10" y="7" width="28" height="34" rx="4"></rect><path d="M17 19h14M17 25h9"></path></svg><h2 id="empty-title"></h2><p id="empty-detail" class="muted"></p></section>
+    <footer><h3>O próximo cartão já está nas suas notas</h3><p>Escreva uma pergunta e sua resposta na mesma linha:</p><code>Pergunta :: Resposta</code><p class="muted">Lemos até 500 notas recentes. Blocos de código são ignorados. As notas ficam intactas; só o progresso é salvo.</p><p class="muted">Use uma janela de revisão por vez. Outras janelas atualizam a fila ao clicar em Atualizar.</p></footer>
+  </main>
+  <script src="modelo.js"></script><script src="page.js"></script>
+</body></html>

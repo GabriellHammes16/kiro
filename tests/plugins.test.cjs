@@ -311,9 +311,20 @@ test('no aplicativo o worker vem do esquema, com a mesma CSP da versão web', ()
   assert.ok(/'Content-Security-Policy': CSP_DO_WORKER/.test(main), 'e ela vai no cabeçalho do esquema');
   // Host reservado com ponto: id de plug-in não pode ter ponto, então não colide.
   assert.ok(/HOST_DO_KIRO = 'kiro\.app'/.test(main));
-  assert.ok(/new Set\(\['plugin-worker\.js', 'plugins\.js', 'kiro-frame\.js'\]\)/.test(main), 'só os arquivos do Kiro saem do app');
+  // O worker do PDF.js entra na lista: a página é file:// e não abre worker de lá,
+  // então ele também vem pelo esquema kiro-plugin (pdf-nota.js aponta para lá).
+  assert.ok(/new Set\(\['plugin-worker\.js', 'plugins\.js', 'kiro-frame\.js', 'vendor\/pdfjs\/pdf\.worker\.min\.js'\]\)/.test(main), 'só os arquivos do Kiro saem do app');
   assert.ok(/corsEnabled: true/.test(main), 'o worker importa o plug-in de outro host: precisa de CORS');
   assert.ok(ler('app.js').includes("new Worker('kiro-plugin://kiro.app/plugin-worker.js', { type: 'module' })"));
+});
+
+test('no aplicativo o esquema kiro-anexo aceita fetch, que é o caminho do PDF.js', () => {
+  const main = require('node:fs').readFileSync(path.join(__dirname, '..', 'electron/main.cjs'), 'utf8');
+  // Sem corsEnabled o Chromium corta o fetch da página file:// ao esquema ("Cross origin
+  // requests are only supported for protocol schemes…"): o PDF não abriria no desktop.
+  assert.ok(/scheme: 'kiro-anexo', privileges: \{[^}]*corsEnabled: true/.test(main), 'kiro-anexo com corsEnabled');
+  // Continua a valer a contenção: o esquema só lê anexos pelo Vault, nunca outros arquivos.
+  assert.ok(/vault\.readAttachment\(relativo\)/.test(main), 'kiro-anexo só lê anexos pelo Vault');
 });
 
 test('o host reservado do worker nunca é id de plug-in válido', async () => {
@@ -325,7 +336,9 @@ test('o host reservado do worker nunca é id de plug-in válido', async () => {
 test('a CSP do index.html declara connect-src sem perder o resto', () => {
   const html = require('node:fs').readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
   const csp = html.match(/http-equiv="Content-Security-Policy" content="([^"]+)"/)[1];
-  assert.ok(/(^|; )connect-src 'self' data:(;|$)/.test(csp), 'connect-src explícito com data:');
+  // kiro-anexo: no connect-src é o fetch do PDF.js ao documento (pdf-nota.js): no
+  // desktop a página é file:// e o PDF vem do esquema cruzado, não de data:.
+  assert.ok(/(^|; )connect-src 'self' data: kiro-anexo:(;|$)/.test(csp), 'connect-src explícito com data: e kiro-anexo:');
   for (const diretiva of ["default-src 'self'", "script-src 'self' 'wasm-unsafe-eval'", "worker-src 'self' blob: kiro-plugin:", "object-src 'none'", "base-uri 'none'", 'kiro-anexo:']) {
     assert.ok(csp.includes(diretiva), diretiva);
   }

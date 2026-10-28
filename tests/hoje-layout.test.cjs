@@ -159,13 +159,14 @@ test('limpar: recusa lixo, corrige campos e descarta repetidos', () => {
       { id: '', coluna: 0 }, null, 'b',
       { id: 'b', coluna: -1, largura: 'enorme', opcoes: [] },
     ],
-    ocultos: ['b', 'b', 'fantasma'],
+    ocultos: ['b', 'b', 'fantasma'], pastasOcultas: ['p', 'p', '', 1],
   });
   assert.deepEqual(l, {
     colunas: 2,
     cartoes: [{ id: 'a', coluna: 1, largura: 'inteira', opcoes: { n: 1 } }, { id: 'b', coluna: 0, largura: 'normal', opcoes: {} }],
-    ocultos: ['b'],
+    ocultos: ['b'], pastasOcultas: ['p'],
   });
   const muitos = H.limpar({ colunas: 1, cartoes: Array.from({ length: 250 }, (_, i) => ({ id: `c${i}`, coluna: 0 })) });
   assert.equal(muitos.cartoes.length, 200);
+  assert.deepEqual(H.definirColunas(l, 1).pastasOcultas, ['p']);
 });

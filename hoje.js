@@ -7,8 +7,8 @@
 (function (root) {
   const MIN_COLUNAS = 1, MAX_COLUNAS = 3, PADRAO_COLUNAS = 2, MAX_CARTOES = 200;
   const LARGURAS = ['normal', 'inteira'];
-  const vazio = () => ({ colunas: PADRAO_COLUNAS, cartoes: [], ocultos: [] });
-  const copia = l => ({ colunas: l.colunas, cartoes: l.cartoes.map(c => ({ ...c, opcoes: { ...c.opcoes } })), ocultos: [...l.ocultos] });
+  const vazio = () => ({ colunas: PADRAO_COLUNAS, cartoes: [], ocultos: [], pastasOcultas: [] });
+  const copia = l => ({ colunas: l.colunas, cartoes: l.cartoes.map(c => ({ ...c, opcoes: { ...c.opcoes } })), ocultos: [...l.ocultos], pastasOcultas: [...(l.pastasOcultas || [])] });
   const primitivo = v => v === null || ['string', 'number', 'boolean'].includes(typeof v);
   const colunaValida = (c, colunas) => Number.isInteger(c) && c >= 0 && c < colunas;
 
@@ -138,7 +138,8 @@
       cartoes.push({ id: c.id, coluna: colunaValida(c.coluna, colunas) ? c.coluna : 0, largura: LARGURAS.includes(c.largura) ? c.largura : 'normal', opcoes });
     }
     const ocultos = [...new Set(Array.isArray(bruto.ocultos) ? bruto.ocultos : [])].filter(id => vistos.has(id));
-    return { colunas, cartoes, ocultos };
+    const pastasOcultas = [...new Set(Array.isArray(bruto.pastasOcultas) ? bruto.pastasOcultas : [])].filter(id => typeof id === 'string' && id.length > 0 && id.length <= 200).slice(0, 1000);
+    return { colunas, cartoes, ocultos, pastasOcultas };
   }
 
   // O que a tela desenha: normais seguidos formam uma faixa de colunas; cada inteiro, uma faixa própria.

@@ -26,7 +26,7 @@ your worker and your frames — no subfolders, no other file types. An
 `<img src="icon.png">` or a local font file will not load: images and fonts
 must be `data:` URLs. `data.json` appears there once you use `kiro.storage`.
 
-Three complete working examples live in this repository: `examples/plugins/word-count/`
+Working examples live in this repository: `examples/plugins/word-count/`
 (commands, panels, blocks), `examples/plugins/wikipedia-summary/` (a block
 that calls a web API with `kiro.fetch`), `examples/plugins/habit-heatmap/`
 (a frame — see [Frames (custom UI)](#frames-custom-ui) below) and
@@ -34,6 +34,33 @@ that calls a web API with `kiro.fetch`), `examples/plugins/habit-heatmap/`
 with drag & drop between columns). `npm run dev`
 copies all of them into the example vault. Copying one of these folders is the
 fastest way to start.
+
+### Productivity plugins
+
+Three more standalone examples provide full-page interfaces, follow Kiro's theme,
+and work offline:
+
+| Folder | Features | Permissions |
+|---|---|---|
+| `examples/plugins/focus-pomodoro/` | Task selection, persistent focus/break timer, up to 200 completed sessions and a Today summary | `tasks:read` |
+| `examples/plugins/flashcards/` | Cards from `Question :: Answer` lines outside code fences, reveal/rate flow and a saved review schedule | `notes:read` |
+| `examples/plugins/weekly-review/` | Seven local calendar days of notes, open tasks, reflection fields and creation of a new review note | `notes:read`, `notes:write`, `tasks:read` |
+
+The current source also includes `examples/plugins/slides/`: notes become slides
+with keyboard navigation and optional full screen, using only `notes:read`.
+New desktop builds bundle it too. Focus reports group the last 200 sessions by
+current folder/tag metadata; they do not reconstruct historical classifications,
+and tag totals can overlap.
+
+Desktop Kiro 0.23.0 includes the original three plugins: missing plugin folders are added
+to the selected vault when plugins are listed, without overwriting existing folders
+or enabling anything. Enable them in Settings → Plug-ins. On the web, copy each
+folder to `<vault>/.kiro/plugins/` first. Use one focus or flashcard
+page at a time; simultaneous windows do not synchronize in real time. Note-based
+views consider up to 500 recent notes, matching the current `notes.list` limit.
+Weekly Review also registers a command in Quick actions; saving never updates an
+existing review or changes the source tasks. Each plugin owns its data in
+`kiro.storage`; none reads another plugin's storage or requests network access.
 
 ## manifest.json
 
@@ -126,13 +153,13 @@ anything you need to survive must already be in `kiro.storage`.
 
 ### kiro.command(id, label, handler)
 
-Adds a command the user runs from **Settings → Plug-ins**, where it is listed
-under your plugin. That is the only place commands appear: there is no
-right-click menu entry and no button on the Today screen. `id` is a non-empty
-string unique within your plugin, `label` is what the user reads, `handler` is a
-function that may be async. The return value is ignored; use `kiro.notify` to say
-something. After the handler finishes, Kiro redraws your panels, since the
-command may have changed what they show.
+Adds a command to **Quick actions** (open with **Ctrl+K**, configurable in
+Settings → Shortcuts), where it appears under the plugin's name. The command is
+identified by its plugin; `id` must be a non-empty string unique within your
+plugin. Commands remain listed in Settings → Plug-ins. `label` is what the user reads, and
+`handler` is a function that may be async. The return value is ignored; use
+`kiro.notify` to say something. After the handler finishes, Kiro redraws your
+panels, since the command may have changed what they show.
 
 ### kiro.panel(id, label, render, { options, width })
 

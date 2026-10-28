@@ -52,6 +52,8 @@ function atualizarSeletorDeCofre() {
 function getNote(id) { return state.notes.find(n => n.id === id); }
 function getFluxo(id) { return (state.fluxos || []).find(f => f.id === id); }
 function render() {
+  if(gravacaoAudio?.contexto&&!contextoAudioValido(gravacaoAudio.contexto))gravacaoAudio.parar();
+  if (!editing || currentView !== 'studies') { modoFoco = false; document.querySelector('.app-shell').classList.remove('modo-foco'); }
   const focoNoEditor = Boolean(editorDaNota?.editor.temFoco());
   const rolagemDaNota = editorDaNota?.editor.dom.closest('.cofre-nota-corpo')?.scrollTop;   // o app.innerHTML abaixo refaz o elemento que rola
   KiroFluxoTela.desmontarTodos(); // grava o texto em edição no estado antes de a tela ser refeita
@@ -81,14 +83,15 @@ function render() {
 function head(eyebrow, title, description, action="") { return `<header class="page-head"><div><p class="eyebrow">${eyebrow}</p><h1>${title}</h1><p class="subhead">${description}</p></div>${action}</header>`; }
 function check(done, action, id) { return `<button class="check ${done ? "done" : ""}" aria-label="${done ? t('Marcar como não concluído') : t('Marcar como concluído')}" data-action="${action}" data-id="${id}"></button>`; }
 // Notas que citam a tarefa com [[tarefa:…]], como links (até três, depois "+n").
-function citadaEm(task) {
-  const notas = Kiro.notesCitingTask(state.notes, task.id);
+function citadaEm(task, fonte = state.notes) {
+  const notas = Kiro.notesCitingTask(fonte, task.id);
   if (!notas.length) return '';
   return ` · <span class="task-citada-em">${t('Citada em')} ${notas.slice(0, 3).map(linkDaNota).join(', ')}${notas.length > 3 ? ` +${notas.length - 3}` : ''}</span>`;
 }
-function taskRow(task) {
+const rotuloDaRepeticao = r => ({ day: frase('Todo dia'), week: frase('Toda semana'), month: frase('Todo mês') })[r.every] || t('A cada {n} dias', { n: r.n });
+function taskRow(task, notas = state.notes) {
   const atrasada = !task.done && task.due < today();
-  return `<div class="task-item">${check(task.done,"toggle-task",task.id)}<div class="task-title"><span class="task-nome">${escapeHtml(task.title)}</span>${task.description ? `<div class="task-descricao">${escapeHtml(task.description)}</div>` : ''}<div class="task-info"><span class="task-data${atrasada ? ' atrasada' : ''}">${icone('calendario')}${dateLabel(task.due)}</span>${task.noteId && getNote(task.noteId) ? ` · ${linkDaNota(getNote(task.noteId))}` : ""}${citadaEm(task)}</div></div>${task.priority === "Alta" ? `<span class="priority">${t('Alta')}</span>` : ""}<div class="task-actions"><button class="icon-button" data-action="edit-task" data-id="${task.id}" title="${t('Editar')}">${icone('renomear')}</button><button class="icon-button" data-action="delete-task" data-id="${task.id}" title="${t('Excluir')}">${icone('lixeira')}</button></div></div>`;
+  return `<div class="task-item">${check(task.done,"toggle-task",task.id)}<div class="task-title"><span class="task-nome">${escapeHtml(task.title)}</span>${task.description ? `<div class="task-descricao">${escapeHtml(task.description)}</div>` : ''}<div class="task-info"><span class="task-data${atrasada ? ' atrasada' : ''}">${icone('calendario')}${dateLabel(task.due)}</span>${task.repeat ? ` <span class="task-repete" title="${t(rotuloDaRepeticao(task.repeat))}">${icone('recarregar')}</span>` : ''}${task.noteId && getNote(task.noteId) ? ` · ${linkDaNota(getNote(task.noteId))}` : ""}${citadaEm(task, notas)}</div></div>${task.priority === "Alta" ? `<span class="priority">${t('Alta')}</span>` : ""}<div class="task-actions"><button class="icon-button" data-action="edit-task" data-id="${task.id}" title="${t('Editar')}">${icone('renomear')}</button><button class="icon-button" data-action="delete-task" data-id="${task.id}" title="${t('Excluir')}">${icone('lixeira')}</button></div></div>`;
 }
 function renderToday() {
   const catalogo = catalogoDaHoje(), l = layoutDaHoje(catalogo);
@@ -113,6 +116,10 @@ function renderToday() {
 // Cartões do Kiro e dos plug-ins num catálogo só: o layout decide onde e se aparecem.
 const LIMITE_DA_LISTA = { key: 'limite', type: 'number', label: frase('Quantos mostrar (0 = todos)'), default: 0, min: 0, max: 50 };
 const cortar = (lista, limite) => limite > 0 ? lista.slice(0, limite) : lista;
+function notasVisiveisNaHoje() {
+  const ocultas = new Set((hojeLayout?.pastasOcultas || []).flatMap(id => [...Kiro.descendants(state.folders, id)]));
+  return state.notes.filter(n => !ocultas.has(n.folderId));
+}
 function catalogoDaHoje() {
   const limite = { ...LIMITE_DA_LISTA, label: t(LIMITE_DA_LISTA.label) };
   const nativos = [
@@ -122,7 +129,7 @@ function catalogoDaHoje() {
       render: o => cardHabitos(o) },
     { id: 'nativo:agora', titulo: t('Para fazer agora'), coluna: 0, opcoes: [limite], render: o => cardAgora(o) },
     { id: 'nativo:continuar', titulo: t('Continuar de onde parei'), coluna: 1, opcoes: [],
-      render: () => cardContinuar([...state.notes].sort((a, b) => b.updatedAt - a.updatedAt)[0]) },
+      render: () => cardContinuar(notasVisiveisNaHoje().sort((a, b) => b.updatedAt - a.updatedAt)[0]) },
     { id: 'nativo:caixa', titulo: t('Caixa de entrada'), coluna: 1, opcoes: [limite], render: o => cardCaixaDeEntrada(o) },
     { id: 'nativo:revisar', titulo: t('Para revisar'), coluna: 1, opcoes: [limite], render: o => cardParaRevisar(o) },
   ].map(c => ({ largura: 'normal', origem: 'Kiro', ...c }));
@@ -142,8 +149,9 @@ function layoutDaHoje(catalogo = catalogoDaHoje()) {
 }
 const idsVisiveisDaHoje = (l, catalogo) => new Set(catalogo.map(c => c.id).filter(id => !l.ocultos.includes(id)));
 function cardAgora({ limite }) {
-  const urgent = state.tasks.filter(t => !t.done && t.due <= today());
-  return `<section class="card"><div class="card-head"><h2>${icone('tarefas')}${t('Para fazer agora')}</h2><a data-go="tasks">${t('Ver tarefas')}</a></div>${cortar(urgent, limite).map(taskRow).join("") || `<div class="empty">${t('Nada urgente para hoje.')}</div>`}</section>`;
+  const notas = notasVisiveisNaHoje(), idsOcultos = new Set(state.notes.filter(n => !notas.includes(n)).map(n => n.id));
+  const urgent = state.tasks.filter(t => !t.done && t.due <= today() && !idsOcultos.has(t.noteId));
+  return `<section class="card"><div class="card-head"><h2>${icone('tarefas')}${t('Para fazer agora')}</h2><a data-go="tasks">${t('Ver tarefas')}</a></div>${cortar(urgent, limite).map(tarefa => taskRow(tarefa, notas)).join("") || `<div class="empty">${t('Nada urgente para hoje.')}</div>`}</section>`;
 }
 // Frase do dia no lugar do "Bom dia". Muda à meia-noite e não repete a de ontem:
 // o passo 7 percorre as 20 frases antes de voltar à primeira.
@@ -218,15 +226,27 @@ function cardHabitos({ mostrarSemana = true } = {}) {
   const cabecalho = mostrarSemana && doDia.length ? `<div class="habito habitos-cabecalho" aria-hidden="true"><span></span><span></span><span class="habito-semana">${[1, 2, 3, 4, 5, 6, 0].map(d => `<span>${letraDoDia(d)}</span>`).join('')}</span></div>` : '';
   return `<section class="card habitos"><div class="card-head"><h2>${icone('chama')}${t('Hábitos')}</h2>${doDia.length ? `<span class="small-muted">${t('Hoje')} · ${feitos}/${doDia.length}</span>` : ''}${extraButton('habit-stats', icone('grafico'), '', 'icon-button', t('Estatísticas dos hábitos'))}${extraButton('add-habit', icone('mais'), '', 'icon-button', t('Novo hábito'))}</div>${cabecalho}${doDia.map(linha).join('') || vazio}</section>`;
 }
-function marcarHabito(id, dia = today()) {
+async function marcarHabito(id, dia = today()) {
   if (busy || failed || !loaded || dia > today() || !state.habits.some(h => h.id === id)) return;
   const dias = new Set(state.habitLog[id] || []);
+  const anterior = Kiro.habitStats(state.habits.find(h => h.id === id), [...dias], today()).streak;
   dias.has(dia) ? dias.delete(dia) : dias.add(dia);
   state.habitLog = { ...state.habitLog, [id]: [...dias].sort() };
   // Marcar um dia de antes da criação quer dizer que o hábito já existia: a data de início recua.
   const habito = state.habits.find(h => h.id === id), [a, m, d] = dia.split('-').map(Number), inicioDoDia = new Date(a, m - 1, d).getTime();
   if (dias.has(dia) && habito.createdAt && inicioDoDia < habito.createdAt) state.habits = state.habits.map(h => h.id === id ? { ...h, createdAt: inicioDoDia } : h);
-  save();
+  if (await save()) {
+    const sequencia = Kiro.habitStats(habito, [...dias], today()).streak;
+    if (dia === today() && dias.has(dia) && sequencia > 1 && sequencia > anterior) celebrarSequencia(habito.title, sequencia);
+    else status(dias.has(dia)
+      ? t('Hábito {titulo} marcado em {dia}.', { titulo: habito.title, dia: rotuloDoDia(dia) })
+      : t('Hábito {titulo} desmarcado em {dia}.', { titulo: habito.title, dia: rotuloDoDia(dia) }));
+  }
+}
+function celebrarSequencia(titulo, n) {
+  status(t('Sequência de {n} para {titulo}!', { n, titulo }));
+  const el = $('#save-status'); el.classList.add('celebracao');
+  setTimeout(() => el.classList.remove('celebracao'), 4000);
 }
 function habitoModal(habito = { title: '', frequency: { type: 'daily' } }) {
   const f = habito.frequency, dias = f.type === 'days' ? f.days : [1, 3, 5];
@@ -340,14 +360,21 @@ function tarefasDasNotas() {
   }
   return achadas;
 }
-function marcarTarefaDaNota(chave) {
+async function marcarTarefaDaNota(chave) {
+  if (busy || failed || !loaded) return;
   const [id, pos] = [chave.slice(0, chave.lastIndexOf(':')), Number(chave.slice(chave.lastIndexOf(':') + 1))];
   const nota = getNote(id); if (!nota) return;
   const fim = nota.body.indexOf('\n', pos), linha = nota.body.slice(pos, fim < 0 ? undefined : fim);
   const trocada = linha.replace(/^(\s*(?:[-*+]|\d+\.)\s+\[)([ xX])(\])/, (_, a, marca, b) => a + (marca === ' ' ? 'x' : ' ') + b);
   if (trocada === linha) return; // a nota mudou desde o desenho: não mexe em outra linha
   state.notes = state.notes.map(n => n.id === id ? { ...n, body: n.body.slice(0, pos) + trocada + n.body.slice(pos + linha.length), updatedAt: Date.now() } : n);
-  save(); render();
+  if (await save()) status(/\[[xX]\]/.test(trocada)
+    ? t('Tarefa na nota {titulo} concluída.', { titulo: nota.title })
+    : t('Tarefa na nota {titulo} reaberta.', { titulo: nota.title }));
+}
+// Tarefa recorrente que acabou de ser concluída (estava aberta em `antes`): cria a próxima ocorrência.
+function criarProximas(antes) {
+  state.tasks = Kiro.criarProximas(state.tasks, antes, uid);
 }
 // ---- Tarefas: resumo no topo, abas com contagem e grupos por data ----
 let filtroDasTarefas = 'todas';   // vale enquanto o app está aberto
@@ -361,6 +388,33 @@ function grupoDaData(due, hoje) {
 }
 const ordemDaPrioridade = x => ({ Alta: 0, 'Média': 1 })[x.priority] ?? 2;
 const linhaDaTarefaDaNota = x => `<div class="task-item">${check(x.feita, "toggle-note-task", `${x.nota.id}:${x.pos}`)}<div class="task-title">${escapeHtml(x.texto)}<div class="task-info">${linkDaNota(x.nota)}</div></div></div>`;
+let diaSelecionadoNoCalendario = '';
+function textoDataCalendario(dia, opcoes = { dateStyle: 'full' }) { return KiroIdiomas.formatarData(new Date(`${dia}T12:00:00`), opcoes); }
+function renderCalendario(lista) {
+  if (!diaSelecionadoNoCalendario) diaSelecionadoNoCalendario = today();
+  const dias = Kiro.calendarioDoMes(diaSelecionadoNoCalendario), porData = new Map();
+  for (const tarefa of lista) {
+    if (!porData.has(tarefa.due)) porData.set(tarefa.due, []);
+    porData.get(tarefa.due).push(tarefa);
+  }
+  const semanas = Array.from({ length: 6 }, (_, i) => dias.slice(i * 7, i * 7 + 7));
+  const diasSemana = [t('Seg'), t('Ter'), t('Qua'), t('Qui'), t('Sex'), t('Sáb'), t('Dom')];
+  const dataCompleta = dia => textoDataCalendario(dia);
+  const qtd = n => n === 1 ? t('1 tarefa') : t('{n} tarefas', { n });
+  const nomeMes = textoDataCalendario(diaSelecionadoNoCalendario, { month: 'long', year: 'numeric' });
+  const tituloDia = dataCompleta(diaSelecionadoNoCalendario), tarefasDoDia = porData.get(diaSelecionadoNoCalendario) || [];
+  const linha = (d, i) => {
+    const n = porData.get(d.date)?.length || 0;
+    return `<button type="button" role="gridcell" class="calendario-dia${d.inMonth ? '' : ' fora-do-mes'}${d.date === today() ? ' calendario-hoje' : ''}" data-calendario-dia="${d.date}" aria-label="${t('Selecionar dia {data}', { data: dataCompleta(d.date) })}, ${n ? qtd(n) : t('Sem tarefas')}" aria-selected="${d.date === diaSelecionadoNoCalendario}"${d.date === today() ? ' aria-current="date"' : ''} tabindex="${d.date === diaSelecionadoNoCalendario ? '0' : '-1'}"><span class="calendario-numero">${Number(d.date.slice(-2))}</span>${n ? `<span class="calendario-contagem" aria-hidden="true">${n}</span>` : ''}</button>`;
+  };
+  return `<div class="calendario-layout">
+    <section class="calendario-mes" aria-label="${t('Calendário mensal')}" >
+      <div class="calendario-navegacao"><button type="button" class="secondary" data-calendario-mes="-1" aria-label="${t('Mês anterior')}">‹</button><h2 id="calendario-mes-titulo" aria-live="polite">${nomeMes}</h2><button type="button" class="secondary" data-calendario-mes="1" aria-label="${t('Próximo mês')}">›</button><button type="button" class="secondary" data-calendario-hoje>${t('Hoje')}</button></div>
+      <div class="calendario-grade" role="grid" aria-labelledby="calendario-mes-titulo"><div class="calendario-semana" role="row">${diasSemana.map(d => `<span role="columnheader">${d}</span>`).join('')}</div>${semanas.map(semana => `<div class="calendario-semana" role="row">${semana.map(linha).join('')}</div>`).join('')}</div>
+    </section>
+    <section class="calendario-selecionado" aria-labelledby="calendario-dia-titulo"><header class="calendario-dia-cabecalho"><h2 id="calendario-dia-titulo">${tituloDia}</h2><button type="button" class="primary" data-calendario-criar>${icone('mais')} ${t('Criar tarefa')}</button></header>${tarefasDoDia.map(tarefa => taskRow(tarefa)).join('') || `<p class="empty">${t('Nenhuma tarefa neste dia.')}</p>`}</section>
+  </div>`;
+}
 function renderTasks() {
   const hoje = today();
   const abertas = state.tasks.filter(x => !x.done).sort((a, b) => a.due.localeCompare(b.due) || ordemDaPrioridade(a) - ordemDaPrioridade(b));
@@ -369,12 +423,12 @@ function renderTasks() {
   const atrasadas = abertas.filter(x => x.due < hoje), paraHoje = abertas.filter(x => x.due === hoje), proximas = abertas.filter(x => x.due > hoje);
   const abas = [['todas', t('Todas'), abertas.length + dasNotas.length], ['hoje', t('Hoje'), atrasadas.length + paraHoje.length], ['proximas', t('Próximas'), proximas.length], ['notas', t('Nas notas'), dasNotas.length], ['feitas', t('Concluídas'), feitas.length]];
   // Por data, ou por status em lista (seções empilhadas) ou em colunas (lado a lado, como um quadro).
-  const visao = ['status', 'colunas'].includes(lerPreferencia('tarefasVisao')) ? lerPreferencia('tarefasVisao') : 'data', porStatusAtivo = visao !== 'data';
+  const visao = ['calendario', 'status', 'colunas'].includes(lerPreferencia('tarefasVisao')) ? lerPreferencia('tarefasVisao') : 'data', porStatusAtivo = ['status', 'colunas'].includes(visao);
   // Por status, "Nas notas" e "Concluídas" não são filtros (concluído é uma seção): vale "Todas".
   if (porStatusAtivo && ['notas', 'feitas'].includes(filtroDasTarefas)) filtroDasTarefas = 'todas';
-  const f = filtroDasTarefas;
-  const abasVisiveis = porStatusAtivo ? abas.filter(([id]) => !['notas', 'feitas'].includes(id)) : abas;
-  const grupo = (titulo, itens, linha = taskRow, classe = '') => itens.length ? `<div class="task-group ${classe}"><h2>${titulo}<span class="task-group-conta">${itens.length}</span></h2>${itens.map(linha).join('')}</div>` : '';
+  const f = visao === 'calendario' && filtroDasTarefas === 'notas' ? 'todas' : filtroDasTarefas;
+  const abasVisiveis = porStatusAtivo ? abas.filter(([id]) => !['notas', 'feitas'].includes(id)) : visao === 'calendario' ? abas.filter(([id]) => id !== 'notas') : abas;
+  const grupo = (titulo, itens, linha = taskRow, classe = '') => itens.length ? `<div class="task-group ${classe}"><h2>${titulo}<span class="task-group-conta">${itens.length}</span></h2>${itens.map(item => linha(item)).join('')}</div>` : '';
   const porData = lista => GRUPOS_DE_DATA.map(([id, nome]) => grupo(t(nome), lista.filter(x => grupoDaData(x.due, hoje) === id), taskRow, id === 'atrasadas' ? 'grupo-atrasado' : '')).join('');
   // Por status: uma seção por status; a tarefa se arrasta entre elas (ou ← → com o foco nela).
   const porStatus = () => {
@@ -388,7 +442,9 @@ function renderTasks() {
         <div class="status-itens">${itens.map(x => `<div class="status-item" draggable="true" tabindex="0" data-tarefa="${x.id}" aria-label="${escapeHtml(x.title)}">${taskRow(x)}</div>`).join('') || `<p class="status-vazio">${t('Arraste uma tarefa para cá.')}</p>`}</div></section>`;
     }).join('');
   };
-  const corpo = porStatusAtivo ? porStatus()
+  const tarefasDoCalendario = f === 'feitas' ? feitas : f === 'hoje' ? [...atrasadas, ...paraHoje] : f === 'proximas' ? proximas : abertas;
+  const corpo = visao === 'calendario' ? renderCalendario(tarefasDoCalendario)
+    : porStatusAtivo ? porStatus()
     : f === 'feitas' ? grupo(t('Concluídas'), feitas)
     : f === 'notas' ? grupo(t('Nas notas'), dasNotas, linhaDaTarefaDaNota)
     : f === 'hoje' ? porData([...atrasadas, ...paraHoje])
@@ -400,7 +456,7 @@ function renderTasks() {
   return `${head(t("Organização"), t("Tarefas"), t("Concentre-se no que realmente importa hoje."), `<button class="primary" id="add-task">${icone('mais')} ${t('Nova tarefa')}</button>`)}
   <div class="tarefas-resumo">${numero(abertas.length, t('Em aberto'))}${numero(atrasadas.length, t('Atrasadas'), atrasadas.length ? 'alerta' : '')}${numero(paraHoje.length, t('Para hoje'))}<div class="resumo-item resumo-progresso"><b>${pct}%</b><span>${t('{feitas} de {total} concluídas', { feitas: feitas.length, total })}</span><div class="progress"><div style="width:${pct}%"></div></div></div></div>
   <div class="tarefas-barra"><div class="segmentos-compactos tarefas-abas" role="group" aria-label="${t('Filtrar')}">${abasVisiveis.map(([id, rotulo, n]) => `<button type="button" class="segmento-botao" data-tarefas-aba="${id}" aria-pressed="${f === id}">${rotulo} <span class="segmento-contagem">${n}</span></button>`).join('')}</div>
-  <div class="segmentos-compactos tarefas-visao" role="group" aria-label="${t('Organizar por')}">${[['data', 'calendario', t('Por data')], ['status', 'lista-marcadores', t('Lista')], ['colunas', 'colunas', t('Colunas')]].map(([id, ic, r]) => `<button type="button" class="segmento-botao" data-tarefas-visao="${id}" aria-pressed="${visao === id}">${icone(ic)} ${r}</button>`).join('')}</div></div>
+  <div class="segmentos-compactos tarefas-visao" role="group" aria-label="${t('Organizar por')}">${[['data', 'calendario', t('Por data')], ['calendario', 'calendario', t('Mês')], ['status', 'lista-marcadores', t('Lista')], ['colunas', 'colunas', t('Colunas')]].map(([id, ic, r]) => `<button type="button" class="segmento-botao" data-tarefas-visao="${id}" aria-pressed="${visao === id}">${icone(ic)} ${r}</button>`).join('')}</div></div>
   <section class="card tarefas-lista${porStatusAtivo ? ' por-status' : ''}${visao === 'colunas' ? ' por-colunas' : ''}">${corpo || `<div class="empty">${vazio}</div>`}</section>`;
 }
 const ROTULOS_DE_STATUS = { 'nao-comecado': frase('Não começado'), andamento: frase('Em andamento'), pausado: frase('Pausado'), concluido: frase('Concluído') };
@@ -409,14 +465,43 @@ const gravarPreferencia = (chave, valor) => { try { localStorage.setItem(`kiro.$
 function moverStatusDaTarefa(id, destino) {
   const tarefa = state.tasks.find(x => x.id === id);
   if (!tarefa || busy || failed || !loaded || Kiro.statusDaTarefa(tarefa) === destino) return;
+  const antes = state.tasks;
   state.tasks = state.tasks.map(x => x.id === id ? Kiro.moverTarefa(x, destino) : x);
+  criarProximas(antes);
   save(); render();
   document.querySelector(`[data-tarefa="${CSS.escape(id)}"]`)?.focus();
 }
 document.addEventListener('click', e => {
   const v = e.target.closest?.('[data-tarefas-visao]');
   if (v) { gravarPreferencia('tarefasVisao', v.dataset.tarefasVisao); render(); $(`[data-tarefas-visao="${v.dataset.tarefasVisao}"]`)?.focus(); return; }
+  const dia = e.target.closest?.('[data-calendario-dia]');
+  if (dia) { diaSelecionadoNoCalendario = dia.dataset.calendarioDia; render(); $(`[data-calendario-dia="${CSS.escape(diaSelecionadoNoCalendario)}"]`)?.focus(); return; }
+  const mes = e.target.closest?.('[data-calendario-mes]');
+  if (mes) { diaSelecionadoNoCalendario = Kiro.somarMeses(diaSelecionadoNoCalendario || today(), Number(mes.dataset.calendarioMes)) || today(); render(); $(`[data-calendario-mes="${mes.dataset.calendarioMes}"]`)?.focus(); return; }
+  if (e.target.closest?.('[data-calendario-hoje]')) { diaSelecionadoNoCalendario = today(); render(); $('[data-calendario-hoje]')?.focus(); return; }
+  if (e.target.closest?.('[data-calendario-criar]')) {
+    const prazo = diaSelecionadoNoCalendario || today();
+    if (filtroDasTarefas === 'feitas' || filtroDasTarefas === 'notas' || (filtroDasTarefas === 'hoje' && prazo > today()) || (filtroDasTarefas === 'proximas' && prazo <= today())) filtroDasTarefas = 'todas';
+    taskModal({ title: '', due: prazo, priority: 'Média', noteId: '' }); return;
+  }
   if (e.target.closest?.('[data-recolher-concluido]')) { gravarPreferencia('tarefasConcluidoAberto', lerPreferencia('tarefasConcluidoAberto') === '1' ? '0' : '1'); render(); return; }
+});
+document.addEventListener('keydown', e => {
+  const dia = e.target.closest?.('[data-calendario-dia]');
+  if (!dia) return;
+  const atual = dia.dataset.calendarioDia;
+  let proximo = null;
+  if (e.key === 'ArrowLeft') proximo = somarDias(atual, -1);
+  else if (e.key === 'ArrowRight') proximo = somarDias(atual, 1);
+  else if (e.key === 'ArrowUp') proximo = somarDias(atual, -7);
+  else if (e.key === 'ArrowDown') proximo = somarDias(atual, 7);
+  else if (e.key === 'Home' || e.key === 'End') {
+    const diaSemana = new Date(`${atual}T12:00:00`).getDay(), segunda = somarDias(atual, -((diaSemana + 6) % 7));
+    proximo = e.key === 'Home' ? segunda : somarDias(segunda, 6);
+  } else if (e.key === 'PageUp' || e.key === 'PageDown') proximo = Kiro.somarMeses(atual, e.key === 'PageUp' ? -1 : 1);
+  if (!proximo) return;
+  e.preventDefault(); diaSelecionadoNoCalendario = proximo; render();
+  $(`[data-calendario-dia="${CSS.escape(proximo)}"]`)?.focus();
 });
 let tarefaArrastada = null;
 document.addEventListener('dragstart', e => {
@@ -535,6 +620,7 @@ const TRACOS = {
   'tema-claro': '<circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4"/>',
   'tema-kiro': '<path d="M19 14.8A7.8 7.8 0 1 1 9.2 5a6.2 6.2 0 0 0 9.8 9.8z"/>',
   'tema-grafite': '<path d="M4.5 19.5l1.1-4.4L15.4 5.3a2.1 2.1 0 0 1 3 3L8.6 18.1z"/><path d="M13.4 7.3l3 3"/>',
+  'tema-liquid-glass': '<rect x="4" y="3" width="16" height="18" rx="6"/><path d="M7 9V7a1 1 0 0 1 1-1h3M7 17l10-10M13 18h3a1 1 0 0 0 1-1v-2"/>',
   'tema-escuro-azul': '<path d="M12 3.5c3.3 4.1 5.8 7.2 5.8 10.6a5.8 5.8 0 0 1-11.6 0C6.2 10.7 8.7 7.6 12 3.5z"/>',
   'tema-escuro-verde': '<path d="M5.5 18.5C4.5 10.5 9.5 5 19.5 4.5 19 14.5 13.5 19.5 5.5 18.5z"/><path d="M4 20l9-9"/>',
   'tema-escuro-ambar': '<path d="M6.5 3.5h11M6.5 20.5h11"/><path d="M8 3.5c0 5 4 5.5 4 8.5s-4 3.5-4 8.5M16 3.5c0 5-4 5.5-4 8.5s4 3.5 4 8.5"/><path d="M9.8 18.6h4.4" stroke-width="2.5"/>',
@@ -561,6 +647,8 @@ const TRACOS = {
   'painel-direito': '<rect x="3.5" y="4.5" width="17" height="15" rx="2"/><path d="M15.5 4.5v15"/>',
   desfazer: '<path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/>',
   refazer: '<path d="m15 14 5-5-5-5"/><path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13"/>',
+  estrela: '<path d="m12 3.8 2.5 5.1 5.6.8-4.1 4 1 5.6-5-2.6-5 2.6 1-5.6-4.1-4 5.6-.8z"/>',
+  'estrela-cheia': '<path d="m12 3.8 2.5 5.1 5.6.8-4.1 4 1 5.6-5-2.6-5 2.6 1-5.6-4.1-4 5.6-.8z" fill="currentColor"/>',
 };
 // Nomes dos botões da barra lateral: começam iguais aos genéricos, mas cada tema de anime pode
 // redesenhá-los sem mexer no "+" ou no "detalhes" do resto do app.
@@ -619,6 +707,11 @@ function toggleFolder(id) {
 // Preferências de tela salvas por instalação. A chave antiga (kuroi.*) ainda é lida:
 // quem usava o aplicativo com o nome anterior não perde o que tinha escolhido.
 const lerPreferencia = chave => { try { return localStorage.getItem(`kiro.${chave}`) ?? localStorage.getItem(`kuroi.${chave}`); } catch { return null; } };
+function aplicarTamanhoDaInterface(valor = lerPreferencia('tamanhoInterface')) {
+  const tamanho = [100, 115, 130, 150].includes(Number(valor)) ? Number(valor) : 100;
+  document.documentElement.style.setProperty('--escala-interface', String(tamanho / 100));
+  return tamanho;
+}
 // Corretor ortográfico: preferência desta instalação, ligado por padrão. Desligado, o html
 // ganha spellcheck="false" (vale para todos os campos, no app e no navegador) e, no app,
 // os dicionários saem da memória.
@@ -691,6 +784,8 @@ function aplicarVidro() {
   const opacidade = Math.min(100, Math.max(30, Number(lerPreferencia('papelOpacidadeCartoes') ?? 100) || 100));
   for (const v of ['panel', 'panel-raised', 'campo']) html.style.setProperty(`--${v}-vidro`, `color-mix(in srgb, ${raiz.getPropertyValue(`--${v}`).trim()} ${opacidade}%, transparent)`);
   html.classList.toggle('cartoes-vidro', opacidade < 100);
+  html.classList.toggle('notas-solidas', lerPreferencia('vidroNotasSolidas') === '1');
+  html.classList.toggle('grafo-solido', lerPreferencia('vidroGrafoSolido') === '1');
 }
 function papelGuardado(acao, valor) {
   return new Promise((ok, erro) => {
@@ -741,6 +836,12 @@ async function aplicarPapelDeParede() {
     if (previa) previa.append(Object.assign(document.createElement('video'), { src: url, muted: true, loop: true, autoplay: !pausarPorMovimento(), playsInline: true }));
   }
   html.style.setProperty('--papel-veu', `${Number.isFinite(veu) ? veu : VEU_PADRAO}%`);
+  aplicarTransparenciaDoPapel();
+}
+// Liquid Glass: o papel de parede pode ficar translúcido e deixar o desktop aparecer (0 a 90%).
+function aplicarTransparenciaDoPapel() {
+  const transparencia = Math.min(90, Math.max(0, Number(lerPreferencia('papelTransparencia') ?? 0) || 0));
+  document.documentElement.style.setProperty('--papel-opacidade', String((100 - transparencia) / 100));
 }
 // Até 3840 px no lado maior (4K); maior que isso é reduzido, sem distorcer. JPEG de boa qualidade.
 async function reduzirImagem(arquivo) {
@@ -866,13 +967,10 @@ function aplicarLateralCompacta() {
   const botao = document.querySelector('#alternar-lateral');
   botao.setAttribute('aria-label', acao);
   botao.setAttribute('aria-expanded', String(!lateralCompacta));
-  botao.title = `${acao} (${teclaDe('lateral')})`;
-  const tecla = document.querySelector('#go-note kbd');
-  if (tecla) tecla.textContent = teclaDe('irPara').replace(/ \+ /g, '+');   // sem espaços: cabe ao lado do botão de recolher
+  botao.title = acao;
   for (const item of document.querySelectorAll('.sidebar :is(.new-note, .quiet-button, .nav-item, .busca-rapida, .nota-diaria)')) {
     const rotulo = item.querySelector('.rotulo')?.textContent.trim();
     if (!rotulo) continue;
-    if (item.id === 'go-note') item.dataset.dica = t('Ir para nota ({tecla})', { tecla: teclaDe('irPara') });
     item.dataset.dica ??= item.getAttribute('title') || '';   // a dica original, se houver
     const original = item.dataset.dica ? t(item.dataset.dica) : '';
     if (lateralCompacta) item.title = original ? `${rotulo} (${original})` : rotulo;
@@ -923,7 +1021,9 @@ function barraDeAbas(painel) {
   const botaoPainel = painel === abas.paineis.length - 1
     ? `<button type="button" class="icon-button painel-direito-alternar" data-painel-direito aria-pressed="${painelDireito.aberto}" title="${t('Painel da direita ({tecla})', { tecla: escapeHtml(teclaDe('painelDireito')) })}" aria-label="${t('Painel da direita')}">${icone('painel-direito')}</button>`
     : '';
-  return `<div class="abas-barra" data-painel="${painel}" role="group" aria-label="${t('Abas')}">${itens}<button type="button" class="icon-button aba-nova" data-nova-aba="${painel}" aria-label="${t('Nova aba')}">${icone('mais')}</button><button type="button" class="icon-button abas-menu" data-menu-abas="${painel}" aria-label="${t('Opções das abas desta coluna')}" aria-haspopup="menu" title="${t('Opções das abas')}">${icone('abaixo')}</button>${botaoPainel}</div>`;
+  const navHist = `<button type="button" class="icon-button aba-nav" data-hist-voltar="${painel}" title="${t('Voltar')}" aria-label="${t('Voltar')}"${KiroAbas.podeVoltar(abas, painel) ? '' : ' disabled'}>${icone('esquerda')}</button><button type="button" class="icon-button aba-nav" data-hist-avancar="${painel}" title="${t('Avançar')}" aria-label="${t('Avançar')}"${KiroAbas.podeAvancar(abas, painel) ? '' : ' disabled'}>${icone('direita')}</button>`;
+  const vincBadge = KiroAbas.colunasVinculadas(abas, painel).length ? `<span class="aba-vinculo-badge" title="${t('Coluna vinculada')}">${icone('link')}</span>` : '';
+  return `<div class="abas-barra" data-painel="${painel}" role="group" aria-label="${t('Abas')}">${navHist}${vincBadge}${itens}<button type="button" class="icon-button aba-nova" data-nova-aba="${painel}" aria-label="${t('Nova aba')}">${icone('mais')}</button><button type="button" class="icon-button abas-menu" data-menu-abas="${painel}" aria-label="${t('Opções das abas desta coluna')}" aria-haspopup="menu" title="${t('Opções das abas')}">${icone('abaixo')}</button>${botaoPainel}</div>`;
 }
 // Vazio de uma metade sem aba nenhuma: mesmo convite de sempre, com o + já sabendo em qual metade abrir.
 function cofreVazioMarkup(painel) {
@@ -1141,10 +1241,11 @@ async function vincularMencaoNaOutraNota(id) {
 function rolarParaTitulo(pos) {
   // pos conta \r\n como 2 caracteres; no editor cada quebra de linha conta 1.
   if (editorDaNota && $('#doc-corpo')?.contains(editorDaNota.editor.dom)) return editorDaNota.editor.rolarPara(editing.body.slice(0, pos).replace(/\r\n/g, '\n').length);
-  document.querySelector(`#doc-corpo [data-pos="${pos}"]`)?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+  const bloco = document.querySelector(`#doc-corpo [data-pos="${pos}"]`) || [...document.querySelectorAll('#doc-corpo [data-pos]')].find(el => Number(el.dataset.pos) <= pos && pos <= Number(el.dataset.fim ?? el.dataset.pos));
+  if (bloco) { bloco.scrollIntoView({ block: 'start', behavior: 'smooth' }); bloco.classList.remove('linha-destaque-flash'); void bloco.offsetWidth; bloco.classList.add('linha-destaque-flash'); setTimeout(() => bloco.classList.remove('linha-destaque-flash'), 1200); }
 }
 function renderCofre() {
-  if (expanded === null) expanded = new Set(state.folders.map(f => f.id));
+  if (expanded === null) expanded = new Set();   // pastas começam fechadas; quem usa abre as que quer
   garantirAbasDoCofre();
   abas = KiroAbas.limpar(abas, [...state.notes.map(n => n.id), ...(state.fluxos || []).map(f => f.id)]);
   // Sem editor aberto (voltando de outra tela ou de uma recarga), ou a nota em edição ficou
@@ -1176,7 +1277,7 @@ function renderCofre() {
       </span>
       ${botaoLateral()}
     </header>
-    <div class="tree">${arvore}</div>
+    <div class="tree">${renderFavoritosMarkup()}${arvore}</div>
     <div class="cofre-divisor" role="separator" aria-orientation="vertical" aria-label="${t('Largura da árvore de pastas')}" tabindex="0" aria-valuemin="${LARGURA_ARVORE.min}" aria-valuemax="${LARGURA_ARVORE.max}" aria-valuenow="${larguraArvore}" title="${t('Arraste para ajustar a largura · dois cliques voltam ao padrão')}"></div>
     <footer class="cofre-rodape">${rodapeDaArvore()}</footer>
   </aside>
@@ -1187,10 +1288,15 @@ function renderCofre() {
 // Itens do menu de contexto de uma aba: nova coluna à direita, mover para a coluna vizinha, fechar.
 function itensDaAba(painel, id) {
   const n = abas.paineis.length;
+  const vinculadas = KiroAbas.colunasVinculadas(abas, painel);
+  const vizinha = painel + 1 < n ? painel + 1 : painel - 1;
   return [
     { rotulo: t('Abrir em nova coluna à direita'), icone: icone('direita'), acao: () => moverAba(painel, id, painel + 1, { nova: true }) },
     ...(painel > 0 ? [{ rotulo: t('Mover para a coluna da esquerda'), icone: icone('esquerda'), acao: () => moverAba(painel, id, painel - 1) }] : []),
     ...(painel < n - 1 ? [{ rotulo: t('Mover para a coluna da direita'), icone: icone('direita'), acao: () => moverAba(painel, id, painel + 1) }] : []),
+    ...(n > 1 ? [vinculadas.length
+      ? { rotulo: t('Desvincular coluna'), icone: icone('link'), acao: () => { abas = KiroAbas.desvincularColuna(abas, painel); gravarAbas(); render(); } }
+      : { rotulo: t('Vincular com a coluna ao lado'), icone: icone('link'), acao: () => { abas = KiroAbas.vincularColunas(abas, painel, vizinha); gravarAbas(); render(); } }] : []),
     { separador: true },
     { rotulo: t('Fechar'), icone: icone('fechar'), acao: () => fecharAba(painel, id) },
     { rotulo: t('Fechar as outras'), icone: icone('fechar'), acao: () => fecharOutrasAbas(painel, id) },
@@ -1214,6 +1320,8 @@ function bindAbas(painel) {
   const barra = document.querySelector(`.abas-barra[data-painel="${painel}"]`);
   if (!barra) return;
   barra.addEventListener('click', e => {
+    if (e.target.closest('[data-hist-voltar]')) { navegarNoHistoricoDaColuna(painel, -1); return; }
+    if (e.target.closest('[data-hist-avancar]')) { navegarNoHistoricoDaColuna(painel, 1); return; }
     if (e.target.closest('[data-nova-aba]')) { abrirNota(notaVazia(), { novaAba: true, painel }); return; }
     const botaoMenu = e.target.closest('[data-menu-abas]');
     if (botaoMenu) {
@@ -1406,19 +1514,49 @@ function bindView() {
   document.querySelector('#collapse-all')?.addEventListener('click',()=>abrirTodas(false));
   document.querySelector('#note-search')?.addEventListener('input',e=>{
     const q=Kiro.normalize(e.target.value);
-    document.querySelector('#notes-grid').innerHTML=notesMarkup(state.notes.filter(n=>q.startsWith('#') ? Kiro.tags(n).some(t=>Kiro.normalize(t).includes(q.slice(1))) : Kiro.normalize(n.title+' '+n.body+' '+Kiro.tags(n).join(' ')).includes(q)));
+    document.querySelector('#notes-grid').innerHTML=notesMarkup(Kiro.filtrarNotasPorConsulta(state.notes, state.folders, e.target.value));
   });
   if(currentView==="graph"){bindGraph();return;}
   if(currentView==="studies"){
     document.querySelector('[data-cofre="casa"]')?.addEventListener('click',()=>irPara('today'));
     // Delegado: a seta esconde ou mostra; com a barra recolhida, clicar na faixa também reabre.
-    document.querySelector('.cofre-lateral')?.addEventListener('click',e=>{if(e.target.closest('[data-cofre="alternar"]')||(lateralRecolhida&&!e.target.closest('button')))alternarLateral();});
+    document.querySelector('.cofre-lateral')?.addEventListener('click',e=>{
+      const remFav=e.target.closest('[data-remover-fav]');
+      if(remFav){e.stopPropagation();const [tipo,...r]=remFav.dataset.removerFav.split(':');alternarItemFavorito({tipo,alvo:r.join(':')});return;}
+      const linhaFav=e.target.closest('.tree-favorito');
+      if(linhaFav){
+        const {favTipo,favAlvo}=linhaFav.dataset;
+        if(favTipo==='nota'||favTipo==='fluxo')abrirPorId(favAlvo,{novaAba:Boolean(e.ctrlKey||e.metaKey)});
+        else if(favTipo==='pasta'){if(expanded)expanded.add(favAlvo);render();document.querySelector(`.tree-node[data-id="${CSS.escape(favAlvo)}"]`)?.scrollIntoView({block:'nearest'});}
+        else if(favTipo==='busca')buscarEtiqueta(favAlvo);
+        return;
+      }
+      if(e.target.closest('[data-cofre="alternar"]')||(lateralRecolhida&&!e.target.closest('button')))alternarLateral();
+    });
     document.querySelectorAll('[data-cofre-nova]').forEach(b=>b.addEventListener('click',()=>abrirNota(notaVazia(),{painel:Number(b.dataset.cofreNova)})));
     ligarDivisorDaArvore();
     abas.paineis.forEach((_,painel)=>bindAbas(painel));
     bindDragDeAbas();
     bindDivisoresDasColunas();
-    abas.paineis.forEach((_,painel)=>{if(abas.ativo!==painel)bindLeitura(painel);});
+    abas.paineis.forEach((_,painel)=>{
+      if(abas.ativo!==painel)bindLeitura(painel);
+      const corpoCol=document.querySelector(`.cofre-metade[data-painel="${painel}"] .cofre-nota-corpo`);
+      corpoCol?.addEventListener('scroll',()=>{
+        if(corpoCol._sincronizando)return;
+        abas=KiroAbas.registrarScroll(abas,painel,corpoCol.scrollTop);
+        const ativa=abas.paineis[painel]?.ativa;
+        const maxOrigem=corpoCol.scrollHeight-corpoCol.clientHeight;
+        const razao=maxOrigem>0?corpoCol.scrollTop/maxOrigem:0;
+        for(const outro of KiroAbas.colunasVinculadas(abas,painel)){
+          if(abas.paineis[outro]?.ativa!==ativa)continue;
+          const outroCorpo=document.querySelector(`.cofre-metade[data-painel="${outro}"] .cofre-nota-corpo`);
+          if(!outroCorpo)continue;
+          outroCorpo._sincronizando=true;
+          outroCorpo.scrollTop=Math.round(razao*Math.max(0,outroCorpo.scrollHeight-outroCorpo.clientHeight));
+          requestAnimationFrame(()=>{outroCorpo._sincronizando=false;});
+        }
+      },{passive:true});
+    });
     if(editing)bindEditor();
     bindPainelDireito();
     montarFluxos();
@@ -1435,7 +1573,7 @@ function action(type,id,evento) {
     return;
   }
   if (busy || failed || !loaded) return;
-  if(type==="new-subfolder") folderModal({title:"",description:"",parentId:id}); if(type==="toggle-habit") marcarHabito(id); if(type==="toggle-habit-day"){const [habito,dia]=id.split("|");marcarHabito(habito,dia);} if(type==="toggle-task"){const t=state.tasks.find(x=>x.id===id);t.done=!t.done;save();render();} if(type==="toggle-note-task") marcarTarefaDaNota(id); if(type==="edit-note") abrirPorId(id,{novaAba:Boolean(evento?.ctrlKey||evento?.metaKey)}); if(type==="abrir-fluxo") abrirPorId(id,{novaAba:Boolean(evento?.ctrlKey||evento?.metaKey)}); if(type==="new-note-folder") abrirNota(notaVazia({folderId:id})); if(type==="edit-task") taskModal(state.tasks.find(x=>x.id===id)); if(type==="edit-folder") folderModal(state.folders.find(x=>x.id===id)); if(type==="delete-task"){state.tasks=state.tasks.filter(x=>x.id!==id);save();render();} if(type==="delete-folder") deleteFolder(id); }
+  if(type==="new-subfolder") folderModal({title:"",description:"",parentId:id}); if(type==="toggle-habit") marcarHabito(id); if(type==="toggle-habit-day"){const [habito,dia]=id.split("|");marcarHabito(habito,dia);} if(type==="toggle-task") alternarTarefa(id); if(type==="toggle-note-task") marcarTarefaDaNota(id); if(type==="edit-note") abrirPorId(id,{novaAba:Boolean(evento?.ctrlKey||evento?.metaKey)}); if(type==="abrir-fluxo") abrirPorId(id,{novaAba:Boolean(evento?.ctrlKey||evento?.metaKey)}); if(type==="new-note-folder") abrirNota(notaVazia({folderId:id})); if(type==="edit-task") taskModal(state.tasks.find(x=>x.id===id)); if(type==="edit-folder") folderModal(state.folders.find(x=>x.id===id)); if(type==="delete-task"){state.tasks=state.tasks.filter(x=>x.id!==id);save();render();} if(type==="delete-folder") deleteFolder(id); }
 // Excluir uma pasta leva junto suas subpastas; as notas continuam no cofre, na raiz.
 function deleteFolder(id) {
   const ids=Kiro.descendants(state.folders,id);
@@ -1546,6 +1684,7 @@ function menuDaArvore(linha) {
     const destinos = destinosDePasta();
     return [
       { rotulo: t('Abrir'), icone: icone('fluxo'), acao: () => getFluxo(id) && abrirFluxo(getFluxo(id)) },
+      { rotulo: Kiro.ehFavorito(favoritos, 'fluxo', id) ? t('Remover dos favoritos') : t('Favoritar'), icone: icone(Kiro.ehFavorito(favoritos, 'fluxo', id) ? 'estrela-cheia' : 'estrela'), acao: () => alternarItemFavorito({ tipo: 'fluxo', alvo: id, titulo: getFluxo(id)?.title }) },
       // Fluxo com erro não é regravado pelo cofre: renomear ou mover não teriam efeito.
       ...(fluxo && !fluxo.erro ? [
         { rotulo: t('Renomear'), icone: icone('renomear'), acao: () => getFluxo(id) && fluxoModal(getFluxo(id)) },
@@ -1559,6 +1698,7 @@ function menuDaArvore(linha) {
     const destinos = destinosDePasta();
     return [
       { rotulo: t('Abrir'), icone: icone('nota'), acao: () => getNote(id) && abrirNota(getNote(id)) },
+      { rotulo: Kiro.ehFavorito(favoritos, 'nota', id) ? t('Remover dos favoritos') : t('Favoritar'), icone: icone(Kiro.ehFavorito(favoritos, 'nota', id) ? 'estrela-cheia' : 'estrela'), acao: () => alternarItemFavorito({ tipo: 'nota', alvo: id, titulo: getNote(id)?.title }) },
       { rotulo: t('Mover para'), icone: icone('pastas'), filhos: destinos.map(d => ({ rotulo: d.rotulo, icone: icone(d.id ? 'pastas' : 'casa'), ativo: () => (getNote(id)?.folderId || '') !== d.id, acao: () => moverNota(id, d.id) })) },
       { separador: true },
       { rotulo: t('Excluir'), icone: icone('lixeira'), acao: () => excluirItens(new Set([id])) },
@@ -1568,6 +1708,7 @@ function menuDaArvore(linha) {
     { rotulo: t('Nova nota aqui'), icone: icone('mais'), acao: () => abrirNota(notaVazia({ folderId: id })) },
     { rotulo: t('Novo fluxo aqui'), icone: icone('fluxo'), acao: () => novoFluxo(id) },
     { rotulo: t('Nova subpasta'), icone: icone('pasta-nova'), acao: () => folderModal({ title: '', description: '', parentId: id }) },
+    { rotulo: Kiro.ehFavorito(favoritos, 'pasta', id) ? t('Remover dos favoritos') : t('Favoritar'), icone: icone(Kiro.ehFavorito(favoritos, 'pasta', id) ? 'estrela-cheia' : 'estrela'), acao: () => alternarItemFavorito({ tipo: 'pasta', alvo: id, titulo: pastaAtual()?.title }) },
     { separador: true },
     { rotulo: t('Renomear ou mover'), icone: icone('renomear'), acao: () => pastaAtual() && folderModal(pastaAtual()) },
     { rotulo: t('Cor'), icone: icone('realce'), filhos: ['', ...Kiro.FOLDER_COLORS].map(cor => ({ rotulo: t(NOMES_DE_COR[cor]), icone: bolinha(cor), ativo: () => (pastaAtual()?.color || '') !== cor, acao: () => { const pasta = pastaAtual(); if (pasta) { pasta.color = cor; save(); } } })) },
@@ -1576,13 +1717,14 @@ function menuDaArvore(linha) {
   ];
 }
 function modal(title, body) { modalDirty=false; document.querySelector("#modal-root").innerHTML=`<div class="modal-backdrop"><section class="modal" role="dialog" aria-modal="true"><header class="modal-head"><h2>${title}</h2><button class="icon-button" id="close-modal" title="${t('Fechar')}" aria-label="${t('Fechar')}">${icone('fechar')}</button></header>${body}</section></div>`; document.querySelector(".modal").addEventListener("input",()=>modalDirty=true); document.querySelector(".modal").addEventListener("change",()=>modalDirty=true); document.querySelector("#close-modal").onclick=()=>closeModal(); document.querySelector(".modal-backdrop").onclick=e=>{if(e.target===e.currentTarget)closeModal();}; }
-function closeModal(force=false){ if(!force && (busy || (modalDirty && !confirm(t('Descartar as alterações deste formulário?')))))return false; document.querySelector('#modal-root').innerHTML='';modalDirty=false;return true; }
+function closeModal(force=false){ if(!force && (busy || (modalDirty && !confirm(t('Descartar as alterações deste formulário?')))))return false; document.querySelector('#modal-root').innerHTML='';modalDirty=false;const aoFechar=aoFecharAcoesRapidas;aoFecharAcoesRapidas=null;aoFechar?.();return true; }
 function taskModal(task={title:"",due:today(),priority:"Média",noteId:""}) {
   const ATALHOS = [[0, frase('Hoje')], [1, frase('Amanhã')], [7, frase('Próxima semana')]];
   modal(task.id?t("Editar tarefa"):t("Nova tarefa"), `<form class="form" id="task-form">
     <div class="field"><label for="tarefa-titulo">${t('Tarefa')}</label><input id="tarefa-titulo" name="title" required autofocus value="${escapeHtml(task.title)}" placeholder="${t('O que precisa ser feito?')}" /></div>
     <div class="field"><label for="tarefa-data">${t('Data')}</label><div class="tarefa-datas"><input id="tarefa-data" name="due" type="date" value="${task.due}" required />${ATALHOS.map(([n, r]) => `<button type="button" class="chip" data-somar-dias="${n}">${t(r)}</button>`).join('')}</div></div>
     <div class="field"><span class="rotulo-campo" id="tarefa-prioridade">${t('Prioridade')}</span><div class="segmentos" role="radiogroup" aria-labelledby="tarefa-prioridade">${[frase("Baixa"),frase("Média"),frase("Alta")].map(p=>`<label class="segmento"><input type="radio" name="priority" value="${p}" ${p===task.priority?"checked":""} /><span>${t(p)}</span></label>`).join("")}</div></div>
+    <div class="field"><label for="tarefa-repete">${t('Repetir')}</label><div class="tarefa-datas"><select id="tarefa-repete" name="repeat">${[['', frase('Não repete')], ['day', frase('Todo dia')], ['week', frase('Toda semana')], ['month', frase('Todo mês')], ['days', frase('A cada N dias')]].map(([v, r]) => `<option value="${v}" ${v === (task.repeat?.every || '') ? 'selected' : ''}>${t(r)}</option>`).join('')}</select><input id="tarefa-repete-n" name="repeatN" type="number" min="1" max="365" value="${task.repeat?.n || 2}" aria-label="${t('Número de dias')}" ${task.repeat?.every === 'days' ? '' : 'hidden'} /></div></div>
     <div class="field"><label for="tarefa-descricao">${t('Descrição (opcional)')}</label><textarea id="tarefa-descricao" name="description" maxlength="5000" rows="3" placeholder="${t('Detalhes, passos, links…')}">${escapeHtml(task.description || '')}</textarea></div>
     <div class="field"><label for="tarefa-nota">${t('Nota associada (opcional)')}</label><select id="tarefa-nota" name="noteId"><option value="">${t('Nenhuma')}</option>${state.notes.map(n=>`<option value="${n.id}" ${n.id===task.noteId?"selected":""}>${escapeHtml(n.title)}</option>`).join("")}</select></div>
     <div class="form-actions">${task.id ? `<button type="button" class="secondary tarefa-copiar" id="tarefa-copiar" title="${t('Cole numa nota para citar esta tarefa')}">${icone('link')} ${t('Copiar citação')}</button>` : ''}<button type="button" class="secondary" id="cancel">${t('Cancelar')}</button><button class="primary">${t('Salvar tarefa')}</button></div></form>`);
@@ -1591,8 +1733,9 @@ function taskModal(task={title:"",due:today(),priority:"Média",noteId:""}) {
   const marcarAtalho = () => atalhos.forEach(b => b.setAttribute('aria-pressed', String(somarDias(today(), Number(b.dataset.somarDias)) === data.value)));
   atalhos.forEach(b => b.onclick = () => { data.value = somarDias(today(), Number(b.dataset.somarDias)); marcarAtalho(); });
   data.addEventListener('input', marcarAtalho); marcarAtalho();
+  $('#tarefa-repete').onchange = e => { $('#tarefa-repete-n').hidden = e.target.value !== 'days'; };
   $('#tarefa-titulo')?.focus();
-  document.querySelector("#cancel").onclick=()=>closeModal();document.querySelector("#task-form").onsubmit=e=>{e.preventDefault();const f=new FormData(e.currentTarget);const saved={...task,id:task.id||uid(),title:f.get("title"),due:f.get("due"),priority:f.get("priority"),noteId:f.get("noteId"),done:task.done||false};const descricao=String(f.get("description")||"").trim();if(descricao)saved.description=descricao;else delete saved.description;state.tasks=task.id?state.tasks.map(t=>t.id===task.id?saved:t):[saved,...state.tasks];save();closeModal(true);render();}; }
+  document.querySelector("#cancel").onclick=()=>closeModal();document.querySelector("#task-form").onsubmit=e=>{e.preventDefault();const f=new FormData(e.currentTarget);const saved={...task,id:task.id||uid(),title:f.get("title"),due:f.get("due"),priority:f.get("priority"),noteId:f.get("noteId"),done:task.done||false};const rep=f.get("repeat"),n=Math.min(365,Math.max(1,Math.round(Number(f.get("repeatN"))||2)));if(rep)saved.repeat=rep==="days"?{every:"days",n}:{every:rep};else delete saved.repeat;const descricao=String(f.get("description")||"").trim();if(descricao)saved.description=descricao;else delete saved.description;state.tasks=task.id?state.tasks.map(t=>t.id===task.id?saved:t):[saved,...state.tasks];save();closeModal(true);render();}; }
 const NOMES_DE_COR = { "":frase("Sem cor"), azul:frase("Azul"), verde:frase("Verde"), amarelo:frase("Amarelo"), laranja:frase("Laranja"), vermelho:frase("Vermelho"), rosa:frase("Rosa"), roxo:frase("Roxo"), cinza:frase("Cinza") };
 function folderModal(folder={title:"",description:"",parentId:""}) { modal(folder.id?t("Editar pasta"):t("Nova pasta de estudo"), `<form class="form" id="folder-form"><div class="field"><label>${t('Nome da pasta')}</label><input name="title" required value="${escapeHtml(folder.title)}" placeholder="${t('Ex.: JAVA, Inglês, programação')}" /><small class="small-muted">${t('Vira uma pasta de verdade no cofre: sem &lt; &gt; : " / \\ | ? * e sem ponto ou espaço no início ou no final.')}</small></div><div class="field"><label>${t('Dentro de')}</label><select name="parentId"><option value="">${t('Raiz do cofre')}</option>${state.folders.filter(f=>!(folder.id?Kiro.descendants(state.folders,folder.id):new Set()).has(f.id)).sort(byTitle).map(f=>`<option value="${f.id}" ${f.id===(folder.parentId||"")?"selected":""}>${escapeHtml(f.path||f.title)}</option>`).join("")}</select></div><div class="field"><span class="rotulo-campo" id="cor-pasta-rotulo">${t('Cor')}</span><div class="amostras" role="radiogroup" aria-labelledby="cor-pasta-rotulo">${["",...Kiro.FOLDER_COLORS].map(cor=>`<label class="amostra" data-cor-pasta="${cor}" title="${t(NOMES_DE_COR[cor])}"><input type="radio" name="color" value="${cor}" ${cor===(folder.color||"")?"checked":""} /><span class="sr-only">${t(NOMES_DE_COR[cor])}</span></label>`).join("")}</div></div><div class="field"><label>${t('Descrição')}</label><textarea name="description" placeholder="${t('Qual é seu objetivo com esta pasta?')}">${escapeHtml(folder.description||"")}</textarea></div><div class="form-actions"><button type="button" class="secondary" id="cancel">${t('Cancelar')}</button><button class="primary">${t('Salvar pasta')}</button></div></form>`);document.querySelector("#cancel").onclick=()=>closeModal();document.querySelector("#folder-form").onsubmit=e=>{e.preventDefault();const f=new FormData(e.currentTarget);const title=f.get("title").trim();
   // Validar aqui evita que um nome inválido bloqueie a janela no salvamento.
@@ -1658,10 +1801,126 @@ function gravarAbas() { garantirAbasDoCofre(); try { localStorage.setItem('kiro.
 const idDaAba = nota => nota.id || KiroAbas.RASCUNHO;
 const $ = selector => document.querySelector(selector);
 const templates={
-  study:{title:frase('Resumo de estudo'),body:'# Objetivo\n\n## Ideias principais\n\n## Exemplos\n\n## Perguntas\n\n## Próximos passos\n- [ ] Revisar\n'},
-  meeting:{title:frase('Reunião'),body:'# Contexto\n\n## Anotações\n\n## Decisões\n\n## Ações\n- [ ] \n'},
-  daily:{title:frase('Nota diária'),body:'# Foco do dia\n\n## Capturas\n\n## O que aprendi\n\n## Amanhã\n'}
+  study:{title:frase('Resumo de estudo'),body:[frase('# Objetivo'),frase('## Ideias principais'),frase('## Exemplos'),frase('## Perguntas'),frase('## Próximos passos'),frase('- [ ] Revisar')]},
+  meeting:{title:frase('Reunião'),body:[frase('# {{title}}'),frase('Data: {{date}}'),frase('## Participantes'),frase('## Pauta'),frase('## Anotações'),frase('## Decisões'),frase('## Ações e responsáveis'),'- [ ] ']},
+  daily:{title:frase('Nota diária'),body:[frase('# Foco do dia'),frase('## Capturas'),frase('## O que aprendi'),frase('## Amanhã')]},
+  minutes:{title:frase('Ata de reunião'),body:[frase('# {{title}}'),frase('Data: {{date}}'),frase('## Local e horário'),frase('## Participantes'),frase('## Pauta'),frase('## Discussões'),frase('## Decisões'),frase('## Ações e responsáveis'),frase('Responsável: — Prazo: —'),'- [ ] ',frase('## Próxima reunião')]},
+  lesson:{title:frase('Plano de aula'),body:[frase('# {{title}}'),frase('Data: {{date}}'),frase('## Turma e duração'),frase('## Objetivos de aprendizagem'),frase('## Conteúdo'),frase('## Materiais'),frase('## Etapas da aula'),frase('## Avaliação'),frase('## Anotações após a aula')]},
+  session:{title:frase('Registro de sessão'),body:[frase('# {{title}}'),frase('Data: {{date}}'),frase('## Identificação e duração'),frase('## Objetivo da sessão'),frase('## Relato e observações'),frase('## Atividades realizadas'),frase('## Encaminhamentos'),frase('## Próxima sessão')]},
+  legal:{title:frase('Peça jurídica'),body:[frase('# {{title}}'),frase('Data: {{date}}'),frase('Estrutura genérica para organização de texto; revise e adapte ao caso.'),frase('## Endereçamento'),frase('## Identificação das partes'),frase('## Fatos'),frase('## Fundamentação'),frase('## Pedidos'),frase('## Documentos anexos'),frase('## Local, data e assinatura')]},
+  script:{title:frase('Roteiro'),body:[frase('# {{title}}'),frase('Data: {{date}}'),frase('## Objetivo e público'),frase('## Duração prevista'),frase('## Abertura'),frase('## Cenas e falas'),frase('Cena: — Imagem/ação: — Fala/áudio: —'),frase('## Encerramento'),frase('## Recursos necessários')]},
+  construction:{title:frase('Diário de obra'),body:[frase('# {{title}}'),frase('Data: {{date}}'),frase('## Obra e responsável'),frase('## Clima e jornada'),frase('## Equipe e equipamentos'),frase('## Serviços executados'),frase('## Materiais recebidos'),frase('## Ocorrências e pendências'),frase('## Registros e anexos'),frase('## Próximos serviços')]}
 };
+// ---- Modelos pessoais ----
+function catalogoDeModelos() {
+  return [
+    ...Object.entries(templates).map(([nome, modelo]) => ({ chave: `embutido:${nome}`, titulo: t(modelo.title), pasta: t('Embutidos'), body: modelo.body.map(parte => t(parte)).join('\n\n') + '\n', tags: [], links: [] })),
+    ...Kiro.modelosPessoais(state.notes).map(nota => ({ chave: `nota:${nota.id}`, titulo: nota.title, pasta: state.folders.find(p => p.id === nota.folderId)?.path || state.folders.find(p => p.id === nota.folderId)?.title || t('Raiz do cofre'), body: nota.body, tags: [...(nota.tags || [])], links: [...(nota.links || [])] })),
+  ];
+}
+function opcoesDeModelos() {
+  return catalogoDeModelos().map(m => `<option value="${escapeHtml(m.chave)}">${escapeHtml(m.titulo)} · ${escapeHtml(m.pasta)}</option>`).join('');
+}
+function relerModelo(chave, cofre) {
+  const modelo = state.vaultPath === cofre && loaded && !failed && catalogoDeModelos().find(m => m.chave === chave);
+  if (!modelo) status(t('O modelo não está mais disponível neste cofre.'), true);
+  return modelo;
+}
+function modalDeModelo(titulo, corpo) {
+  modal(titulo, corpo);
+  const dialogo = $('.modal');
+  dialogo.setAttribute('aria-label', titulo);
+  dialogo.addEventListener('keydown', e => {
+    if (e.key !== 'Tab') return;
+    const campos = [...dialogo.querySelectorAll('button, input, select')].filter(c => !c.disabled);
+    const primeiro = campos[0], ultimo = campos[campos.length - 1];
+    if (e.shiftKey && document.activeElement === primeiro) { e.preventDefault(); ultimo?.focus(); }
+    else if (!e.shiftKey && document.activeElement === ultimo) { e.preventDefault(); primeiro?.focus(); }
+  });
+}
+function pedirTituloModelo(confirmar) {
+  modalDeModelo(t('Título da nota'), `<form class="form" id="modelo-titulo-form"><div class="field"><label for="modelo-titulo">${t('Título da nota')}</label><input id="modelo-titulo" required maxlength="200" autocomplete="off" /></div><p id="modelo-titulo-aviso" role="alert" hidden></p><div class="form-actions"><button type="button" class="secondary" id="modelo-cancelar">${t('Cancelar')}</button><button class="primary" id="modelo-criar">${t('Continuar')}</button></div></form>`);
+  const campo = $('#modelo-titulo'), formulario = $('#modelo-titulo-form'), botao = $('#modelo-criar');
+  const avisarFalha = () => {
+    const aviso = $('#modelo-titulo-aviso');
+    aviso.textContent = failed ? t('Não foi possível salvar o cofre. Feche este formulário, preserve ou exporte suas alterações e recupere o cofre antes de tentar novamente.') : t('Não foi possível continuar. Salve a nota aberta ou verifique o modelo antes de tentar novamente.');
+    aviso.hidden = false;
+  };
+  let enviando = false;
+  campo.oninput = () => campo.setCustomValidity('');
+  $('#modelo-cancelar').onclick = () => closeModal();
+  formulario.onsubmit = async e => {
+    e.preventDefault();
+    if (failed) { botao.disabled = true; avisarFalha(); return; }
+    if (enviando || busy || !loaded) return;
+    const titulo = campo.value.trim();
+    campo.setCustomValidity(!titulo || titulo.length > 200 ? t('Informe um título de até 200 caracteres.') : '');
+    if (!titulo || titulo.length > 200) { campo.reportValidity(); return; }
+    enviando = true; botao.disabled = true;
+    try {
+      if (await confirmar(titulo, formulario)) closeModal(true);
+      else if ($('#modelo-titulo-form') === formulario && $('#modal-root').firstChild) {
+        avisarFalha(); botao.disabled = failed; campo.focus();
+      }
+    }
+    finally { enviando = false; botao.disabled = failed; }
+  };
+  campo.focus();
+}
+function criarNotaPorModelo() {
+  if (!loaded || failed || busy || $('#modal-root').firstChild) return;
+  const cofre = state.vaultPath, pasta = editing?.folderId || '';
+  modalDeModelo(t('Criar nota por modelo'), `<form class="form" id="modelo-selecao-form"><div class="field"><label for="modelo-escolha">${t('Modelo')}</label><select id="modelo-escolha">${opcoesDeModelos()}</select></div><p class="small-muted">${t('Adicione modelo no campo de tags de uma nota para usá-la como modelo pessoal.')}</p><p class="small-muted">${t('Anexos não são copiados; caminhos relativos não são ajustados.')}</p><div class="form-actions"><button type="button" class="secondary" id="modelo-cancelar">${t('Cancelar')}</button><button class="primary" id="modelo-continuar">${t('Continuar')}</button></div></form>`);
+  $('#modelo-cancelar').onclick = () => closeModal();
+  $('#modelo-selecao-form').onsubmit = e => {
+    e.preventDefault();
+    const chave = $('#modelo-escolha').value;
+    if (!relerModelo(chave, cofre)) return;
+    pedirTituloModelo(async (titulo, formulario) => {
+      if (!relerModelo(chave, cofre) || !await salvarAntesDeTrocar()) return false;
+      if ($('#modelo-titulo-form') !== formulario || !$('#modal-root').firstChild) return false;
+      const modelo = relerModelo(chave, cofre);
+      if (!modelo) return false;
+      await abrirNota(notaVazia({ title: titulo, body: Kiro.expandirModelo(modelo.body, { title: titulo, date: today() }), tags: modelo.tags.filter(tag => Kiro.normalize(tag) !== 'modelo'), links: [...modelo.links], folderId: state.folders.some(p => p.id === pasta) ? pasta : '' }));
+      editorDirty = true; estadoDoc();
+      return true;
+    });
+  };
+  $('#modelo-escolha').focus();
+}
+async function criarModeloPessoal() {
+  if (!loaded || failed || busy || $('#modal-root').firstChild) return;
+  const cofre = state.vaultPath, pasta = editing?.folderId || '';
+  if (!await salvarAntesDeTrocar() || state.vaultPath !== cofre) return;
+  await abrirNota(notaVazia({ body: '# {{title}}\n\n' + t('Data: {{date}}') + '\n\n' + t('Escreva seu modelo aqui.'), tags: ['modelo'], folderId: state.folders.some(p => p.id === pasta) ? pasta : '' }));
+  editorDirty = true; estadoDoc();
+}
+function aplicarModeloNaNota(chave) {
+  const cofre = state.vaultPath, nota = editing, modelo = relerModelo(chave, cofre);
+  if (!modelo || !nota || busy) return;
+  if (nota.body.trim() && !confirm(t('Substituir o texto desta nota pelo modelo?'))) return;
+  const aplicar = titulo => {
+    if (editing !== nota) return false;
+    const atual = relerModelo(chave, cofre);
+    if (!atual) return false;
+    const corpo = Kiro.expandirModelo(atual.body, { title: titulo, date: today() }), area = editorDaNota?.editor.area();
+    // Uma inserção no editor preserva a transação de desfazer.
+    if (area) { area.setSelectionRange(0, area.value.length); area.inserir(corpo); }
+    else {
+      const campo = $('#doc-corpo .doc-corpo-simples');
+      if (!campo) return false;
+      campo.focus(); campo.select();
+      document.execCommand('insertText', false, corpo);
+      editing.body = campo.value;
+    }
+    if (!nota.title.trim() && titulo) { nota.title = titulo; $('#doc-title').value = titulo; }
+    editorDirty = true; estadoDoc();
+    return true;
+  };
+  if (!nota.title.trim() && modelo.body.includes('{{title}}')) pedirTituloModelo(aplicar);
+  else aplicar(nota.title.trim());
+}
+// ---- Fim dos modelos pessoais ----
 async function api(endpoint,data){
   const response=await fetch(`/api/${endpoint}`,data===undefined?{}:{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
   const result=await response.json();if(!response.ok)throw new Error(result.error||t('Não foi possível acessar o cofre.'));return result;
@@ -1721,7 +1980,13 @@ async function trocarIdioma(codigo) {
 // Mensagem de erro de outro módulo (cofre, domínio, plug-ins, processo principal): as frases
 // fixas marcadas com frase() lá têm tradução; as montadas com dados seguem em português.
 const mensagemDoErro = erro => t(KiroIdiomas.semPrefixoDoIpc(erro?.message ?? erro));
-function status(message,error=false){$('#save-status').textContent=message;$('#save-status').classList.toggle('error',error);}
+function status(message,error=false){$('#save-status').classList.remove('celebracao');$('#save-status').textContent=message;$('#save-status').classList.toggle('error',error);}
+function avisoAtalhoGlobal(mostrar) {
+  let el = $('#aviso-atalho-global');
+  if (!mostrar) { el?.remove(); return; }
+  if (!el) { el = document.createElement('div'); el.id = 'aviso-atalho-global'; el.setAttribute('role', 'alert'); document.body.append(el); }
+  el.textContent = t('Atalho global indisponível: outro aplicativo pode estar usando a combinação.');
+}
 let focoAntesDoBusy=null;   // inert tira o foco de qualquer coisa focada; ao sair do "ocupado" ele volta pra onde estava
 function setBusy(value){
   if(value&&!busy)focoAntesDoBusy=document.activeElement;
@@ -1739,6 +2004,7 @@ function setBusy(value){
 async function reload(manual=false){
   if(aguardandoCofre||busy||(!manual&&(failed||editorDirty||fluxoPendente||KiroFluxoTela.ocupado()||$('#modal-root').firstChild)))return;
   if(manual&&(failed||modalDirty||editorDirty||fluxoPendente)&&!confirm(t('Recarregar descarta alterações ainda não salvas nesta janela. Exporte seus dados ou copie o texto antes de continuar. Recarregar?')))return;
+  verificarConflitos();
   setBusy(true);
   try{
     const saved=await loadFromVault();Kiro.validateState(saved);
@@ -1755,14 +2021,26 @@ async function reload(manual=false){
   }catch(error){status(t('Não foi possível ler o cofre: {erro}',{erro:mensagemDoErro(error)}),true);}
   finally{setBusy(false);fecharAbertura();}
 }
+async function verificarConflitos() {
+  try {
+    const arquivos = window.cadernoDesktop ? await window.cadernoDesktop.conflictCopies() : await api('conflicts');
+    let aviso = $('#conflitos-sincronizacao');
+    if (!arquivos.length) { aviso?.remove(); return; }
+    if (!aviso) { aviso = document.createElement('details'); aviso.id = 'conflitos-sincronizacao'; document.body.append(aviso); }
+    aviso.replaceChildren();
+    const titulo = document.createElement('summary'); titulo.textContent = t('Possíveis cópias de conflito de sincronização'); aviso.append(titulo);
+    const ajuda = document.createElement('p'); ajuda.textContent = t('Compare os arquivos antes de alterar qualquer cópia. Pause a sincronização e faça um backup; o Kiro não resolve conflitos automaticamente.'); aviso.append(ajuda);
+    const lista = document.createElement('ul'); for (const arquivo of arquivos) { const item = document.createElement('li'); item.textContent = arquivo; lista.append(item); } aviso.append(lista);
+  } catch (erro) { status(t('Não foi possível verificar conflitos: {erro}', { erro: mensagemDoErro(erro) }), true); }
+}
 const itemQueAbre=n=>`<div class="routine-item"><span class="brand-mark">${icone('nota')}</span><a class="routine-title" data-action="edit-note" data-id="${n.id}">${escapeHtml(n.title||t('Sem título'))}</a></div>`;
 function cardCaixaDeEntrada({limite=0}={}){
-  const notas=state.notes.filter(Kiro.inInbox).sort((a,b)=>(b.createdAt??b.updatedAt)-(a.createdAt??a.updatedAt));
+  const notas=notasVisiveisNaHoje().filter(Kiro.inInbox).sort((a,b)=>(b.createdAt??b.updatedAt)-(a.createdAt??a.updatedAt));
   return `<section class="card caixa-entrada"><div class="card-head"><h2>${icone('arquivar')}${t('Caixa de entrada')}</h2><span class="small-muted">${notas.length}</span></div>${cortar(notas,limite).map(n=>`<div class="routine-item"><span class="brand-mark">${icone('nota')}</span><a class="routine-title" data-action="edit-note" data-id="${n.id}">${escapeHtml(n.title||t('Sem título'))}</a><span class="caixa-acoes">${extraButton('inbox-mover',icone('pastas'),n.id,'icon-button',t('Mover para pasta'))}${extraButton('inbox-arquivar',icone('arquivar'),n.id,'icon-button',t('Arquivar (tirar da caixa)'))}</span></div>`).join('')||`<div class="empty">${t('Nada pendente. Tudo organizado.')}</div>`}</section>`;
 }
 let filtroDaRevisao='todas';
 function cardParaRevisar({limite=0}={}){
-  const {loose,forgotten}=Kiro.toReview(state.notes);
+  const {loose,forgotten}=Kiro.toReview(notasVisiveisNaHoje());
   if(!loose.length&&!forgotten.length)return '';
   const grupos=[['soltas',t('Soltas'),loose],['esquecidas',t('Esquecidas'),forgotten]].filter(([,,notas])=>notas.length);
   if(!grupos.some(([id])=>id===filtroDaRevisao))filtroDaRevisao='todas';
@@ -1810,7 +2088,7 @@ function capturaRapida(){
   campo.focus();
 }
 // ---- Editor de documento: a nota ocupa a página inteira, como um processador de texto. ----
-async function abrirNota(nota,{novaAba=false,painel,duplicar=false,colunaNova=false}={}){
+async function abrirNota(nota,{novaAba=false,painel,duplicar=false,colunaNova=false,ancora=''}={}){
   garantirAbasDoCofre(); // 1ª nota da sessão pode vir de fora de Pastas (Hoje etc.), antes do 1º renderCofre.
   if(editing&&editorDirty&&!await salvarNota())return;
   // O salvamento acima pode ter trocado o objeto da nota em state.notes (ela ganhou id, ou o
@@ -1828,11 +2106,27 @@ async function abrirNota(nota,{novaAba=false,painel,duplicar=false,colunaNova=fa
       else abas=KiroAbas.fechar(abas,onde,KiroAbas.RASCUNHO);
     }
   }
-  abas=KiroAbas.abrir(abas,novoId,{novaAba,painel,duplicar,colunaNova});
+  abas=KiroAbas.abrir(KiroAbas.comHistorico(abas),novoId,{novaAba,painel,duplicar,colunaNova});
   gravarAbas();
   editing={...nota,tags:[...(nota.tags||[])],links:[...(nota.links||[])]};
   if(editing.id)ultimaNota=editing.id; // centro do grafo local
   editorDirty=false;currentView='studies';render();
+  if(ancora&&editing){const achada=Kiro.resolverAncoraNaNota(editing.body,ancora);if(achada)montagemDoEditor.then(()=>rolarParaTitulo(achada.pos));}
+}
+async function navegarNoHistoricoDaColuna(painel, delta) {
+  if (!await salvarAntesDeTrocar()) return;
+  const idsValidos = [...state.notes.map(n => n.id), ...(state.fluxos || []).map(f => f.id)];
+  abas = delta < 0 ? KiroAbas.voltar(abas, painel, idsValidos) : KiroAbas.avancar(abas, painel, idsValidos);
+  gravarAbas();
+  atualizarEditingConformeAtiva();
+  render();
+  const scrollSalvo = KiroAbas.scrollAtivo(abas, painel);
+  if (scrollSalvo > 0) {
+    montagemDoEditor.then(() => {
+      const rola = document.querySelector(`.cofre-metade[data-painel="${painel}"] .cofre-nota-corpo`);
+      if (rola) rola.scrollTop = scrollSalvo;
+    });
+  }
 }
 // Acha a nota pelo id (usado pela árvore e pela barra de abas) e abre.
 function abrirPorId(id,opcoes){ const nota=getNote(id); if(nota)return abrirNota(nota,opcoes); const fluxo=getFluxo(id); return fluxo?abrirFluxo(fluxo,opcoes):Promise.resolve(); }
@@ -1841,13 +2135,14 @@ async function abrirFluxo(fluxo,{novaAba=false,painel,duplicar=false,colunaNova=
   garantirAbasDoCofre();
   if(editing&&editorDirty&&!await salvarNota())return;
   if(editing&&!editing.id){const onde=abas.paineis.findIndex(p=>p.abas.includes(KiroAbas.RASCUNHO));if(onde!==-1)abas=KiroAbas.fechar(abas,onde,KiroAbas.RASCUNHO);}
-  abas=KiroAbas.abrir(abas,fluxo.id,{novaAba,painel,duplicar,colunaNova});
+  abas=KiroAbas.abrir(KiroAbas.comHistorico(abas),fluxo.id,{novaAba,painel,duplicar,colunaNova});
   gravarAbas();
   editing=null;editorDirty=false;currentView='studies';render();
 }
 // Fluxo novo: "Sem título", "Sem título 1", … sem repetir nome (sem diferenciar maiúsculas) na pasta.
 async function novoFluxo(folderId='',abrirComo={}){
   if(busy||failed||!loaded)return;
+  if(!await salvarAntesDeTrocar())return;
   const usados=new Set((state.fluxos||[]).filter(f=>(f.folderId||'')===folderId).map(f=>Kiro.pathKey(f.title)));
   let title=t('Sem título'),i=1;
   while(usados.has(Kiro.pathKey(title)))title=`${t('Sem título')} ${i++}`;
@@ -1969,11 +2264,19 @@ async function sairDoEditor(destino){
   if(editorDirty&&!await salvarNota())return false;
   editing=null;currentView=destino;render();return true;
 }
+let modoFoco = false, metaFoco = 0;
+function atualizarFoco() {
+  const saida = $('#foco-contagem');
+  if (saida) saida.textContent = t('{n} palavras · meta: {meta}', { n: (editing?.body.trim().match(/\S+/g) || []).length, meta: metaFoco || '–' });
+}
 function renderEditor(){
   const nota=editing, pasta=state.folders.find(f=>f.id===nota.folderId);
   const opcoes=`<option value="">${t('Raiz do cofre')}</option>`+state.folders.slice().sort(byTitle).map(f=>`<option value="${f.id}" ${f.id===nota.folderId?'selected':''}>${escapeHtml(f.path||f.title)}</option>`).join('');
-  const modelos=Object.entries(templates).map(([k,modelo])=>`<option value="${k}">${escapeHtml(t(modelo.title))}</option>`).join('');
-  return `<header class="doc-bar"><div class="crumbs"><span>${pasta?escapeHtml(pasta.path||pasta.title):t('Raiz do cofre')}</span><span>/</span><span class="crumb-atual">${escapeHtml(nota.title||t('Sem título'))}</span></div><span class="doc-ponto" id="doc-state" title="${t('Alterações não salvas')}"></span></header>
+  const modelos=opcoesDeModelos();
+  const ehFav = Boolean(nota.id && Kiro.ehFavorito(favoritos, 'nota', nota.id));
+  const botaoFav = `<button type="button" class="quiet-button" id="doc-audio">${t('Anexar áudio')}</button><button type="button" class="quiet-button" id="doc-gravar">${gravacaoAudio ? t('Parar gravação') : t('Gravar áudio')}</button>`+(nota.id ? `<button type="button" class="quiet-button" id="doc-historico">${t('Histórico')}</button><button type="button" class="icon-button doc-favorito${ehFav ? ' ativo' : ''}" id="doc-favorito" title="${ehFav ? t('Remover dos favoritos') : t('Favoritar')}" aria-label="${ehFav ? t('Remover dos favoritos') : t('Favoritar')}">${icone(ehFav ? 'estrela-cheia' : 'estrela')}</button>` : '');
+  const barraBusca = `<div class="barra-busca-nota" id="barra-busca-nota"${buscaNaNota.aberta ? '' : ' hidden'}><div class="busca-nota-linha"><input type="search" id="busca-nota-termo" value="${escapeHtml(buscaNaNota.termo)}" placeholder="${t('Localizar na nota…')}" aria-label="${t('Localizar na nota')}" autocomplete="off" /><button type="button" class="chip busca-nota-aa" id="busca-nota-aa" aria-pressed="${buscaNaNota.maiusculas}" title="${t('Diferenciar maiúsculas e minúsculas')}">Aa</button><span class="small-muted busca-nota-contagem" id="busca-nota-contagem">0/0</span><button type="button" class="icon-button" id="busca-nota-ant" title="${t('Anterior')}" aria-label="${t('Anterior')}">↑</button><button type="button" class="icon-button" id="busca-nota-prox" title="${t('Próxima')}" aria-label="${t('Próxima')}">↓</button><button type="button" class="icon-button" id="busca-nota-fechar" title="${t('Fechar')}" aria-label="${t('Fechar')}">${icone('fechar')}</button></div><div class="busca-nota-linha" id="busca-nota-linha-sub"${buscaNaNota.substituir ? '' : ' hidden'}><input type="text" id="busca-nota-sub" value="${escapeHtml(buscaNaNota.substituto)}" placeholder="${t('Substituir por…')}" aria-label="${t('Substituir por')}" autocomplete="off" /><button type="button" class="secondary cfg-pequeno" id="busca-nota-trocar">${t('Substituir')}</button><button type="button" class="secondary cfg-pequeno" id="busca-nota-todas">${t('Substituir tudo')}</button></div></div>`;
+  return `<div class="foco-controles"><button type="button" class="secondary" id="doc-foco">${modoFoco ? t('Sair do modo foco') : t('Modo foco')}</button><span id="foco-detalhes" ${modoFoco ? '' : 'hidden'}><label>${t('Meta de palavras')} <input type="number" min="0" id="foco-meta" value="${metaFoco || ''}" /></label> <span id="foco-contagem" role="status"></span></span></div><header class="doc-bar"><div class="crumbs"><span>${pasta?escapeHtml(pasta.path||pasta.title):t('Raiz do cofre')}</span><span>/</span><span class="crumb-atual">${escapeHtml(nota.title||t('Sem título'))}</span></div><div class="doc-bar-acoes"><button type="button" class="quiet-button" id="doc-imprimir">${t('Imprimir nota')}</button><button type="button" class="quiet-button" id="doc-pdf">${t('Exportar nota para PDF')}</button>${botaoFav}<span class="doc-ponto" id="doc-state" title="${t('Alterações não salvas')}"></span></div></header>${barraBusca}
 <input class="doc-title" id="doc-title" value="${escapeHtml(nota.title)}" placeholder="${t('Sem título')}" aria-label="${t('Título da nota')}" />
 <section class="doc-details" id="doc-details" hidden><div class="two-cols"><div class="field"><label for="doc-folder">${t('Pasta')}</label><select id="doc-folder">${opcoes}</select></div><div class="field"><label for="doc-tags">${t('Tags (separadas por vírgulas)')}</label><input id="doc-tags" value="${escapeHtml(nota.tags.join(', '))}" placeholder="${t('ideias, estudos')}" /></div></div><div class="two-cols"><div class="field"><label for="doc-template">${t('Modelo')}</label><select id="doc-template"><option value="">${t('Escolher modelo…')}</option>${modelos}</select></div><div class="field"><label for="doc-link">${t('Anexar link')}</label><div class="add-link"><input id="doc-link" placeholder="${t('Cole um link de aula ou vídeo')}" /><button type="button" class="secondary" id="doc-link-add">${t('Anexar')}</button></div></div></div><div class="links-list" id="doc-links"></div></section>
 <div class="doc-corpo" id="doc-corpo"></div>${renderMencoes(nota)}`;
@@ -1991,6 +2294,102 @@ function renderMencoes(nota){
   }).join('');
   return `<section class="doc-mencoes"><h2 class="small-muted">${t('Mencionada em ({n})',{n:citam.length})}</h2>${itens}</section>`;
 }
+let buscaNaNota = { aberta: false, substituir: false, termo: '', substituto: '', maiusculas: false, indice: 0, faixas: [] };
+function atualizarBuscaNaNota(rolar = true) {
+  if (!editing || !buscaNaNota.aberta) {
+    buscaNaNota.faixas = [];
+    editorDaNota?.editor.destacarBusca?.([], -1, false);
+    return;
+  }
+  const faixas = Kiro.buscarNoTexto(editing.body, buscaNaNota.termo, { diferenciarMaiusculas: buscaNaNota.maiusculas });
+  buscaNaNota.faixas = faixas;
+  if (!faixas.length) buscaNaNota.indice = -1;
+  else if (buscaNaNota.indice < 0 || buscaNaNota.indice >= faixas.length) buscaNaNota.indice = 0;
+  const cont = $('#busca-nota-contagem');
+  if (cont) cont.textContent = faixas.length ? `${buscaNaNota.indice + 1}/${faixas.length}` : '0/0';
+  editorDaNota?.editor.destacarBusca?.(faixas, buscaNaNota.indice, rolar);
+}
+function abrirBuscaNaNota(comSubstituir = false) {
+  if (currentView !== 'studies' || !editing) return;
+  buscaNaNota.aberta = true;
+  buscaNaNota.substituir = Boolean(comSubstituir);
+  const barra = $('#barra-busca-nota');
+  if (!barra) return;
+  barra.hidden = false;
+  const sub = $('#busca-nota-linha-sub');
+  if (sub) sub.hidden = !buscaNaNota.substituir;
+  atualizarBuscaNaNota(true);
+  const campo = $('#busca-nota-termo');
+  if (campo) { campo.focus(); campo.select(); }
+}
+function fecharBuscaNaNota() {
+  buscaNaNota.aberta = false;
+  const barra = $('#barra-busca-nota');
+  if (barra) barra.hidden = true;
+  editorDaNota?.editor.destacarBusca?.([], -1, false);
+  editorDaNota?.editor.focar?.();
+}
+function bindBuscaNaNota() {
+  const barra = $('#barra-busca-nota');
+  if (!barra) return;
+  const termo = $('#busca-nota-termo'), sub = $('#busca-nota-sub'), aa = $('#busca-nota-aa');
+  termo?.addEventListener('input', () => { buscaNaNota.termo = termo.value; buscaNaNota.indice = 0; atualizarBuscaNaNota(true); });
+  termo?.addEventListener('keydown', e => {
+    if (e.key === 'Escape') { e.preventDefault(); fecharBuscaNaNota(); }
+    else if (e.key === 'Enter' && buscaNaNota.faixas.length) {
+      e.preventDefault();
+      const total = buscaNaNota.faixas.length;
+      buscaNaNota.indice = (buscaNaNota.indice + (e.shiftKey ? total - 1 : 1)) % total;
+      atualizarBuscaNaNota(true);
+    }
+  });
+  sub?.addEventListener('input', () => { buscaNaNota.substituto = sub.value; });
+  sub?.addEventListener('keydown', e => {
+    if (e.key === 'Escape') { e.preventDefault(); fecharBuscaNaNota(); }
+    else if (e.key === 'Enter') { e.preventDefault(); $('#busca-nota-trocar')?.click(); }
+  });
+  aa?.addEventListener('click', () => {
+    buscaNaNota.maiusculas = !buscaNaNota.maiusculas;
+    aa.setAttribute('aria-pressed', String(buscaNaNota.maiusculas));
+    buscaNaNota.indice = 0;
+    atualizarBuscaNaNota(true);
+  });
+  $('#busca-nota-ant')?.addEventListener('click', () => {
+    const total = buscaNaNota.faixas.length;
+    if (!total) return;
+    buscaNaNota.indice = (buscaNaNota.indice + total - 1) % total;
+    atualizarBuscaNaNota(true);
+  });
+  $('#busca-nota-prox')?.addEventListener('click', () => {
+    const total = buscaNaNota.faixas.length;
+    if (!total) return;
+    buscaNaNota.indice = (buscaNaNota.indice + 1) % total;
+    atualizarBuscaNaNota(true);
+  });
+  $('#busca-nota-fechar')?.addEventListener('click', fecharBuscaNaNota);
+  $('#busca-nota-trocar')?.addEventListener('click', () => {
+    const f = buscaNaNota.faixas[buscaNaNota.indice];
+    if (!f || !editing) return;
+    if (editorDaNota?.editor) {
+      editorDaNota.editor.trocarTrecho(f.de, f.ate, buscaNaNota.substituto);
+    } else {
+      const r = Kiro.substituirNoTexto(editing.body, f, buscaNaNota.substituto);
+      editing.body = r.texto; editorDirty = true; estadoDoc();
+    }
+    atualizarBuscaNaNota(true);
+  });
+  $('#busca-nota-todas')?.addEventListener('click', () => {
+    if (!buscaNaNota.faixas.length || !editing) return;
+    if (editorDaNota?.editor?.substituirTodas) {
+      editorDaNota.editor.substituirTodas(buscaNaNota.faixas, buscaNaNota.substituto);
+    } else {
+      const r = Kiro.substituirTodosNoTexto(editing.body, buscaNaNota.termo, buscaNaNota.substituto, { diferenciarMaiusculas: buscaNaNota.maiusculas });
+      editing.body = r.texto; editorDirty = true; estadoDoc();
+    }
+    atualizarBuscaNaNota(false);
+  });
+  if (buscaNaNota.aberta) atualizarBuscaNaNota(false);
+}
 function estadoDoc(){ $('#doc-state')?.classList.toggle('sujo', editorDirty); }
 function desenharLinksDoc(){
   const caixa=$('#doc-links'); if(!caixa) return;
@@ -1999,6 +2398,10 @@ function desenharLinksDoc(){
 }
 function bindEditor(){
   const titulo=$('#doc-title'), corpo=$('#doc-corpo');
+  document.querySelector('.app-shell').classList.toggle('modo-foco', modoFoco);
+  $('#doc-foco').onclick = () => { modoFoco = !modoFoco; document.querySelector('.app-shell').classList.toggle('modo-foco', modoFoco); $('#foco-detalhes').hidden = !modoFoco; $('#doc-foco').textContent = modoFoco ? t('Sair do modo foco') : t('Modo foco'); };
+  $('#foco-meta').oninput = e => { metaFoco = Math.max(0, Number(e.target.value) || 0); atualizarFoco(); };
+  atualizarFoco();
   const sujar=()=>{editorDirty=true;estadoDoc();};
   titulo.oninput=()=>{editing.title=titulo.value;sujar();};
   // Enter ou seta para baixo no título descem para o texto, como num processador de texto.
@@ -2011,12 +2414,7 @@ function bindEditor(){
   $('#doc-tags').oninput=e=>{editing.tags=e.target.value.split(',').map(t=>t.trim().replace(/^#/,'')).filter(Boolean);sujar();};
   $('#doc-template').onchange=e=>{
     if(!e.target.value)return;
-    if(editing.body.trim()&&!confirm(t('Substituir o texto desta nota pelo modelo?'))){e.target.value='';return;}
-    // Pelo editor, como uma edição comum: Ctrl+Z volta ao texto de antes do modelo (aoMudar atualiza editing.body).
-    const modelo=templates[e.target.value].body, area=editorDaNota?.editor.area();
-    if(area){area.setSelectionRange(0,area.value.length);area.inserir(modelo);}
-    else{editing.body=modelo;const c=$('#doc-corpo .doc-corpo-simples');if(c)c.value=modelo;}
-    sujar();
+    aplicarModeloNaNota(e.target.value);e.target.value='';
   };
   $('#doc-link-add').onclick=()=>{
     const campo=$('#doc-link'), valor=campo.value.trim();
@@ -2025,6 +2423,13 @@ function bindEditor(){
   };
   const montado=montagemDoEditor=montarEditorDaNota(corpo);
   document.querySelectorAll('[data-editor]').forEach(b=>b.onclick=()=>acaoEditor(b.dataset.editor));
+  $('#doc-favorito')?.addEventListener('click', () => { if (editing?.id) alternarItemFavorito({ tipo: 'nota', alvo: editing.id, titulo: editing.title }); });
+  $('#doc-historico')?.addEventListener('click', () => mostrarHistoricoNota());
+  $('#doc-audio')?.addEventListener('click', () => escolherAudio());
+  $('#doc-gravar')?.addEventListener('click', () => gravarAudio());
+  $('#doc-imprimir')?.addEventListener('click', () => imprimirNota());
+  $('#doc-pdf')?.addEventListener('click', () => imprimirNota(true));
+  bindBuscaNaNota();
   desenharLinksDoc();estadoDoc();
   // Nota nova começa pelo título; nota existente sem texto já abre o campo para escrever.
   // (o editor pode ainda estar carregando: o foco espera a montagem)
@@ -2040,13 +2445,18 @@ const chaveDaNota = nota => nota.id || 'rascunho';
 function opcoesDoEditor({ atual = () => editorDaNota?.editor, menu = menuDaNota } = {}) {
   return {
     ortografia: { ativa: corretorLigado, errada: p => KiroOrtografia.errada(p) },
-    aoMudar: texto => { if (!editing) return; editing.body = texto; editorDirty = true; estadoDoc(); },
-    existe: alvo => Boolean(Kiro.findLinkedNote(state.notes, alvo)),
+    aoMudar: texto => { if (!editing) return; editing.body = texto; editorDirty = true; estadoDoc(); atualizarFoco(); if (buscaNaNota.aberta) atualizarBuscaNaNota(false); },
+    existe: alvo => { const { target } = Kiro.parseWikiLink(alvo); return !target || Boolean(Kiro.findLinkedNote(state.notes, target)); },
     aoTeclar: evento => Boolean(sugestao && teclaNaSugestao(evento)),
     aoMoverCursor: () => atualizarSugestoes(editorDaNota?.editor.area()),
     aoColar: evento => {
       const arquivos = imagensDoEvento(evento.clipboardData || evento.dataTransfer);
-      if (!arquivos.length) return false;
+      if (!arquivos.length) {
+        const tabela=evento.clipboardData&&Kiro.csvParaTabela(evento.clipboardData.getData('text/plain'));
+        if(!tabela)return false;
+        const area=editorDaNota.editor.area(), antes=area.value.slice(0,area.selectionStart), depois=area.value.slice(area.selectionEnd);
+        evento.preventDefault();inserirTexto(area,(antes&&!antes.endsWith('\n')?'\n':'')+tabela+(depois&&!depois.startsWith('\n')?'\n':''));return true;
+      }
       evento.preventDefault();
       colarImagens(editorDaNota.editor.area(), arquivos);
       return true;
@@ -2071,8 +2481,10 @@ function opcoesDoEditor({ atual = () => editorDaNota?.editor, menu = menuDaNota 
     widgets: {
       desenharFormula: (tex, bloco) => matematica(tex, bloco),
       desenharImagem: texto => { const img = lerImagem(texto); return img ? htmlDaImagem(img) : null; },
+      desenharPdf: texto => { const pdf = Kiro.lerPdf ? Kiro.lerPdf(texto) : null; return pdf ? htmlDoPdf(pdf) : null; },
+      desenharAudio: texto => htmlDoAudio(texto),
       abrirImagem: (caminho, nome) => abrirImagemInteira(urlDoAnexo(caminho), nome),
-      abrirNota: alvo => abrirNota(Kiro.findLinkedNote(state.notes, alvo) || notaVazia({ title: alvo })),
+      abrirNota: alvo => { const { target, ref } = Kiro.parseWikiLink(alvo); if (!target && ref && editing) { const a = Kiro.resolverAncoraNaNota(editing.body, ref); if (a) rolarParaTitulo(a.pos); return; } return abrirNota(Kiro.findLinkedNote(state.notes, target) || notaVazia({ title: target }), { ancora: ref }); },
       abrirSite: url => { const limpa = Kiro.safeUrl(url); if (limpa) window.open(limpa, '_blank', 'noopener,noreferrer'); },
       buscarEtiqueta: texto => buscarEtiqueta(texto),
       copiar: async texto => { const ok = await copiarTexto(texto); if (!ok) status(t('O navegador não liberou a área de transferência.'), true); return ok; },
@@ -2084,13 +2496,18 @@ function opcoesDoEditor({ atual = () => editorDaNota?.editor, menu = menuDaNota 
   };
 }
 // Caixinha da tarefa citada numa nota: conclui ou reabre a tarefa e redesenha só as citações e o contador.
-function alternarTarefa(id) {
+async function alternarTarefa(id) {
   const tarefa = state.tasks.find(x => x.id === id);
   if (!tarefa || busy || failed || !loaded) return;
+  const antes = state.tasks;
   state.tasks = state.tasks.map(x => x.id === id ? { ...x, done: !x.done } : x);
-  save();
+  criarProximas(antes);
+  const salvo = await save();
   updateCount();
   editorDaNota?.editor.redesenhar?.();
+  if (salvo) status(tarefa.done
+    ? t('Tarefa {titulo} reaberta.', { titulo: tarefa.title })
+    : t('Tarefa {titulo} concluída.', { titulo: tarefa.title }));
 }
 const infoDaTarefaCitada = id => { const x = state.tasks.find(y => y.id === id); return x ? { titulo: x.title, feita: x.done, data: dateLabel(x.due), atrasada: !x.done && x.due < today() } : null; };
 async function montarEditorDaNota(corpo) {
@@ -2105,7 +2522,7 @@ async function montarEditorDaNota(corpo) {
   catch {
     status(t('Não foi possível carregar o editor'), true);
     const campo = Object.assign(document.createElement('textarea'), { className: 'doc-corpo-simples', value: editing.body });
-    campo.addEventListener('input', () => { editing.body = campo.value; editorDirty = true; estadoDoc(); });
+    campo.addEventListener('input', () => { editing.body = campo.value; editorDirty = true; estadoDoc(); atualizarFoco(); });
     corpo.replaceChildren(campo);
     return null;
   }
@@ -2237,6 +2654,19 @@ function textoDoResumo(nos, ligacoes) {
   return `${volta}${notas === 1 ? t('1 nota') : t('{n} notas', { n: notas })} · ${ligacoes.length === 1 ? t('1 ligação') : t('{n} ligações', { n: ligacoes.length })}`;
 }
 
+function listaDasLigacoes({ nos, arestas }, aceita = () => true) {
+  const porId = new Map(nos.map(no => [no.id, no]));
+  const rotulo = no => {
+    const texto = escapeHtml(no.rotulo);
+    if (no.tipo === 'nota') return `<button type="button" class="quiet-button" data-action="edit-note" data-id="${escapeHtml(no.id)}">${texto}</button>`;
+    if (no.tipo === 'tarefa') return `<button type="button" class="quiet-button" data-action="edit-task" data-id="${escapeHtml(no.tarefaId)}">${texto}</button>`;
+    return `<span>${texto}${no.tipo === 'fantasma' ? ` (${t('Nota inexistente')})` : ''}</span>`;
+  };
+  const linhas = arestas.filter(a => porId.has(a.de) && porId.has(a.para) && (aceita(porId.get(a.de)) || aceita(porId.get(a.para))))
+    .map(a => `<li>${rotulo(porId.get(a.de))} <span>${t('liga a')}</span> ${rotulo(porId.get(a.para))}</li>`);
+  return linhas.length ? `<ul>${linhas.join('')}</ul>` : `<p class="small-muted">${t('Nenhuma ligação com os filtros atuais.')}</p>`;
+}
+
 function renderGraph() {
   const { nos, arestas } = grafoDados();
   const resumo = escapeHtml(textoDoResumo(nos, arestas));
@@ -2247,6 +2677,7 @@ function renderGraph() {
   <svg id="graph-svg" role="img" aria-label="${t('Grafo de conexões entre as notas')}"></svg>
   ${vazio}
   <span class="grafo-resumo small-muted">${resumo}</span>
+  <details class="grafo-lista"><summary>${t('Ligações em texto')}</summary><div id="grafo-ligacoes">${listaDasLigacoes({ nos, arestas })}</div></details>
   <button class="icon-button grafo-abrir" id="grafo-abrir" title="${t('Mostrar opções')}" aria-label="${t('Mostrar opções')}">${icone('detalhes')}</button>
   <aside class="grafo-painel" id="grafo-painel" aria-label="${t('Opções do grafo')}">
     ${grafoSecao('filtros', t('Filtros'), `
@@ -2297,7 +2728,20 @@ function bindGraph() {
   const raio = no => (4.5 + Math.sqrt(no.entradas || 0) * 3.4) * grafoOpcoes.tamanho;
   // "procura", não "texto": no.texto é o elemento <text> do rótulo, criado no desenho.
   const procuravel = no => Kiro.normalize(no.procura || no.rotulo);
-  const corDoNo = no => grafoOpcoes.grupos.find(g => g.consulta.trim() && procuravel(no).includes(Kiro.normalize(g.consulta)))?.cor || '';
+  const caminhosDasPastas = () => Kiro.folderPaths(state.folders || []);
+  const bateConsultaNo = (no, consulta) => {
+    const q = String(consulta || '').trim();
+    if (!q) return false;
+    if (no.tipo === 'nota') {
+      const nota = getNote(no.id);
+      if (nota) {
+        const caminhos = caminhosDasPastas();
+        return Kiro.avaliarConsulta(Kiro.compilarConsulta(q), nota, { caminhoDaPasta: n => (n && n.folderId && caminhos.get(n.folderId)) || '' });
+      }
+    }
+    return procuravel(no).includes(Kiro.normalize(q));
+  };
+  const corDoNo = no => grafoOpcoes.grupos.find(g => g.consulta.trim() && bateConsultaNo(no, g.consulta))?.cor || '';
 
   function medir() {
     largura = Math.max(320, tela.clientWidth);
@@ -2324,6 +2768,7 @@ function bindGraph() {
   // Aparência sem refazer o desenho: tamanho, cor, grossura, setas, busca e rótulos.
   function pintar() {
     const busca = Kiro.normalize(grafoOpcoes.busca.trim());
+    $('#grafo-ligacoes').innerHTML = listaDasLigacoes({ nos, arestas: ligacoes.map(l => ({ de: l.a.id, para: l.b.id })) }, no => !busca || bateConsultaNo(no, grafoOpcoes.busca));
     // Cor padrão = a do tema (--graph-node); só uma cor escolhida no painel vai inline.
     const corSolta = corValida(grafoOpcoes.corSolta) && grafoOpcoes.corSolta.toUpperCase() !== GRAFO_PADRAO.corSolta ? grafoOpcoes.corSolta : '';
     if (corSolta) tela.style.setProperty('--grafo-solta', corSolta); else tela.style.removeProperty('--grafo-solta');
@@ -2333,7 +2778,7 @@ function bindGraph() {
       no.alvo.setAttribute('r', r + 9);
       no.texto.setAttribute('y', r + 13);
       no.circulo.style.fill = corDoNo(no);
-      no.el.classList.toggle('filtrado', Boolean(busca) && !procuravel(no).includes(busca));
+      no.el.classList.toggle('filtrado', Boolean(busca) && !bateConsultaNo(no, grafoOpcoes.busca));
     }
     for (const l of ligacoes) {
       // Estilo embutido, não atributo: o atributo perde para a regra .graph-edge do CSS.
@@ -2598,6 +3043,23 @@ function htmlDaImagem({ caminho, largura }) {
   const nome = escapeHtml(caminho.split('/').pop());
   return `<span class="md-imagem" data-nome="${nome}"><img src="${escapeHtml(urlDoAnexo(caminho))}" alt="${nome}" draggable="false"${largura ? ` style="width:${largura}px"` : ''} /><span class="md-alca" title="${t('Arraste para redimensionar')}" aria-hidden="true"></span></span>`;
 }
+function htmlDoAudio(caminho){
+  caminho=String(caminho).trim();
+  if(!Kiro.isAudioPath(caminho)||/[:\\]|\.\.|^\//.test(caminho))return '';
+  return `<audio controls preload="metadata" src="${escapeHtml(urlDoAnexo(caminho))}" aria-label="${escapeHtml(caminho.split('/').pop())}"></audio>`;
+}
+// PDF em nota: o webview nunca recebe os bytes do PDF — cada página é um <img>
+// rasterizado pelo PDF.js (pdf-nota.js), pedido à medida que se rola. O iframe do
+// visor nativo saiu de cena: no Electron ele nem renderiza, e entregar um PDF
+// hostil ao viewer nativo é justamente o que o desenho do OpenSIDian evita.
+function htmlDoPdf(pdf) {
+  if (!pdf) return '';
+  const nome = escapeHtml(pdf.arquivo.split('/').pop());
+  const caminho = escapeHtml(pdf.arquivo);
+  const url = `${urlDoAnexo(pdf.arquivo)}${pdf.pagina ? `#page=${pdf.pagina}` : ''}`;
+  const alt = pdf.altura || 480;
+  return `<details class="md-pdf" data-pdf="${caminho}"${pdf.pagina ? ` data-pagina="${pdf.pagina}"` : ''}><summary class="md-pdf-topo"><span class="md-pdf-titulo">${icone('direita')} ${icone('notas')} ${nome}${pdf.pagina ? ` · p. ${pdf.pagina}` : ''}<span class="md-pdf-total"></span></span><span class="md-pdf-acoes"><span class="md-pdf-mostrar">${t('Mostrar PDF')}</span><span class="md-pdf-recolher">${t('Recolher PDF')}</span><a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer" class="secondary cfg-pequeno md-pdf-abrir">${t('Abrir')}</a></span></summary><div class="md-pdf-paginas" style="height:${alt}px"></div></details>`;
+}
 // As imagens de um trecho da fonte, na mesma ordem em que mdInline as desenha: as
 // crases são mascaradas antes, porque o que está em código não vira imagem.
 function imagensNaFonte(fonte) {
@@ -2634,7 +3096,10 @@ function mdInline(texto) {
     // links, para o [[...]] de dentro não virar ligação entre notas.
     .replace(/!\[\[([^\][\n]+)\]\]/g, (inteiro, dentro) => {
       const imagem = lerImagem(desescapar(dentro));
-      return imagem ? reservar(htmlDaImagem(imagem)) : inteiro;
+      if (imagem) return reservar(htmlDaImagem(imagem));
+      const pdf = Kiro.lerPdf ? Kiro.lerPdf(desescapar(dentro)) : null;
+      if(pdf)return reservar(htmlDoPdf(pdf));
+      const audio=htmlDoAudio(desescapar(dentro));return audio?reservar(audio):inteiro;
     })
     .replace(/\[\[tarefa:([^\][\n|]+)(?:\|([^\][\n]*))?\]\]/gi, (_, id, rotulo = '') => {
       const info = infoDaTarefaCitada(desescapar(id.trim()));
@@ -2646,8 +3111,8 @@ function mdInline(texto) {
       const [alvoBruto, rotuloBruto] = dentro.split('|');
       const alvo = alvoBruto.split('#')[0].trim();
       const rotulo = (rotuloBruto || alvoBruto).trim();
-      const nota = Kiro.findLinkedNote(state.notes, desescapar(alvo));
-      return reservar(`<a class="wikilink${nota ? '' : ' ausente'}" data-alvo="${alvo}"${nota ? ` data-id="${nota.id}"` : ''} title="${nota ? t('Abrir nota') : t('Nota ainda não criada')}">${rotulo}</a>`);
+      { const { target: alvoDes, ref: ancora } = Kiro.parseWikiLink(desescapar(alvoBruto)); const nota = alvoDes ? Kiro.findLinkedNote(state.notes, alvoDes) : editing; return reservar(`<a class="wikilink${nota ? '' : ' ausente'}" data-alvo="${alvo}"${ancora ? ` data-ancora="${escapeHtml(ancora)}"` : ''}${nota?.id ? ` data-id="${nota.id}"` : ''} title="${nota ? t('Abrir nota') : t('Nota ainda não criada')}">${rotulo}</a>`); }
+      { const { target: alvoDes, ref: ancora } = Kiro.parseWikiLink(desescapar(alvoBruto)); const nota = alvoDes ? Kiro.findLinkedNote(state.notes, alvoDes) : editing; return reservar(`<a class="wikilink${nota ? '' : ' ausente'}" data-alvo="${alvo}"${ancora ? ` data-ancora="${escapeHtml(ancora)}"` : ''}${nota?.id ? ` data-id="${nota.id}"` : ''} title="${nota ? t('Abrir nota') : t('Nota ainda não criada')}">${rotulo}</a>`); }
     })
     .replace(/\[([^\][\n]*)\]\(([^)\s]+)\)/g, (inteiro, rotulo, url) => {
       const limpa = Kiro.safeUrl(desescapar(url));
@@ -2664,7 +3129,7 @@ function mdInline(texto) {
 
 /** Converte o Markdown em HTML. Cada bloco guarda em data-pos e data-fim o trecho
  *  da fonte que ocupa, somado a `base` quando só um pedaço da nota é desenhado. */
-function renderizarMarkdown(fonte, base = 0) {
+function renderizarMarkdown(fonte, base = 0, impressao = false) {
   const linhas = fonte.split('\n');
   const saida = [];
   let posicao = 0, i = 0;
@@ -2685,7 +3150,7 @@ function renderizarMarkdown(fonte, base = 0) {
       const ate = Math.min(j + 1, linhas.length);
       // ```kiro:<id>: o plug-in desenha depois; a fonte fica na nota, intacta.
       const doPlugin = cerca[1].trim().match(/^kiro:([a-z0-9][a-z0-9-]{1,39})$/);
-      if (doPlugin) {
+      if (doPlugin && !impressao) {
         const fonteDoBloco = corpo.join('\n').replace(/\r$/gm, ''); // a mesma fonte que o editor manda (sem \r)
         saida.push(htmlDoBlocoPlugin(doPlugin[1], fonteDoBloco, abrir(inicio, ate)));
         avancar(ate - i);
@@ -2713,6 +3178,14 @@ function renderizarMarkdown(fonte, base = 0) {
       avancar(j - i); i = j; continue;
     }
     if (!linha.trim()) { avancar(1); i++; continue; }
+    const cabecalho=Kiro.celulasTabela(linha), separador=Kiro.celulasTabela(linhas[i+1]||'');
+    if(cabecalho?.length>=2&&separador?.length===cabecalho.length&&separador.every(c=>/^:?-{3,}:?$/.test(c))){
+      const linhasTabela=[];let j=i+2;
+      while(j<linhas.length){const c=Kiro.celulasTabela(linhas[j]);if(!c||c.length!==cabecalho.length)break;linhasTabela.push(c);j++;}
+      const celula=c=>escapeHtml(c).replace(/\\([\\|])/g,'$1').replace(/&lt;br&gt;/g,'<br>');
+      saida.push(`<table ${abrir(inicio,j)}><thead><tr>${cabecalho.map(c=>`<th scope="col">${celula(c)}</th>`).join('')}</tr></thead><tbody>${linhasTabela.map(l=>`<tr>${l.map(c=>`<td>${celula(c)}</td>`).join('')}</tr>`).join('')}</tbody></table>`);
+      avancar(j-i);i=j;continue;
+    }
     if (/^(-{3,}|\*{3,})\s*$/.test(linha)) { saida.push(`<hr ${abrir(inicio, i + 1)} />`); avancar(1); i++; continue; }
     const titulo = linha.match(/^(#{1,6})\s+(.*)$/);
     if (titulo) {
@@ -2755,12 +3228,46 @@ function renderizarMarkdown(fonte, base = 0) {
     // crase sobrando) não virava bloco nenhum e o laço nunca avançava.
     const paragrafo = [linhas[i]];
     let j = i + 1;
-    while (j < linhas.length && linhas[j].trim() && !/^(#{1,6}\s|>|```|[-*+]\s|\d+\.\s|-{3,}\s*$)/.test(linhas[j])) paragrafo.push(linhas[j++]);
+    while (j < linhas.length && linhas[j].trim() && !/^(#{1,6}\s|>|```|[-*+]\s|\d+\.\s|-{3,}\s*$)/.test(linhas[j])) {
+      const colunas=Kiro.celulasTabela(linhas[j]), divisao=Kiro.celulasTabela(linhas[j+1]||'');
+      if(colunas?.length>=2&&divisao?.length===colunas.length&&divisao.every(c=>/^:?-{3,}:?$/.test(c)))break;
+      paragrafo.push(linhas[j++]);
+    }
     saida.push(`<p ${abrir(inicio, j)}>${mdInline(escapeHtml(paragrafo.join('\n'))).replace(/\n/g, '<br />')}</p>`);
     avancar(j - i); i = j;
   }
   return saida.join('');
 }
+
+// ---- Impressão da nota: usa o rascunho atual sem gravar ou trocar a nota aberta ----
+let impressaoEmCurso = false;
+async function imprimirNota(pdf = false) {
+  if (!editing || impressaoEmCurso) return;
+  impressaoEmCurso = true;
+  const tituloAnterior = document.title;
+  const titulo = editing.title || t('Sem título');
+  const folha = document.createElement('article');
+  folha.id = 'nota-impressao';
+  folha.className = 'doc-corpo';
+  try {
+    // Blocos de plug-ins saem como código: imprimir nunca executa o plug-in.
+    folha.innerHTML = `<h1>${escapeHtml(titulo)}</h1>${renderizarMarkdown(editing.body, 0, true)}`;
+    document.body.appendChild(folha);
+    document.title = titulo;
+    await document.fonts?.ready;
+    await Promise.allSettled([...folha.querySelectorAll('img')].map(imagem => imagem.decode()));
+    if (pdf && window.cadernoDesktop?.exportNotePdf) await window.cadernoDesktop.exportNotePdf(titulo);
+    else if (window.cadernoDesktop?.printNote) await window.cadernoDesktop.printNote();
+    else window.print();
+  } catch {
+    status(t('Não foi possível imprimir ou exportar esta nota.'), true);
+  } finally {
+    folha.remove();
+    document.title = tituloAnterior;
+    impressaoEmCurso = false;
+  }
+}
+// ---- Fim da impressão da nota ----
 
 // ---- Blocos de código ----
 // O corpo continua sendo Markdown puro: a área de código só insere as cercas ```,
@@ -2810,7 +3317,7 @@ async function buscarEtiqueta(texto) {
 }
 function seguirWikilink(link, painel) {
   const alvo = link.dataset.id ? getNote(link.dataset.id) : notaVazia({ title: link.dataset.alvo });
-  return abrirNota(alvo, { painel });
+  const ancora = link.dataset.ancora || ''; if (!link.dataset.alvo && ancora && editing) { const a = Kiro.resolverAncoraNaNota(editing.body, ancora); if (a) rolarParaTitulo(a.pos); return; } return abrirNota(alvo, { painel, ancora });
 }
 // Cursor no fim do texto da nota. Sem editor montado (ainda carregando, ou no modo simples
 // quando o editor não carregou) devolve null: quem chama desiste, em vez de abrir um segundo
@@ -2831,7 +3338,7 @@ function atualizarSugestoes(campo) {
   if (!campo) return fecharSugestoes();
   const cursor = campo.selectionStart, antes = campo.value.slice(0, cursor);
   const consulta = cursor === campo.selectionEnd ? Kiro.linkQuery(antes.slice(antes.lastIndexOf('\n') + 1)) : null;
-  const notas = consulta === null ? [] : Kiro.linkSuggestions(state.notes.filter(n => n.id !== editing?.id), consulta).map(titulo => ({ rotulo: titulo, inserir: titulo + ']]' }));
+  const notas = consulta === null ? [] : Kiro.linkSuggestions(state.notes.filter(n => n.id !== editing?.id), consulta, 8, editing).map(titulo => ({ rotulo: titulo, inserir: titulo + ']]' }));
   const procura = consulta ? Kiro.normalize(consulta.replace(/^tarefa:/i, '')) : '';
   const tarefas = !procura ? [] : state.tasks.filter(x => !x.done && Kiro.normalize(x.title).includes(procura)).slice(0, 5).map(x => ({ rotulo: x.title, tarefa: true, inserir: Kiro.taskReference(x).slice(2) }));
   const titulos = [...notas, ...tarefas];
@@ -2890,8 +3397,46 @@ function posicaoDoCursor(campo) {
 }
 
 // ---- Colar, arrastar e redimensionar imagens ----
-const TIPOS_DE_IMAGEM = ['image/png', 'image/jpeg', 'image/gif', 'image/webp'];
-const LIMITE_DE_IMAGEM = 20 * 1024 * 1024;
+const TIPOS_DE_IMAGEM = ['image/png', 'image/jpeg', 'image/gif', 'image/webp', 'application/pdf'];
+const LIMITE_DE_IMAGEM = 250 * 1024 * 1024;
+const LIMITE_DE_AUDIO = 50 * 1024 * 1024;
+let gravacaoAudio=null;
+function contextoAudio(){return {nota:editing,cofre:state.vaultPath,editor:editorDaNota?.editor};}
+function contextoAudioValido(c){return editing===c.nota&&state.vaultPath===c.cofre&&editorDaNota?.editor===c.editor;}
+async function inserirAudio(arquivo,contexto){
+  if(!contextoAudioValido(contexto)||arquivo.size>LIMITE_DE_AUDIO){status(t('Não foi possível adicionar o áudio.'),true);return;}
+  try{
+    const dados=await arquivo.arrayBuffer();if(!contextoAudioValido(contexto))return;
+    let resultado;
+    if(window.cadernoDesktop)resultado=await window.cadernoDesktop.saveAttachment({nome:arquivo.name||'audio.webm',dados:new Uint8Array(dados)});
+    else {const tipo=/\.wav$/i.test(arquivo.name)?'audio/wav':/\.mp3$/i.test(arquivo.name)?'audio/mpeg':'audio/webm';const resposta=await fetch('/api/anexo',{method:'POST',headers:{'Content-Type':tipo,'X-Kiro-Nome':encodeURIComponent(arquivo.name||'audio.webm')},body:dados});resultado=await resposta.json();if(!resposta.ok)throw new Error(resultado.error);}
+    if(!contextoAudioValido(contexto))return;
+    inserirTexto(contexto.editor.area(),`\n\n![[${resultado.path}]]\n\n`);status(t('Áudio adicionado.'));
+  }catch(erro){status(t('Não foi possível adicionar o áudio: {erro}',{erro:mensagemDoErro(erro)}),true);}
+}
+function escolherAudio(){
+  if(!editing||!editorDaNota?.editor)return;
+  const contexto=contextoAudio(), campo=document.createElement('input');campo.type='file';campo.accept='.wav,.mp3,.webm,audio/wav,audio/mpeg,audio/webm';
+  campo.onchange=()=>{const arquivo=campo.files?.[0];if(arquivo&&contextoAudioValido(contexto))inserirAudio(arquivo,contexto);};campo.click();
+}
+async function gravarAudio(){
+  if(gravacaoAudio){gravacaoAudio.parar();return;}
+  if(!editing||!editorDaNota?.editor)return;
+  const contexto=contextoAudio(), sessao={contexto,parar:()=>{sessao.cancelada=true;}};gravacaoAudio=sessao;
+  let stream;
+  try{
+    stream=await navigator.mediaDevices.getUserMedia({audio:true});
+    if(sessao.cancelada||!contextoAudioValido(contexto)){stream.getTracks().forEach(t=>t.stop());gravacaoAudio=null;return;}
+    if(!MediaRecorder.isTypeSupported('audio/webm'))throw new Error(t('Gravação de áudio não suportada.'));
+    const recorder=new MediaRecorder(stream,{mimeType:'audio/webm'}), partes=[];let tamanho=0, falhou=false;
+    const limpar=()=>{clearTimeout(timer);stream.getTracks().forEach(t=>t.stop());if(gravacaoAudio===sessao)gravacaoAudio=null;const botao=$('#doc-gravar');if(botao)botao.textContent=t('Gravar áudio');};
+    sessao.parar=()=>{if(recorder.state!=='inactive')recorder.stop();};
+    recorder.ondataavailable=e=>{tamanho+=e.data.size;if(tamanho>LIMITE_DE_AUDIO){falhou=true;sessao.parar();}else if(e.data.size)partes.push(e.data);};
+    recorder.onerror=()=>{falhou=true;sessao.parar();limpar();status(t('Não foi possível gravar áudio.'),true);};
+    recorder.onstop=()=>{limpar();if(!falhou&&partes.length&&contextoAudioValido(contexto))inserirAudio(new File(partes,'gravacao.webm',{type:'audio/webm'}),contexto);else if(falhou)status(t('Não foi possível gravar áudio.'),true);};
+    const timer=setTimeout(()=>sessao.parar(),10*60*1000);recorder.start(1000);$('#doc-gravar').textContent=t('Parar gravação');
+  }catch(erro){stream?.getTracks().forEach(t=>t.stop());if(gravacaoAudio===sessao)gravacaoAudio=null;status(t('Não foi possível gravar áudio: {erro}',{erro:mensagemDoErro(erro)}),true);}
+}
 
 function imagensDoEvento(dados) {
   if (!dados) return [];
@@ -2922,7 +3467,7 @@ function escolherImagemDoSistema() {
 }
 // Mesmo limite e mesmo aviso da imagem colada numa nota; devolve o caminho ou null.
 async function guardarImagemDoFluxo(arquivo) {
-  if (arquivo.size > LIMITE_DE_IMAGEM) { status(t('{nome} passa de 20 MB.', { nome: arquivo.name || t('A imagem') }), true); return null; }
+  if (arquivo.size > LIMITE_DE_IMAGEM) { status(t('{nome} passa de 250 MB.', { nome: arquivo.name || t('A imagem') }), true); return null; }
   try { return (await guardarImagem(arquivo)).path; }
   catch (erro) { status(t('Não foi possível guardar a imagem: {erro}', { erro: mensagemDoErro(erro) }), true); return null; }
 }
@@ -2950,7 +3495,7 @@ async function colarImagens(campo, arquivos) {
   status(arquivos.length > 1 ? t('Guardando {n} imagens…', { n: arquivos.length }) : t('Guardando imagem…'));
   const trechos = [];
   for (const arquivo of arquivos) {
-    if (arquivo.size > LIMITE_DE_IMAGEM) { status(t('{nome} passa de 20 MB.', { nome: arquivo.name || t('A imagem') }), true); continue; }
+    if (arquivo.size > LIMITE_DE_IMAGEM) { status(t('{nome} passa de 250 MB.', { nome: arquivo.name || t('A imagem') }), true); continue; }
     try { trechos.push(`![[${(await guardarImagem(arquivo)).path}]]`); }
     catch (erro) { status(t('Não foi possível guardar a imagem: {erro}', { erro: mensagemDoErro(erro) }), true); }
   }
@@ -2979,6 +3524,16 @@ document.addEventListener('paste', evento => {
 // Arquivo solto fora da nota não deve abrir a imagem no lugar do aplicativo.
 window.addEventListener('dragover', evento => { if (evento.dataTransfer?.types.includes('Files')) evento.preventDefault(); });
 window.addEventListener('drop', evento => { if (evento.dataTransfer?.types.includes('Files')) evento.preventDefault(); });
+// Abrir o PDF no leitor do sistema: no desktop o esquema kiro-anexo:// não abre em
+// aba (o window.open dele é negado), então o botão sai pelo shell, com o caminho
+// resolvido dentro do cofre. No navegador o link segue normal, para /anexo/.
+document.addEventListener('click', evento => {
+  const botao = evento.target.closest?.('.md-pdf-abrir');
+  if (!botao || !window.cadernoDesktop) return;
+  evento.preventDefault();
+  const caminho = botao.closest('.md-pdf')?.dataset.pdf;
+  if (caminho) window.cadernoDesktop.openAttachment(caminho).catch(() => { /* sem leitor padrão: fica quieto */ });
+});
 
 // Clicar na imagem abre ela inteira sobre a nota; Esc ou um clique fecham. O
 // Markdown da imagem continua a um clique do botão direito, como nos outros blocos.
@@ -3270,8 +3825,10 @@ async function salvarNota(){
   if(!editing.title.trim()){status(t('Dê um título à nota antes de salvar.'),true);$('#doc-title')?.focus();return false;}
   const eraNova=!editing.id;
   const salva={...editing,id:editing.id||uid(),title:editing.title.trim(),createdAt:editing.createdAt||Date.now(),updatedAt:Date.now()};
+  const antes=editing.id?getNote(editing.id):null;
   state.notes=editing.id?state.notes.map(n=>n.id===editing.id?salva:n):[salva,...state.notes];
-  editing=salva;
+  if(antes&&antes.title!==salva.title)state=Kiro.aplicarRenomeacaoDeLinks(state,salva.id,antes.title,salva.title).state;
+  editing=getNote(salva.id)||salva;
   if(eraNova){abas=KiroAbas.trocarId(abas,KiroAbas.RASCUNHO,salva.id);gravarAbas();}
   // O rascunho virou nota com id: o mesmo editor continua (cursor e desfazer intactos).
   if(eraNova&&editorDaNota?.chave==='rascunho')editorDaNota.chave=chaveDaNota(salva);
@@ -3288,7 +3845,7 @@ async function extraAction(type,id){
     const pastas=state.folders.slice().sort((a,b)=>KiroIdiomas.comparar(a.path || a.title, b.path || b.title));
     abrirMenuContexto({preventDefault(){},clientX:r.left,clientY:r.bottom},document.body,pastas.length?pastas.map(f=>({rotulo:f.path||f.title,icone:icone('pastas'),acao:()=>tirarDaCaixa(id,f.id)})):[{rotulo:t('Nenhuma pasta ainda'),icone:icone('pastas'),ativo:()=>false,acao:()=>{}}]);
   }
-  if(type==='daily')abrirNota(state.notes.find(n=>n.title===today())||notaVazia({title:today(),body:templates.daily.body,tags:['diario']}));
+  if(type==='daily')abrirNota(state.notes.find(n=>n.title===today())||notaVazia({title:today(),body:catalogoDeModelos().find(m=>m.chave==='embutido:daily').body,tags:['diario']}));
   if(type==='add-habit') habitoModal();
   if(type==='habit-stats') habitosModal();
   if(type==='continuar'){const nota=getNote(id);if(nota){await abrirNota(nota);await montagemDoEditor;if(editing?.id===id&&!abrirNoFim()){const c=$('#doc-corpo .doc-corpo-simples');if(c){c.focus();c.setSelectionRange(c.value.length,c.value.length);}}}}
@@ -3297,6 +3854,40 @@ async function extraAction(type,id){
 // subpastas, anexos e os identificadores originais. Reconstruir isso aqui, como
 // se fazia antes, quebrava com pastas e travava a janela.
 const restaurarDoCofre = pedido => window.cadernoDesktop ? window.cadernoDesktop.restore(pedido) : api('restore', pedido);
+async function mostrarHistoricoNota(){
+  if(!loaded||failed||busy||!editing?.id)return;
+  const noteId=editing.id, cofre=state.vaultPath;
+  if(!await salvarAntesDeTrocar()||editing?.id!==noteId||state.vaultPath!==cofre)return;
+  setBusy(true);
+  try{
+    const itens=window.cadernoDesktop?await window.cadernoDesktop.history({noteId}):await api('history',{noteId});
+    if(editing?.id!==noteId||state.vaultPath!==cofre||editorDirty)return;
+    modal(t('Histórico da nota'), itens.length ? `<div class="form"><label for="historico-versao">${t('Versão')}</label><select id="historico-versao">${itens.map(i=>`<option value="${escapeHtml(i.snapshotId)}">${escapeHtml(KiroIdiomas.formatarData(new Date(i.when),{year:'numeric',month:'short',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit'}))}</option>`).join('')}</select><pre id="historico-previa" style="white-space:pre-wrap;max-height:45vh;overflow:auto"></pre><div class="form-actions"><button type="button" class="secondary" id="historico-fechar">${t('Fechar')}</button><button type="button" class="primary" id="historico-restaurar">${t('Restaurar conteúdo')}</button></div></div>` : `<p>${t('Nenhuma versão disponível.')}</p>`);
+    if(!itens.length)return;
+    const seletor=$('#historico-versao'), previa=$('#historico-previa'), restaurar=$('#historico-restaurar');
+    const carregar=async()=>{
+      const snapshotId=seletor.value;restaurar.disabled=true;previa.textContent=t('Carregando…');
+      try{const versao=window.cadernoDesktop?await window.cadernoDesktop.readHistory({noteId,snapshotId}):await api('history-read',{noteId,snapshotId});
+        if(seletor.isConnected&&seletor.value===snapshotId&&editing?.id===noteId&&state.vaultPath===cofre){previa.textContent=versao.body;restaurar.disabled=false;}
+      }catch(erro){if(seletor.isConnected)previa.textContent=mensagemDoErro(erro);}
+    };
+    seletor.onchange=e=>{e.stopPropagation();carregar();};$('#historico-fechar').onclick=()=>closeModal();
+    restaurar.onclick=async()=>{
+      if(busy||failed||editing?.id!==noteId||state.vaultPath!==cofre||editorDirty)return;
+      if(!confirm(t('Restaurar o conteúdo desta versão? O conteúdo atual será preservado no histórico.')))return;
+      if(!await gravarFluxoPendente()||editing?.id!==noteId||state.vaultPath!==cofre||editorDirty)return;
+      const snapshotId=seletor.value, revision=state.revision;setBusy(true);
+      try{
+        const pedido={noteId,snapshotId,revision};
+        const resultado=window.cadernoDesktop?await window.cadernoDesktop.restoreHistory(pedido):await api('history-restore',pedido);
+        if(editing?.id!==noteId||state.vaultPath!==cofre||editorDirty)return;
+        state=doCofre(resultado);const nota=getNote(noteId);editing={...nota,tags:[...(nota.tags||[])],links:[...(nota.links||[])]};
+        closeModal(true);render();eventosDoCofre(null);status(t('Conteúdo restaurado.'));
+      }catch(erro){status(t('Não foi possível restaurar: {erro}',{erro:mensagemDoErro(erro)}),true);}finally{setBusy(false);}
+    };
+    await carregar();
+  }catch(erro){status(mensagemDoErro(erro),true);}finally{setBusy(false);}
+}
 async function showTrash(){
   if(!loaded||failed||busy)return;
   try{
@@ -3344,6 +3935,44 @@ async function carregarHoje() {
   clearTimeout(hojeTimer); hojeGravavel = false;
   try { hojeLayout = KiroHoje.limpar(await hojeApi.ler()); hojeGravavel = true; }
   catch (erro) { hojeLayout = null; hojeGravavel = false; status(t('Não foi possível ler o layout da Hoje: {erro}', { erro: mensagemDoErro(erro) }), true); }
+  await carregarFavoritos();
+}
+// ---- Favoritos (.kiro/favoritos.json) ----
+const favoritosApi = {
+  ler: () => window.cadernoDesktop ? window.cadernoDesktop.bookmarks() : api('favoritos'),
+  gravar: f => window.cadernoDesktop ? window.cadernoDesktop.saveBookmarks(f) : api('favoritos', f),
+};
+let favoritos = { itens: [] };
+async function carregarFavoritos() {
+  try { favoritos = Kiro.validarFavoritos(await favoritosApi.ler()); }
+  catch { favoritos = { itens: [] }; }
+}
+async function salvarFavoritos(novos) {
+  favoritos = Kiro.validarFavoritos(novos);
+  try { await favoritosApi.gravar(favoritos); }
+  catch (erro) { status(mensagemDoErro(erro), true); }
+  if (loaded) render();
+}
+function alternarItemFavorito(item) {
+  return salvarFavoritos(Kiro.alternarFavorito(favoritos, item));
+}
+function renderFavoritosMarkup() {
+  if (!favoritos?.itens?.length) return '';
+  const desenharItem = (it, prof = 0) => {
+    if (it.tipo === 'grupo') {
+      const filhos = (it.itens || []).map(sub => desenharItem(sub, prof + 1)).join('');
+      return `<div class="tree-node${it.aberto !== false ? ' open' : ''}" data-fav-grupo="${escapeHtml(it.id)}"><div class="tree-row tree-folder" data-action="toggle-fav-group" data-id="${escapeHtml(it.id)}" style="--depth:${prof}"><span class="twisty">${filhos ? icone('direita') : ''}</span><span class="tree-icone">${icone('pastas')}</span><span class="tree-name">${escapeHtml(it.titulo)}</span></div><div class="tree-children"><div class="tree-children-inner">${filhos}</div></div></div>`;
+    }
+    const nota = it.tipo === 'nota' ? getNote(it.alvo) : null;
+    const pasta = it.tipo === 'pasta' ? state.folders.find(f => f.id === it.alvo) : null;
+    const fluxo = it.tipo === 'fluxo' ? getFluxo(it.alvo) : null;
+    if (it.tipo !== 'busca' && !nota && !pasta && !fluxo) return '';
+    const rotulo = nota ? (nota.title || t('Sem título')) : pasta ? pasta.title : fluxo ? fluxo.title : (it.titulo || it.alvo);
+    return `<div class="tree-row tree-favorito" data-fav-tipo="${escapeHtml(it.tipo)}" data-fav-alvo="${escapeHtml(it.alvo)}" style="--depth:${prof}"><span class="twisty"></span><span class="tree-icone">${icone('estrela-cheia')}</span><span class="tree-name" title="${escapeHtml(rotulo)}">${escapeHtml(rotulo)}</span><button type="button" class="icon-button fav-remover" data-remover-fav="${escapeHtml(it.tipo)}:${escapeHtml(it.alvo)}" title="${t('Remover dos favoritos')}" aria-label="${t('Remover dos favoritos')}">${icone('fechar')}</button></div>`;
+  };
+  const html = favoritos.itens.map(it => desenharItem(it, 0)).join('');
+  if (!html) return '';
+  return `<div class="cofre-favoritos"><div class="cofre-favoritos-titulo"><span>${icone('estrela-cheia')} ${t('Favoritos')}</span></div>${html}</div>`;
 }
 function gravarHojeDepois() {
   if (!hojeGravavel) return;
@@ -3476,6 +4105,13 @@ document.addEventListener('change', e => {
 document.addEventListener('input', e => {
   if (e.target.matches?.('[data-hoje-opcao], [data-hoje-visivel]')) e.stopPropagation();
 }, { capture: true });
+document.addEventListener('change', e => {
+  const campo = e.target.closest?.('[data-pasta-oculta]');
+  if (!campo) return;
+  e.stopPropagation(); modalDirty = false;
+  mudarHoje(l => ({ ...l, pastasOcultas: campo.checked ? [...new Set([...(l.pastasOcultas || []), campo.dataset.pastaOculta])] : (l.pastasOcultas || []).filter(id => id !== campo.dataset.pastaOculta) }));
+}, { capture: true });
+document.addEventListener('input', e => { if (e.target.matches?.('[data-pasta-oculta]')) e.stopPropagation(); }, { capture: true });
 // Mesma lista da Hoje, em linhas: cada controle chama KiroHoje por mudarHoje, que redesenha as duas telas.
 function conteudoDaAbaHoje() {
   const catalogo = catalogoDaHoje(), l = layoutDaHoje(catalogo), porId = new Map(catalogo.map(c => [c.id, c]));
@@ -3498,6 +4134,8 @@ function conteudoDaAbaHoje() {
     <header class="cfg-grupo-topo"><span class="cfg-texto"><span class="cfg-titulo">${t('Tela Hoje')}</span><span class="small-muted">${t('Escolha quais cartões aparecem, onde ficam e em que ordem. Também dá para arrumar direto na Hoje, em Personalizar.')}</span></span><button type="button" class="secondary cfg-pequeno" data-hoje-acao="restaurar">${icone('recarregar')} ${t('Restaurar padrão')}</button></header>
     <div class="cfg-linha"><span class="cfg-texto"><span class="cfg-titulo">${t('Colunas na Hoje')}</span><span class="small-muted">${t('Quantas colunas os cartões dividem.')}</span></span><span class="hoje-segmentos" role="group" aria-label="${t('Colunas')}">${[1, 2, 3].map(n => `<button type="button" class="hoje-seg" data-hoje-acao="colunas" data-valor="${n}" aria-pressed="${n === l.colunas}" aria-label="${n > 1 ? t('{n} colunas', { n }) : t('{n} coluna', { n })}">${n}</button>`).join('')}</span></div>
     ${linhas}
+    <header class="cfg-grupo-topo"><span class="cfg-texto"><span class="cfg-titulo">${t('Pastas ocultas na Hoje')}</span><span class="small-muted">${t('Inclui subpastas nos cartões nativos. Não criptografa dados; plug-ins podem mostrar suas próprias visões.')}</span></span></header>
+    ${state.folders.slice().sort(byTitle).map(f => `<label class="cfg-linha"><span>${escapeHtml(f.path || f.title)}</span><input type="checkbox" data-pasta-oculta="${escapeHtml(f.id)}" ${(l.pastasOcultas || []).includes(f.id) ? 'checked' : ''} /></label>`).join('')}
     <p class="small-muted cfg-rodape">${t('Guardado em {arquivo}, dentro do cofre.', { arquivo: '<code>.kiro/hoje.json</code>' })}</p>
   </section>`;
 }
@@ -3505,6 +4143,7 @@ function conteudoDaAbaHoje() {
 const pluginApi = {
   versao: () => window.cadernoDesktop ? window.cadernoDesktop.version() : api('version').then(r => r.version),
   lista: () => window.cadernoDesktop ? window.cadernoDesktop.plugins() : api('plugins'),
+  inspecionar: id => window.cadernoDesktop ? window.cadernoDesktop.inspectPlugin(id) : api('plugin-inspect', { id }),
   escolhas: () => window.cadernoDesktop ? window.cadernoDesktop.pluginChoices() : api('plugin-choices'),
   gravarEscolhas: e => window.cadernoDesktop ? window.cadernoDesktop.savePluginChoices(e) : api('plugin-choices', e),
   dados: id => window.cadernoDesktop ? window.cadernoDesktop.pluginData(id) : api(`plugin-data/${encodeURIComponent(id)}`),
@@ -4098,7 +4737,9 @@ async function executarMetodo(id, metodo, args) {
       if (campos.status !== undefined && Kiro.STATUS_DA_TAREFA.includes(campos.status)) Object.assign(nova, Kiro.moverTarefa(nova, campos.status));
       if (campos.description !== undefined) { const d = descricaoDoPlugin(campos.description); if (d) nova.description = d; else delete nova.description; }
       if (!nova.title) throw new Error(t('A tarefa precisa de um título.'));
+      const antes = state.tasks;
       state.tasks = state.tasks.map(t => t.id === tarefa.id ? nova : t);
+      criarProximas(antes);
       await gravar(id);
       return tarefaParaPlugin(nova);
     }
@@ -4159,6 +4800,9 @@ function pintarAcento(raiz, acento) {
   raiz.setProperty('--acento-texto', texto);
   raiz.setProperty('--primario-texto', texto);
 }
+// Último modo de janela pedido ao desktop; começa indefinido para a abertura sempre pedir
+// (a janela pode ter nascido transparente de uma sessão em que o tema era o Liquid Glass).
+let vidroPedido;
 function aplicarAparencia(valores) {
   const a = Kiro.aparenciaValida(valores || lerAparencia());
   temaDosIcones = a.tema;
@@ -4166,6 +4810,16 @@ function aplicarAparencia(valores) {
   const html = document.documentElement, raiz = html.style;
   html.classList.remove(...[...html.classList].filter(c => /^(tema|skin)-/.test(c)));
   html.classList.add(...Kiro.classesDaAparencia(a));
+  raiz.setProperty('--vidro-opacidade', `${100 - a.transparencia}%`);
+  const vidro = a.tema === 'liquid-glass';
+  if (!vidro) html.classList.remove('vidro-nativo');
+  if (vidro !== vidroPedido && window.cadernoDesktop?.definirVidro) {
+    vidroPedido = vidro;
+    window.cadernoDesktop.definirVidro(vidro).then(ativo => {
+      html.classList.toggle('vidro-nativo', ativo === true && html.classList.contains('tema-liquid-glass'));
+      coresDaJanela();
+    }).catch(() => html.classList.remove('vidro-nativo'));
+  }
   // Tema pronto traz as próprias variáveis (temas.css); o Personalizado põe fundos e acento inline,
   // e o destaque escolhido vale por cima de qualquer tema.
   ['--sidebar-bg', '--content-bg', ...PROPRIEDADES_DO_ACENTO].forEach(p => raiz.removeProperty(p));
@@ -4181,7 +4835,7 @@ function aplicarAparencia(valores) {
 function coresDaJanela() {
   if (!window.cadernoDesktop?.janelaPropria) return;
   const estilo = getComputedStyle(document.documentElement);
-  window.cadernoDesktop.coresDaJanela({ fundo: estilo.getPropertyValue('--sidebar-bg').trim(), simbolo: estilo.getPropertyValue('--ink').trim() });
+  window.cadernoDesktop.coresDaJanela({ fundo: estilo.getPropertyValue('--sidebar-bg').trim(), simbolo: estilo.getPropertyValue('--ink').trim(), vidro: document.documentElement.classList.contains('vidro-nativo') });
 }
 function gravarAparencia(a) {
   try { localStorage.setItem('kiro.aparencia', JSON.stringify(a)); } catch { /* janela privada: só aplica na sessão */ }
@@ -4383,9 +5037,16 @@ function pedirConsentimento(id) {
     ${itensDeChaves(m, segredosNovos)}
     ${m.page ? `<p class="small-muted plugin-tela-propria">${t('Tem uma tela própria (“{titulo}”), que aparece na barra lateral.', { titulo: escapeHtml(m.page.title) })}</p>` : ''}
     ${m.permissions.some(p => p.endsWith(':read')) ? `<p class="small-muted plugin-aviso-tela">${t('As telas de plug-in rodam isoladas e sem rede, mas o navegador não deixa bloquear por completo o envio por WebRTC. Um plug-in que lê seus dados só deve ser ativado se você confia em quem o escreveu.')}</p>` : ''}
+    <details><summary>${t('Inspecionar arquivos do plug-in')}</summary><div id="plugin-arquivos">${t('Carregando…')}</div></details>
     <p class="small-muted plugin-consentimento-nota">${t('Dá para desligar quando quiser, em Configurações → Plug-ins.')}</p>
     <div class="form-actions"><button type="button" class="secondary" id="cancel">${t('Cancelar')}</button><button type="button" class="primary" id="confirmar-plugin">${aguardando ? t('Permitir e ativar') : t('Ativar plug-in')}</button></div>`);
   const voltar = () => showSettings('plugins');
+  const area = $('#plugin-arquivos');
+  pluginApi.inspecionar(id).then(arquivos => {
+    if (!area.isConnected) return;
+    area.replaceChildren();
+    for (const arquivo of arquivos) { const detalhe = document.createElement('details'), titulo = document.createElement('summary'), codigo = document.createElement('pre'); titulo.textContent = arquivo.name; codigo.textContent = arquivo.text; detalhe.append(titulo, codigo); area.append(detalhe); }
+  }).catch(erro => { if (area.isConnected) area.textContent = t('Não foi possível inspecionar: {erro}', { erro: mensagemDoErro(erro) }); });
   $('#cancel').onclick = voltar;
   $('#confirmar-plugin').onclick = async () => {
     const botao = $('#confirmar-plugin');
@@ -4478,8 +5139,156 @@ function ligarAbaPlugins(painel) {
 }
 // ---- Fim da aba Plug-ins ----
 
+// ---- Aba Backup ----
+const backupApi = {
+  status: () => window.cadernoDesktop ? window.cadernoDesktop.backupStatus() : api('backup-status'),
+  salvar: parcial => window.cadernoDesktop ? window.cadernoDesktop.saveBackupConfig(parcial) : api('backup-config', parcial),
+  executar: opcoes => window.cadernoDesktop ? window.cadernoDesktop.runBackupNow(opcoes) : api('backup-run', opcoes || {}),
+  escolherPasta: () => window.cadernoDesktop ? window.cadernoDesktop.chooseBackupFolder() : Promise.resolve(null),
+  abrirPasta: () => window.cadernoDesktop ? window.cadernoDesktop.openBackupFolder() : Promise.resolve(''),
+};
+const DIAS_BACKUP = [[0, frase('Domingo')], [1, frase('Segunda-feira')], [2, frase('Terça-feira')], [3, frase('Quarta-feira')], [4, frase('Quinta-feira')], [5, frase('Sexta-feira')], [6, frase('Sábado')]];
+
+function formatarInstanteBackup(ms) {
+  if (!(ms > 0)) return t('Ainda não executado.');
+  return KiroIdiomas.formatarData(new Date(ms), { dateStyle: 'short', timeStyle: 'short' });
+}
+
+async function conteudoDaAbaBackup() {
+  let info;
+  try { info = await backupApi.status(); }
+  catch (erro) { return `<p class="cfg-aviso">${t('Não foi possível ler o backup: {erro}', { erro: escapeHtml(mensagemDoErro(erro)) })}</p>`; }
+  const { config, estado, drives = [] } = info;
+  const texto = (titulo, detalhe = '') => `<span class="cfg-texto"><span class="cfg-titulo">${titulo}</span>${detalhe ? `<span class="small-muted">${detalhe}</span>` : ''}</span>`;
+  const botao = (id, rotulo, nomeIcone, extra = '') => `<button type="button" class="secondary cfg-pequeno" id="${id}"${extra}>${icone(nomeIcone)} ${rotulo}</button>`;
+  const ultimaCopiaMs = Math.max(0, ...Object.values(estado?.ultimasCopias || {}).map(n => Number(n) || 0));
+  const botoesDrive = drives.map(d => `<button type="button" class="secondary cfg-pequeno" data-backup-drive="${escapeHtml(d)}">${icone('pasta-aberta')} ${t('Usar Google Drive ({caminho})', { caminho: escapeHtml(d) })}</button>`).join('');
+  const blocoDestino = window.cadernoDesktop
+    ? `<code class="cfg-caminho">${escapeHtml(config.destino || t('Nenhuma pasta escolhida.'))}</code>
+       <div class="cfg-botoes">${botao('cfg-backup-escolher', t('Escolher pasta'), 'pastas')}${botoesDrive}${config.destino ? botao('cfg-backup-abrir', t('Abrir pasta de backup'), 'pasta-aberta') : ''}</div>`
+    : `<div class="cfg-botoes"><input type="text" id="cfg-backup-destino" value="${escapeHtml(config.destino)}" placeholder="${t('Caminho completo da pasta (ex.: G:\\Meu Drive)')}" aria-label="${t('Pasta de destino do backup')}" /><button type="button" class="secondary cfg-pequeno" id="cfg-backup-salvar-destino">${t('Salvar pasta')}</button>${botoesDrive}</div>`;
+  const c = config.copias;
+  return `<section class="cfg-grupo">
+    <header class="cfg-grupo-topo">${texto(t('Backup e espelho'), t('Grava automaticamente numa pasta sincronizada (como o Google Drive para Desktop). Só funciona enquanto o Kiro está aberto.'))}</header>
+    <label class="cfg-linha cfg-chave">${texto(t('Ativar backup e espelho automáticos'), t('Quando ligado, mantém o espelho em dia e cria as cópias nas frequências escolhidas.'))}<input type="checkbox" data-backup-campo="ligado" ${config.ligado ? 'checked' : ''} /><span class="interruptor" aria-hidden="true"></span></label>
+    <div class="cfg-linha cfg-linha-coluna">${texto(t('Pasta de destino'), t('O Kiro cria uma subpasta Kiro/<nome-do-cofre> dentro do destino escolhido.'))}${blocoDestino}</div>
+    <label class="cfg-linha cfg-chave">${texto(t('Espelho contínuo das notas'), t('Mantém uma cópia aberta das notas (.md) e anexos em espelho/, pronta para ler no Drive ou usar no NotebookLM.'))}<input type="checkbox" data-backup-campo="espelho" ${config.espelho ? 'checked' : ''} /><span class="interruptor" aria-hidden="true"></span></label>
+  </section>
+  <section class="cfg-grupo">
+    <header class="cfg-grupo-topo">${texto(t('Cópias datadas (.zip)'), t('Arquivos .zip do cofre inteiro para voltar no tempo. As cópias mais antigas são apagadas automaticamente além do limite.'))}</header>
+    <div class="cfg-linha cfg-linha-coluna">
+      <label class="cfg-chave">${texto(t('Cópia por horas'), t('Cria um .zip a cada intervalo de horas enquanto o Kiro estiver aberto.'))}<input type="checkbox" data-backup-copia="horas" data-backup-prop="ligado" ${c.horas.ligado ? 'checked' : ''} /><span class="interruptor" aria-hidden="true"></span></label>
+      <div class="cfg-botoes">
+        <label class="small-muted">${t('A cada (horas)')} <input type="number" min="1" max="24" value="${c.horas.intervalo}" data-backup-copia="horas" data-backup-prop="intervalo" /></label>
+        <label class="small-muted">${t('Cópias a manter')} <input type="number" min="1" max="48" value="${c.horas.manter}" data-backup-copia="horas" data-backup-prop="manter" /></label>
+      </div>
+    </div>
+    <div class="cfg-linha cfg-linha-coluna">
+      <label class="cfg-chave">${texto(t('Cópia diária'), t('Uma cópia por dia.'))}<input type="checkbox" data-backup-copia="diaria" data-backup-prop="ligado" ${c.diaria.ligado ? 'checked' : ''} /><span class="interruptor" aria-hidden="true"></span></label>
+      <div class="cfg-botoes"><label class="small-muted">${t('Cópias a manter')} <input type="number" min="1" max="60" value="${c.diaria.manter}" data-backup-copia="diaria" data-backup-prop="manter" /></label></div>
+    </div>
+    <div class="cfg-linha cfg-linha-coluna">
+      <label class="cfg-chave">${texto(t('Cópia semanal'), t('Uma cópia por semana, a partir do dia escolhido.'))}<input type="checkbox" data-backup-copia="semanal" data-backup-prop="ligado" ${c.semanal.ligado ? 'checked' : ''} /><span class="interruptor" aria-hidden="true"></span></label>
+      <div class="cfg-botoes">
+        <label class="small-muted">${t('Dia da semana')} <select data-backup-copia="semanal" data-backup-prop="dia">${DIAS_BACKUP.map(([v, rotulo]) => `<option value="${v}"${c.semanal.dia === v ? ' selected' : ''}>${t(rotulo)}</option>`).join('')}</select></label>
+        <label class="small-muted">${t('Cópias a manter')} <input type="number" min="1" max="52" value="${c.semanal.manter}" data-backup-copia="semanal" data-backup-prop="manter" /></label>
+      </div>
+    </div>
+    <div class="cfg-linha cfg-linha-coluna">
+      <label class="cfg-chave">${texto(t('Cópia mensal'), t('Uma cópia por mês.'))}<input type="checkbox" data-backup-copia="mensal" data-backup-prop="ligado" ${c.mensal.ligado ? 'checked' : ''} /><span class="interruptor" aria-hidden="true"></span></label>
+      <div class="cfg-botoes"><label class="small-muted">${t('Cópias a manter')} <input type="number" min="1" max="36" value="${c.mensal.manter}" data-backup-copia="mensal" data-backup-prop="manter" /></label></div>
+    </div>
+  </section>
+  <section class="cfg-grupo">
+    <header class="cfg-grupo-topo">${texto(t('Status do backup'), t('Últimas execuções deste cofre neste computador.'))}</header>
+    <div class="cfg-linha">${texto(t('Último espelho'))}<span class="small-muted">${escapeHtml(formatarInstanteBackup(estado?.ultimoEspelho))}</span></div>
+    <div class="cfg-linha">${texto(t('Última cópia (.zip)'))}<span class="small-muted">${escapeHtml(formatarInstanteBackup(ultimaCopiaMs))}</span></div>
+    ${estado?.ultimoErro ? `<p class="cfg-aviso">${t('Último erro: {erro}', { erro: escapeHtml(t(estado.ultimoErro)) })}</p>` : ''}
+    <div class="cfg-linha"><div class="cfg-botoes">${botao('cfg-backup-agora', t('Fazer backup agora'), 'arquivar')}</div><span id="backup-msg" class="small-muted" role="status" aria-live="polite"></span></div>
+  </section>`;
+}
+
+async function redesenharAbaBackup() {
+  const painel = $('#painel-backup');
+  if (!painel) return;
+  const html = await conteudoDaAbaBackup();
+  if (painel.isConnected) painel.innerHTML = html;
+}
+
+function lerFormularioBackup(painel) {
+  const campo = k => painel.querySelector(`[data-backup-campo="${k}"]`);
+  const copia = (tipo, prop) => painel.querySelector(`[data-backup-copia="${tipo}"][data-backup-prop="${prop}"]`);
+  const parcial = {
+    ligado: !!campo('ligado')?.checked,
+    espelho: !!campo('espelho')?.checked,
+    copias: {
+      horas: { ligado: !!copia('horas', 'ligado')?.checked, intervalo: Number(copia('horas', 'intervalo')?.value || 6), manter: Number(copia('horas', 'manter')?.value || 8) },
+      diaria: { ligado: !!copia('diaria', 'ligado')?.checked, manter: Number(copia('diaria', 'manter')?.value || 7) },
+      semanal: { ligado: !!copia('semanal', 'ligado')?.checked, dia: Number(copia('semanal', 'dia')?.value || 0), manter: Number(copia('semanal', 'manter')?.value || 4) },
+      mensal: { ligado: !!copia('mensal', 'ligado')?.checked, manter: Number(copia('mensal', 'manter')?.value || 12) },
+    },
+  };
+  const destinoWeb = painel.querySelector('#cfg-backup-destino');
+  if (destinoWeb) parcial.destino = destinoWeb.value.trim();
+  return parcial;
+}
+
+function ligarAbaBackup(painel) {
+  if (!painel) return;
+  painel.addEventListener('change', async evento => {
+    if (evento.target.id === 'cfg-backup-destino') return;
+    const msg = painel.querySelector('#backup-msg');
+    try {
+      await backupApi.salvar(lerFormularioBackup(painel));
+      if (msg) msg.textContent = t('Salvo');
+    } catch (erro) {
+      status(t('Não foi possível salvar: {erro}', { erro: mensagemDoErro(erro) }), true);
+      redesenharAbaBackup();
+    }
+  });
+  painel.addEventListener('click', async evento => {
+    const driveBtn = evento.target.closest('[data-backup-drive]');
+    if (driveBtn) {
+      try { await backupApi.salvar({ destino: driveBtn.dataset.backupDrive }); await redesenharAbaBackup(); }
+      catch (erro) { status(t('Não foi possível salvar: {erro}', { erro: mensagemDoErro(erro) }), true); }
+      return;
+    }
+    if (evento.target.closest('#cfg-backup-escolher')) {
+      try { const res = await backupApi.escolherPasta(); if (res) await redesenharAbaBackup(); }
+      catch (erro) { status(t('Não foi possível salvar: {erro}', { erro: mensagemDoErro(erro) }), true); }
+      return;
+    }
+    if (evento.target.closest('#cfg-backup-salvar-destino')) {
+      try { await backupApi.salvar(lerFormularioBackup(painel)); await redesenharAbaBackup(); }
+      catch (erro) { status(t('Não foi possível salvar: {erro}', { erro: mensagemDoErro(erro) }), true); }
+      return;
+    }
+    if (evento.target.closest('#cfg-backup-abrir')) {
+      try { await backupApi.abrirPasta(); }
+      catch (erro) { status(mensagemDoErro(erro), true); }
+      return;
+    }
+    const botaoAgora = evento.target.closest('#cfg-backup-agora');
+    if (botaoAgora) {
+      const msg = painel.querySelector('#backup-msg');
+      botaoAgora.disabled = true;
+      if (msg) msg.textContent = t('Fazendo backup…');
+      try {
+        await backupApi.executar({ espelho: true, copia: true });
+        await redesenharAbaBackup();
+        const novoMsg = painel.querySelector('#backup-msg');
+        if (novoMsg) novoMsg.textContent = t('Backup concluído.');
+      } catch (erro) {
+        await redesenharAbaBackup();
+        status(mensagemDoErro(erro), true);
+      }
+    }
+  });
+}
+// ---- Fim da aba Backup ----
+
 // Aparência aplica na hora; as permissões de agente só no botão Salvar.
-const ABAS_CFG = [['personalizacao', frase('Aparência'), 'realce'], ['papel', frase('Papel de parede'), 'imagem'], ['editor', frase('Editor'), 'notas'], ['hoje', frase('Hoje'), 'hoje'], ['sistema', frase('Sistema'), 'pasta-aberta'], ['integracoes', frase('Integrações'), 'link'], ['plugins', frase('Plug-ins'), 'plugin'], ['atalhos', frase('Atalhos'), 'codigo']];
+const ABAS_CFG = [['personalizacao', frase('Aparência'), 'realce'], ['papel', frase('Papel de parede'), 'imagem'], ['editor', frase('Editor'), 'notas'], ['hoje', frase('Hoje'), 'hoje'], ['sistema', frase('Sistema'), 'pasta-aberta'], ['backup', frase('Backup'), 'arquivar'], ['integracoes', frase('Integrações'), 'link'], ['plugins', frase('Plug-ins'), 'plugin'], ['atalhos', frase('Atalhos'), 'codigo']];
 let abaDasConfiguracoes = 'personalizacao';
 // Fixos: fazem parte do editor e dos menus, não dá para trocar.
 const ATALHOS_FIXOS = [
@@ -4545,11 +5354,12 @@ function ligarAbaAtalhos(texto) {
 async function showSettings(aba = abaDasConfiguracoes) {
   if (busy || !loaded) return;
   let conf = null, erroConf = '';
-  const [, abaPlugins] = await Promise.all([
+  const [, abaPlugins, abaBackup] = await Promise.all([
     agentApi.load().then(c => { conf = c; }, error => { erroConf = mensagemDoErro(error); }),
     conteudoDaAbaPlugins(),
+    conteudoDaAbaBackup(),
   ]);
-  const cores = lerAparencia();
+  const cores = lerAparencia(), tamanhoInterface = aplicarTamanhoDaInterface();
   const texto = (titulo, detalhe = '', id = '') => `<span class="cfg-texto"><span class="cfg-titulo"${id ? ` id="${id}"` : ''}>${titulo}</span>${detalhe ? `<span class="small-muted">${detalhe}</span>` : ''}</span>`;
   const chave = (id, titulo, marcado, detalhe = '', extra = '') => `<label class="cfg-linha cfg-chave ${extra}">${texto(titulo, detalhe)}<input type="checkbox" data-perm="${id}" ${marcado ? 'checked' : ''} /><span class="interruptor" aria-hidden="true"></span></label>`;
   const cor = (id, titulo, valor) => `<div class="cfg-linha">${texto(titulo)}<label class="cor-ponto" title="${t('Escolher cor')}"><input type="color" data-cor="${id}" value="${valor}" aria-label="${titulo}" /></label></div>`;
@@ -4565,7 +5375,15 @@ async function showSettings(aba = abaDasConfiguracoes) {
     <div class="cfg-conteudo">
     <p class="cfg-sem-resultado small-muted" hidden>${t('Nenhuma configuração com esse nome.')}</p>
     ${painel('personalizacao', `<section class="cfg-grupo cfg-aparencia">
-      <header class="cfg-grupo-topo">${texto(t('Aparência'), t('Muda na hora e vale só para esta instalação.'))}<button type="button" class="secondary cfg-pequeno" id="cor-padrao">${icone('recarregar')} ${t('Restaurar padrão')}</button></header>
+      <header class="cfg-grupo-topo">${texto(t('Aparência'), t('Muda na hora e vale só para esta instalação.'))}<button type="button" class="secondary cfg-pequeno" id="cfg-primeiros-passos">${t('Primeiros passos')}</button><button type="button" class="secondary cfg-pequeno" id="cor-padrao">${icone('recarregar')} ${t('Restaurar padrão')}</button></header>
+      <label class="cfg-linha">${texto(t('Tamanho do texto da interface'), t('Ajusta menus e controles; o texto das notas mantém seu tamanho.'))}<select id="cfg-tamanho-interface">${[100, 115, 130, 150].map(n => `<option value="${n}"${tamanhoInterface === n ? ' selected' : ''}>${n}%</option>`).join('')}</select></label>
+      <div class="cfg-linha cfg-linha-coluna" id="cfg-vidro" ${cores.tema === 'liquid-glass' ? '' : 'hidden'}>
+        <label class="cfg-vidro-controle" for="cfg-transparencia"><span>${t('Transparência do fundo')}</span><output id="cfg-transparencia-valor" for="cfg-transparencia">${cores.transparencia}%</output></label>
+        <input type="range" id="cfg-transparencia" min="0" max="80" step="1" value="${cores.transparencia}" aria-describedby="cfg-vidro-detalhe" />
+        <p class="small-muted" id="cfg-vidro-detalhe">${t('Mais transparência revela a área de trabalho, sem apagar o texto. No navegador, o tema usa um fundo interno.')}</p>
+        <label class="cfg-chave cfg-vidro-controle"><span>${t('Fundo sólido nas notas')}</span><input type="checkbox" id="cfg-notas-solidas" ${lerPreferencia('vidroNotasSolidas') === '1' ? 'checked' : ''} /><span class="interruptor" aria-hidden="true"></span></label>
+        <label class="cfg-chave cfg-vidro-controle"><span>${t('Fundo sólido no grafo')}</span><input type="checkbox" id="cfg-grafo-solido" ${lerPreferencia('vidroGrafoSolido') === '1' ? 'checked' : ''} /><span class="interruptor" aria-hidden="true"></span></label>
+      </div>
       <div class="cfg-linha cfg-linha-coluna">${texto(t('Tema'), '', 'tema-rotulo')}
         ${[['classicos', t('Clássicos')], ['anime', t('Anime')]].map(([grupo, titulo]) => `<div class="temas-grupo"><h4 class="cfg-subtitulo">${titulo}</h4><div class="temas" role="radiogroup" aria-labelledby="tema-rotulo">${TEMAS.filter(tema => tema[2] === grupo).map(opcaoTema).join('')}</div></div>`).join('')}
         <div class="temas-grupo"><div class="temas">${opcaoTema(['personalizado', frase('Personalizado')])}</div></div>
@@ -4588,6 +5406,7 @@ async function showSettings(aba = abaDasConfiguracoes) {
         <div class="papel-controles"><span class="papel-previa" aria-hidden="true"></span><label class="secondary cfg-pequeno papel-escolher">${icone('imagem')} ${t('Escolher arquivo')}<input type="file" accept="image/*,video/mp4,video/webm" id="papel-arquivo" class="sr-only" /></label><button type="button" class="secondary cfg-pequeno papel-so-com" id="papel-remover">${icone('lixeira')} ${t('Remover')}</button></div>
         <label class="papel-veu papel-so-com"><span class="small-muted">${t('Suavizar a imagem')}</span><input type="range" id="papel-veu" min="0" max="90" step="5" value="${lerPreferencia('papelDeParedeVeu') ?? VEU_PADRAO}" /></label>
         <label class="cfg-chave papel-so-video papel-segue-sistema"><span class="small-muted">${t('Pausar o vídeo quando o sistema pede menos movimento')}</span><input type="checkbox" id="papel-segue-sistema" ${videoSegueOSistema() ? 'checked' : ''} /><span class="interruptor" aria-hidden="true"></span></label>
+        <label class="papel-veu papel-so-com papel-so-vidro"><span class="small-muted">${t('Transparência do papel de parede')}</span><input type="range" id="papel-transparencia" min="0" max="90" step="5" value="${lerPreferencia('papelTransparencia') ?? 0}" /></label>
         <label class="papel-veu papel-so-com"><span class="small-muted">${t('Opacidade dos cartões')}</span><input type="range" id="papel-opacidade" min="30" max="100" step="5" value="${lerPreferencia('papelOpacidadeCartoes') ?? 100}" /></label>
         <p class="cfg-aviso" id="papel-erro" role="status" hidden></p>
       </div>
@@ -4597,10 +5416,16 @@ async function showSettings(aba = abaDasConfiguracoes) {
       <label class="cfg-linha cfg-chave">${texto(t('Mostrar “Mencionada em”'), t('Lista, no fim da nota, as notas que apontam para ela com [[links]].'))}<input type="checkbox" id="cfg-mencoes" ${mostrarMencoes ? 'checked' : ''} /><span class="interruptor" aria-hidden="true"></span></label>
       <label class="cfg-linha cfg-chave">${texto(t('Corretor ortográfico'), t('Sublinha palavras erradas em português e em inglês, ao mesmo tempo. Botão direito sobre a palavra mostra as sugestões.'))}<input type="checkbox" id="cfg-corretor" ${corretorLigado ? 'checked' : ''} /><span class="interruptor" aria-hidden="true"></span></label>
     </section>`)}
-    ${painel('hoje', `<div id="cfg-hoje">${conteudoDaAbaHoje()}</div>`)}
+    ${painel('hoje', `<section class="cfg-grupo">
+      <header class="cfg-grupo-topo">${texto(t('Lembretes'), t('Avisa das tarefas de hoje e atrasadas e dos hábitos ainda não feitos, uma vez por dia.') + ' ' + t('Os avisos só chegam enquanto o Kiro está aberto.'))}</header>
+      <label class="cfg-linha cfg-chave">${texto(t('Lembretes'))}<input type="checkbox" id="cfg-lembretes" ${lembretesLigados() ? 'checked' : ''} /><span class="interruptor" aria-hidden="true"></span></label>
+      <div class="cfg-linha"><label for="cfg-hora-tarefas">${texto(t('Horário do aviso das tarefas'))}</label><input type="time" id="cfg-hora-tarefas" value="${horaDoLembrete('tarefas')}" /></div>
+      <div class="cfg-linha"><label for="cfg-hora-habitos">${texto(t('Horário do aviso dos hábitos'))}</label><input type="time" id="cfg-hora-habitos" value="${horaDoLembrete('habitos')}" /></div>
+    </section><div id="cfg-hoje">${conteudoDaAbaHoje()}</div>`)}
     ${painel('sistema', `<section class="cfg-grupo">
       <header class="cfg-grupo-topo">${texto(t('Idioma'), t('Idioma dos menus, botões e avisos. Suas notas não mudam.'))}</header>
       <div class="cfg-linha">${texto(t('Idioma da interface'), '', 'cfg-idioma-rotulo')}<div class="segmentos cfg-idioma" id="cfg-idioma" role="radiogroup" aria-labelledby="cfg-idioma-rotulo">${KiroIdiomas.IDIOMAS.map(i => `<label class="segmento"><input type="radio" name="cfg-idioma" value="${i.codigo}" ${i.codigo === KiroIdiomas.idioma() ? 'checked' : ''} /><span>${escapeHtml(i.nome)}</span></label>`).join('')}</div></div>
+      ${window.cadernoDesktop ? `<label class="cfg-linha">${texto(t('Captura global'), t('Abrir o Kiro e capturar com Ctrl+Shift+Espaço (⌘+Shift+Espaço no Mac).'))}<input type="checkbox" id="cfg-captura-global" ${lerPreferencia('capturaGlobal') === '1' ? 'checked' : ''} /></label>` : ''}
     </section>
     <section class="cfg-grupo">
       <header class="cfg-grupo-topo">${texto(t('Cofre'), t('A pasta onde suas notas ficam, como arquivos Markdown.'))}</header>
@@ -4624,6 +5449,7 @@ async function showSettings(aba = abaDasConfiguracoes) {
       ${chave('confirm', t('Confirmar ações destrutivas'), conf.requireConfirmationForDestructive, t('Pede confirmação antes de excluir.'), 'cfg-depende')}
       <p class="small-muted cfg-rodape">${t('Guardado em {arquivo}, dentro do cofre.', { arquivo: '<code>.kiro/agent.json</code>' })} <span id="ai-estado" role="status" aria-live="polite"></span></p>
     </section>` : `<p class="cfg-aviso">${t('Não foi possível ler a configuração de agentes: {erro}', { erro: escapeHtml(erroConf) })}</p>`)}
+    ${painel('backup', abaBackup)}
     ${painel('plugins', abaPlugins)}
     ${painel('atalhos', `<section class="cfg-grupo">
       <header class="cfg-grupo-topo">${texto(t('Atalhos'), t('Para fazer as coisas sem tirar a mão do teclado.'))}</header>
@@ -4656,6 +5482,24 @@ async function showSettings(aba = abaDasConfiguracoes) {
     erroDoPapel.hidden = true;
     await aplicarPapelDeParede();
   });
+  $('#cfg-lembretes')?.addEventListener('change', async e => {
+    e.stopPropagation(); modalDirty = false;
+    if (e.target.checked && typeof Notification !== 'undefined' && Notification.permission === 'default') { try { await Notification.requestPermission(); } catch { /* sem permissão: o aviso só não aparece */ } }
+    if (e.target.checked && (typeof Notification === 'undefined' || Notification.permission !== 'granted')) { e.target.checked = false; status(t('Permita as notificações para receber lembretes.'), true); return; }
+    gravarPreferencia('lembretes', e.target.checked ? '1' : '0');
+    verificarLembretes();
+  });
+  for (const k of ['tarefas', 'habitos']) $(`#cfg-hora-${k}`)?.addEventListener('change', e => { e.stopPropagation(); modalDirty = false; if (/^\d{2}:\d{2}$/.test(e.target.value)) { gravarPreferencia(`lembreteHora.${k}`, e.target.value); verificarLembretes(); } });
+  $('#cfg-notas-solidas')?.addEventListener('change', e => {
+    e.stopPropagation(); modalDirty = false;
+    gravarPreferencia('vidroNotasSolidas', e.target.checked ? '1' : '0');
+    aplicarVidro();
+  });
+  $('#cfg-grafo-solido')?.addEventListener('change', e => {
+    e.stopPropagation(); modalDirty = false;
+    gravarPreferencia('vidroGrafoSolido', e.target.checked ? '1' : '0');
+    aplicarVidro();
+  });
   $('#papel-segue-sistema')?.addEventListener('change', e => {
     e.stopPropagation(); modalDirty = false;
     try { localStorage.setItem('kiro.papelVideoSegueSistema', e.target.checked ? '1' : '0'); } catch { /* janela privada: vale só nesta sessão */ }
@@ -4675,6 +5519,12 @@ async function showSettings(aba = abaDasConfiguracoes) {
     try { localStorage.setItem('kiro.papelOpacidadeCartoes', e.target.value); } catch { /* janela privada: vale só nesta sessão */ }
     aplicarVidro();
   });
+  $('#papel-transparencia')?.addEventListener('input', e => {
+    e.stopPropagation(); modalDirty = false;
+    gravarPreferencia('papelTransparencia', e.target.value);
+    aplicarTransparenciaDoPapel();
+  });
+  $('#papel-transparencia')?.addEventListener('change', e => e.stopPropagation());
   $('#papel-veu')?.addEventListener('change', e => e.stopPropagation());
   $('#papel-opacidade')?.addEventListener('change', e => e.stopPropagation());
   $('#cfg-idioma')?.addEventListener('change', async e => {
@@ -4706,6 +5556,7 @@ async function showSettings(aba = abaDasConfiguracoes) {
     abas.forEach(b => { const ativa = b.dataset.aba === id; b.setAttribute('aria-selected', ativa); b.tabIndex = ativa ? 0 : -1; });
     document.querySelectorAll('.cfg-painel').forEach(p => { p.hidden = p.dataset.painel !== id; });
     if (id === 'plugins' && trocou) redesenharAbaPlugins();   // estado das chaves e últimas chamadas em dia
+    if (id === 'backup') redesenharAbaBackup();
   };
   // Busca: mostra todas as abas de uma vez e só as linhas cujo texto combina (ou o grupo inteiro,
   // se o título do grupo combina). Sem texto, volta para a aba de antes.
@@ -4750,6 +5601,10 @@ async function showSettings(aba = abaDasConfiguracoes) {
   });
 
   // Personalização
+  $('#cfg-tamanho-interface').onchange = e => {
+    const tamanho = aplicarTamanhoDaInterface(e.target.value);
+    try { localStorage.setItem('kiro.tamanhoInterface', String(tamanho)); } catch { /* vale nesta sessão */ }
+  };
   const corAtual = () => ({
     ...lerAparencia(),
     tema: 'personalizado',
@@ -4759,7 +5614,7 @@ async function showSettings(aba = abaDasConfiguracoes) {
   // O card Personalizado mostra as cores manuais atuais.
   const gravarCores = () => { const a = corAtual(); gravarAparencia(a); document.querySelector('.tema-opcao.tema-personalizado').style.cssText = estiloPersonalizado(a); };
   // Aparência, Sistema e Plug-ins agem na hora: não contam como alteração pendente ao fechar a janela.
-  for (const tipo of ['input', 'change']) document.querySelectorAll('.cfg-aparencia, [data-painel="sistema"], [data-painel="plugins"]').forEach(el => el.addEventListener(tipo, e => e.stopPropagation()));
+  for (const tipo of ['input', 'change']) document.querySelectorAll('.cfg-aparencia, [data-painel="sistema"], [data-painel="backup"], [data-painel="plugins"]').forEach(el => el.addEventListener(tipo, e => e.stopPropagation()));
   // Compara o destaque e o fundo que estão de fato na tela (tema, Personalizado ou destaque escolhido).
   const avisar = () => {
     const css = getComputedStyle(document.documentElement), [acento, fundo] = ['--acento', '--content-bg'].map(v => css.getPropertyValue(v).trim());
@@ -4771,8 +5626,21 @@ async function showSettings(aba = abaDasConfiguracoes) {
   avisar();
   document.querySelectorAll('[data-cor]').forEach(campo => { campo.oninput = () => { gravarCores(); avisar(); }; });
   // Tema e skin aplicam na hora; o Personalizado abre os controles de cor.
-  document.querySelectorAll('input[name="tema"]').forEach(r => r.onchange = () => { gravarAparencia({ ...lerAparencia(), tema: r.value }); $('#cfg-personalizado').hidden = r.value !== 'personalizado'; avisar(); });
+  document.querySelectorAll('input[name="tema"]').forEach(r => r.onchange = () => { gravarAparencia({ ...lerAparencia(), tema: r.value }); $('#cfg-personalizado').hidden = r.value !== 'personalizado'; $('#cfg-vidro').hidden = r.value !== 'liquid-glass'; avisar(); });
+  $('#cfg-transparencia').oninput = e => {
+    const a = Kiro.aparenciaValida({ ...lerAparencia(), transparencia: Number(e.target.value) });
+    $('#cfg-transparencia-valor').value = `${a.transparencia}%`;
+    gravarAparencia(a);
+  };
   document.querySelectorAll('input[name="skin"]').forEach(r => r.onchange = () => gravarAparencia({ ...lerAparencia(), skin: r.value }));
+  $('#cfg-primeiros-passos').onclick = () => { if (closeModal()) primeirosPassos(); };
+  $('#cfg-captura-global')?.addEventListener('change', async e => {
+    const ligado = e.target.checked;
+    const ok = await window.cadernoDesktop.capturaGlobal(ligado).catch(() => false);
+    if (!ok) { e.target.checked = false; gravarPreferencia('capturaGlobal', '0'); avisoAtalhoGlobal(true); return; }
+    avisoAtalhoGlobal(false);
+    gravarPreferencia('capturaGlobal', ligado ? '1' : '0');
+  });
   $('#cor-padrao').onclick = () => {
     gravarAparencia({ ...APARENCIA_PADRAO });
     document.querySelector('[data-cor="sidebar"]').value = APARENCIA_PADRAO.sidebar;
@@ -4781,6 +5649,9 @@ async function showSettings(aba = abaDasConfiguracoes) {
     document.querySelectorAll('input[name="tema"], input[name="skin"]').forEach(r => r.checked = r.value === APARENCIA_PADRAO.tema || r.value === APARENCIA_PADRAO.skin);
     document.querySelector('.tema-opcao.tema-personalizado').style.cssText = estiloPersonalizado(APARENCIA_PADRAO);
     $('#cfg-personalizado').hidden = true;
+    $('#cfg-vidro').hidden = true;
+    $('#cfg-transparencia').value = APARENCIA_PADRAO.transparencia;
+    $('#cfg-transparencia-valor').value = `${APARENCIA_PADRAO.transparencia}%`;
     avisar();
   };
 
@@ -4794,6 +5665,7 @@ async function showSettings(aba = abaDasConfiguracoes) {
   $('#cfg-lixeira').onclick = () => { closeModal(true); showTrash(); };
 
   ligarAbaPlugins($('#painel-plugins'));
+  ligarAbaBackup($('#painel-backup'));
 
   // Integrações: cada interruptor salva na hora, como nas outras abas.
   if (!conf) return;
@@ -4993,6 +5865,7 @@ document.querySelectorAll('.nav-item').forEach(b=>b.onclick=()=>{if(loaded)irPar
 $('#new-note').onclick=()=>{if(loaded&&!busy&&!failed)abrirNota(notaVazia());};
 $('#daily-note').onclick=()=>extraAction('daily');
 $('#go-note').onclick=irParaNota;
+$('#quick-actions').onclick=abrirAcoesRapidas;
 $('#settings').onclick=()=>showSettings();
 $('#cofre-seletor').onclick=()=>{if(!loaded||busy)return;if(window.cadernoDesktop)escolherOutroCofre();else showSettings('sistema');};
 $('#lixeira-lateral').onclick=()=>{if(loaded&&!busy&&!failed)showTrash();};
@@ -5060,7 +5933,75 @@ function irParaNota({ escolher = false } = {}){
   desenhar();campo.focus();
   });
 }
+// ---- Ações rápidas ----
+let aoFecharAcoesRapidas = null;
+function primeirosPassos() {
+  modal(t('Primeiros passos'), `<ol><li>${t('Crie uma nota, escreva e salve no cofre.')}</li><li>${t('Organize suas notas em pastas e conecte ideias com links.')}</li><li>${t('Crie tarefas e acompanhe o que precisa fazer na Hoje.')}</li></ol><h3>${t('Glossário')}</h3><p>${t('Cofre: a pasta onde suas notas ficam guardadas.')}</p><p>${t('Hoje: cartões para retomar notas, tarefas e hábitos.')}</p><p>${t('Pastas: organize notas; links conectam ideias.')}</p><p>${t('Fluxo: um quadro para organizar ideias visualmente.')}</p><p>${t('Skin: a aparência visual do aplicativo.')}</p><p>${t('Ações rápidas: encontre comandos e crie conteúdo pelo teclado.')}</p><div class="form-actions"><button type="button" class="secondary" id="cancel">${t('Fechar')}</button></div>`);
+  $('#cancel').onclick = () => closeModal(true);
+}
+function catalogoDeAcoes() {
+  const nativas = [
+    { id: 'novaNota', titulo: t('Nova nota'), categoria: t('Notas'), executar: () => abrirNota(notaVazia()) },
+    { id: 'novaTarefa', titulo: t('Nova tarefa'), categoria: t('Tarefas'), executar: () => taskModal() },
+    { id: 'novoFluxo', titulo: t('Novo fluxo'), categoria: t('Fluxos'), executar: () => novoFluxo() },
+    { id: 'captura', titulo: t('Captura rápida'), categoria: t('Notas'), executar: () => capturaRapida() },
+    { id: 'diaria', titulo: t('Nota diária'), categoria: t('Notas'), executar: () => extraAction('daily') },
+    { id: 'irPara', titulo: t('Ir para nota'), categoria: t('Notas'), executar: () => irParaNota() },
+    { id: 'primeirosPassos', titulo: t('Primeiros passos'), categoria: t('Ajuda'), executar: primeirosPassos },
+    { id: 'configuracoes', titulo: t('Configurações'), categoria: t('Configurações'), executar: () => showSettings() },
+    { id: 'criarModelo', titulo: t('Criar modelo pessoal'), categoria: t('Notas'), executar: () => criarModeloPessoal() },
+    { id: 'notaPorModelo', titulo: t('Criar nota por modelo'), categoria: t('Notas'), executar: () => criarNotaPorModelo() },
+  ];
+  for (const [id, estado] of pluginsAtivos) for (const comando of estado.comandos || []) nativas.push({
+    id: `plugin:${id}:${comando.id}`, titulo: comando.label, categoria: estado.manifesto?.name || id,
+    executar: () => {
+      if (pluginsAtivos.get(id) === estado && estado.comandos?.some(c => c.id === comando.id)) rodarComandoDoPlugin(id, comando.id);
+    },
+  });
+  return nativas;
+}
+function abrirAcoesRapidas() {
+  if (!loaded || failed || busy || gravandoAtalho || aguardandoCofre || $('#modal-root').firstChild) return;
+  const focoAnterior = document.activeElement;
+  modal(t('Ações rápidas'), `<div class="form"><label for="acoes-busca">${t('O que você quer fazer?')}</label><input class="search ir-busca" id="acoes-busca" role="combobox" aria-autocomplete="list" aria-expanded="true" aria-controls="acoes-lista" autocomplete="off" /><div class="ir-lista" id="acoes-lista" role="listbox" aria-label="${t('Ações rápidas')}"></div></div>`);
+  const dialogo = $('.modal'), campo = $('#acoes-busca'), lista = $('#acoes-lista');
+  dialogo.setAttribute('aria-label', t('Ações rápidas'));
+  let achadas = [], marcada = 0, executou = false, fechada = false;
+  aoFecharAcoesRapidas = () => { fechada = true; if (!executou && focoAnterior?.isConnected) focoAnterior.focus(); };
+  const desenhar = () => {
+    achadas = Kiro.filtrarAcoes(catalogoDeAcoes(), campo.value);
+    marcada = Math.min(marcada, Math.max(achadas.length - 1, 0));
+    lista.innerHTML = achadas.map((acao, i) => `<button type="button" tabindex="-1" class="ir-item${i === marcada ? ' marcada' : ''}" id="acao-rapida-${i}" data-i="${i}" role="option" aria-selected="${i === marcada}"><span>${escapeHtml(acao.titulo)}</span><small>${escapeHtml(acao.categoria)}</small></button>`).join('') || `<div class="empty">${t('Nenhuma ação encontrada.')}</div>`;
+    if (achadas.length) campo.setAttribute('aria-activedescendant', `acao-rapida-${marcada}`);
+    else campo.removeAttribute('aria-activedescendant');
+  };
+  const executar = acao => {
+    if (!acao || executou || fechada || busy || failed || !loaded) return;
+    executou = true;
+    if (!closeModal(true)) { executou = false; return; }
+    acao.executar();
+  };
+  campo.addEventListener('input', e => { e.stopPropagation(); marcada = 0; desenhar(); });
+  campo.addEventListener('change', e => e.stopPropagation());
+  campo.addEventListener('keydown', e => {
+    if (e.isComposing) { e.stopPropagation(); return; }
+    if ((e.key === 'ArrowDown' || e.key === 'ArrowUp') && achadas.length) {
+      e.preventDefault(); marcada = (marcada + (e.key === 'ArrowDown' ? 1 : achadas.length - 1)) % achadas.length;
+      desenhar(); lista.querySelector('.marcada')?.scrollIntoView({ block: 'nearest' });
+    }
+    if (e.key === 'Enter') { e.preventDefault(); executar(achadas[marcada]); }
+  });
+  dialogo.addEventListener('keydown', e => {
+    if (e.key !== 'Tab') return;
+    e.preventDefault();
+    (document.activeElement === campo ? $('#close-modal') : campo).focus();
+  });
+  lista.addEventListener('click', e => { const botao = e.target.closest('[data-i]'); if (botao) executar(achadas[+botao.dataset.i]); });
+  desenhar(); campo.focus();
+}
+// ---- Fim das ações rápidas ----
 const ACOES_DOS_ATALHOS={
+  acoesRapidas:()=>abrirAcoesRapidas(),
   captura:()=>capturaRapida(),
   irPara:()=>irParaNota(),
   novaNota:()=>{if(loaded&&!failed&&!busy&&!$('#modal-root').firstChild)abrirNota(notaVazia());},
@@ -5068,20 +6009,50 @@ const ACOES_DOS_ATALHOS={
   lateral:()=>alternarLateralCompacta(),
   painelDireito:()=>alternarPainelDireito(),
 };
+// O editor também usa Ctrl+K e Ctrl+Shift+K; interceptar a combinação configurada antes dele.
+document.addEventListener('keydown',e=>{
+  if(e.isComposing||gravandoAtalho||aguardandoCofre||Kiro.combinacaoDoEvento(e)!==atalhos.acoesRapidas)return;
+  e.preventDefault();e.stopPropagation();ACOES_DOS_ATALHOS.acoesRapidas();
+},true);
 document.addEventListener('keydown',e=>{
   if(e.key==='Escape') { if (document.querySelector(':popover-open')) return; /* Esc fecha primeiro o popover (ex.: Opções da Hoje); um segundo Esc fecha o modal */ closeModal(); }
   if(gravandoAtalho||aguardandoCofre)return;
   const combinacao=Kiro.combinacaoDoEvento(e);
+  if ((combinacao === 'Ctrl+F' || combinacao === 'Ctrl+H') && currentView === 'studies' && editing && !$('#modal-root').firstChild) {
+    e.preventDefault();
+    abrirBuscaNaNota(combinacao === 'Ctrl+H');
+    return;
+  }
   const acao=Object.keys(atalhos).find(id=>atalhos[id]===combinacao);
+  if(acao==='acoesRapidas')return;
   if(acao==='salvar'&&!editing)return;
   if(acao){e.preventDefault();ACOES_DOS_ATALHOS[acao]();}
 });
 window.addEventListener('beforeunload',e=>{if(busy||failed||modalDirty||editorDirty||fluxoPendente||KiroFluxoTela.ocupado()){e.preventDefault();e.returnValue='';}});
 window.addEventListener('focus',()=>reload());
+// ---- Lembretes: aviso-resumo das tarefas do dia e dos hábitos de hoje, uma vez por dia cada ----
+const lembretesLigados = () => lerPreferencia('lembretes') === '1';
+const horaDoLembrete = k => lerPreferencia(`lembreteHora.${k}`) || (k === 'tarefas' ? '09:00' : '20:00');
+function verificarLembretes() {
+  if (!lembretesLigados() || !loaded || typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
+  const ultimo = { tarefas: lerPreferencia('lembreteUltimo.tarefas'), habitos: lerPreferencia('lembreteUltimo.habitos') };
+  const avisos = Kiro.avisosDeHoje({ tarefas: state.tasks, habitos: state.habits, habitLog: state.habitLog, horas: { tarefas: horaDoLembrete('tarefas'), habitos: horaDoLembrete('habitos') }, ultimo });
+  const texto = { tarefas: n => t('{n} tarefa(s) para hoje ou atrasada(s)', { n }), habitos: n => t('{n} hábito(s) de hoje ainda não feito(s)', { n }) };
+  for (const k of ['tarefas', 'habitos']) {
+    if (!avisos[k]) continue;
+    try {
+      const aviso = new Notification('Kiro', { body: texto[k](avisos[k]) });
+      gravarPreferencia(`lembreteUltimo.${k}`, today());
+      aviso.onclick = () => { window.focus(); aviso.close(); irPara('today'); };
+    } catch { /* ambiente sem notificações */ }
+  }
+}
+setInterval(verificarLembretes, 60000); setTimeout(verificarLembretes, 3000);
 setInterval(()=>{if(document.hidden)return;if(lastDay!==today()){lastDay=today();if(loaded&&!busy)render();}reload();if(loaded)for(const id of pluginsAtivos.keys())entregarDia(id);},5000);
 desenharIconesFixos();
 if (window.cadernoDesktop?.janelaPropria) document.documentElement.classList.add('janela-propria');
 aplicarAparencia();
+aplicarTamanhoDaInterface();
 aplicarCorretor();
 coresDaJanela();
 aplicarPapelDeParede();
@@ -5099,6 +6070,8 @@ iniciar();
 // de ler qualquer coisa; nos outros casos o cofre abre direto, como sempre.
 async function iniciar() {
   await prepararIdioma();
+  window.cadernoDesktop?.aoCapturaGlobal(() => capturaRapida());
+  if (window.cadernoDesktop && lerPreferencia('capturaGlobal') === '1' && !await window.cadernoDesktop.capturaGlobal(true).catch(() => false)) avisoAtalhoGlobal(true);
   const inicio = window.cadernoDesktop ? await window.cadernoDesktop.firstRun().catch(() => null) : null;
   if (inicio?.primeiraVez) { aguardandoCofre = true; return mostrarBoasVindas(inicio.padrao); }
   comecar();

@@ -6,7 +6,7 @@ const tecla = (key, extra = {}) => ({ key, code: '', ctrlKey: false, metaKey: fa
 const PADRAO = Object.fromEntries(ATALHOS_EDITAVEIS.map(([id, , , padrao]) => [id, padrao]));
 
 test('padrões incluem o atalho da barra lateral', () => {
-  assert.deepEqual(PADRAO, { captura: 'Ctrl+Space', irPara: 'Ctrl+O', novaNota: 'Ctrl+N', salvar: 'Ctrl+S', lateral: 'Ctrl+\\', painelDireito: 'Ctrl+Shift+L' });
+  assert.deepEqual(PADRAO, { captura: 'Ctrl+Space', irPara: 'Ctrl+O', novaNota: 'Ctrl+N', salvar: 'Ctrl+S', lateral: 'Ctrl+\\', painelDireito: 'Ctrl+Shift+L', acoesRapidas: 'Ctrl+K' });
 });
 
 test('combinação sai do evento de teclado, com Cmd valendo Ctrl', () => {
@@ -28,7 +28,7 @@ test('rótulo legível em português', () => {
 });
 
 test('atalho novo precisa de Ctrl ou Alt, não pode ser de edição nem repetido', () => {
-  assert.equal(problemaDoAtalho('Ctrl+K', PADRAO, 'irPara'), '');
+  assert.equal(problemaDoAtalho('Ctrl+J', PADRAO, 'irPara'), '');
   assert.equal(problemaDoAtalho('F2', PADRAO, 'irPara'), '');
   assert.equal(problemaDoAtalho('Ctrl+O', PADRAO, 'irPara'), '');       // o próprio atalho de volta
   assert.match(problemaDoAtalho('K', PADRAO, 'irPara'), /Ctrl ou Alt/);
@@ -42,7 +42,12 @@ test('atalho novo precisa de Ctrl ou Alt, não pode ser de edição nem repetido
 test('atalhos salvos: inválido, repetido ou desconhecido volta ao padrão', () => {
   assert.deepEqual(atalhosValidos(undefined), PADRAO);
   assert.deepEqual(atalhosValidos('lixo'), PADRAO);
-  assert.deepEqual(atalhosValidos({ irPara: 'Ctrl+K' }), { ...PADRAO, irPara: 'Ctrl+K' });
+  assert.deepEqual(atalhosValidos({ irPara: 'Ctrl+K' }), { ...PADRAO, irPara: 'Ctrl+K', acoesRapidas: 'Ctrl+Shift+P' });
+  assert.equal(atalhosValidos({ irPara: 'Ctrl+K' }).acoesRapidas, 'Ctrl+Shift+P');
+  assert.equal(atalhosValidos({ irPara: 'Ctrl+K', salvar: 'Ctrl+Shift+P' }).acoesRapidas, 'Ctrl+Alt+K');
+  assert.equal(atalhosValidos({ irPara: 'Ctrl+K', salvar: 'Ctrl+Shift+P', captura: 'Ctrl+Alt+K' }).acoesRapidas, 'F1');
+  assert.equal(atalhosValidos({ irPara: 'Ctrl+K', acoesRapidas: 'Alt+Q' }).acoesRapidas, 'Alt+Q');
+  assert.equal(new Set(Object.values(atalhosValidos({ irPara: 'Ctrl+K' }))).size, ATALHOS_EDITAVEIS.length);
   assert.deepEqual(atalhosValidos({ irPara: 'K', inventado: 'Ctrl+J' }), PADRAO);
   assert.deepEqual(atalhosValidos({ irPara: 'Ctrl+N' }), PADRAO);        // colidiria com Nova nota
   // Troca entre dois: ambos continuam válidos.

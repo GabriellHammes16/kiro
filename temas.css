@@ -26,6 +26,12 @@
   --overlay:rgba(15,23,42,.32); --shadow-md:0 12px 32px rgba(15,23,42,.14); --shadow-sm:0 1px 2px rgba(15,23,42,.08);
   color-scheme:light;
 }
+/* Liquid Glass: inspirado no vidro da Apple — vidro neutro, sem cor própria; quem dá a cor é o que está atrás. */
+.tema-liquid-glass {
+  --bg:#1C1C1E; --panel:#2C2C2E; --panel-raised:#3A3A3C; --sidebar-bg:#232325; --content-bg:#1C1C1E; --campo:#262628;
+  --ink:#FFFFFF; --muted:#D1D1D6; --line:#545458;
+  --acento:#F2F2F7; --acento-2:#C7C7CC; --acento-forte:#48484A; --acento-escuro:#3A3A3C; --acento-texto:#000000; --primario-texto:#FFFFFF;
+}
 /* Personalizado: base do clássico; fundos e destaque vêm inline do app.js. */
 .tema-personalizado {
   --bg:#0B0F14; --panel:#1A1F26; --panel-raised:#232A33; --sidebar-bg:#11161D; --content-bg:#0B0F14; --campo:#12171E;
@@ -202,4 +208,126 @@
 
 /* Cores manuais: só no Personalizado, recuadas sob a grade de temas. */
 .cfg-personalizado { display:grid; padding-left:var(--esp-3); border-left:2px solid color-mix(in srgb, var(--acento) 35%, transparent); }
+
+/* Liquid Glass. Camadas: desktop (acrylic/vibrancy nativo) ou o fundo interno → véu neutro no body
+   (--vidro-opacidade, o controle de transparência; cobre também a barra de título) → superfícies de vidro claro.
+   No navegador não há acesso ao desktop: o fundo interno é grafite com reflexos suaves. */
+html.tema-liquid-glass {
+  --vidro-papel:
+    radial-gradient(80% 60% at 85% 5%, #8E8E9366 0, #8E8E9300 60%),
+    radial-gradient(70% 60% at 5% 100%, #63636A55 0, #63636A00 60%),
+    linear-gradient(160deg, #2A2A2E 0%, #18181B 55%, #222226 100%);
+  /* O piso local preserva contraste sobre desktop branco, mesmo com transparência máxima. */
+  --vidro-fundo-legivel:#1C1C1ECC;
+  --vidro-base-painel:#1C1C1EE6;
+  --vidro-superficie:linear-gradient(150deg, #FFFFFF14 0%, #FFFFFF0F 40%, #FFFFFF08 100%), var(--vidro-base-painel);
+  --vidro-superficie-forte:linear-gradient(150deg, #FFFFFF1F 0%, #FFFFFF1C 45%, #FFFFFF12 100%), var(--vidro-base-painel);
+  --vidro-borda:#FFFFFF38;
+  --vidro-reflexo:inset 0 1px 0 #FFFFFF66, inset 1px 0 0 #FFFFFF1A, inset 0 -1px 0 #FFFFFF12;
+  --vidro-sombra:0 10px 34px #00000038, 0 2px 6px #00000024;
+  --vidro-desfoque:blur(30px) saturate(140%);
+  --line:#FFFFFF26; --surface-hover:#FFFFFF14; --surface-active:#FFFFFF24;
+  background:var(--vidro-papel); background-attachment:fixed;
+}
+html.tema-liquid-glass.skin-padrao { --raio-card:22px; --raio-controle:12px; }
+/* Na janela transparente não há o que desfocar (o desktop fica fora da página) e o backdrop-filter repinta
+   o véu escuro atrás de cada painel, escurecendo-o (a barra lateral mais que tudo). Vale também com papel de
+   parede: uma imagem com partes transparentes (PNG recortado) deixa o mesmo véu à mostra. */
+html.tema-liquid-glass.vidro-nativo { --vidro-desfoque:none; }
+/* Véu único no body: o controle de transparência vai de 90% (0) a 18% (80) de preto. */
+/* Janela transparente não tem moldura nem cantos arredondados do sistema. A rolagem passa para o body
+   (do tamanho da janela), que é recortado com cantos de 12px como os do Windows 11; o fundo do html
+   não pode ficar vazio, senão o véu do body vaza para a tela inteira e escapa do recorte. */
+html.tema-liquid-glass.vidro-nativo { background:linear-gradient(transparent, transparent); overflow:hidden; }
+html.tema-liquid-glass.vidro-nativo body { height:100vh; box-sizing:border-box; overflow-y:auto; clip-path:inset(0 round 12px); }
+/* Um fio claro marca a borda contra o desktop. */
+html.tema-liquid-glass.vidro-nativo body::after { content:""; position:fixed; inset:0; z-index:100; pointer-events:none; border:1px solid #FFFFFF2E; border-radius:12px; }
+html.tema-liquid-glass body { background:color-mix(in srgb, #0A0A0C calc(var(--vidro-opacidade, 65%) * .9), transparent); }
+html.tema-liquid-glass:not(.vidro-nativo) body { background:color-mix(in srgb, #0A0A0C calc(var(--vidro-opacidade, 65%) * .3), transparent); }
+/* Sem :is(): com o #id ele ganharia de todas as regras do app-shell, inclusive a do papel de parede. */
+html.tema-liquid-glass .app-shell { background:transparent; }
+html.tema-liquid-glass #barra-titulo { background:var(--vidro-superficie); }
+html.tema-liquid-glass :is(.content, .cofre-nota, .cofre-metade, .grafo-tela) { background:var(--vidro-fundo-legivel); }
+html.tema-liquid-glass :is(.abas-menu, .abas-barra) { background:var(--vidro-superficie); }
+
+/* Superfícies de vidro: barra lateral, cartões, campos, menus. */
+html.tema-liquid-glass :is(.sidebar, .cofre-lateral, .painel-direito, .card, .note-card, .cfg-grupo, .capture, .search, .segmentos, .habito-stats, .secondary, .new-note, .hoje-acoes > .secondary) {
+  background:var(--vidro-superficie); border-color:var(--vidro-borda); box-shadow:var(--vidro-reflexo), var(--vidro-sombra);
+  -webkit-backdrop-filter:var(--vidro-desfoque); backdrop-filter:var(--vidro-desfoque);
+}
+html.tema-liquid-glass :is(.cofre-lateral, .painel-direito) { box-shadow:var(--vidro-reflexo); }
+html.tema-liquid-glass :is(.secondary, .new-note, .segmentos) { box-shadow:var(--vidro-reflexo); }
+html.tema-liquid-glass :is(.secondary, .new-note):hover { background:var(--vidro-superficie-forte); }
+html.tema-liquid-glass :is(.modal, .ctx-menu) {
+  background:var(--vidro-superficie);
+  border-color:#FFFFFF4D; box-shadow:var(--vidro-reflexo), 0 30px 80px #00000059;
+  -webkit-backdrop-filter:blur(40px) saturate(190%); backdrop-filter:blur(40px) saturate(190%);
+}
+html.tema-liquid-glass .modal-backdrop { background:#0000002E; -webkit-backdrop-filter:blur(6px); backdrop-filter:blur(6px); }
+html.tema-liquid-glass :is(.search, .capture, .field input, .field textarea, .field select, .add-link input):focus-within {
+  border-color:#FFFFFF80; box-shadow:var(--vidro-reflexo), 0 0 0 3px #FFFFFF33;
+}
+/* Itens ativos e botões primários: pílula de vidro mais densa, como os controles do iOS. */
+html.tema-liquid-glass .nav-item.active { background:var(--vidro-superficie-forte); box-shadow:var(--vidro-reflexo); }
+html.tema-liquid-glass .primary {
+  background:var(--vidro-superficie-forte); color:var(--ink);
+  border-color:#FFFFFF59; box-shadow:inset 0 1px 0 #FFFFFF80, 0 4px 14px #00000040;
+}
+html.tema-liquid-glass .check:not(.done) { background:#FFFFFF1A; border-color:#FFFFFF66; box-shadow:inset 0 1px 0 #FFFFFF40; }
+html.tema-liquid-glass .page-head :is(h1, p) { text-shadow:0 1px 12px #00000066; }
+
+/* Barras laterais flutuantes (Hoje e Pastas), soltas da borda da janela; o resto ocupa o espaço inteiro. */
+@media (min-width:781px) {
+  html.tema-liquid-glass :is(.app-shell:not(.cofre-aberto) > .sidebar, .cofre-lateral) {
+    margin:12px 0 12px 12px; top:calc(var(--barra-titulo, 0px) + 12px);
+    height:calc(var(--altura-util, 100vh) - 24px); border:1px solid var(--vidro-borda); border-radius:26px;
+  }
+  /* Com a rolagem no body (janela transparente), o sticky já conta a partir da faixa da barra de título. */
+  html.tema-liquid-glass.vidro-nativo :is(.app-shell:not(.cofre-aberto) > .sidebar, .cofre-lateral) { top:12px; }
+  html.tema-liquid-glass .app-shell:not(.cofre-aberto, .lateral-compacta) > .sidebar { flex-basis:240px; width:240px; }
+  html.tema-liquid-glass .app-shell.lateral-compacta:not(.cofre-aberto) > .sidebar { border-radius:22px; }
+  html.tema-liquid-glass .app-shell:not(.cofre-aberto) > .sidebar .sidebar-bottom { border-color:var(--vidro-borda); }
+}
+/* Nota sem moldura: a folha some e o texto fica direto sobre o vidro da janela, de ponta a ponta. */
+html.tema-liquid-glass .cofre-nota-corpo { margin:0; border-radius:0; background:transparent; }
+html.tema-liquid-glass :is(.cofre-nota, .cofre-metade) { background:transparent; }
+/* Opção "Fundo sólido nas notas": o lado da nota (abas e texto) volta ao escuro opaco, para ler melhor. */
+/* Vira um painel flutuante, com o mesmo respiro e cantos da árvore ao lado; com duas notas, o painel é o par. */
+html.tema-liquid-glass.notas-solidas :is(.cofre-nota, .cofre-metades) {
+  margin:12px; height:calc(var(--altura-util, 100vh) - 24px); border-radius:22px; overflow:hidden;
+  background:var(--content-bg); border:1px solid var(--vidro-borda);
+}
+html.tema-liquid-glass.notas-solidas .cofre-metade { height:100%; }
+/* Grafo: o mesmo das notas. Sem fundo, os nós ficam direto sobre o vidro; "Fundo sólido no grafo" vira painel. */
+html.tema-liquid-glass .grafo-tela { background:var(--vidro-fundo-legivel); }
+/* Sobre o vidro, as cores do grafo misturadas com o fundo opaco do tema ficariam escuras: viram brancos translúcidos. */
+html.tema-liquid-glass:not(.grafo-solido) .grafo-tela {
+  --graph-background:transparent; --graph-node:#FFFFFFCC; --graph-node-muted:#FFFFFF73; --graph-edge:#FFFFFF4D;
+}
+html.tema-liquid-glass.grafo-solido .grafo-tela {
+  margin:12px; height:calc(var(--altura-util, 100vh) - 24px); border-radius:22px;
+  background:var(--content-bg); border:1px solid var(--vidro-borda);
+}
+/* Papel de parede na janela toda, até atrás da barra de título: as barras flutuam por cima dele, sem quinas.
+   Fica numa camada própria para a "Transparência do papel de parede" (--papel-opacidade) deixar o desktop aparecer. */
+html.tema-liquid-glass.com-papel-de-parede:not(.papel-em-video) body:has(> .app-shell:not(.cofre-aberto))::before {
+  content:""; position:fixed; inset:0; z-index:-1; pointer-events:none; opacity:var(--papel-opacidade, 1);
+  background:linear-gradient(color-mix(in srgb, var(--content-bg) var(--papel-veu, 60%), transparent) 0 0), var(--papel-de-parede) center / cover no-repeat;
+}
+html.tema-liquid-glass.papel-em-video .app-shell:not(.cofre-aberto) { background:color-mix(in srgb, var(--content-bg) var(--papel-veu, 60%), transparent); }
+html.tema-liquid-glass #papel-video { opacity:var(--papel-opacidade, 1); }
+/* O controle de transparência do papel de parede só existe no Liquid Glass. */
+html:not(.tema-liquid-glass) .papel-so-vidro { display:none; }
+html.tema-liquid-glass.com-papel-de-parede .app-shell:not(.cofre-aberto) > .content { background:var(--vidro-fundo-legivel); }
+html.tema-liquid-glass .aba.ativa { background:var(--vidro-superficie-forte); box-shadow:var(--vidro-reflexo); }
+html.tema-liquid-glass .aba.ativa::before, html.tema-liquid-glass .aba.ativa::after { display:none; }
+.cfg-vidro-controle { display:flex; justify-content:space-between; gap:16px; width:100%; }
+.cfg-vidro-controle output { color:var(--accent-text); font-variant-numeric:tabular-nums; }
+#cfg-transparencia { width:100%; accent-color:var(--acento); cursor:pointer; }
+#cfg-vidro-detalhe { margin:0; }
+/* Com "efeitos de transparência" desligados no sistema, o controle do tema continua valendo (é uma escolha
+   explícita aqui dentro); só menus e modais, onde se lê de perto, ficam sólidos. */
+@media (prefers-reduced-transparency: reduce) {
+  html.tema-liquid-glass :is(.modal, .ctx-menu) { background:var(--panel); backdrop-filter:none; }
+}
 @media (prefers-reduced-motion: reduce) { .tema-opcao, .skin-opcao { transition:none; } }

@@ -1,12 +1,14 @@
-const { app, BrowserWindow, ipcMain, Menu, shell, dialog, protocol, safeStorage } = require('electron');
+const { app, BrowserWindow, ipcMain, Menu, shell, dialog, protocol, safeStorage, globalShortcut } = require('electron');
 const ligacaoRede = require('../ligacao-rede-plugins.cjs');
 const { criarGuardaDeSegredos } = require('../segredos-plugins.cjs');
+const { criarAgendadorDeBackup } = require('../agendador-backup.cjs');
 const KiroPlugins = require('../plugins.js');
 const { readFile, readdir, mkdir, copyFile } = require('node:fs/promises');
 const { join, dirname } = require('node:path');
-const { existsSync } = require('node:fs');
+const { existsSync, readFileSync } = require('node:fs');
 const { Vault, atomicWrite } = require('../vault.cjs');
 const { palavraValida, palavraParaDicionario } = require('../corretor.js');
+const { instalarPluginsInclusos } = require('./plugins-inclusos.cjs');
 // Corretor: português e inglês juntos (a palavra vale se estiver certa em um dos dois).
 const IDIOMAS_DO_CORRETOR = ['pt-BR', 'en-US'];
 const { AgentConfig } = require('../agent/index.cjs');
@@ -19,7 +21,9 @@ let vault, settings, primeiraVez = false;
 // (file://) não lê o disco, e só arquivos de imagem de dentro do cofre passam.
 // O código dos plug-ins chega ao worker pelo esquema kiro-plugin, também servido pelo Vault.
 protocol.registerSchemesAsPrivileged([
-  { scheme: 'kiro-anexo', privileges: { standard: true, secure: true, supportFetchAPI: true } },
+  // corsEnabled: o PDF.js faz fetch do documento (pdf-nota.js) e a página é file://,
+  // origem cruzada — sem o privilégio o Chromium corta o pedido antes do esquema.
+  { scheme: 'kiro-anexo', privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true } },
   // corsEnabled: a página é file:// e o worker importa módulos deste esquema (import de módulo é CORS).
   { scheme: 'kiro-plugin', privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true } },
 ]);
@@ -28,13 +32,25 @@ const CSP_DO_WORKER = "default-src 'none'; script-src 'self' kiro-plugin:; conne
 // Host reservado para o código do próprio Kiro: tem ponto, e id de plug-in não pode ter
 // (vault.pluginPath aceita só [a-z0-9-]), então nunca colide com a pasta de um plug-in.
 const HOST_DO_KIRO = 'kiro.app';
-const ARQUIVOS_DO_KIRO = new Set(['plugin-worker.js', 'plugins.js', 'kiro-frame.js']);
+const ARQUIVOS_DO_KIRO = new Set(['plugin-worker.js', 'plugins.js', 'kiro-frame.js', 'vendor/pdfjs/pdf.worker.min.js']);
 // Janela como a do Obsidian (Windows): sem a barra de título do sistema; os botões de minimizar,
 // maximizar e fechar são os do sistema, desenhados por cima da faixa do app e pintados com as cores
 // do tema (a página manda as cores por 'janela:cores'). No macOS e no Linux fica a janela padrão: no
 // Linux a barra sobreposta depende do tema GTK e do compositor (borda branca, falhas no Wayland).
 const JANELA_PROPRIA = process.platform === 'win32';
 const ALTURA_DA_BARRA = 32;
+// Vidro (tema Liquid Glass): janela transparente de verdade, para o desktop aparecer atrás do véu que o
+// controle de transparência regula. O acrylic do Windows desfoca e tinge tanto que vira um cinza chapado.
+// `transparent` só vale na criação: trocar o tema recria a janela, e a escolha fica em janela.json.
+const VIDRO_NATIVO = process.platform === 'darwin' || process.platform === 'win32';
+const janelasDeVidro = new WeakSet();
+const arquivoDoVidro = () => join(app.getPath('userData'), 'janela.json');
+function vidroSalvo() {
+  try { return JSON.parse(readFileSync(arquivoDoVidro(), 'utf8')).vidro === true; } catch { return false; }
+}
+function opcoesDoVidro(vidro) {
+  return vidro && VIDRO_NATIVO ? { transparent: true, backgroundColor: '#00000000' } : { backgroundColor: '#0a0a0a' };
+}
 // Dicionários embutidos (dicionarios/*.bdic) vão para a pasta onde o Chromium os procura, então
 // ele não baixa nada. Sem a pasta (corretor do sistema), só ativa os idiomas.
 async function prepararCorretor(sessao) {
@@ -48,9 +64,10 @@ async function prepararCorretor(sessao) {
   const idiomas = IDIOMAS_DO_CORRETOR.filter(i => sessao.availableSpellCheckerLanguages.includes(i));
   if (idiomas.length) sessao.setSpellCheckerLanguages(idiomas); // vazio: fica o padrão do sistema
 }
-function createWindow() {
-  const window = new BrowserWindow({ width: 1280, height: 820, minWidth: 900, minHeight: 620, backgroundColor: '#0a0a0a', title: 'Kiro',
-    ...(JANELA_PROPRIA ? { titleBarStyle: 'hidden', titleBarOverlay: { color: '#111111', symbolColor: '#EDEDED', height: ALTURA_DA_BARRA } } : {}), icon: join(__dirname, '..', 'kiro-logo.png'), webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true, preload: join(__dirname, 'preload.cjs') } });
+function createWindow(vidro = vidroSalvo(), limites = {}) {
+  const window = new BrowserWindow({ width: 1280, height: 820, ...limites, minWidth: 900, minHeight: 620, ...opcoesDoVidro(vidro), title: 'Kiro',
+    ...(JANELA_PROPRIA ? { titleBarStyle: 'hidden', titleBarOverlay: { color: vidro && VIDRO_NATIVO ? '#00000000' : '#111111', symbolColor: '#EDEDED', height: ALTURA_DA_BARRA } } : {}), icon: join(__dirname, '..', 'kiro-logo.png'), webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true, preload: join(__dirname, 'preload.cjs') } });
+  if (vidro && VIDRO_NATIVO) janelasDeVidro.add(window);
   window.loadFile(join(__dirname, '..', 'index.html'));
   // Depois da página, para não atrasar a abertura.
   window.webContents.once('did-finish-load', () => prepararCorretor(window.webContents.session).catch(() => { /* sem corretor, o app segue */ }));
@@ -60,6 +77,7 @@ function createWindow() {
   });
   window.webContents.on('will-navigate', event => event.preventDefault());
   window.webContents.setWindowOpenHandler(({ url }) => { if (/^https?:/i.test(url)) shell.openExternal(url); return { action: 'deny' }; });
+  return window;
 }
 // No Linux, o registro do Chromium (inclui erros do console da página) vai para ~/.config/kiro/kiro.log,
 // recriado a cada abertura: é o que se pede a quem relata um problema numa distro que não temos.
@@ -94,6 +112,8 @@ else app.whenReady().then(async () => {
   }
   vault = primeiraVez ? null : new Vault(directory);
   let agentConfig = primeiraVez ? null : new AgentConfig(directory);
+  const agendadorBackup = criarAgendadorDeBackup({ arquivo: join(app.getPath('userData'), 'backup.json'), obterCofre: () => vault });
+  agendadorBackup.iniciar();
   ipcMain.handle('vault:first-run', () => (primeiraVez ? { primeiraVez: true, padrao: directory } : { primeiraVez: false }));
   // Boas-vindas: 'padrao' usa Documentos/Kiro/vault; 'criar' e 'abrir' perguntam a pasta.
   ipcMain.handle('vault:setup', async (event, modo) => {
@@ -119,25 +139,64 @@ else app.whenReady().then(async () => {
     vault = escolhido;
     agentConfig = new AgentConfig(escolhido.directory);
     primeiraVez = false;
+    agendadorBackup.iniciar();
     return { directory: escolhido.directory };
   });
   ipcMain.handle('vault:load', () => {
     if (!vault) throw new Error(frase('Escolha onde ficam suas notas para começar.'));
     return vault.load();
   });
-  ipcMain.handle('vault:save', (_event, state) => vault.save(state));
+  ipcMain.handle('vault:save', async (_event, state) => { const salvo = await vault.save(state); agendadorBackup.aoSalvar(); return salvo; });
+  ipcMain.handle('vault:conflicts', () => vault ? vault.conflictCopies() : []);
+  ipcMain.handle('captura-global', (_event, ligado) => {
+    const tecla = 'CommandOrControl+Shift+Space';
+    globalShortcut.unregister(tecla);
+    if (!ligado) return true;
+    try { return globalShortcut.register(tecla, () => { const janela = BrowserWindow.getAllWindows()[0]; if (!janela) return; if (janela.isMinimized()) janela.restore(); janela.show(); janela.focus(); janela.webContents.send('captura-global'); }); } catch { return false; }
+  });
+  ipcMain.handle('nota:imprimir', event => new Promise((resolve, reject) => {
+    if (event.senderFrame !== event.sender.mainFrame) return reject(new Error(frase('Pedido de impressão inválido.')));
+    event.sender.print({ silent: false, printBackground: false }, (sucesso, motivo) => {
+      if (sucesso || motivo === 'Print job canceled') resolve(sucesso);
+      else reject(new Error(frase('Não foi possível imprimir ou exportar esta nota.')));
+    });
+  }));
+  ipcMain.handle('nota:pdf', async (event, titulo) => {
+    if (event.senderFrame !== event.sender.mainFrame || typeof titulo !== 'string') throw new Error(frase('Pedido de impressão inválido.'));
+    const nome = titulo.replace(/[<>:"/\\|?*\x00-\x1f]/g, '-').replace(/[. ]+$/, '').slice(0, 100) || 'nota';
+    const resultado = await dialog.showSaveDialog(BrowserWindow.fromWebContents(event.sender), {
+      title: t('Exportar nota para PDF'), defaultPath: `${nome}.pdf`, filters: [{ name: 'PDF', extensions: ['pdf'] }],
+    });
+    if (resultado.canceled || !resultado.filePath) return false;
+    const dados = await event.sender.printToPDF({ printBackground: false, pageSize: 'A4' });
+    await atomicWrite(resultado.filePath, dados);
+    return true;
+  });
   ipcMain.handle('vault:trash', () => vault.trash());
   ipcMain.handle('vault:restore', (_event, pedido) => vault.restore(pedido));
+  ipcMain.handle('vault:history', (_event, pedido) => vault.history(pedido));
+  ipcMain.handle('vault:history-read', (_event, pedido) => vault.readHistory(pedido));
+  ipcMain.handle('vault:history-restore', (_event, pedido) => vault.restoreHistory(pedido));
   ipcMain.handle('vault:attachment', (_event, pedido) => {
     if (!(pedido?.dados instanceof Uint8Array)) throw new Error(frase('Imagem inválida.'));
     return vault.saveAttachment({ name: String(pedido.nome || ''), data: Buffer.from(pedido.dados) });
+  });
+  // Botão "Abrir" de um PDF na nota: o leitor do sistema abre o arquivo do cofre.
+  // O caminho passa pela mesma contenção de readAttachment (extensão e safePath).
+  ipcMain.handle('vault:open-attachment', async (_event, caminho) => {
+    const relativo = String(caminho || '');
+    if (!/\.(png|jpe?g|gif|webp|avif|bmp|pdf)$/i.test(relativo)) throw new Error(frase('Imagem inválida.'));
+    return shell.openPath(await vault.safePath(relativo));
   });
   // `vault` é lido a cada pedido: depois de escolher outro cofre, as imagens vêm do novo.
   protocol.handle('kiro-anexo', async request => {
     try {
       const relativo = new URL(request.url).pathname.slice(1).split('/').map(decodeURIComponent).join('/');
       const { data, type } = await vault.readAttachment(relativo);
-      return new Response(data, { headers: { 'Content-Type': type, 'X-Content-Type-Options': 'nosniff' } });
+      // CORS porque o PDF.js faz fetch do documento e a página é file:// (esquema cruzado);
+      // o esquema serve só anexos do cofre, como o kiro-plugin já faz.
+      const parte = require('../vault.cjs').attachmentRange(data, request.headers.get('range'));
+      return new Response(parte.data, { status: parte.status, headers: { 'Content-Type': type, 'X-Content-Type-Options': 'nosniff', 'Access-Control-Allow-Origin': '*', ...parte.headers } });
     } catch { return new Response('Imagem não encontrada.', { status: 404 }); }
   });
   // kiro-plugin://kiro.app/plugin-worker.js (e o plugins.js que ele importa) é o worker do Kiro;
@@ -169,18 +228,39 @@ else app.whenReady().then(async () => {
   ipcMain.on('corretor:definir', (event, ligado) => event.sender.session.setSpellCheckerEnabled(ligado === true));
   ipcMain.on('corretor:trocar', (event, palavra) => { if (palavraValida(palavra)) event.sender.replaceMisspelling(palavra); });
   ipcMain.on('corretor:adicionar', (event, palavra) => { if (palavraParaDicionario(palavra)) event.sender.session.addWordToSpellCheckerDictionary(palavra); });
+  // A nova janela nasce no lugar da antiga (antes de fechá-la, senão o app encerra) e recarrega a página.
+  ipcMain.handle('janela:vidro', async (event, ligado) => {
+    const janela = BrowserWindow.fromWebContents(event.sender);
+    const vidro = ligado === true && VIDRO_NATIVO;
+    if (vidro !== vidroSalvo()) await atomicWrite(arquivoDoVidro(), JSON.stringify({ vidro }));
+    if (janela && janelasDeVidro.has(janela) !== vidro) {
+      const nova = createWindow(vidro, janela.getNormalBounds());
+      if (janela.isMaximized()) nova.maximize();
+      janela.destroy();
+    }
+    return vidro;
+  });
   // Cores dos botões da janela: só as duas cores, validadas, para a janela que pediu.
   ipcMain.on('janela:cores', (event, cores) => {
     const cor = v => (typeof v === 'string' && /^#[0-9a-f]{6}$/i.test(v.trim()) ? v.trim() : null);
     const janela = BrowserWindow.fromWebContents(event.sender);
     const fundo = cor(cores?.fundo), simbolo = cor(cores?.simbolo);
-    if (JANELA_PROPRIA && janela && fundo && simbolo) janela.setTitleBarOverlay({ color: fundo, symbolColor: simbolo, height: ALTURA_DA_BARRA });
+    if (JANELA_PROPRIA && janela && fundo && simbolo) janela.setTitleBarOverlay({ color: cores.vidro === true && VIDRO_NATIVO ? '#00000000' : fundo, symbolColor: simbolo, height: ALTURA_DA_BARRA });
   });
-  ipcMain.handle('plugins:list', () => vault.listPlugins());
+  ipcMain.handle('plugins:list', async () => {
+    const atual = vault;
+    if (!atual) return [];
+    const origem = app.isPackaged ? join(process.resourcesPath, 'plugins') : join(__dirname, '..', 'examples', 'plugins');
+    await instalarPluginsInclusos(atual, origem);
+    return atual.listPlugins();
+  });
   ipcMain.handle('plugins:choices:get', () => vault.readPluginChoices());
+  ipcMain.handle('plugins:inspect', (_event, id) => vault.inspectPlugin(id));
   ipcMain.handle('plugins:choices:set', (_event, escolhas) => vault.writePluginChoices(escolhas));
   ipcMain.handle('home:get', () => vault.readHomeLayout());
   ipcMain.handle('home:set', (_event, layout) => vault.writeHomeLayout(layout));
+  ipcMain.handle('favoritos:get', () => vault.readBookmarks());
+  ipcMain.handle('favoritos:set', (_event, favoritos) => vault.writeBookmarks(favoritos));
   ipcMain.handle('dicionario:get', () => vault.readDictionary());
   ipcMain.handle('dicionario:add', (_event, palavra) => vault.addToDictionary(palavra));
   ipcMain.handle('plugins:data:get', (_event, id) => vault.readPluginData(String(id || '')));
@@ -206,6 +286,15 @@ else app.whenReady().then(async () => {
   ipcMain.handle('vault:path', () => vault.directory);
   ipcMain.handle('agent:config:get', () => agentConfig.load());
   ipcMain.handle('agent:config:set', (_event, parcial) => agentConfig.save(parcial));
+  ipcMain.handle('backup:status', () => agendadorBackup.obterStatus());
+  ipcMain.handle('backup:config:set', (_event, parcial) => agendadorBackup.salvarConfig(parcial));
+  ipcMain.handle('backup:run', (_event, opcoes) => agendadorBackup.executarAgora(opcoes));
+  ipcMain.handle('backup:choose', async event => {
+    const result = await dialog.showOpenDialog(BrowserWindow.fromWebContents(event.sender), { title: t('Escolher pasta de destino do backup'), properties: ['openDirectory', 'createDirectory'] });
+    if (result.canceled || !result.filePaths[0]) return null;
+    return agendadorBackup.salvarConfig({ destino: result.filePaths[0] });
+  });
+  ipcMain.handle('backup:open', async () => shell.openPath(await agendadorBackup.pastaDoCofreNoDestino()));
   ipcMain.handle('vault:choose', async event => {
     const result = await dialog.showOpenDialog(BrowserWindow.fromWebContents(event.sender), { title: t('Abrir pasta como cofre Kiro'), properties: ['openDirectory', 'createDirectory'] });
     if (result.canceled) return null;
@@ -214,6 +303,7 @@ else app.whenReady().then(async () => {
     await atomicWrite(settings, JSON.stringify({ directory: selected.directory }));
     vault = selected;
     agentConfig = new AgentConfig(selected.directory);
+    agendadorBackup.iniciar();
     return state;
   });
   createWindow();
@@ -221,3 +311,4 @@ else app.whenReady().then(async () => {
   app.on('second-instance', () => { const window = BrowserWindow.getAllWindows()[0]; if (window) { window.restore(); window.focus(); } });
 }).catch(error => { dialog.showErrorBox(t('Não foi possível abrir o Kiro'), error.message); app.quit(); });
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
+app.on('will-quit', () => globalShortcut.unregisterAll());

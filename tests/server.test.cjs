@@ -48,6 +48,14 @@ test('servidor restringe acesso e persiste o cofre pela API', async t => {
   const volta=await restaurada.json();
   assert.equal(volta.notes.length,1);
   assert.equal(volta.notes[0].body,'Conteúdo');
+  volta.notes[0].body='Alterado';
+  const post=async(endpoint,data)=>fetch(base+'/api/'+endpoint,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
+  const atualizado=await (await post('state',volta)).json();
+  const versoes=await (await post('history',{noteId:'http-note'})).json();
+  const versao=versoes[0];assert.equal((await (await post('history-read',{noteId:'http-note',snapshotId:versao.snapshotId})).json()).body,'Conteúdo');
+  assert.equal((await post('history-restore',{noteId:'http-note',snapshotId:versao.snapshotId,revision:'antiga'})).status,400);
+  const restaurado=await (await post('history-restore',{noteId:'http-note',snapshotId:versao.snapshotId,revision:atualizado.revision})).json();
+  assert.equal(restaurado.notes[0].body,'Conteúdo');
 });
 
 test('modo de desenvolvimento injeta a recarga ao vivo; o normal não a expõe', async t => {

@@ -7,6 +7,16 @@ const { spawn } = require('node:child_process');
 const { Vault } = require('../vault.cjs');
 const domain = require('../domain.js');
 
+test('áudio WAV e MP3 usam assinatura e leitura por intervalo', async t => {
+  const vault=await cofre(t), wav=Buffer.concat([Buffer.from('RIFF'),Buffer.alloc(4),Buffer.from('WAVE'),Buffer.from('som')]);
+  const caminho=(await vault.saveAttachment({name:'voz.wav',data:wav})).path;
+  const lido=await vault.readAttachment(caminho);assert.equal(lido.type,'audio/wav');
+  const parte=require('../vault.cjs').attachmentRange(lido.data,'bytes=2-5');assert.equal(parte.status,206);assert.deepEqual(parte.data,wav.subarray(2,6));
+  assert.equal(require('../vault.cjs').attachmentRange(wav,'bytes=999-').status,416);
+  assert.match((await vault.saveAttachment({name:'musica.mp3',data:Buffer.from('ID3\x04\x00\x00')})).path,/\.mp3$/);
+  await assert.rejects(vault.saveAttachment({name:'falso.webm',data:Buffer.from('não é áudio')}));
+});
+
 // PNG válido de 1x1.
 const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAMAASsJTYQAAAAASUVORK5CYII=', 'base64');
 const nota = (extra = {}) => ({ id: 'nota-1', title: 'Com imagem', body: 'Texto', links: [], tags: [], folderId: '', updatedAt: Date.now(), ...extra });
@@ -44,7 +54,7 @@ test('nome de arquivo arrastado vira slug; conteúdo e caminhos perigosos são r
   assert.match((await vault.saveAttachment({ name: '../../fora.png', data: PNG })).path, /^Anexos\/fora-[0-9a-f]{6}\.png$/);
   await assert.rejects(vault.saveAttachment({ name: 'x.png', data: Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"/>') }), /não é uma imagem/);
   await assert.rejects(vault.saveAttachment({ name: 'x.png', data: Buffer.alloc(0) }), /vazia/);
-  await assert.rejects(vault.saveAttachment({ data: Buffer.concat([PNG, Buffer.alloc(20 * 1024 * 1024)]) }), /20 MB/);
+  await assert.rejects(vault.saveAttachment({ data: Buffer.concat([PNG, Buffer.alloc(250 * 1024 * 1024)]) }), /250 MB/);
   for (const ruim of ['../fora.png', 'Anexos/../../fora.png', '.history/x.png', 'caderno.json', 'Anexos/.kiro-anexos', 'C:/Windows/x.png'])
     await assert.rejects(vault.readAttachment(ruim), `aceitou ${ruim}`);
 });
@@ -69,6 +79,9 @@ test('imagem embutida não conta como ligação entre notas', () => {
   assert.deepEqual(domain.wikiLinks('![[Anexos/a.png|300]] e [[Nota]] e ![[Outra nota]]').map(l => l.target), ['Nota', 'Outra nota']);
   assert.equal(domain.isImagePath('Anexos/Print.PNG'), true);
   assert.equal(domain.isImagePath('Anexos/x.svg'), false);
+  assert.equal(domain.isPdfPath('Anexos/Aula.PDF'), true);
+  assert.deepEqual(domain.lerPdf('Anexos/Aula.pdf#page=4|500'), { arquivo: 'Anexos/Aula.pdf', pagina: 4, altura: 500 });
+  assert.deepEqual(domain.wikiLinks('![[Anexos/Aula.pdf#page=2]] e [[Nota]]').map(l => l.target), ['Nota']);
 });
 
 test('servidor recebe imagem colada e só devolve imagens de dentro do cofre', async t => {

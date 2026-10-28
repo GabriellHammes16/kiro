@@ -693,6 +693,25 @@ test('tarefas: criar, listar, editar, mudar status e excluir pela API de agentes
   assert.deepEqual([...new Set(vistos)].sort(), ['task.created', 'task.deleted', 'task.updated']);
 });
 
+test('tarefas recorrentes pela API persistem próxima ocorrência sem duplicar ao reabrir', async t => {
+  const { toolkit, vault } = await montar(t);
+  const estado = await vault.load();
+  await vault.save({ ...estado, tasks: [{ id: 'recorrente', title: 'Diária', due: '2026-10-25', priority: 'Média', done: false, repeat: { every: 'day' } }] });
+  await toolkit.call('set_task_status', { id: 'recorrente', status: 'concluido' }, cliente);
+  let salvo = await vault.load();
+  assert.equal(salvo.tasks.length, 2);
+  const proxima = salvo.tasks.find(t => t.id !== 'recorrente');
+  assert.equal(proxima.due, '2026-10-26');
+  assert.equal(salvo.tasks.find(t => t.id === 'recorrente').repeatNextId, proxima.id);
+  await toolkit.call('set_task_status', { id: 'recorrente', status: 'andamento' }, cliente);
+  await toolkit.call('update_task', { id: 'recorrente', status: 'concluido' }, cliente);
+  assert.equal((await vault.load()).tasks.length, 2);
+  await toolkit.call('update_task', { id: proxima.id, status: 'concluido' }, cliente);
+  salvo = await vault.load();
+  assert.equal(salvo.tasks.length, 3);
+  assert.equal(salvo.tasks.find(t => !t.done).due, '2026-10-27');
+});
+
 test('tarefas: entradas inválidas são recusadas com motivo', async t => {
   const { toolkit } = await montar(t);
   await assert.rejects(toolkit.call('create_task', { title: '   ' }, cliente), codigo('INVALID_INPUT'));

@@ -24,7 +24,7 @@ test('aparência padrão: vazio, lixo ou nada viram Escuro Clássico + Padrão',
     assert.equal(a.tema, PADRAO.tema, `tema para ${JSON.stringify(salvo)}`);
     assert.equal(a.skin, PADRAO.skin, `skin para ${JSON.stringify(salvo)}`);
   }
-  assert.deepEqual(APARENCIA_PADRAO, { tema: 'kiro', skin: 'padrao', sidebar: '#11161D', content: '#0B0F14', acento: '#9273FF', destaque: '' });
+  assert.deepEqual(APARENCIA_PADRAO, { tema: 'kiro', skin: 'padrao', sidebar: '#11161D', content: '#0B0F14', acento: '#9273FF', destaque: '', transparencia: 35 });
   assert.deepEqual(classesDaAparencia(aparenciaValida(undefined)), ['tema-kiro', 'skin-padrao']);
 });
 
@@ -53,6 +53,20 @@ test('ids desconhecidos e cores inválidas caem no padrão', () => {
   assert.equal(p.sidebar, APARENCIA_PADRAO.sidebar);
   assert.equal(p.content, APARENCIA_PADRAO.content);
   assert.equal(p.acento, APARENCIA_PADRAO.acento);
+});
+
+test('Liquid Glass e transparência sobrevivem ao salvamento sem alterar outros temas', () => {
+  const a = aparenciaValida(JSON.parse(JSON.stringify({ tema: 'liquid-glass', transparencia: 65 })));
+  assert.equal(a.tema, 'liquid-glass');
+  assert.equal(a.transparencia, 65);
+  assert.deepEqual(classesDaAparencia(a), ['tema-liquid-glass', 'skin-padrao']);
+  assert.equal(aparenciaValida({ ...a, tema: 'kiro' }).transparencia, 65);
+});
+
+test('transparência valida limites, zero e preferências antigas ou corrompidas', () => {
+  for (const [entrada, esperado] of [[0, 0], [80, 80], [-20, 0], [150, 80], [32.6, 33], [undefined, 35], [null, 35], ['70', 35], [NaN, 35], [Infinity, 35]]) {
+    assert.equal(aparenciaValida({ transparencia: entrada }).transparencia, esperado, String(entrada));
+  }
 });
 
 test('destaque vale em qualquer tema e é independente dele; inválido volta a seguir o tema', () => {

@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; connect-src 'self' data:; worker-src 'self' blob: kiro-plugin:; frame-src 'self' kiro-plugin:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: kiro-anexo:; media-src 'self' blob:; object-src 'none'; base-uri 'none'" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; connect-src 'self' data: kiro-anexo:; worker-src 'self' blob: kiro-plugin:; frame-src 'self' kiro-plugin:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: kiro-anexo:; media-src 'self' blob: kiro-anexo:; object-src 'none'; base-uri 'none'" />
     <title>Kiro</title>
     <link rel="stylesheet" href="vendor/katex/katex.min.css" />
     <link rel="stylesheet" href="styles.css" />
@@ -15,12 +15,13 @@
     <div class="app-shell">
       <aside class="sidebar">
         <div class="sidebar-topo">
-          <button class="busca-rapida" id="go-note" title="Ir para nota (Ctrl+O)"><span class="rotulo-icone" data-icone="ir-para-nota"></span><span class="rotulo">Ir para nota</span><kbd class="rotulo">Ctrl+O</kbd></button>
-          <button class="icon-button lateral-alternar" id="alternar-lateral" data-icone="esquerda" aria-label="Recolher barra lateral" title="Recolher barra lateral (Ctrl+\)" aria-expanded="true"></button>
+          <button class="busca-rapida" id="go-note"><span class="rotulo-icone" data-icone="ir-para-nota"></span><span class="rotulo">Ir para nota</span></button>
+          <button class="icon-button lateral-alternar" id="alternar-lateral" data-icone="esquerda" aria-label="Recolher barra lateral" title="Recolher barra lateral" aria-expanded="true"></button>
         </div>
         <div class="acoes-rapidas">
           <button class="new-note" id="new-note"><span class="rotulo-icone" data-icone="nova-nota"></span><span class="rotulo">Nova nota</span></button>
-          <button class="nota-diaria" id="daily-note" title="Nota diária"><span class="rotulo-icone" data-icone="nota-diaria"></span><span class="rotulo">Diária</span></button>
+          <button class="nota-diaria" id="daily-note" title="Nota diária"><span class="rotulo-icone" data-icone="nota-diaria"></span><span class="rotulo sr-only">Diária</span></button>
+          <button class="busca-rapida acao-icone" id="quick-actions" title="Ações rápidas" aria-haspopup="dialog"><span class="rotulo-icone" data-icone="lista-marcadores"></span><span class="rotulo sr-only">Ações rápidas</span></button>
         </div>
         <nav aria-label="Navegação principal">
           <button class="nav-item active" data-view="today"><span class="rotulo-icone" data-icone="hoje"></span><span class="rotulo">Hoje</span></button>
@@ -41,6 +42,7 @@
     <div id="modal-root"></div>
     <div id="save-status" role="status" aria-live="polite">Carregando…</div>
     <script src="vendor/katex/katex.min.js"></script>
+    <script src="vendor/pdfjs/pdf.min.js"></script>
     <script src="idiomas.js"></script>
     <script src="corretor.js"></script>
     <script src="editor-widgets.js"></script>
@@ -53,6 +55,7 @@
     <script src="fluxo-tela.js"></script>
     <script src="hoje.js"></script>
     <script src="icones-tema.js"></script>
+    <script src="pdf-nota.js"></script>
     <script src="app.js"></script>
   </body>
 </html>

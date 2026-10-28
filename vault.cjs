@@ -1,7 +1,7 @@
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const { createHash, randomUUID } = require('node:crypto');
-const { validateState, upgradeBackup, folderPaths, descendants, pathKey, folderColor, withHabits, validFolderName } = require('./domain.js');
+const { validateState, upgradeBackup, folderPaths, descendants, pathKey, folderColor, withHabits, validFolderName, aplicarRenomeacaoDeLinks } = require('./domain.js');
 const yaml = require('js-yaml');
 const KiroFluxo = require('./fluxo.js');
 const { palavraParaDicionario } = require('./corretor.js');
@@ -71,16 +71,35 @@ const temMarcaDeAnexos = async directory => {
   for (const marca of ATTACHMENT_MARKERS) if (await pathExists(path.join(directory, marca))) return true;
   return false;
 };
-const ATTACHMENT_LIMIT = 20 * 1024 * 1024;
+const ATTACHMENT_LIMIT = 250 * 1024 * 1024;
 const PLUGIN_FILE_LIMIT = 2 * 1024 * 1024;
 const PLUGIN_DATA_LIMIT = 1024 * 1024;
-const IMAGE_TYPES = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp', avif: 'image/avif', bmp: 'image/bmp' };
+const IMAGE_TYPES = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp', avif: 'image/avif', bmp: 'image/bmp', pdf: 'application/pdf', wav:'audio/wav', mp3:'audio/mpeg', webm:'audio/webm' };
+function audioSignature(data){
+  if(data.length>=12&&data.toString('ascii',0,4)==='RIFF'&&data.toString('ascii',8,12)==='WAVE')return 'wav';
+  if(data.length>=4&&(data.toString('ascii',0,3)==='ID3'||(data[0]===0xff&&(data[1]&0xe0)===0xe0&&(data[1]&0x18)!==0x08&&(data[1]&0x06)!==0)))return 'mp3';
+  if(data.length<12||data.readUInt32BE(0)!==0x1a45dfa3)return null;
+  const read=(start,end)=>{const out=[];let p=start;while(p<end){const first=data[p];if(!first)throw Error();let n=1,mask=0x80;while(n<=4&&!(first&mask)){n++;mask>>=1;}if(n>4||p+n>=end)throw Error();let id=0;for(let i=0;i<n;i++)id=id*256+data[p++];const f=data[p];if(!f)throw Error();let s=1,m=0x80;while(s<=8&&!(f&m)){s++;m>>=1;}if(s>8||p+s>end)throw Error();let size=f&(m-1);for(let i=1;i<s;i++)size=size*256+data[p+i];const unknown=size===2**(7*s)-1;p+=s;const stop=unknown?end:p+size;if(stop>end||!Number.isSafeInteger(stop))throw Error();out.push({id,start:p,end:stop});p=stop;}return out;};
+  try{const top=read(0,data.length),header=top.find(x=>x.id===0x1a45dfa3),segment=top.find(x=>x.id===0x18538067);if(!header||!segment||!read(header.start,header.end).some(x=>x.id===0x4282&&data.toString('ascii',x.start,x.end)==='webm'))return null;
+    const tracks=read(segment.start,segment.end).find(x=>x.id===0x1654ae6b);if(!tracks)return null;
+    const types=read(tracks.start,tracks.end).filter(x=>x.id===0xae).map(x=>read(x.start,x.end).find(y=>y.id===0x83)).map(x=>x&&x.end-x.start===1?data[x.start]:0);
+    return types.length&&types.every(x=>x===2)?'webm':null;
+  }catch{return null;}
+}
+function attachmentRange(data,header){
+  if(!header)return {data,status:200,headers:{'Accept-Ranges':'bytes','Content-Length':String(data.length)}};
+  const m=/^bytes=(\d*)-(\d*)$/.exec(header);if(!m||(!m[1]&&!m[2]))return {data:Buffer.alloc(0),status:416,headers:{'Content-Range':`bytes */${data.length}`}};
+  const start=m[1]?Number(m[1]):Math.max(0,data.length-Number(m[2])),end=m[1]?(m[2]?Math.min(Number(m[2]),data.length-1):data.length-1):data.length-1;
+  if(!Number.isSafeInteger(start)||!Number.isSafeInteger(end)||start>end||start>=data.length)return {data:Buffer.alloc(0),status:416,headers:{'Content-Range':`bytes */${data.length}`}};
+  return {data:data.subarray(start,end+1),status:206,headers:{'Accept-Ranges':'bytes','Content-Range':`bytes ${start}-${end}/${data.length}`,'Content-Length':String(end-start+1)}};
+}
 // Pelo conteúdo, não pelo nome nem pelo tipo declarado. SVG fica de fora: pode carregar script.
 function imageSignature(data) {
   if (data.length >= 8 && data.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) return 'png';
   if (data.length >= 3 && data[0] === 0xff && data[1] === 0xd8 && data[2] === 0xff) return 'jpg';
   if (data.length >= 6 && /^GIF8[79]a$/.test(data.subarray(0, 6).toString('latin1'))) return 'gif';
   if (data.length >= 12 && data.subarray(0, 4).toString('latin1') === 'RIFF' && data.subarray(8, 12).toString('latin1') === 'WEBP') return 'webp';
+  if (data.length >= 5 && data.subarray(0, 5).toString('latin1') === '%PDF-') return 'pdf';
   return null;
 }
 async function pathExists(file) { try { await fs.access(file); return true; } catch { return false; } }
@@ -127,6 +146,20 @@ class Vault {
       catch(error){if(error.code!=='ENOENT')throw error;}
     }
     return target;
+  }
+  async conflictCopies() {
+    await fs.mkdir(this.directory, { recursive: true });
+    const found = [];
+    const walk = async (relative = '') => {
+      const entries = await fs.readdir(relative ? await this.safePath(relative) : this.directory, { withFileTypes: true });
+      for (const entry of entries) {
+        if (entry.isSymbolicLink()) continue;
+        const file = relative ? `${relative}/${entry.name}` : entry.name;
+        if (entry.isFile() && /(?:\.sync-conflict-\d{8}-\d{6}-[^.]+|conflicted copy|cópia em conflito)/i.test(entry.name)) found.push(file);
+        if (entry.isDirectory() && !entry.name.startsWith('.')) await walk(file);
+      }
+    };
+    await walk(); return found.sort();
   }
   async scan() {
     const files=new Map(), directories=[];
@@ -206,6 +239,41 @@ class Vault {
     return {state:{...state,revision,vaultPath:this.directory},files,directories,metadata};
   }
   load(){return this.exclusive(async()=>(await this.read()).state);}
+  async historyNote({noteId,snapshotId}){
+    if(!/^[a-zA-Z0-9_-]{1,100}$/.test(noteId||'')||!/^\d+-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(snapshotId||''))throw new Error(frase('Histórico inválido.'));
+    const root=`.history/${snapshotId}`; let found=null;
+    const walk=async(relative='')=>{
+      for(const entry of await fs.readdir(await this.safePath(relative?`${root}/${relative}`:root),{withFileTypes:true})){
+        if(entry.name.startsWith('.'))continue;
+        const file=relative?`${relative}/${entry.name}`:entry.name, target=await this.safePath(`${root}/${file}`);
+        if(entry.isDirectory())await walk(file);
+        else if(entry.isFile()&&/\.md$/i.test(file)){
+          const info=await fs.stat(target);if(info.size>20*1024*1024)throw new Error(frase('Nota do histórico grande demais.'));
+          const note=parseMarkdown(await fs.readFile(target,'utf8'),file,info.mtimeMs);
+          if(note.id===noteId){if(found)throw new Error(frase('ID duplicado no histórico.'));found=note;}
+        }
+      }
+    };
+    await walk();if(!found)throw new Error(frase('Nota não encontrada no histórico.'));
+    return {body:found.body};
+  }
+  history({noteId}){return this.exclusive(async()=>{
+    if(!/^[a-zA-Z0-9_-]{1,100}$/.test(noteId||''))throw new Error(frase('Nota inválida.'));
+    let ids;try{ids=await fs.readdir(await this.safePath('.history'));}catch(error){if(error.code==='ENOENT')return [];throw error;}
+    const versions=[];
+    for(const snapshotId of ids.filter(id=>/^\d+-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(id)).sort().reverse()){
+      try{await this.historyNote({noteId,snapshotId});versions.push({snapshotId,when:Number(snapshotId.split('-')[0])});}
+      catch(error){if(error.message!==frase('Nota não encontrada no histórico.'))throw error;}
+    }
+    return versions;
+  });}
+  readHistory(pedido){return this.exclusive(()=>this.historyNote(pedido));}
+  restoreHistory({noteId,snapshotId,revision}){return this.locked(async()=>{
+    const before=await this.read();if(before.state.revision!==revision)throw new Error(frase('O cofre mudou. Recarregue antes de restaurar.'));
+    const note=before.state.notes.find(n=>n.id===noteId);if(!note)throw new Error(frase('Nota não encontrada.'));
+    const {body}=await this.historyNote({noteId,snapshotId});
+    note.body=body;note.updatedAt=Date.now();return this.write(before.state);
+  });}
   locked(operation){
     return this.exclusive(async()=>{
       await fs.mkdir(this.directory,{recursive:true});const lockPath=await this.safePath('.kiro.lock');let lock;
@@ -217,6 +285,7 @@ class Vault {
   async write(input,restoring=null){
     validateState(input);const before=await this.read();
     if(input.revision!==before.state.revision)throw new Error(frase('O cofre mudou em outro editor. Exporte suas alterações e recarregue antes de salvar.'));
+    for(const note of input.notes){const old=before.state.notes.find(n=>n.id===note.id);if(old&&old.title!==note.title)input=aplicarRenomeacaoDeLinks(input,note.id,old.title,note.title).state;}
     const paths=folderPaths(input.folders), beforeFolders=before.state.folders;
     for(const folderPath of paths.values())if(!folderPath.includes('/')&&await temMarcaDeAnexos(path.join(this.directory,folderPath)))throw new Error(`A pasta "${folderPath}" guarda as imagens coladas nas notas. Escolha outro nome.`);
     const owner=file=>beforeFolders.filter(f=>f.diskPath&&inside(file,f.diskPath)).sort((a,b)=>b.diskPath.length-a.diskPath.length)[0];
@@ -346,9 +415,9 @@ class Vault {
   saveAttachment({name='',data}={}){
     return this.exclusive(async()=>{
       if(!Buffer.isBuffer(data)||!data.length)throw new Error(frase('Imagem vazia.'));
-      if(data.length>ATTACHMENT_LIMIT)throw new Error(frase('Imagem maior que 20 MB.'));
-      const extension=imageSignature(data);
-      if(!extension)throw new Error(frase('O arquivo não é uma imagem PNG, JPEG, GIF ou WebP.'));
+      if(data.length>ATTACHMENT_LIMIT)throw new Error(frase('Imagem maior que 250 MB.'));
+      const extension=imageSignature(data)||audioSignature(data);
+      if(!extension)throw new Error(frase('O arquivo não é uma imagem PNG, JPEG, GIF, WebP, PDF ou áudio WAV, MP3 ou WebM.'));
       const folder=await this.attachmentFolder();
       // A marca vem antes da imagem: a pasta nunca aparece na varredura sem ela.
       const marker=await this.safePath(`${folder}/${ATTACHMENT_MARKER}`);
@@ -369,7 +438,9 @@ class Vault {
     const file=await this.safePath(relative);
     const info=await fs.stat(file);
     if(!info.isFile()||info.size>ATTACHMENT_LIMIT)throw new Error(frase('Imagem inválida.'));
-    return {data:await fs.readFile(file),type};
+    const data=await fs.readFile(file);
+    if(type.startsWith('audio/')&&audioSignature(data)!==relative.split('.').pop().toLowerCase())throw new Error(frase('Áudio inválido.'));
+    return {data,type};
   }
   /** Plug-ins ficam em <cofre>/.kiro/plugins/<id>/. Só o que está nessa pasta é servido. */
   async pluginPath(id,arquivo=''){
@@ -403,6 +474,19 @@ class Vault {
     if(!info.isFile()||info.size>PLUGIN_FILE_LIMIT)throw new Error(frase('Arquivo de plug-in inválido.'));
     return fs.readFile(alvo);
   }
+  async inspectPlugin(id) {
+    const entries = await fs.readdir(await this.pluginPath(id), { withFileTypes: true });
+    const result = []; let total = 0;
+    for (const entry of entries) {
+      if (!entry.isFile() || !/^(?:manifest\.json|[a-z0-9][a-z0-9._-]{0,60}\.(?:js|html|css))$/i.test(entry.name)) continue;
+      const file = await this.pluginPath(id, entry.name), info = await fs.stat(file);
+      if (!info.isFile() || info.size > PLUGIN_FILE_LIMIT) throw new Error(frase('Arquivo de plug-in inválido.'));
+      const data = await fs.readFile(file); total += data.length;
+      if (data.length > PLUGIN_FILE_LIMIT || total > 4 * 1024 * 1024 || result.length >= 100) throw new Error(frase('Arquivo de plug-in inválido.'));
+      result.push({ name: entry.name, text: data.toString('utf8') });
+    }
+    return result;
+  }
   /** Escolhas do usuário (ativado, permissões concedidas) em .kiro/plugins.json. */
   async readPluginChoices(){
     const bruto=await optionalRead(path.join(this.directory,'.kiro','plugins.json'));
@@ -422,6 +506,17 @@ class Vault {
   async writeHomeLayout(layout){
     await atomicWrite(path.join(this.directory,'.kiro','hoje.json'),`${JSON.stringify(layout,null,2)}\n`);
     return layout;
+  }
+  /** Favoritos e grupos em .kiro/favoritos.json. */
+  async readBookmarks(){
+    const bruto=await optionalRead(path.join(this.directory,'.kiro','favoritos.json'));
+    if(!bruto)return {itens:[]};
+    try{const dado=JSON.parse(bruto);return dado&&typeof dado==='object'&&!Array.isArray(dado)?dado:{itens:[]};}catch{return {itens:[]};}
+  }
+  async writeBookmarks(favoritos){
+    const obj=favoritos&&typeof favoritos==='object'&&!Array.isArray(favoritos)?favoritos:{itens:[]};
+    await atomicWrite(path.join(this.directory,'.kiro','favoritos.json'),`${JSON.stringify(obj,null,2)}\n`);
+    return obj;
   }
   /** Dicionário pessoal do corretor em .kiro/dicionario.txt: uma palavra por linha. */
   async readDictionary(){
@@ -515,4 +610,4 @@ class Vault {
     await atomicWrite(await this.safePath(`.trash/${entryId}/restored`),'true');return result;
   });}
 }
-module.exports={Vault,parseMarkdown,markdown,atomicWrite,rewritePaths,HISTORY_LIMIT};
+module.exports={Vault,parseMarkdown,markdown,atomicWrite,rewritePaths,attachmentRange,HISTORY_LIMIT,ATTACHMENT_LIMIT};

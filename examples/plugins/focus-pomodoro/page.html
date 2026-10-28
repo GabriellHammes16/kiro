@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="pt-BR">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Foco / Pomodoro</title><link rel="stylesheet" href="style.css"></head>
+<body>
+  <main>
+    <header><div><p class="eyebrow">UM TEMPO PARA O ESSENCIAL</p><h1>Foco / Pomodoro</h1></div><span class="header-mark" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="13" r="8"/><path d="M9 2h6M12 2v3M12 9v5l3 2"/></svg></span></header>
+    <p id="message" class="message" role="status">Preparando seu espaço de foco…</p>
+    <div class="workspace">
+      <section class="focus" aria-labelledby="phase">
+        <div class="phase-row"><h2 id="phase">Foco</h2><span id="status">Pronto para começar</span></div>
+        <div class="dial"><svg viewBox="0 0 300 300" aria-hidden="true"><circle class="track" cx="150" cy="150" r="137"/><circle id="progress" cx="150" cy="150" r="137" pathLength="100"/></svg><div class="dial-copy"><p class="eyebrow" id="dial-label">SEU PRÓXIMO CICLO</p><p id="time" role="timer" aria-label="Tempo restante">25:00</p><p id="cycle-caption">Uma coisa de cada vez.</p></div></div>
+        <div class="task-field"><label for="task">Em que você quer se concentrar?</label><select id="task" disabled><option value="">Foco livre</option></select><p id="task-hint">Suas tarefas pendentes aparecem aqui.</p></div>
+        <div class="actions"><button id="toggle" class="primary" disabled>Iniciar foco</button><button id="cancel" disabled>Encerrar</button></div>
+        <p class="footnote">O tempo continua ao sair desta página. Use uma janela por vez.</p>
+      </section>
+      <aside aria-label="Seu histórico de foco"><section class="summary"><p class="eyebrow">HOJE, NO SEU RITMO</p><div class="metric"><strong id="minutes">0</strong><span>minutos de foco</span></div><p id="count">Nenhuma sessão concluída</p><div class="rule"></div><p>Pequenos intervalos.<br>Espaço para fazer bem.</p></section><section class="history"><div class="history-heading"><h2>Últimas sessões</h2><span id="history-count">0</span></div><ol id="sessions"></ol><p id="empty">Seu primeiro ciclo começa aqui. Ao concluir um foco, ele aparece nesta lista.</p></section><section class="report" aria-labelledby="report-title"><div class="history-heading"><h2 id="report-title">Relatório</h2><select id="report-period" aria-label="Período do relatório"><option value="hoje">Hoje</option><option value="semana">Últimos 7 dias</option><option value="mes">Últimos 30 dias</option></select></div><p class="report-total"><strong id="report-total">0 min</strong> de foco concluído</p><p class="report-empty">Últimas 200 sessões, classificadas pelas pastas e tags consultadas ao abrir ou concluir um foco. Tarefas ou notas removidas ficam sem classificação; as sessões antigas não guardam essa atribuição. Cada tag recebe o tempo inteiro da sessão e pode se sobrepor às demais.</p><p id="report-warning" class="message error" role="status" hidden>Não foi possível consultar todas as tarefas ou notas. O tempo total foi preservado; parte da classificação está indisponível.</p><h3>Por pasta</h3><ul id="report-folders" class="bars"></ul><p id="report-folders-empty" class="report-empty" hidden>Nenhuma sessão concluída neste período.</p><h3>Por tag</h3><ul id="report-tags" class="bars"></ul><p id="report-tags-empty" class="report-empty" hidden>Nenhuma tag nas tarefas deste período.</p></section></aside>
+    </div>
+    <footer>Foco e pausa podem ser ajustados em Configurações → Plug-ins. As mudanças valem para os próximos ciclos.</footer>
+  </main>
+  <script src="modelo.js"></script><script src="page.js"></script>
+</body></html>

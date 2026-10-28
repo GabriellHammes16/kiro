@@ -1,0 +1,214 @@
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+  background: var(--bg,#faf9f6);
+  color: var(--ink,#242720);
+  font: 15px/1.6 var(--fonte-interface,system-ui);
+}
+main {
+  max-width: 900px;
+  margin: auto;
+  padding: 44px clamp(20px, 5vw, 60px);
+}
+header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+}
+h1 {
+  font-size: clamp(28px, 5vw, 40px);
+  font-weight: 550;
+  letter-spacing: -.04em;
+  margin: 0;
+}
+.eyebrow {
+  font-size: 10px;
+  font-weight: 650;
+  letter-spacing: .14em;
+  color: var(--muted,#71756d);
+  margin: 0 0 8px;
+}
+button {
+  font: inherit;
+  border: 1px solid var(--line,#dcded7);
+  border-radius: 12px;
+  background: var(--panel,#fff);
+  color: var(--ink,#242720);
+  padding: 10px 18px;
+  cursor: pointer;
+}
+button:hover {
+  background: var(--surface-hover,var(--campo,#f0f1eb));
+}
+button:disabled {
+  opacity: .55;
+  cursor: wait;
+}
+button:focus-visible {
+  outline: 3px solid var(--focus-ring,var(--acento,#50734c));
+  outline-offset: 4px;
+}
+.primary {
+  background: var(--acento,#50734c);
+  color: var(--primario-texto,#fff);
+  border-color: transparent;
+}
+.primary:hover {
+  background: var(--acento-forte,var(--acento,#50734c));
+  filter: brightness(.96);
+}
+.muted {
+  color: var(--muted,#71756d);
+  font-size: 13px;
+}
+#summary {
+  margin: 18px 0 32px;
+}
+.session {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  font-size: 12px;
+  color: var(--muted,#71756d);
+}
+progress {
+  display: block;
+  width: 100%;
+  height: 3px;
+  margin: 12px 0 22px;
+  accent-color: var(--acento,#50734c);
+  border: 0;
+  background: var(--line,#dcded7);
+}
+progress::-webkit-progress-bar {
+  background: var(--line,#dcded7);
+}
+progress::-webkit-progress-value {
+  background: var(--acento,#50734c);
+}
+.card {
+  background: var(--panel,#fff);
+  border: 1px solid var(--line,#dcded7);
+  border-radius: 20px;
+  padding: clamp(24px, 5vw, 52px);
+  min-height: 340px;
+}
+#source {
+  overflow-wrap: anywhere;
+}
+h2 {
+  font: 500 clamp(24px, 4vw, 36px)/1.4 var(--fonte-leitura,Georgia,serif);
+  letter-spacing: -.02em;
+  overflow-wrap: anywhere;
+  margin: 24px 0 36px;
+  white-space: pre-wrap;
+}
+h2:focus {
+  outline: none;
+}
+#answer-area {
+  padding-top: 24px;
+  border-top: 1px solid var(--line,#dcded7);
+  margin-bottom: 28px;
+}
+#answer {
+  font: 20px/1.7 var(--fonte-leitura,Georgia,serif);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  margin: 8px 0;
+}
+#reveal {
+  width: 100%;
+}
+.ratings {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.ratings button {
+  padding: 14px;
+}
+.ratings span {
+  display: block;
+  font-size: 11px;
+  opacity: .85;
+  margin-top: 3px;
+}
+.empty {
+  text-align: center;
+  padding: 48px 24px;
+  border: 1px solid var(--line,#dcded7);
+  border-radius: 20px;
+  background: var(--panel,#fff);
+}
+.empty svg {
+  fill: none;
+  stroke: var(--accent-text,var(--acento,#50734c));
+  stroke-width: 1.5;
+}
+.empty h2 {
+  margin: 18px 0 10px;
+  font-size: 28px;
+}
+.empty p {
+  max-width: 440px;
+  margin: 0 auto;
+}
+footer {
+  margin-top: 38px;
+  padding-top: 24px;
+  border-top: 1px solid var(--line,#dcded7);
+}
+h3 {
+  font-size: 14px;
+  font-weight: 550;
+  margin: 0;
+}
+footer p {
+  font-size: 13px;
+  margin: 8px 0;
+}
+code {
+  display: inline-block;
+  padding: 8px 12px;
+  background: var(--campo,#f0f1eb);
+  border-radius: 8px;
+  font-family: var(--fonte-codigo,monospace);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+#error {
+  padding: 14px 18px;
+  border: 1px solid var(--danger,#aa3939);
+  color: var(--danger,#aa3939);
+  border-radius: 12px;
+  font-size: 13px;
+}
+[hidden] {
+  display: none !important;
+}
+@media (max-width: 600px) {
+  main {
+    padding-top: 26px;
+  }
+  .card {
+    min-height: 300px;
+  }
+  .ratings {
+    grid-template-columns: 1fr;
+  }
+  header {
+    gap: 12px;
+  }
+  .session {
+    font-size: 11px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  * {
+    scroll-behavior: auto;
+  }
+}

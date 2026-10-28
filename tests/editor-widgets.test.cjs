@@ -190,3 +190,12 @@ test('citação de tarefa: [[tarefa:id|Título]] vira elemento próprio, fora de
   const c = els.filter(e => e.tipo === 'citacaoTarefa');
   assert.deepEqual(c.map(e => [fatia(s, e), e.id, e.titulo]), [['[[tarefa:abc-1|Assistir à aula]]', 'abc-1', 'Assistir à aula']]);
 });
+
+test('PDF embutido: ![[arquivo.pdf#page=3|520]] vira elemento pdf', () => {
+  const { s, els } = achar('Veja ![[Anexos/apostila.pdf#page=3|520]] e ![[doc.pdf]]');
+  const pdfs = els.filter(e => e.tipo === 'pdf');
+  assert.deepEqual(pdfs.map(p => [fatia(s, p), p.arquivo, p.pagina, p.altura]), [
+    ['![[Anexos/apostila.pdf#page=3|520]]', 'Anexos/apostila.pdf', 3, 520],
+    ['![[doc.pdf]]', 'doc.pdf', null, null],
+  ]);
+});

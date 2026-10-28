@@ -262,6 +262,28 @@
       }
     }, { decorations: v => v.decorations });
     const historico = new S.Compartment();
+    const definirBusca = S.StateEffect.define();
+    const marcaBuscaHit = V.Decoration.mark({ class: 'ed-busca-hit' });
+    const marcaBuscaAtivo = V.Decoration.mark({ class: 'ed-busca-ativo' });
+    let buscaEstado = { faixas: [], indiceAtivo: -1 };
+    const montarDecosDeBusca = doc => {
+      const marcas = [];
+      const tam = doc.length;
+      buscaEstado.faixas.forEach((f, idx) => {
+        const de = Math.max(0, Math.min(f.de, tam));
+        const ate = Math.max(de, Math.min(f.ate, tam));
+        if (ate > de) marcas.push((idx === buscaEstado.indiceAtivo ? marcaBuscaAtivo : marcaBuscaHit).range(de, ate));
+      });
+      return V.Decoration.set(marcas, true);
+    };
+    const buscaPlugin = V.ViewPlugin.fromClass(class {
+      constructor(view) { this.decorations = montarDecosDeBusca(view.state.doc); }
+      update(u) {
+        if (u.docChanged || u.transactions.some(tr => tr.effects.some(e => e.is(definirBusca)))) {
+          this.decorations = montarDecosDeBusca(u.state.doc);
+        }
+      }
+    }, { decorations: v => v.decorations });
     const view = new V.EditorView({
       parent: elemento,
       state: S.EditorState.create({
@@ -286,6 +308,7 @@
           ...(desenhados ?? []),
           aoVivo,
           ortografiaPlugin,
+          buscaPlugin,
           V.EditorView.updateListener.of(u => {
             if (u.docChanged && !u.transactions.some(veioDeFora)) aoMudar?.(u.state.sliceDoc());
             if (u.docChanged || u.selectionSet) aoMoverCursor?.();
@@ -311,7 +334,15 @@
         view.focus();
       },
       temFoco: () => view.hasFocus,
-      rolarPara(pos) { view.dispatch({ effects: V.EditorView.scrollIntoView(limitar(pos), { y: 'start' }) }); },
+      rolarPara(pos) {
+        const p = limitar(pos);
+        view.dispatch({ effects: V.EditorView.scrollIntoView(p, { y: 'start' }) });
+        if (typeof requestAnimationFrame === 'function') requestAnimationFrame(() => {
+          const dom = view.domAtPos(p)?.node;
+          const el = (dom?.nodeType === 1 ? dom : dom?.parentElement)?.closest?.('.cm-line');
+          if (el) { el.classList.remove('linha-destaque-flash'); void el.offsetWidth; el.classList.add('linha-destaque-flash'); setTimeout(() => el.classList.remove('linha-destaque-flash'), 1200); }
+        });
+      },
       definirOrtografia(ativa) { ortografiaAtiva = Boolean(ativa) && typeof ortografia?.errada === 'function'; view.dispatch({ effects: redesenhar.of(null) }); },
       redesenharOrtografia() { view.dispatch({ effects: redesenhar.of(null) }); },
       // Algo de fora do texto mudou (ex.: tarefa citada concluída): os elementos desenhados se refazem.
@@ -329,6 +360,32 @@
       },
       // só troca se o texto ainda é a palavra clicada (pode ter mudado até a escolha da sugestão)
       trocarTrecho(de, ate, texto, esperada) { if (esperada !== undefined && (ate > view.state.doc.length || view.state.sliceDoc(de, ate) !== esperada)) return false; view.dispatch({ changes: { from: de, to: ate, insert: texto }, selection: { anchor: de + texto.length }, userEvent: 'input' }); return true; },
+      destacarBusca(faixas = [], indiceAtivo = -1, rolar = true) {
+        buscaEstado = { faixas: Array.isArray(faixas) ? faixas : [], indiceAtivo };
+        const efeitos = [definirBusca.of(null)];
+        const f = buscaEstado.faixas[indiceAtivo];
+        if (rolar && f && typeof f.de === 'number') efeitos.push(V.EditorView.scrollIntoView(limitar(f.de), { y: 'center' }));
+        view.dispatch({ effects: efeitos });
+      },
+      substituirTodas(faixas = [], substituto = '') {
+        if (!Array.isArray(faixas) || !faixas.length) return 0;
+        const tam = view.state.doc.length;
+        const changes = faixas
+          .map(f => ({ from: Math.max(0, Math.min(f.de, tam)), to: Math.max(0, Math.min(f.ate, tam)), insert: String(substituto) }))
+          .filter(c => c.to >= c.from);
+        if (!changes.length) return 0;
+        view.dispatch({ changes, userEvent: 'input' });
+        return changes.length;
+      },
+      linhaNoTopo(scrollTop = 0) {
+        const bloco = view.lineBlockAtHeight(Math.max(0, Number(scrollTop) || 0));
+        return Math.max(0, view.state.doc.lineAt(bloco.from).number - 1);
+      },
+      alturaDaLinha(linha = 0) {
+        const num = Math.max(1, Math.min(Math.floor(Number(linha) || 0) + 1, view.state.doc.lines));
+        const l = view.state.doc.line(num);
+        return view.lineBlockAt(l.from).top;
+      },
       destruir: () => view.destroy(),
     };
   }

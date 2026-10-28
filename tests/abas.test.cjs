@@ -170,3 +170,29 @@ test('trocarId e limpar desduplicam por coluna, não entre colunas', () => {
   const guardado = { paineis: [{ abas: ['a', 'a'], ativa: 'a' }, { abas: ['a'], ativa: 'a' }], ativo: 1, larguras: [0.5, 0.5] };
   assert.deepEqual(colunas(A.limpar(guardado, ['a'])), [['a'], ['a']]);
 });
+
+test('histórico por coluna (voltar/avançar) e vínculo entre colunas', () => {
+  let e = A.comHistorico(A.vazio());
+  e = A.abrir(e, 'a');
+  e = A.abrir(e, 'b', { novaAba: true });
+  e = A.abrir(e, 'c', { novaAba: true });
+  assert.equal(A.podeVoltar(e, 0), true);
+  assert.equal(A.podeAvancar(e, 0), false);
+
+  e = A.voltar(e, 0, ['a', 'b', 'c']);
+  assert.equal(A.notaAtiva(e), 'b');
+  assert.equal(A.podeAvancar(e, 0), true);
+
+  e = A.avancar(e, 0, ['a', 'b', 'c']);
+  assert.equal(A.notaAtiva(e), 'c');
+
+  e = A.registrarScroll(e, 0, 240);
+  assert.equal(A.scrollAtivo(e, 0), 240);
+
+  e = A.mover(e, 0, 'c', 1, { nova: true });
+  e = A.vincularColunas(e, 0, 1);
+  assert.deepEqual(A.colunasVinculadas(e, 0), [1]);
+  assert.deepEqual(A.colunasVinculadas(e, 1), [0]);
+  e = A.desvincularColuna(e, 0);
+  assert.deepEqual(A.colunasVinculadas(e, 0), []);
+});

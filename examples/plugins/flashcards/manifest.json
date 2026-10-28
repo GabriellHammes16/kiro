@@ -1,0 +1,12 @@
+{
+  "id": "flashcards",
+  "name": "Flashcards",
+  "version": "1.0.0",
+  "author": "Kiro",
+  "description": "Revisões espaçadas a partir das suas notas, uma pergunta por vez.",
+  "minKiro": "0.20.3",
+  "permissions": ["notes:read"],
+  "network": [],
+  "icon": "M5 4h14v16H5zM8 8h8M8 12h5",
+  "page": { "title": "Flashcards", "file": "page.html" }
+}

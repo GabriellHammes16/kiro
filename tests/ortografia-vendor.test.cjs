@@ -38,7 +38,9 @@ test('as CSPs permitem WebAssembly e o binário embutido do motor', () => {
 
   // index.html deve permitir WebAssembly e dados embutidos
   assert.ok(htmlCsp.includes("'wasm-unsafe-eval'"), 'index.html: script-src tem wasm-unsafe-eval');
-  assert.ok(/(^|; )connect-src 'self' data:(;|$)/.test(htmlCsp), 'index.html: connect-src permite data:');
+  // kiro-anexo: no connect-src é o fetch do PDF.js ao documento (pdf-nota.js): no
+  // desktop a página é file:// e o PDF vem do esquema cruzado, não de data:.
+  assert.ok(/(^|; )connect-src 'self' data: kiro-anexo:(;|$)/.test(htmlCsp), 'index.html: connect-src permite data: e kiro-anexo:');
 
   // server.mjs deve ter o mesmo
   assert.ok(serverCsp.includes("'wasm-unsafe-eval'"), 'server.mjs: script-src tem wasm-unsafe-eval');

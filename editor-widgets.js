@@ -5,6 +5,22 @@
   const CM = () => root.CM;
   const IMAGEM = /\.(png|jpe?g|gif|webp|avif|bmp)$/i;
   const ehImagem = caminho => (root.Kiro?.isImagePath ? root.Kiro.isImagePath(caminho) : IMAGEM.test(String(caminho).trim()));
+  const PDF = /\.pdf$/i;
+  const ehPdf = caminho => (root.Kiro?.isPdfPath ? root.Kiro.isPdfPath(caminho) : PDF.test(String(caminho || '').split('#')[0].trim()));
+  function lerPdf(dentro) {
+    if (root.Kiro?.lerPdf) return root.Kiro.lerPdf(dentro);
+    const partes = String(dentro || '').split('|').map(s => s.trim());
+    const primeiro = partes[0] || '';
+    const hash = primeiro.indexOf('#');
+    const arquivo = (hash >= 0 ? primeiro.slice(0, hash) : primeiro).trim();
+    if (!ehPdf(arquivo) || /[:\\]|\.\./.test(arquivo)) return null;
+    const frag = hash >= 0 ? primeiro.slice(hash + 1) : '';
+    const mPag = /^page=(\d+)$/i.exec(frag.trim());
+    const pagina = mPag ? Math.max(1, Number(mPag[1])) : null;
+    let altura = null;
+    for (const p of partes.slice(1)) if (/^\d{2,4}$/.test(p)) { const n = Number(p); if (n >= 120 && n <= 2000) altura = n; }
+    return { arquivo, pagina, altura };
+  }
   // Igual a lerImagem do app: a última parte depois de | pode ser a largura (300 ou 300x200).
   function lerImagem(dentro) {
     const partes = dentro.split('|');
@@ -100,12 +116,15 @@
       for (const m of l.text.matchAll(IMAGEM_NA_LINHA)) {
         const a = l.from + m.index, b = a + m[0].length;
         const img = lerImagem(m[1]);
-        if (img && foraDeTudo(a, b)) els.push({ tipo: 'imagem', de: a, ate: b, ...img });
+        if (img && foraDeTudo(a, b)) { els.push({ tipo: 'imagem', de: a, ate: b, ...img }); continue; }
+        const pdf = lerPdf(m[1]);
+        if (pdf && foraDeTudo(a, b)) els.push({ tipo: 'pdf', de: a, ate: b, ...pdf });
+        else if(root.Kiro?.isAudioPath(m[1]) && !/[:\\]|\.\.|^\//.test(m[1]) && foraDeTudo(a,b)) els.push({tipo:'audio',de:a,ate:b});
       }
       // Fórmulas: mascara as imagens e o código da linha para não achar $ dentro deles.
       for (const m of l.text.matchAll(FORMULA)) {
         const a = l.from + m.index, b = a + m[0].length;
-        if (foraDeTudo(a, b) && !els.some(e => e.tipo === 'imagem' && a < e.ate && b > e.de)) els.push({ tipo: 'formula', de: a, ate: b, tex: m[1] });
+        if (foraDeTudo(a, b) && !els.some(e => (e.tipo === 'imagem' || e.tipo === 'pdf') && a < e.ate && b > e.de)) els.push({ tipo: 'formula', de: a, ate: b, tex: m[1] });
       }
       for (const m of l.text.matchAll(COMENTARIO)) {
         const a = l.from + m.index, b = a + m[0].length;
@@ -120,7 +139,7 @@
 
     // Remove overlapping elements: priority comentario > formulaBloco > imagem > formula
     // Tasks, callouts, and code headers never overlap these
-    const prioridade = { comentario: 0, formulaBloco: 1, imagem: 2, formula: 3, citacaoTarefa: 3, tarefa: 4, callout: 4, cabecalhoCodigo: 4, blocoPlugin: 4 };
+    const prioridade = { comentario: 0, formulaBloco: 1, imagem: 2, pdf: 2, audio:2, formula: 3, citacaoTarefa: 3, tarefa: 4, callout: 4, cabecalhoCodigo: 4, blocoPlugin: 4 };
     const sobrepostos = new Set();
     for (let i = 0; i < els.length; i++) {
       if (sobrepostos.has(i)) continue;
@@ -248,6 +267,24 @@
         return s;
       }
     }
+    class PdfEmbutido extends V.WidgetType {
+      constructor(texto) { super(); this.texto = texto; this.pdf = lerPdf(texto); }
+      eq(o) { return o.texto === this.texto; }
+      toDOM() {
+        const s = document.createElement('span');
+        const html = opcoes.desenharPdf?.(this.texto);
+        if (!html) { s.textContent = `![[${this.texto}]]`; return s; }
+        s.innerHTML = html;
+        return s;
+      }
+      ignoreEvent() { return true; }
+    }
+    class AudioEmbutido extends V.WidgetType {
+      constructor(texto){super();this.texto=texto;}
+      eq(o){return o.texto===this.texto;}
+      toDOM(){const s=document.createElement('span');s.innerHTML=opcoes.desenharAudio?.(this.texto)||'';return s;}
+      ignoreEvent(){return true;}
+    }
     class Formula extends V.WidgetType {
       constructor(tex, bloco) { super(); this.tex = tex; this.bloco = bloco; }
       eq(o) { return o.tex === this.tex && o.bloco === this.bloco; }
@@ -343,6 +380,8 @@
           if (ativa) continue;
           if (el.tipo === 'tarefa') cobre(el.de, el.ate, V.Decoration.replace({ widget: new CaixaDeTarefa(el.feito) }));
           else if (el.tipo === 'imagem') cobre(el.de, el.ate, V.Decoration.replace({ widget: new Imagem(doc.sliceString(el.de + 3, el.ate - 2)) }));
+          else if (el.tipo === 'pdf') cobre(el.de, el.ate, V.Decoration.replace({ widget: new PdfEmbutido(doc.sliceString(el.de + 3, el.ate - 2)) }));
+          else if (el.tipo === 'audio') cobre(el.de, el.ate, V.Decoration.replace({ widget: new AudioEmbutido(doc.sliceString(el.de + 3, el.ate - 2)) }));
           else if (el.tipo === 'formula') cobre(el.de, el.ate, V.Decoration.replace({ widget: new Formula(el.tex, false) }));
           else if (el.tipo === 'callout') cobre(el.de, el.ate, V.Decoration.replace({ widget: new RotuloDoCallout(el.nome) }));
           else if (el.tipo === 'citacaoTarefa') cobre(el.de, el.ate, V.Decoration.replace({ widget: new CitacaoDeTarefa(el.id, el.titulo, opcoes.tarefa?.(el.id) ?? null) }));
@@ -406,7 +445,7 @@
         const rel = pos - linha.from;
         const m = root.KiroEditor.marcacoesDoKiro(linha.text).find(x => x.tipo === 'wikilink' && x.de <= rel && rel < x.ate);
         if (!m) return false;
-        e.preventDefault(); opcoes.abrirNota?.(m.alvo.split('#')[0].trim());
+        e.preventDefault(); opcoes.abrirNota?.(m.alvo.trim());
         return true;
       },
     });
@@ -428,7 +467,7 @@
     return ext;
   }
 
-  const api = { extensao, acharElementos, trocaDaTarefa, trocaDaLargura, trocasDasTarefas, ehImagem, lerImagem };
+  const api = { extensao, acharElementos, trocaDaTarefa, trocaDaLargura, trocasDasTarefas, ehImagem, lerImagem, ehPdf, lerPdf };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.KiroWidgets = api;
 })(globalThis);

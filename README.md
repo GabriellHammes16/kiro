@@ -39,9 +39,23 @@ O servidor aceita conexões somente deste computador. O botão **Abrir pasta do 
 
 ## Escrever e conectar
 
+- **Imprimir / exportar PDF:** use os botões no editor. A saída contém apenas a nota, com fundo branco, incluindo o rascunho atual sem salvar o cofre. No navegador, escolha salvar como PDF no diálogo de impressão. PDFs anexados aparecem como referências; blocos de plug-ins saem como código.
+- **Modelos por área:** o catálogo inclui ata de reunião, plano de aula, registro de sessão, estrutura de peça jurídica, roteiro e diário de obra, além de estudo, reunião e diária. Os modelos pessoais continuam sendo notas com a tag `modelo`.
+- **Recorrência e lembretes:** tarefas podem repetir por dia, semana, mês ou intervalo de dias. Concluir cria uma próxima ocorrência; reabrir e reconcluir a anterior não duplica a seguinte. Ative os lembretes nas configurações; eles precisam de permissão para notificar e do Kiro aberto. A recorrência mensal parte do prazo anterior, ajustando ao último dia do mês quando necessário.
+- **Calendário mensal:** em Tarefas, escolha **Mês**. Selecione um dia para ver suas tarefas ou criar uma com esse prazo. Setas, Home/End e PageUp/PageDown navegam pela grade; Hoje volta à data atual. A grade mostra ocorrências já existentes.
+- **Acessibilidade:** em Configurações, ajuste o texto da interface entre 100% e 150%; o corpo das notas mantém seu tamanho. O grafo tem uma lista de ligações em texto acompanhando os filtros. Tarefas e hábitos anunciam as mudanças depois de salvar, e os painéis do Glass mantêm proteção de contraste sobre fundos claros.
+- **Primeiros passos:** reabra o roteiro e o glossário em Configurações ou Ações rápidas.
+- **Escrita em foco:** no editor, ative Modo foco para esconder a navegação e mostrar uma meta de palavras. O botão de saída permanece disponível; o texto não é reescrito ao alternar.
+- **Pastas na Hoje:** nas opções da Hoje, oculte uma pasta e suas subpastas dos cartões nativos, incluindo tarefas ligadas às notas. A preferência fica no cofre. Os arquivos continuam disponíveis e os plugins têm visões próprias.
+- **Histórico:** na nota salva, abra Histórico, selecione uma versão e confira a prévia antes de Restaurar conteúdo. O título e a pasta atuais são mantidos; a gravação preserva também uma cópia do conteúdo substituído. A disponibilidade depende dos snapshots ainda existentes em `.history`.
+
 - **Captura rápida**, na página Hoje, cria uma nota com a tag `inbox`.
 - **Nota diária** abre ou prepara uma nota com a data local, sem duplicar uma nota com o mesmo título.
-- **Modelo** oferece resumo de estudo, reunião e nota diária.
+- **Modelos** predefinidos e pessoais ficam disponíveis no seletor do editor e em **Ações rápidas** (`Ctrl+K`).
+- Para criar um modelo pessoal, abra **Ações rápidas → Criar modelo pessoal** e salve o rascunho com a tag de controle `modelo` no campo de tags. Hashtag `#modelo` no corpo não identifica um modelo.
+- Para criar uma nota, abra **Ações rápidas → Criar nota por modelo**, escolha um modelo e informe o título. `{{date}}` vira a data local (`AAAA-MM-DD`) e `{{title}}` o título escolhido; tokens desconhecidos ficam literais.
+- Ao criar uma nota por modelo, tags e links são copiados; a tag de controle `modelo` é removida. Metadados personalizados, ID, arquivo e datas não são copiados. Anexos não são copiados e caminhos relativos não são ajustados; o modelo original permanece intacto.
+- Aplicar um modelo pelo seletor do editor substitui o corpo. Em uma nota preenchida, pede confirmação e pode ser desfeito com **Ctrl+Z**.
 - Use `[[Nome da nota]]` para ligar ideias. A seção **Links nesta nota** abre a nota ou permite criar o destino.
 - `[[Nome da nota|Texto do link]]` permite um rótulo diferente.
 - **Notas que apontam para cá** mostra os backlinks.
@@ -49,7 +63,8 @@ O servidor aceita conexões somente deste computador. O botão **Abrir pasta do 
 - A busca encontra títulos, conteúdo e tags. Use `#tag` para filtrar por tags.
 - Tarefas podem ser associadas a uma nota. A rotina considera o dia no fuso local.
 - Atalhos: **Ctrl+N** para criar uma nota, **Ctrl+S** para salvar o formulário de nota e **Esc** para fechar.
-- O editor trabalha com texto Markdown; ainda não há prévia formatada, grafo ou sistema de plugins. Modelos são predefinidos.
+- **Ações rápidas** abre com **Ctrl+K**, remapeável em **Configurações → Atalhos**, e também pelo botão na interface. Use as setas, **Enter** e **Esc** para navegar. A lista reúne comandos nativos e comandos de plugins ativos; eles também continuam em Configurações.
+- Se o cofre falhar ao criar uma nota por modelo, o formulário preserva os campos e orienta preservar/exportar e recuperar o cofre antes de tentar de novo. A falha mantém o bloqueio ativo.
 
 Links internos são resolvidos pelo título ou caminho do arquivo, sem diferenciar maiúsculas e acentos. Títulos duplicados resolvem para a primeira correspondência; prefira títulos distintos ou caminhos. Ao renomear um título, atualize os links que usam esse título.
 
@@ -83,7 +98,9 @@ Importações são validadas antes de alterar o estado. Elas substituem os dados
 
 Cole um print com **Ctrl+V** ou arraste uma imagem para dentro da nota. A imagem é gravada no cofre, na pasta `Anexos/`, e a nota recebe `![[Anexos/nome.png]]`, o mesmo formato do Obsidian. Passe o mouse sobre a imagem e arraste a bolinha do canto para mudar o tamanho; a largura fica no texto, como `![[Anexos/nome.png|320]]`.
 
-Aceita PNG, JPEG, GIF e WebP de até 20 MB. SVG não é aceito, porque pode carregar código.
+Aceita PNG, JPEG, GIF, WebP e PDF de até 250 MB. SVG não é aceito, porque pode carregar código.
+
+Um PDF na nota, `![[Anexos/livro.pdf]]`, aparece como as páginas do próprio PDF dentro dela: o Kiro desenha cada página com o [PDF.js](https://mozilla.github.io/pdf.js/) e elas rolam na moldura, pedidas só quando chegam perto da vista — o visor nativo do sistema não é usado e os bytes do PDF nunca chegam à página. `![[Anexos/livro.pdf#page=12]]` abre já na página 12; `![[Anexos/livro.pdf|700]]` dá a altura da moldura em pixels. O botão **Abrir** no topo abre o arquivo no leitor do sistema. Como o KaTeX, o PDF.js é embarcado em `vendor/pdfjs/` (Apache-2.0, licença em `vendor/pdfjs/LICENSE.txt`); nada é buscado na internet.
 
 `Anexos/` tem um arquivo `.kiro-anexos` que a identifica. Com ele, a pasta não aparece na árvore, colar uma imagem não entra em conflito com a nota aberta e as imagens não são copiadas para `.history` a cada salvamento. Em troca, o histórico e a lixeira não guardam imagens: apagar o `![[...]]` da nota não apaga o arquivo, e uma imagem apagada da pasta não volta. Se o cofre já tiver uma pasta `Anexos` sua, as imagens vão para `Anexos do Kiro`.
 
@@ -127,6 +144,25 @@ O aplicativo embarca as próprias fontes, em `fonts/`, e nunca busca fonte na in
 - **IBM Plex Mono** nos blocos de código.
 
 São arquivos `woff2` só com os caracteres latinos, cerca de 450 KB no total. As três estão sob a SIL Open Font License, que permite redistribuí-las junto do aplicativo; as licenças ficam em `fonts/LICENSE-ibm-plex.txt` e `fonts/LICENSE-literata.txt`.
+
+## Plugins de produtividade
+
+Três plugins locais estão disponíveis em `examples/plugins/`:
+
+| Plugin | Uso |
+|---|---|
+| `focus-pomodoro` — Foco / Pomodoro | Escolha uma tarefa ou foco livre, inicie um ciclo e acompanhe suas sessões. Relatório por pasta e tag em hoje, 7 e 30 dias. Foco de 25 minutos e pausa de 5 minutos, ajustáveis nas configurações do plugin. |
+| `flashcards` — Flashcards | Escreva `Pergunta :: Resposta` nas notas e revise uma pergunta por vez, revelando a resposta antes de avaliar. |
+| `weekly-review` — Revisão semanal | Veja notas recentes e tarefas pendentes, escreva suas reflexões e salve uma nova nota de revisão. |
+| `slides` — Apresentação | Transforme títulos e separadores da nota em slides. Navegue com setas ou espaço; Esc retorna à lista. |
+
+No desktop, a partir da versão **0.23.0**, os três plugins vêm no instalador e ficam disponíveis em **Configurações → Plug-ins** no cofre escolhido. Pastas de plugins existentes são preservadas; nenhum plugin é ativado automaticamente. Confira as permissões e ative os que quiser. Cada um ganha uma página na barra lateral e um cartão que pode ser adicionado ao **Hoje**. A revisão semanal também tem um comando em **Ações rápidas**.
+
+Nesta retomada, Apresentação também foi incluída nos recursos para os próximos builds. Ela tem uma página própria e pede somente leitura de notas. O relatório do Foco usa as últimas 200 sessões e a classificação atual das notas ligadas às tarefas; sessões antigas não guardam suas pastas/tags históricas. Tags podem se sobrepor, por isso a soma delas pode superar o total. Plugins existentes não são substituídos automaticamente: para atualizá-los manualmente, feche o Kiro, preserve `data.json` e copie somente os arquivos de código da versão desejada.
+
+Na versão web, copie a pasta de cada plugin para `<cofre>/.kiro/plugins/`, reinicie o Kiro e ative-o nas configurações.
+
+Os três funcionam offline e acompanham o tema do app. Foco e Flashcards devem ser usados em uma janela por vez. O cronômetro guarda o prazo ao sair da página e retoma ao voltar; avisos só aparecem com a página aberta. O histórico conserva as últimas 200 sessões concluídas. Flashcards e Revisão semanal consideram até 500 notas recentes; blocos de código não viram cartões. A revisão semanal cria uma nota nova, preservando as notas e tarefas de origem.
 
 ## Agentes de IA (opcional)
 

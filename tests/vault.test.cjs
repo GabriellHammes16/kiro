@@ -13,6 +13,52 @@ async function setup(t) {
 }
 async function seed(vault, notes = [note()]) { const state = await vault.load(); return vault.save({ ...state, notes }); }
 
+test('diagnóstico encontra cópias sem alterar arquivos mesmo quando IDs duplicados impedem abrir', async t => {
+  const vault = await setup(t);
+  const texto = '---\ncaderno-id: repetido\ntitle: Nota\n---\n\nTexto';
+  await fs.writeFile(path.join(vault.directory, 'nota.md'), texto);
+  const copia = 'nota.sync-conflict-20261026-120000-ABC.md';
+  await fs.writeFile(path.join(vault.directory, copia), texto);
+  await fs.writeFile(path.join(vault.directory, 'outro (conflicted copy).md'), 'outro');
+  await assert.rejects(vault.load());
+  assert.deepEqual(await vault.conflictCopies(), ['nota.sync-conflict-20261026-120000-ABC.md', 'outro (conflicted copy).md']);
+  assert.equal(await fs.readFile(path.join(vault.directory, copia), 'utf8'), texto);
+});
+
+test('inspeção de plug-in só lê manifesto e código permitido com limites', async t => {
+  const vault = await setup(t), pasta = path.join(vault.directory, '.kiro', 'plugins', 'exemplo');
+  await fs.mkdir(pasta, { recursive: true });
+  await fs.writeFile(path.join(pasta, 'manifest.json'), '{}');
+  await fs.writeFile(path.join(pasta, 'index.js'), '<script>');
+  await fs.writeFile(path.join(pasta, 'data.json'), 'privado');
+  assert.deepEqual((await vault.inspectPlugin('exemplo')).map(x => x.name).sort(), ['index.js', 'manifest.json']);
+  await assert.rejects(vault.inspectPlugin('../fora'), /inválido/i);
+  await fs.writeFile(path.join(pasta, 'grande.js'), Buffer.alloc(2 * 1024 * 1024 + 1));
+  await assert.rejects(vault.inspectPlugin('exemplo'), /inválido/i);
+});
+
+test('histórico restaura apenas conteúdo pelo ID após mover e renomear, guardando a versão atual', async t => {
+  const vault=await setup(t);let state=await seed(vault,[note(),note({id:'note-2',title:'Vizinha',body:'Intacta'})]);
+  state.notes[0].body='Segunda';state=await vault.save(state);
+  const versao=(await vault.history({noteId:'note-1'}))[0];
+  state.folders=[{id:'pasta-1',title:'Pasta',parentId:'',description:''}];
+  state.notes.find(n=>n.id==='note-1').title='Renomeada';state.notes.find(n=>n.id==='note-1').folderId='pasta-1';state=await vault.save(state);
+  assert.equal((await vault.readHistory({noteId:'note-1',snapshotId:versao.snapshotId})).body,'Conteúdo original');
+  await assert.rejects(vault.restoreHistory({noteId:'note-1',snapshotId:versao.snapshotId,revision:'antiga'}),/mudou/);
+  state=await vault.restoreHistory({noteId:'note-1',snapshotId:versao.snapshotId,revision:state.revision});
+  const restaurada=state.notes.find(n=>n.id==='note-1');assert.equal(restaurada.body,'Conteúdo original');assert.equal(restaurada.title,'Renomeada');assert.equal(restaurada.folderId,'pasta-1');
+  assert.equal(state.notes.find(n=>n.id==='note-2').body,'Intacta');
+  const historico=await vault.history({noteId:'note-1'});
+  assert.ok((await Promise.all(historico.map(v=>vault.readHistory({noteId:'note-1',snapshotId:v.snapshotId})))).some(v=>v.body==='Segunda'));
+  await assert.rejects(vault.readHistory({noteId:'note-1',snapshotId:'../../fora'}),/inválido/);
+});
+test('histórico rejeita links simbólicos dentro do snapshot', async t => {
+  const vault=await setup(t);let state=await seed(vault);state.notes[0].body='Novo';await vault.save(state);
+  const versao=(await vault.history({noteId:'note-1'}))[0];
+  try{await fs.symlink(vault.directory,path.join(vault.directory,'.history',versao.snapshotId,'atalho'),'junction');}catch(error){if(error.code==='EPERM'){t.skip('links simbólicos indisponíveis');return;}throw error;}
+  await assert.rejects(vault.readHistory({noteId:'note-1',snapshotId:versao.snapshotId}),/simbólicos/);
+});
+
 test('Markdown é a fonte principal; JSON guarda somente dados auxiliares', async t => {
   const vault = await setup(t); const state = await seed(vault);
   const meta = JSON.parse(await fs.readFile(path.join(vault.directory,'caderno.json'),'utf8'));

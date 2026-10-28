@@ -1,0 +1,16 @@
+{
+  "id": "focus-pomodoro",
+  "name": "Foco / Pomodoro",
+  "version": "1.0.0",
+  "author": "Kiro",
+  "description": "Um tempo para uma coisa de cada vez. Ciclos de foco, pausas e histórico local.",
+  "minKiro": "0.20.3",
+  "permissions": ["tasks:read", "notes:read"],
+  "network": [],
+  "icon": "M12 8v5l3 2M9 2h6M12 2v3M19 6l2 2M21 14a9 9 0 1 1-18 0 9 9 0 0 1 18 0",
+  "page": { "title": "Foco / Pomodoro", "file": "page.html" },
+  "settings": [
+    { "key": "foco", "type": "number", "label": "Foco em minutos", "default": 25, "min": 1, "max": 120 },
+    { "key": "pausa", "type": "number", "label": "Pausa em minutos", "default": 5, "min": 1, "max": 30 }
+  ]
+}

@@ -8,7 +8,7 @@ const path = require('node:path');
 const raiz = path.join(__dirname, '..');
 const ler = f => fs.readFileSync(path.join(raiz, f), 'utf8');
 
-const FONTES = ['app.js', 'fluxo-tela.js', 'corretor.js', 'editor-nota.js', 'ortografia.js', 'domain.js', 'plugins.js', 'vault.cjs', 'electron/main.cjs', 'server.mjs', 'segredos-plugins.cjs', 'ligacao-rede-plugins.cjs', 'rede-plugins.cjs', 'editor-widgets.js'];
+const FONTES = ['app.js', 'fluxo-tela.js', 'corretor.js', 'editor-nota.js', 'ortografia.js', 'domain.js', 'plugins.js', 'vault.cjs', 'electron/main.cjs', 'server.mjs', 'segredos-plugins.cjs', 'ligacao-rede-plugins.cjs', 'rede-plugins.cjs', 'editor-widgets.js', 'pdf-nota.js', 'backup.cjs', 'agendador-backup.cjs'];
 const CHAMADA = /(?<![\w$.])(?:t|frase)\(\s*(['"])((?:\\.|(?!\1)[^\\])*)\1/g;
 const TEMPLATE = /(?<![\w$.])(?:t|frase)\(\s*`/g;
 const IGNORAR_NO_INDEX = new Set(['Kiro', 'Ctrl+O']);
