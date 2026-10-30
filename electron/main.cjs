@@ -300,7 +300,14 @@ else app.whenReady().then(async () => {
     if (result.canceled || !result.filePaths[0]) return null;
     return agendadorBackup.salvarConfig({ destino: result.filePaths[0] });
   });
-  ipcMain.handle('backup:open', async () => shell.openPath(await agendadorBackup.pastaDoCofreNoDestino()));
+  ipcMain.handle('backup:open', async () => {
+    const status = await agendadorBackup.obterStatus();
+    if (status.config.modo === 'nuvem') {
+      await shell.openExternal(await agendadorBackup.urlPastaNaNuvem());
+      return '';
+    }
+    return shell.openPath(await agendadorBackup.pastaDoCofreNoDestino());
+  });
   ipcMain.handle('backup:drive:connect', (_event, credenciais) => agendadorBackup.conectarGoogleDrive(credenciais));
   ipcMain.handle('backup:drive:disconnect', () => agendadorBackup.desconectarGoogleDrive());
   ipcMain.handle('vault:choose', async event => {

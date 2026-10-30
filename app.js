@@ -5177,6 +5177,7 @@ async function conteudoDaAbaBackup() {
       <input type="text" class="cfg-campo cfg-campo-largo" id="cfg-backup-client-id" value="${escapeHtml(config.nuvem?.clientId || '')}" placeholder="${t('Client ID do Google Cloud')}" aria-label="${t('Client ID do Google Cloud')}" autocomplete="off" spellcheck="false" />
       <input type="password" class="cfg-campo cfg-campo-largo" id="cfg-backup-client-secret" value="" placeholder="${temClientSecret ? t('Client Secret salvo (em branco mantém)') : t('Client Secret do Google Cloud')}" aria-label="${t('Client Secret do Google Cloud')}" autocomplete="off" spellcheck="false" />
       ${botao('cfg-backup-conectar-drive', nuvemConectada ? t('Reconectar Google Drive') : t('Conectar ao Google Drive'), 'link')}
+      ${nuvemConectada && window.cadernoDesktop ? botao('cfg-backup-abrir', t('Abrir pasta de backup'), 'pasta-aberta') : ''}
       ${nuvemConectada ? botao('cfg-backup-desconectar-drive', t('Desconectar'), 'fechar') : ''}
     </div>
     <details class="cfg-ajuda small-muted"><summary>${t('Como obter o Client ID gratuito no Google Cloud')}</summary><p>${t('1. No Google Cloud Console, ative a Google Drive API. 2. Em Tela de permissão OAuth, adicione seu e-mail como usuário de teste. 3. Em Credenciais → Criar credenciais → ID do cliente OAuth, escolha "App para computador" e cole o Client ID e o Client Secret acima.')}</p></details>`;
@@ -5186,8 +5187,8 @@ async function conteudoDaAbaBackup() {
     <header class="cfg-grupo-topo">${texto(t('Backup e espelho'), t('Grava numa pasta sincronizada no computador ou envia direto para o seu Google Drive na nuvem. Só funciona enquanto o Kiro está aberto.'))}</header>
     <label class="cfg-linha cfg-chave">${texto(t('Ativar backup e espelho automáticos'), t('Quando ligado, mantém o espelho em dia e cria as cópias nas frequências escolhidas.'))}<input type="checkbox" data-backup-campo="ligado" ${config.ligado ? 'checked' : ''} /><span class="interruptor" aria-hidden="true"></span></label>
     <div class="cfg-linha">${texto(t('Onde guardar o backup'))}<div class="segmentos cfg-idioma" role="radiogroup" aria-label="${t('Onde guardar o backup')}"><label class="segmento"><input type="radio" name="cfg-backup-modo" value="pasta" ${!emNuvem ? 'checked' : ''} /><span>${t('Pasta no PC')}</span></label><label class="segmento"><input type="radio" name="cfg-backup-modo" value="nuvem" ${emNuvem ? 'checked' : ''} /><span>${t('Google Drive (nuvem)')}</span></label></div></div>
-    <div class="cfg-linha cfg-linha-coluna" ${emNuvem ? 'hidden' : ''}>${texto(t('Pasta de destino'), t('O Kiro cria uma subpasta Kiro/<nome-do-cofre> dentro do destino escolhido.'))}${blocoPasta}</div>
-    <div class="cfg-linha cfg-linha-coluna" ${emNuvem ? '' : 'hidden'}>${texto(t('Conta do Google Drive (sem app no PC)'), t('Envia direto para a pasta Kiro/<nome-do-cofre> na sua nuvem do Google Drive.'))}${blocoNuvem}</div>
+    <div class="cfg-linha cfg-linha-coluna" ${emNuvem ? 'hidden' : ''}>${texto(t('Pasta de destino'), escapeHtml(t('O Kiro cria uma subpasta Kiro/<nome-do-cofre> dentro do destino escolhido.')))}${blocoPasta}</div>
+    <div class="cfg-linha cfg-linha-coluna" ${emNuvem ? '' : 'hidden'}>${texto(t('Conta do Google Drive (sem app no PC)'), escapeHtml(t('Envia direto para a pasta Kiro/<nome-do-cofre> na sua nuvem do Google Drive.')))}${blocoNuvem}</div>
     <label class="cfg-linha cfg-chave">${texto(t('Espelho contínuo das notas'), t('Mantém uma cópia aberta das notas (.md) e anexos em espelho/, pronta para ler no Drive ou usar no NotebookLM.'))}<input type="checkbox" data-backup-campo="espelho" ${config.espelho ? 'checked' : ''} /><span class="interruptor" aria-hidden="true"></span></label>
   </section>
   <section class="cfg-grupo">

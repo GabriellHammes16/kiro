@@ -26,6 +26,7 @@ const estadoPadrao = () => ({
   ultimasCopias: { horas: 0, diaria: 0, semanal: 0, mensal: 0, manual: 0 },
   ultimoErro: '',
   ultimoErroEm: 0,
+  pastaNuvemId: '',
 });
 
 function normalizarEstado(entrada = {}) {
@@ -43,6 +44,7 @@ function normalizarEstado(entrada = {}) {
     },
     ultimoErro: typeof e.ultimoErro === 'string' ? e.ultimoErro.slice(0, 500) : '',
     ultimoErroEm: num(e.ultimoErroEm),
+    pastaNuvemId: typeof e.pastaNuvemId === 'string' ? e.pastaNuvemId.slice(0, 128) : '',
   };
 }
 
@@ -187,13 +189,14 @@ function criarAgendadorDeBackup({
     const agoraMs = agora.getTime();
     try {
       let fezEspelho = false;
+      let pastaCofreNuvem = '';
       const copiasFeitas = [];
-      const deveEspelhar = forcarEspelho || (config.ligado && config.espelho && (espelhoPendente || !estado.ultimoEspelho));
+      const deveEspelhar = config.espelho && (forcarEspelho || (config.ligado && (espelhoPendente || !estado.ultimoEspelho)));
       const exclusivo = typeof v.exclusive === 'function' ? op => v.exclusive(op) : op => op();
       const atrasadas = config.ligado ? backup.copiasAtrasadas(config, estado.ultimasCopias, agora) : [];
 
       if (emNuvem) {
-        if (deveEspelhar || forcarCopia || atrasadas.length) {
+        if (deveEspelhar || forcarCopia || atrasadas.length || (!config.espelho && estado.ultimoEspelho > 0)) {
           const accessToken = await googleDrive.obterAccessToken({
             clientId: config.nuvem.clientId,
             clientSecret,
@@ -201,12 +204,15 @@ function criarAgendadorDeBackup({
           }, requisitarDrive);
           const cliente = googleDrive.criarClienteDrive(accessToken, requisitarDrive);
           const pastaCofreId = await googleDrive.garantirRaizNaNuvem(cliente, cofreDir);
+          pastaCofreNuvem = pastaCofreId;
 
           if (deveEspelhar) {
             espelhoPendente = false;
             const arquivos = await backup.listarParaEspelho(cofreDir);
             await googleDrive.espelharNaNuvem(cliente, pastaCofreId, arquivos);
             fezEspelho = true;
+          } else if (!config.espelho) {
+            await googleDrive.limparEspelhoNaNuvem(cliente, pastaCofreId);
           }
 
           if (forcarCopia || atrasadas.length) {
@@ -240,9 +246,11 @@ function criarAgendadorDeBackup({
         }
       }
 
-      if (fezEspelho || copiasFeitas.length || estado.ultimoErro) {
+      if (fezEspelho || copiasFeitas.length || estado.ultimoErro || pastaCofreNuvem || (!config.espelho && estado.ultimoEspelho > 0)) {
         await atualizarRegistro(cofreDir, reg => {
           if (fezEspelho) reg.estado.ultimoEspelho = agoraMs;
+          else if (!config.espelho) reg.estado.ultimoEspelho = 0;
+          if (pastaCofreNuvem) reg.estado.pastaNuvemId = pastaCofreNuvem;
           for (const t of copiasFeitas) reg.estado.ultimasCopias[t] = agoraMs;
           reg.estado.ultimoErro = '';
           reg.estado.ultimoErroEm = 0;
@@ -339,7 +347,7 @@ function criarAgendadorDeBackup({
         }
         return { config: backup.normalizarConfig(mesclado), estado: reg.estado, segredos: reg.segredos };
       });
-      if (salvo.config.ligado && temDestinoConfigurado(salvo.config, salvo.segredos)) {
+      if ((salvo.config.ligado || (!salvo.config.espelho && salvo.estado.ultimoEspelho > 0)) && temDestinoConfigurado(salvo.config, salvo.segredos)) {
         executarEmFila(() => rodarCiclo());
       }
       return this.obterStatus();
@@ -407,6 +415,19 @@ function criarAgendadorDeBackup({
       const v = cofreAtual();
       const { config } = await lerRegistro(v.directory);
       return backup.resolverRaiz(v.directory, config.destino);
+    },
+    async urlPastaNaNuvem() {
+      const v = cofreAtual();
+      const { config, estado, segredos } = await lerRegistro(v.directory);
+      if (estado.pastaNuvemId) return `https://drive.google.com/drive/folders/${encodeURIComponent(estado.pastaNuvemId)}`;
+      const refreshToken = abrirSegredo(segredos.refreshToken);
+      const clientSecret = abrirSegredo(segredos.clientSecret);
+      if (!config.nuvem.clientId || !refreshToken) throw new Error(frase('Conecte sua conta do Google Drive antes de fazer o backup na nuvem.'));
+      const accessToken = await googleDrive.obterAccessToken({ clientId: config.nuvem.clientId, clientSecret, refreshToken }, requisitarDrive);
+      const cliente = googleDrive.criarClienteDrive(accessToken, requisitarDrive);
+      const pastaCofreId = await googleDrive.garantirRaizNaNuvem(cliente, v.directory);
+      await atualizarRegistro(v.directory, reg => { reg.estado.pastaNuvemId = pastaCofreId; return reg; });
+      return `https://drive.google.com/drive/folders/${encodeURIComponent(pastaCofreId)}`;
     },
     aguardarFila: () => filaExecucao,
   };

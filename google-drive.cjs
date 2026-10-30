@@ -280,10 +280,22 @@ async function garantirRaizNaNuvem(cliente, cofreDir) {
 }
 
 /**
- * Sincroniza as notas (.md) e anexos do cofre para a subpasta `espelho` no Google Drive.
+ * Remove a subpasta `espelho` no Google Drive quando o espelho contínuo está desligado,
+ * evitando que arquivos avulsos continuem aparecendo nos "Arquivos sugeridos" do Drive.
+ */
+async function limparEspelhoNaNuvem(cliente, pastaCofreId) {
+  const q = `mimeType = '${MIME_PASTA}' and name = 'espelho'`;
+  const achadas = await cliente.listarFilhos(pastaCofreId, q);
+  for (const p of achadas) await cliente.excluirArquivo(p.id);
+  return achadas.length;
+}
+
+/**
+ * Sincroniza as notas (.md) do cofre para a subpasta `espelho` no Google Drive.
  * Usa `appProperties.kiroMtime` e `kiroSize` para enviar apenas o que mudou.
  */
 async function espelharNaNuvem(cliente, pastaCofreId, arquivosOrigem) {
+  const notasOrigem = arquivosOrigem.filter(f => f.rel.toLowerCase().endsWith('.md'));
   const pastaEspelhoId = await cliente.garantirPasta('espelho', pastaCofreId);
   const cachePastas = new Map([['', pastaEspelhoId]]);
 
@@ -319,14 +331,14 @@ async function espelharNaNuvem(cliente, pastaCofreId, arquivosOrigem) {
   }
   await varrerDrive(pastaEspelhoId);
 
-  if (!arquivosOrigem.length && existentes.size > 0) {
+  if (!notasOrigem.length && existentes.size > 0) {
     throw new Error(frase('O cofre parece vazio; o espelho não foi alterado para não apagar a cópia.'));
   }
 
   let copiados = 0, removidos = 0;
   const manter = new Set();
 
-  for (const f of arquivosOrigem) {
+  for (const f of notasOrigem) {
     const chave = f.rel.toLowerCase();
     manter.add(chave);
     const atual = existentes.get(chave);
@@ -339,7 +351,7 @@ async function espelharNaNuvem(cliente, pastaCofreId, arquivosOrigem) {
     try { dados = await fs.readFile(f.abs); } catch (e) { if (e.code === 'ENOENT') continue; throw e; }
     const dirRel = path.posix.dirname(f.rel) === '.' ? '' : path.posix.dirname(f.rel);
     const parentId = await pastaParaRel(dirRel);
-    const mime = f.rel.endsWith('.md') ? 'text/markdown; charset=UTF-8' : 'application/octet-stream';
+    const mime = 'text/markdown; charset=UTF-8';
     await cliente.enviarOuAtualizarArquivo({
       fileId: atual ? atual.id : '',
       parentId,
@@ -357,7 +369,7 @@ async function espelharNaNuvem(cliente, pastaCofreId, arquivosOrigem) {
       removidos++;
     }
   }
-  return { copiados, removidos, total: arquivosOrigem.length };
+  return { copiados, removidos, total: notasOrigem.length };
 }
 
 /**
@@ -392,6 +404,7 @@ module.exports = {
   iniciarFluxoOAuth,
   criarClienteDrive,
   garantirRaizNaNuvem,
+  limparEspelhoNaNuvem,
   espelharNaNuvem,
   enviarCopiaParaNuvem,
 };

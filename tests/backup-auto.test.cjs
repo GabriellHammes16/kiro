@@ -375,5 +375,13 @@ test('modo nuvem: OAuth local, espelho incremental e rotação de .zip direto na
   await agendador.executarAgora({ espelho: false, copia: false });
   assert.deepEqual(zipsNoDrive(), ['kiro-2026-10-11.zip', 'kiro-2026-10-12.zip']);
 
+  const urlPasta = await agendador.urlPastaNaNuvem();
+  assert.match(urlPasta, /^https:\/\/drive\.google\.com\/drive\/folders\/drv-\d+$/);
+
+  // Desligar o espelho apaga a pasta espelho no Drive
+  await agendador.salvarConfig({ espelho: false });
+  await agendador.aguardarFila();
+  assert.equal([...arquivosDrive.values()].some(f => f.name === 'espelho'), false);
+
   agendador.parar();
 });

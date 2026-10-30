@@ -29,7 +29,7 @@ const configPadrao = () => ({
   modo: 'pasta',
   destino: '',
   nuvem: { clientId: '', email: '' },
-  espelho: true,
+  espelho: false,
   copias: {
     horas: { ligado: false, intervalo: 6, manter: 8 },
     diaria: { ligado: true, manter: 7 },
