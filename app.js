@@ -5173,14 +5173,17 @@ async function conteudoDaAbaBackup() {
     ? (config.nuvem?.email ? t('Conectado como {email}', { email: escapeHtml(config.nuvem.email) }) : t('Conta Google conectada.'))
     : t('Nenhuma conta Google conectada.');
   const blocoNuvem = `<span class="small-muted">${estadoConta}</span>
-    <div class="cfg-botoes cfg-backup-credenciais">
-      <input type="text" class="cfg-campo cfg-campo-largo" id="cfg-backup-client-id" value="${escapeHtml(config.nuvem?.clientId || '')}" placeholder="${t('Client ID do Google Cloud')}" aria-label="${t('Client ID do Google Cloud')}" autocomplete="off" spellcheck="false" />
-      <input type="password" class="cfg-campo cfg-campo-largo" id="cfg-backup-client-secret" value="" placeholder="${temClientSecret ? t('Client Secret salvo (em branco mantém)') : t('Client Secret do Google Cloud')}" aria-label="${t('Client Secret do Google Cloud')}" autocomplete="off" spellcheck="false" />
+    <div class="cfg-botoes">
       ${botao('cfg-backup-conectar-drive', nuvemConectada ? t('Reconectar Google Drive') : t('Conectar ao Google Drive'), 'link')}
       ${nuvemConectada && window.cadernoDesktop ? botao('cfg-backup-abrir', t('Abrir pasta de backup'), 'pasta-aberta') : ''}
       ${nuvemConectada ? botao('cfg-backup-desconectar-drive', t('Desconectar'), 'fechar') : ''}
     </div>
-    <details class="cfg-ajuda small-muted"><summary>${t('Como obter o Client ID gratuito no Google Cloud')}</summary><p>${t('1. No Google Cloud Console, ative a Google Drive API. 2. Em Tela de permissão OAuth, adicione seu e-mail como usuário de teste. 3. Em Credenciais → Criar credenciais → ID do cliente OAuth, escolha "App para computador" e cole o Client ID e o Client Secret acima.')}</p></details>`;
+    <details class="cfg-ajuda small-muted"><summary>${t('Usar Client ID próprio do Google Cloud (opcional)')}</summary>
+      <div class="cfg-botoes cfg-backup-credenciais">
+        <input type="text" class="cfg-campo cfg-campo-largo" id="cfg-backup-client-id" value="${escapeHtml(config.nuvem?.clientId || '')}" placeholder="${t('Client ID do Google Cloud')}" aria-label="${t('Client ID do Google Cloud')}" autocomplete="off" spellcheck="false" />
+        <input type="password" class="cfg-campo cfg-campo-largo" id="cfg-backup-client-secret" value="" placeholder="${temClientSecret ? t('Client Secret salvo (em branco mantém)') : t('Client Secret do Google Cloud')}" aria-label="${t('Client Secret do Google Cloud')}" autocomplete="off" spellcheck="false" />
+      </div>
+    </details>`;
   const emNuvem = config.modo === 'nuvem';
   const c = config.copias;
   return `<section class="cfg-grupo">

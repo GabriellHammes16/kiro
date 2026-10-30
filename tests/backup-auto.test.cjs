@@ -339,9 +339,9 @@ test('modo nuvem: OAuth local, espelho incremental e rotação de .zip direto na
     relogio: () => dataAtual,
   });
 
-  const aposConectar = await agendador.conectarGoogleDrive({ clientId: 'meu-client-id', clientSecret: 'meu-segredo' });
+  // Conecta sem precisar informar Client ID nem Client Secret (usa as credenciais embutidas do Kiro)
+  const aposConectar = await agendador.conectarGoogleDrive();
   assert.equal(aposConectar.nuvemConectada, true);
-  assert.equal(aposConectar.temClientSecret, true);
   assert.equal(aposConectar.config.nuvem.email, 'gabriel@example.com');
   assert.equal(aposConectar.config.modo, 'nuvem');
 

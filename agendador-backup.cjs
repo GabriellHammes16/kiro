@@ -176,7 +176,7 @@ function criarAgendadorDeBackup({
     const clientSecret = abrirSegredo(segredos.clientSecret);
 
     if (emNuvem) {
-      if (!config.nuvem.clientId || !refreshToken) {
+      if (!refreshToken) {
         if (exigirDestino) throw new Error(frase('Conecte sua conta do Google Drive antes de fazer o backup na nuvem.'));
         return null;
       }
@@ -296,7 +296,7 @@ function criarAgendadorDeBackup({
 
   const temDestinoConfigurado = (config, segredos) =>
     config.modo === 'nuvem'
-      ? Boolean(config.nuvem.clientId && abrirSegredo(segredos.refreshToken))
+      ? Boolean(abrirSegredo(segredos.refreshToken))
       : Boolean(config.destino);
 
   return {
@@ -322,7 +322,7 @@ function criarAgendadorDeBackup({
         estado,
         rodando,
         drives,
-        nuvemConectada: Boolean(config.nuvem.clientId && abrirSegredo(segredos.refreshToken)),
+        nuvemConectada: Boolean(abrirSegredo(segredos.refreshToken)),
         temClientSecret: Boolean(abrirSegredo(segredos.clientSecret)),
       };
     },
@@ -355,13 +355,22 @@ function criarAgendadorDeBackup({
     async conectarGoogleDrive({ clientId = '', clientSecret = '', aguardar = true } = {}) {
       const v = cofreAtual();
       const regAtual = await lerRegistro(v.directory);
-      const idFinal = (typeof clientId === 'string' && clientId.trim()) || regAtual.config.nuvem.clientId;
-      const secretFinal = (typeof clientSecret === 'string' && clientSecret.trim()) || abrirSegredo(regAtual.segredos.clientSecret);
-      if (!idFinal) throw new Error(frase('Informe o Client ID do Google Cloud para conectar.'));
+      const idPersonalizado = typeof clientId === 'string' && clientId.trim()
+        ? clientId.trim()
+        : regAtual.config.nuvem.clientId;
+      const secretPersonalizado = typeof clientSecret === 'string' && clientSecret.trim()
+        ? clientSecret.trim()
+        : abrirSegredo(regAtual.segredos.clientSecret);
+      const efetivas = googleDrive.credenciaisEfetivas({
+        clientId: idPersonalizado,
+        clientSecret: secretPersonalizado,
+      });
 
       await atualizarRegistro(v.directory, reg => {
         reg.config.modo = 'nuvem';
-        reg.config.nuvem.clientId = idFinal;
+        if (idPersonalizado && idPersonalizado !== googleDrive.CLIENT_ID_PADRAO) {
+          reg.config.nuvem.clientId = idPersonalizado;
+        }
         if (typeof clientSecret === 'string' && clientSecret.trim()) {
           reg.segredos.clientSecret = guardarSegredo(clientSecret.trim());
         }
@@ -370,8 +379,8 @@ function criarAgendadorDeBackup({
 
       if (fluxoOAuthAtivo) fluxoOAuthAtivo.cancelar();
       const fluxo = await googleDrive.iniciarFluxoOAuth({
-        clientId: idFinal,
-        clientSecret: secretFinal,
+        clientId: efetivas.clientId,
+        clientSecret: efetivas.clientSecret,
         requisitar: requisitarDrive,
       });
       fluxoOAuthAtivo = fluxo;
@@ -380,7 +389,9 @@ function criarAgendadorDeBackup({
         if (fluxoOAuthAtivo === fluxo) fluxoOAuthAtivo = null;
         const salvo = await atualizarRegistro(v.directory, reg => {
           reg.config.modo = 'nuvem';
-          reg.config.nuvem.clientId = idFinal;
+          if (idPersonalizado && idPersonalizado !== googleDrive.CLIENT_ID_PADRAO) {
+            reg.config.nuvem.clientId = idPersonalizado;
+          }
           reg.config.nuvem.email = resultado.email || '';
           if (resultado.refreshToken) reg.segredos.refreshToken = guardarSegredo(resultado.refreshToken);
           reg.estado.ultimoErro = '';
@@ -422,7 +433,7 @@ function criarAgendadorDeBackup({
       if (estado.pastaNuvemId) return `https://drive.google.com/drive/folders/${encodeURIComponent(estado.pastaNuvemId)}`;
       const refreshToken = abrirSegredo(segredos.refreshToken);
       const clientSecret = abrirSegredo(segredos.clientSecret);
-      if (!config.nuvem.clientId || !refreshToken) throw new Error(frase('Conecte sua conta do Google Drive antes de fazer o backup na nuvem.'));
+      if (!refreshToken) throw new Error(frase('Conecte sua conta do Google Drive antes de fazer o backup na nuvem.'));
       const accessToken = await googleDrive.obterAccessToken({ clientId: config.nuvem.clientId, clientSecret, refreshToken }, requisitarDrive);
       const cliente = googleDrive.criarClienteDrive(accessToken, requisitarDrive);
       const pastaCofreId = await googleDrive.garantirRaizNaNuvem(cliente, v.directory);
