@@ -14,6 +14,55 @@ function carregar(nomes, contexto) {
 }
 const t = (texto, dados = {}) => texto.replace(/\{(\w+)\}/g, (_, chave) => dados[chave]);
 
+test('plug-ins: destaque claro com texto branco usa o fundo forte sem mudar a preferência do tema', () => {
+  const original = { '--acento': '#B8A9FF', '--acento-forte': '#6E5BD6', '--primario-texto': '#FFFFFF' };
+  const { temaAtual } = carregar(['temaAtual'], {
+    Kiro, KiroPlugins: { VARIAVEIS_DO_TEMA: Object.keys(original) },
+    document: { documentElement: {} }, getComputedStyle: () => ({ getPropertyValue: key => original[key] }),
+  });
+  const tema = temaAtual();
+  assert.ok(Kiro.contraste(tema['--primario-texto'], tema['--acento']) >= 4.5);
+  assert.equal(original['--acento'], '#B8A9FF');
+  original['--primario-texto'] = '#000000';
+  assert.equal(temaAtual()['--acento'], original['--acento']);
+});
+
+test('papel de parede: o piso de cada paleta mantém texto legível sobre imagens brancas e pretas', () => {
+  const { opacidadeMinimaDoPapel } = carregar(['opacidadeMinimaDoPapel'], { Kiro });
+  const css = fs.readFileSync(require.resolve('../temas.css'), 'utf8');
+  for (const bloco of css.matchAll(/^\.tema-([\w-]+)\s*\{([^}]+)\}/gm)) {
+    const cores = Object.fromEntries([...bloco[2].matchAll(/--([\w-]+):(#[0-9A-Fa-f]{6})\b/g)].map(m => [m[1], m[2]]));
+    if (!cores['content-bg']) continue;
+    const textos = [cores.ink, cores.muted], p = opacidadeMinimaDoPapel(cores['content-bg'], textos);
+    assert.ok(p > 0 && p <= 100, bloco[1]);
+    for (const tras of [0, 255]) {
+      const fundo = '#' + [1, 3, 5].map(i => Math.round(parseInt(cores['content-bg'].slice(i, i + 2), 16) * p / 100 + tras * (1 - p / 100)).toString(16).padStart(2, '0')).join('');
+      for (const texto of textos) assert.ok(Kiro.contraste(texto, fundo) >= 4.5, `${bloco[1]}: ${texto}/${fundo}`);
+      if (Kiro.luminancia(cores.ink) > .5) {
+        const paper = '#' + [1, 3, 5].map(i => Math.round(parseInt(fundo.slice(i, i + 2), 16) * .93 + 255 * .07).toString(16).padStart(2, '0')).join('');
+        for (const texto of textos) assert.ok(Kiro.contraste(texto, paper) >= 4.5, `${bloco[1]}: Paper ${texto}/${paper}`);
+      }
+    }
+  }
+});
+
+test('destaques: texto e estados dos botões mantêm contraste nas amostras e em cores livres', () => {
+  const { pintarAcento } = carregar(['pintarAcento'], { contraste: Kiro.contraste });
+  const amostras = [...fonte.slice(fonte.indexOf('const ACENTOS'), fonte.indexOf('function lerAparencia')).matchAll(/#[\dA-F]{6}/g)].map(m => m[0]);
+  for (const cor of [...amostras, '#000000', '#FFFFFF', '#777777', '#808080', '#123456']) {
+    const tokens = {};
+    pintarAcento({ setProperty: (nome, valor) => { tokens[nome] = valor; } }, cor);
+    for (const nome of ['--acento', '--acento-forte', '--acento-escuro']) {
+      let fundo = tokens[nome];
+      if (fundo.startsWith('color-mix')) {
+        const [, hex, percent, mistura] = fundo.match(/(#[\dA-F]{6}) (\d+)%, (black|white)/);
+        fundo = '#' + [1, 3, 5].map(i => Math.round(parseInt(hex.slice(i, i + 2), 16) * percent / 100 + (mistura === 'white' ? 255 : 0) * (1 - percent / 100)).toString(16).padStart(2, '0')).join('');
+      }
+      assert.ok(Kiro.contraste(tokens['--primario-texto'], fundo) >= 4.5, `${cor}: ${nome}`);
+    }
+  }
+});
+
 test('interface: preferência carregada e inválida afetam só escala dos controles', () => {
   const propriedades = new Map();
   const { aplicarTamanhoDaInterface } = carregar(['aplicarTamanhoDaInterface'], {
@@ -96,9 +145,10 @@ test('Glass: composição no desktop branco mantém contraste mesmo sem véu glo
   };
   const bases = [compor(token('vidro-fundo-legivel'), '#FFFFFF')];
   for (const nome of ['vidro-superficie', 'vidro-superficie-forte']) {
-    const gradiente = css.match(new RegExp(`--${nome}:([^;]+)`))[1];
+    const gradiente = css.match(new RegExp(`--${nome}:([^;]+)`))[1].replace('var(--vidro-realce)', css.match(/--vidro-realce:([^;]+)/)[1]);
     for (const cor of gradiente.match(/#[0-9A-F]{8}/g)) bases.push(compor(cor, compor(token('vidro-base-painel'), '#FFFFFF')));
   }
   for (const fundo of bases) for (const texto of ['#FFFFFF', '#D1D1D6', '#F2F2F7']) assert.ok(Kiro.contraste(texto, fundo) >= 4.5, `${texto} sobre ${fundo}`);
-  assert.match(css, /html\.tema-liquid-glass\.com-papel-de-parede[^}]+background:var\(--vidro-fundo-legivel\)/);
+  assert.match(css, /html\.tema-liquid-glass \.app-shell:not\(\.cofre-aberto\) \{ background:var\(--vidro-fundo-legivel\)/);
+  assert.match(css, /html\.tema-liquid-glass \.app-shell:not\(\.cofre-aberto\) > \.content \{ background:transparent/);
 });

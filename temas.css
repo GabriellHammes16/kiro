@@ -8,12 +8,11 @@
   --ink:#EDEDED; --muted:#A1A1A1; --line:#2A2A2A;
   --acento:#EDEDED; --acento-2:#A1A1A1; --acento-forte:#D4D4D4; --acento-escuro:#A3A3A3; --acento-texto:#0A0A0A; --primario-texto:#0A0A0A;
 }
-/* Grafite: cinza escuro em vez de preto absoluto (no espírito do Obsidian), mais leve para ler por horas.
-   Texto de nota em #1E1E1E; barra lateral e cartões um degrau acima; destaque branco suave, como no Kiro. */
+/* Areia substitui o antigo Grafite; o identificador preserva a preferência salva. */
 .tema-grafite {
-  --bg:#1E1E1E; --panel:#262626; --panel-raised:#2E2E2E; --sidebar-bg:#262626; --content-bg:#1E1E1E; --campo:#232323;
-  --ink:#DADADA; --muted:#A3A3A3; --line:#3A3A3A;
-  --acento:#E0E0E0; --acento-2:#A3A3A3; --acento-forte:#CFCFCF; --acento-escuro:#A8A8A8; --acento-texto:#1E1E1E; --primario-texto:#1E1E1E;
+  --bg:#F2E8D5; --panel:#FAF3E7; --panel-raised:#FFFFFF; --sidebar-bg:#E4D4B9; --content-bg:#F2E8D5; --campo:#FFF9EF;
+  --ink:#302A23; --muted:#6B5B48; --line:#C4B090;
+  --acento:#79512B; --acento-2:#456B65; --acento-forte:#704722; --acento-escuro:#5E391B; --acento-texto:#FFFFFF; --primario-texto:#FFFFFF;
 }
 /* Claro: fundo branco, texto grafite e o roxo do Kiro mais escuro para manter 4.5:1. */
 .tema-claro {
@@ -22,7 +21,7 @@
   --acento:#6445D8; --acento-2:#2563EB; --acento-forte:#5A3BCF; --acento-escuro:#4A2FB5; --acento-texto:#FFFFFF; --primario-texto:#FFFFFF;
   /* Fundo claro: a sombra e o véu das janelas ficam mais leves que no escuro. */
   /* Texto na cor de destaque puxa para o grafite: um destaque claro (amarelo, verde) continua legível. */
-  --accent-text:color-mix(in srgb, var(--acento) 58%, var(--ink));
+  --accent-text:color-mix(in srgb, var(--acento) 20%, var(--ink));
   --overlay:rgba(15,23,42,.32); --shadow-md:0 12px 32px rgba(15,23,42,.14); --shadow-sm:0 1px 2px rgba(15,23,42,.08);
   color-scheme:light;
 }
@@ -30,7 +29,7 @@
 .tema-liquid-glass {
   --bg:#1C1C1E; --panel:#2C2C2E; --panel-raised:#3A3A3C; --sidebar-bg:#232325; --content-bg:#1C1C1E; --campo:#262628;
   --ink:#FFFFFF; --muted:#D1D1D6; --line:#545458;
-  --acento:#F2F2F7; --acento-2:#C7C7CC; --acento-forte:#48484A; --acento-escuro:#3A3A3C; --acento-texto:#000000; --primario-texto:#FFFFFF;
+  --acento:#F2F2F7; --acento-2:#C7C7CC; --acento-forte:#D4D4D8; --acento-escuro:#AEAEB2; --acento-texto:#000000; --primario-texto:#000000;
 }
 /* Personalizado: base do clássico; fundos e destaque vêm inline do app.js. */
 .tema-personalizado {
@@ -39,19 +38,19 @@
   --acento:#9273FF; --acento-2:#3B82F6; --acento-forte:#6B4AE8; --acento-escuro:#5836C7; --acento-texto:#000000; --primario-texto:#FFFFFF;
 }
 .tema-escuro-azul {
-  --bg:#10141B; --panel:#19202A; --panel-raised:#212A36; --sidebar-bg:#151A22; --content-bg:#10141B; --campo:#121720;
-  --ink:#EEF3F8; --muted:#A0ABBA; --line:#2E3846;
-  --acento:#5AB0FF; --acento-2:#8FD3FF; --acento-forte:#4A9FF0; --acento-escuro:#3A8AD8; --acento-texto:#06121F; --primario-texto:#06121F;
+  --bg:#082F40; --panel:#103F50; --panel-raised:#194E60; --sidebar-bg:#062837; --content-bg:#082F40; --campo:#0B3545;
+  --ink:#E8FAFF; --muted:#A6CAD6; --line:#376372;
+  --acento:#73E1E2; --acento-2:#FFBF75; --acento-forte:#5DC6C8; --acento-escuro:#42AFB2; --acento-texto:#042A32; --primario-texto:#042A32;
 }
 .tema-escuro-verde {
-  --bg:#0F1512; --panel:#18211C; --panel-raised:#202B25; --sidebar-bg:#141B17; --content-bg:#0F1512; --campo:#111814;
-  --ink:#EEF5F1; --muted:#9FB0A7; --line:#2D3A33;
-  --acento:#5FD39A; --acento-2:#B5E86F; --acento-forte:#45BE83; --acento-escuro:#34A36E; --acento-texto:#04140C; --primario-texto:#04140C;
+  --bg:#E2F3EB; --panel:#F2FCF6; --panel-raised:#FFFFFF; --sidebar-bg:#C8E6D8; --content-bg:#E2F3EB; --campo:#F8FFFB;
+  --ink:#173D32; --muted:#476A5D; --line:#9AC5B1;
+  --acento:#20654E; --acento-2:#9C5832; --acento-forte:#1D5C46; --acento-escuro:#164D3B; --acento-texto:#FFFFFF; --primario-texto:#FFFFFF;
 }
 .tema-escuro-ambar {
-  --bg:#15120D; --panel:#221D16; --panel-raised:#2B251C; --sidebar-bg:#1B1712; --content-bg:#15120D; --campo:#18140F;
-  --ink:#F6F1E8; --muted:#B3A899; --line:#3B3327;
-  --acento:#FFB547; --acento-2:#FF7A45; --acento-forte:#F0A030; --acento-escuro:#D98A1F; --acento-texto:#1A1004; --primario-texto:#1A1004;
+  --bg:#302018; --panel:#3F2B20; --panel-raised:#50372A; --sidebar-bg:#241811; --content-bg:#302018; --campo:#38251B;
+  --ink:#FFF2DD; --muted:#CCB59B; --line:#715744;
+  --acento:#EFBD82; --acento-2:#93C7BC; --acento-forte:#DCA66C; --acento-escuro:#CC955C; --acento-texto:#2A1A11; --primario-texto:#2A1A11;
 }
 .tema-alto-contraste {
   --bg:#000000; --panel:#0D0D0D; --panel-raised:#161616; --sidebar-bg:#000000; --content-bg:#000000; --campo:#0A0A0A;
@@ -64,9 +63,9 @@
   --acento:#B8A9FF; --acento-2:#7FD8FF; --acento-forte:#6E5BD6; --acento-escuro:#5B48C4; --acento-texto:#0E0A24; --primario-texto:#FFFFFF;
 }
 .tema-floresta {
-  --bg:#0E1510; --panel:#172019; --panel-raised:#1F2A21; --sidebar-bg:#131B15; --content-bg:#0E1510; --campo:#101812;
-  --ink:#EFF4EE; --muted:#A7B3A6; --line:#2E3D31;
-  --acento:#E3B94F; --acento-2:#7FC98B; --acento-forte:#D1A53A; --acento-escuro:#BD9230; --acento-texto:#151004; --primario-texto:#151004;
+  --bg:#243A20; --panel:#304B2A; --panel-raised:#3D5B35; --sidebar-bg:#1B2D19; --content-bg:#243A20; --campo:#2A4225;
+  --ink:#F1F5DF; --muted:#C1D0AB; --line:#607A4C;
+  --acento:#F2D878; --acento-2:#A7D697; --acento-forte:#DBC363; --acento-escuro:#C8AF51; --acento-texto:#252D12; --primario-texto:#252D12;
 }
 
 /* Anime */
@@ -76,9 +75,9 @@
   --acento:#FF2D95; --acento-2:#00F0FF; --acento-forte:#D6166F; --acento-escuro:#B8105F; --acento-texto:#1A0010; --primario-texto:#FFFFFF;
 }
 .tema-sakura-night {
-  --bg:#141013; --panel:#211A1F; --panel-raised:#2A2128; --sidebar-bg:#1A1519; --content-bg:#141013; --campo:#171216;
-  --ink:#F7EEF2; --muted:#B9A7B0; --line:#3C2F38;
-  --acento:#FF8FAB; --acento-2:#FFD1DC; --acento-forte:#E86F8F; --acento-escuro:#D65A7C; --acento-texto:#1C0A10; --primario-texto:#1C0A10;
+  --bg:#FFF0F4; --panel:#FFFAFB; --panel-raised:#FFFFFF; --sidebar-bg:#F3D7E1; --content-bg:#FFF0F4; --campo:#FFFFFF;
+  --ink:#4C2032; --muted:#815569; --line:#D6AABA;
+  --acento:#A42A58; --acento-2:#5D5B91; --acento-forte:#95234E; --acento-escuro:#801D43; --acento-texto:#FFFFFF; --primario-texto:#FFFFFF;
 }
 .tema-shonen-fire {
   --bg:#15100D; --panel:#221A15; --panel-raised:#2C221B; --sidebar-bg:#1B1511; --content-bg:#15100D; --campo:#18120F;
@@ -86,24 +85,24 @@
   --acento:#FF6B2C; --acento-2:#FFC83D; --acento-forte:#F05A1A; --acento-escuro:#D94E12; --acento-texto:#1A0A02; --primario-texto:#1A0A02;
 }
 .tema-studio-ghibli {
-  --bg:#0F1A1A; --panel:#172424; --panel-raised:#1F2E2E; --sidebar-bg:#142020; --content-bg:#0F1A1A; --campo:#111D1D;
-  --ink:#EEF5F0; --muted:#A2B5AE; --line:#2D4040;
-  --acento:#7CB518; --acento-2:#E9C46A; --acento-forte:#6FA314; --acento-escuro:#5E8F0F; --acento-texto:#081004; --primario-texto:#081004;
+  --bg:#F0F3DB; --panel:#FAFCEB; --panel-raised:#FFFFFF; --sidebar-bg:#DDE5BA; --content-bg:#F0F3DB; --campo:#FEFFF4;
+  --ink:#283D23; --muted:#586B48; --line:#B3C18F;
+  --acento:#45651F; --acento-2:#8F5728; --acento-forte:#3B581B; --acento-escuro:#304A15; --acento-texto:#FFFFFF; --primario-texto:#FFFFFF;
 }
 .tema-evangelion {
-  --bg:#0C0A10; --panel:#17141E; --panel-raised:#1F1B28; --sidebar-bg:#121018; --content-bg:#0C0A10; --campo:#0F0D14;
-  --ink:#F2EFF7; --muted:#AAA3B8; --line:#2F2A3C;
-  --acento:#A855F7; --acento-2:#6DD35B; --acento-forte:#8B3FD9; --acento-escuro:#7431BF; --acento-texto:#0E0418; --primario-texto:#FFFFFF;
+  --bg:#261B3C; --panel:#35254F; --panel-raised:#453365; --sidebar-bg:#1D142F; --content-bg:#261B3C; --campo:#2C2043;
+  --ink:#F5F1FF; --muted:#C2AED8; --line:#665082;
+  --acento:#B4EF4A; --acento-2:#B68CFF; --acento-forte:#A0D73D; --acento-escuro:#8FC232; --acento-texto:#1F2411; --primario-texto:#1F2411;
 }
 .tema-sailor-moon {
-  --bg:#0E1030; --panel:#171A42; --panel-raised:#1F2350; --sidebar-bg:#13163A; --content-bg:#0E1030; --campo:#111335;
-  --ink:#F4F2FF; --muted:#ABA9CE; --line:#2F3468;
-  --acento:#FF6BCB; --acento-2:#FFD166; --acento-forte:#E04FAE; --acento-escuro:#D0449F; --acento-texto:#1A0614; --primario-texto:#1A0614;
+  --bg:#422447; --panel:#55325B; --panel-raised:#68416D; --sidebar-bg:#321A37; --content-bg:#422447; --campo:#49294F;
+  --ink:#FFF0FD; --muted:#D8B7D5; --line:#8B6090;
+  --acento:#FFACDA; --acento-2:#F5DE8E; --acento-forte:#EF97C9; --acento-escuro:#DD86B8; --acento-texto:#38172F; --primario-texto:#38172F;
 }
 .tema-violet-evergarden {
-  --bg:#151A20; --panel:#1E252E; --panel-raised:#262F3A; --sidebar-bg:#1A2028; --content-bg:#151A20; --campo:#171C23;
-  --ink:#F1F4F7; --muted:#A9B3BF; --line:#36414E;
-  --acento:#7EB8DA; --acento-2:#D8C9A3; --acento-forte:#62A0C6; --acento-escuro:#528EB4; --acento-texto:#07121A; --primario-texto:#07121A;
+  --bg:#EEEFE9; --panel:#FAFBF6; --panel-raised:#FFFFFF; --sidebar-bg:#D9DFD8; --content-bg:#EEEFE9; --campo:#FFFFFF;
+  --ink:#263B43; --muted:#53676D; --line:#AEBDBD;
+  --acento:#365F78; --acento-2:#78663A; --acento-forte:#2E536B; --acento-escuro:#26475C; --acento-texto:#FFFFFF; --primario-texto:#FFFFFF;
 }
 .tema-demon-blood {
   --bg:#0D0909; --panel:#1A1111; --panel-raised:#231717; --sidebar-bg:#140E0E; --content-bg:#0D0909; --campo:#110B0B;
@@ -116,14 +115,21 @@
   --acento:#00FF9F; --acento-2:#B388FF; --acento-forte:#00D988; --acento-escuro:#00B872; --acento-texto:#001A0F; --primario-texto:#001A0F;
 }
 .tema-makoto-shinkai {
-  --bg:#111726; --panel:#1A2236; --panel-raised:#222B42; --sidebar-bg:#161D2F; --content-bg:#111726; --campo:#131A2A;
-  --ink:#F3F5FA; --muted:#A8B0C4; --line:#323D58;
-  --acento:#FF8C42; --acento-2:#7FB2FF; --acento-forte:#F07A2C; --acento-escuro:#DB6A1E; --acento-texto:#1A0B00; --primario-texto:#1A0B00;
+  --bg:#E4F2FF; --panel:#F5FAFF; --panel-raised:#FFFFFF; --sidebar-bg:#C6DFF4; --content-bg:#E4F2FF; --campo:#FFFFFF;
+  --ink:#183F5C; --muted:#4A6982; --line:#A1C0D8;
+  --acento:#A44016; --acento-2:#205E95; --acento-forte:#913811; --acento-escuro:#7D2F0D; --acento-texto:#FFFFFF; --primario-texto:#FFFFFF;
 }
 .tema-jojo-stand {
   --bg:#150B1F; --panel:#21142E; --panel-raised:#2A1B39; --sidebar-bg:#1B1027; --content-bg:#150B1F; --campo:#180D23;
   --ink:#FBF3FF; --muted:#B9A8C8; --line:#3F2C52;
   --acento:#FFC93C; --acento-2:#FF3EA5; --acento-forte:#F0B41F; --acento-escuro:#DB9E0F; --acento-texto:#1A1000; --primario-texto:#1A1000;
+}
+
+
+:is(.tema-grafite, .tema-escuro-verde, .tema-sakura-night, .tema-studio-ghibli, .tema-violet-evergarden, .tema-makoto-shinkai) {
+  --accent-text:color-mix(in srgb, var(--acento) 20%, var(--ink));
+  --overlay:rgba(15,23,42,.32); --shadow-md:0 12px 32px rgba(15,23,42,.14); --shadow-sm:0 1px 2px rgba(15,23,42,.08);
+  color-scheme:light;
 }
 
 /* ---- Skins ----
@@ -154,14 +160,15 @@
 :is(.skin-terminal, .skin-sharp) *:not(.amostra, .cor-ponto, .cor-ponto input, .habito-dia, .dia-chip span, .doc-ponto, .md-alca, .grafo-cor, .interruptor) { border-radius:0 !important; }
 
 /* Sharp: bordas marcadas. */
-.skin-sharp :where(.card, .note-card, .cfg-grupo, .modal, .ctx-menu, .doc-details, .grafo-painel, .code-area) { border-width:2px; border-color:color-mix(in srgb, var(--muted) 35%, var(--line)); }
+.skin-sharp { --shadow:4px 4px 0 color-mix(in srgb, var(--muted) 35%, transparent); }
+.skin-sharp :where(.card, .note-card, .cfg-grupo, .modal, .ctx-menu, .doc-details, .grafo-painel, .code-area) { border-width:2px; border-color:color-mix(in srgb, var(--muted) 65%, var(--line)); box-shadow:var(--shadow); }
 .skin-sharp :where(.primary, .secondary, .new-note, .search, .field input, .field textarea, .field select, .add-link input, .tema-opcao, .skin-opcao) { border-width:1.5px; }
 .skin-sharp .hoje-acoes .capture { border-width:2px; }
 
 /* Suave: cantos redondos e sombras leves. */
-.skin-suave { --raio-controle:14px; --raio-card:22px; --shadow:0 10px 30px rgba(0,0,0,.2), 0 2px 6px rgba(0,0,0,.12); }
+.skin-suave { --raio-controle:22px; --raio-card:32px; --raio-pilula:999px; --shadow:0 8px 24px rgba(0,0,0,.12); }
 .skin-suave :where(.modal, .ctx-menu, .doc-details, .grafo-painel, .code-area) { border-radius:var(--raio-card); }
-.skin-suave :where(.ctx-item, .tree-row, .nav-item) { border-radius:10px; }
+.skin-suave :where(.ctx-item, .tree-row, .nav-item) { border-radius:999px; }
 
 /* Neon: brilho do destaque em cards, botões principais e foco. */
 .skin-neon :where(.card, .note-card, .cfg-grupo, .modal, .ctx-menu, .grafo-painel, .doc-details) { border-color:color-mix(in srgb, var(--acento) 22%, var(--line)); }
@@ -171,10 +178,11 @@
 .skin-neon :focus-visible { box-shadow:0 0 14px color-mix(in srgb, var(--acento) 45%, transparent); }
 
 /* Paper: grão de papel (SVG em data: URI) e sombra de folha. */
-.skin-paper { --raio-card:6px; --shadow:0 1px 0 rgba(255,255,255,.03) inset, 0 2px 3px rgba(0,0,0,.35), 0 10px 24px rgba(0,0,0,.22); }
+.skin-paper { --paper-textura:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 .07 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"); --raio-card:6px; --shadow:0 1px 0 rgba(255,255,255,.03) inset, 0 2px 3px rgba(0,0,0,.35), 0 10px 24px rgba(0,0,0,.22); }
 .skin-paper :where(.content, .card, .note-card, .cfg-grupo, .modal) {
-  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 .07 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-image:var(--paper-textura);
 }
+.skin-paper :where(.page-head h1, .cfg-grupo-topo strong, .card h2) { font-family:var(--fonte-leitura); }
 
 /* ---- Configurações → Aparência: cards de tema e lista de skins ---- */
 .temas-grupo { display:grid; gap:var(--esp-2); }
@@ -202,6 +210,7 @@
 .skin-opcao { position:relative; display:grid; gap:2px; padding:var(--esp-2) var(--esp-3); border:1px solid var(--line); border-radius:var(--raio-controle); cursor:pointer; transition:border-color var(--rapido) var(--curva), background-color var(--rapido) var(--curva); }
 .skin-opcao:hover { border-color:color-mix(in srgb, var(--acento) 45%, var(--line)); }
 .skin-opcao:has(input:checked) { border-color:var(--acento); background:var(--accent-soft); }
+.skin-opcao:has(input:checked) .skin-nome::after { content:"✓"; float:right; margin-left:8px; }
 .skin-opcao:has(input:focus-visible) { outline:2px solid var(--acento); outline-offset:2px; }
 .skin-nome { font-size:var(--fs-interface); font-weight:600; color:var(--ink); }
 .skin-desc { font-size:var(--fs-legenda); line-height:1.4; color:var(--muted); }
@@ -220,7 +229,8 @@ html.tema-liquid-glass {
   /* O piso local preserva contraste sobre desktop branco, mesmo com transparência máxima. */
   --vidro-fundo-legivel:#1C1C1ECC;
   --vidro-base-painel:#1C1C1EE6;
-  --vidro-superficie:linear-gradient(150deg, #FFFFFF14 0%, #FFFFFF0F 40%, #FFFFFF08 100%), var(--vidro-base-painel);
+  --vidro-realce:linear-gradient(150deg, #FFFFFF14 0%, #FFFFFF0F 40%, #FFFFFF08 100%);
+  --vidro-superficie:var(--vidro-realce), var(--vidro-base-painel);
   --vidro-superficie-forte:linear-gradient(150deg, #FFFFFF1F 0%, #FFFFFF1C 45%, #FFFFFF12 100%), var(--vidro-base-painel);
   --vidro-borda:#FFFFFF38;
   --vidro-reflexo:inset 0 1px 0 #FFFFFF66, inset 1px 0 0 #FFFFFF1A, inset 0 -1px 0 #FFFFFF12;
@@ -246,12 +256,14 @@ html.tema-liquid-glass body { background:color-mix(in srgb, #0A0A0C calc(var(--v
 html.tema-liquid-glass:not(.vidro-nativo) body { background:color-mix(in srgb, #0A0A0C calc(var(--vidro-opacidade, 65%) * .3), transparent); }
 /* Sem :is(): com o #id ele ganharia de todas as regras do app-shell, inclusive a do papel de parede. */
 html.tema-liquid-glass .app-shell { background:transparent; }
+/* O piso de contraste cobre também o espaço atrás da lateral flutuante, sem emenda vertical. */
+html.tema-liquid-glass .app-shell:not(.cofre-aberto) { background:var(--vidro-fundo-legivel); }
 html.tema-liquid-glass #barra-titulo { background:var(--vidro-superficie); }
 html.tema-liquid-glass :is(.content, .cofre-nota, .cofre-metade, .grafo-tela) { background:var(--vidro-fundo-legivel); }
 html.tema-liquid-glass :is(.abas-menu, .abas-barra) { background:var(--vidro-superficie); }
 
 /* Superfícies de vidro: barra lateral, cartões, campos, menus. */
-html.tema-liquid-glass :is(.sidebar, .cofre-lateral, .painel-direito, .card, .note-card, .cfg-grupo, .capture, .search, .segmentos, .habito-stats, .secondary, .new-note, .hoje-acoes > .secondary) {
+html.tema-liquid-glass :is(.sidebar, .cofre-lateral, .painel-direito, .card, .note-card, .cfg-grupo, .capture, .search, .segmentos, .habito-stats, .secondary, .new-note) {
   background:var(--vidro-superficie); border-color:var(--vidro-borda); box-shadow:var(--vidro-reflexo), var(--vidro-sombra);
   -webkit-backdrop-filter:var(--vidro-desfoque); backdrop-filter:var(--vidro-desfoque);
 }
@@ -299,7 +311,7 @@ html.tema-liquid-glass.notas-solidas :is(.cofre-nota, .cofre-metades) {
 }
 html.tema-liquid-glass.notas-solidas .cofre-metade { height:100%; }
 /* Grafo: o mesmo das notas. Sem fundo, os nós ficam direto sobre o vidro; "Fundo sólido no grafo" vira painel. */
-html.tema-liquid-glass .grafo-tela { background:var(--vidro-fundo-legivel); }
+html.tema-liquid-glass .grafo-tela { background:transparent; }
 /* Sobre o vidro, as cores do grafo misturadas com o fundo opaco do tema ficariam escuras: viram brancos translúcidos. */
 html.tema-liquid-glass:not(.grafo-solido) .grafo-tela {
   --graph-background:transparent; --graph-node:#FFFFFFCC; --graph-node-muted:#FFFFFF73; --graph-edge:#FFFFFF4D;
@@ -314,13 +326,19 @@ html.tema-liquid-glass.com-papel-de-parede:not(.papel-em-video) body:has(> .app-
   content:""; position:fixed; inset:0; z-index:-1; pointer-events:none; opacity:var(--papel-opacidade, 1);
   background:linear-gradient(color-mix(in srgb, var(--content-bg) var(--papel-veu, 60%), transparent) 0 0), var(--papel-de-parede) center / cover no-repeat;
 }
-html.tema-liquid-glass.papel-em-video .app-shell:not(.cofre-aberto) { background:color-mix(in srgb, var(--content-bg) var(--papel-veu, 60%), transparent); }
+html.tema-liquid-glass.papel-em-video .app-shell:not(.cofre-aberto) { background:linear-gradient(var(--vidro-fundo-legivel) 0 0), color-mix(in srgb, var(--content-bg) var(--papel-veu, 60%), transparent); }
 html.tema-liquid-glass #papel-video { opacity:var(--papel-opacidade, 1); }
 /* O controle de transparência do papel de parede só existe no Liquid Glass. */
 html:not(.tema-liquid-glass) .papel-so-vidro { display:none; }
-html.tema-liquid-glass.com-papel-de-parede .app-shell:not(.cofre-aberto) > .content { background:var(--vidro-fundo-legivel); }
+html.tema-liquid-glass .app-shell:not(.cofre-aberto) > .content { background:transparent; }
 html.tema-liquid-glass .aba.ativa { background:var(--vidro-superficie-forte); box-shadow:var(--vidro-reflexo); }
 html.tema-liquid-glass .aba.ativa::before, html.tema-liquid-glass .aba.ativa::after { display:none; }
+/* As skins continuam definindo bordas e textura sobre as superfícies de vidro. */
+html.tema-liquid-glass.skin-minimal :where(.card, .note-card, .cfg-grupo, .doc-details, .grafo-painel) { border-color:transparent; box-shadow:none; }
+html.tema-liquid-glass.skin-minimal .hoje-acoes .capture:not(:focus-within) { border-color:transparent; }
+html.tema-liquid-glass.skin-paper :is(.card, .note-card, .cfg-grupo, .modal) { background-image:var(--paper-textura), var(--vidro-realce); }
+html.tema-liquid-glass.skin-neon .new-note:not(:hover) { box-shadow:var(--vidro-reflexo), 0 0 12px color-mix(in srgb, var(--acento) 28%, transparent); }
+html.tema-liquid-glass.skin-sharp { --vidro-sombra:4px 4px 0 #00000066; }
 .cfg-vidro-controle { display:flex; justify-content:space-between; gap:16px; width:100%; }
 .cfg-vidro-controle output { color:var(--accent-text); font-variant-numeric:tabular-nums; }
 #cfg-transparencia { width:100%; accent-color:var(--acento); cursor:pointer; }

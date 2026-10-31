@@ -55,6 +55,18 @@ test('ids desconhecidos e cores inválidas caem no padrão', () => {
   assert.equal(p.acento, APARENCIA_PADRAO.acento);
 });
 
+test('paletas substituídas preservam escolhas salvas e oferecem famílias claras distintas', () => {
+  for (const id of ['grafite', 'escuro-azul', 'escuro-verde', 'escuro-ambar', 'sakura-night']) {
+    assert.equal(aparenciaValida({ tema: id, skin: 'paper' }).tema, id);
+  }
+  const css = ler('temas.css');
+  const claros = TEMAS.filter(([id]) => {
+    const cor = blocoDoTema(css, id)['content-bg'];
+    return require('../domain.js').luminancia(cor) > .5;
+  });
+  assert.ok(claros.length >= 6, 'o catálogo deve oferecer opções claras além do branco');
+});
+
 test('Liquid Glass e transparência sobrevivem ao salvamento sem alterar outros temas', () => {
   const a = aparenciaValida(JSON.parse(JSON.stringify({ tema: 'liquid-glass', transparencia: 65 })));
   assert.equal(a.tema, 'liquid-glass');
@@ -105,6 +117,13 @@ test('tema Kiro em temas.css bate com o :root de styles.css', () => {
   assert.equal(classico.acento, '#EDEDED');
   const root = Object.assign({}, ...[...ler('styles.css').matchAll(/:root\s*\{([^}]*)\}/g)].map(m => variaveis(m[1])));
   for (const v of ['bg', 'panel', 'ink', 'muted', 'line', 'acento']) assert.equal(classico[v], root[v], `--${v}`);
+});
+
+test('Liquid Glass: botões de plug-ins têm contraste no destaque e nos estados de hover', () => {
+  const cores = blocoDoTema(ler('temas.css'), 'liquid-glass');
+  for (const fundo of ['acento', 'acento-forte', 'acento-escuro']) {
+    assert.ok(contraste(cores['primario-texto'], cores[fundo]) >= 4.5, fundo);
+  }
 });
 
 test('index.html carrega temas.css depois de styles.css', () => {

@@ -2060,7 +2060,7 @@ const extraButton=(action,label,id='',cls='secondary',nome='')=>`<button type="b
 function enhanceView(){
   if(currentView!=='today')return;
   // Captura numa faixa própria logo abaixo da frase, na largura dos cards: não depende de quantas linhas a frase ocupa.
-  $('.page-head').insertAdjacentHTML('afterend',`<div class="hoje-acoes"><form id="capture-form" class="capture add-link"><label for="capture-text" class="sr-only">${t('Captura rápida')}</label>${icone('mais')}<input id="capture-text" required autocomplete="off" placeholder="${t('Capturar uma ideia, pergunta ou lembrete…')}" /><kbd class="atalho" title="${t('De qualquer tela')}">${teclaDe('captura')}</kbd><button class="primary captura-enviar" aria-label="${t('Guardar')}" title="${t('Guardar')} (Enter)">${icone('direita')}</button></form></div>`);
+  $('.page-head').insertAdjacentHTML('afterend',`<div class="hoje-acoes"><form id="capture-form" class="capture"><label for="capture-text" class="sr-only">${t('Captura rápida')}</label>${icone('mais')}<input id="capture-text" required autocomplete="off" placeholder="${t('Capturar uma ideia, pergunta ou lembrete…')}" /><kbd class="atalho" title="${t('De qualquer tela')}">${teclaDe('captura')}</kbd><button class="primary captura-enviar" aria-label="${t('Guardar')}" title="${t('Guardar')} (Enter)">${icone('direita')}</button></form></div>`);
   // A nota diária já tem botão na barra lateral: na faixa da captura fica o Personalizar, que sai do cabeçalho.
   const personalizar=$('.page-head [data-hoje-acao="personalizar"]');
   if(personalizar)$('.hoje-acoes').append(personalizar);
@@ -4271,7 +4271,13 @@ const urlDaTela = (id, arquivo) => window.cadernoDesktop ? `kiro-plugin://${id}/
 const dadosDasMolduras = new Map();       // chave da moldura → data passado pelo bloco/painel
 const molduraHtml = (id, arquivo, altura, chave) =>
   `<iframe class="plugin-moldura" sandbox="allow-scripts" referrerpolicy="no-referrer" loading="lazy" title="${escapeHtml(pluginsAtivos.get(id)?.manifesto?.name || id)}" data-plugin="${escapeHtml(id)}" data-arquivo="${escapeHtml(arquivo)}" data-chave="${escapeHtml(chave)}" style="height:${Number(altura) || KiroPlugins.ALTURA_DA_MOLDURA.padrao}px" src="${escapeHtml(urlDaTela(id, arquivo))}"></iframe>`;
-const temaAtual = () => { const css = getComputedStyle(document.documentElement); return Object.fromEntries(KiroPlugins.VARIAVEIS_DO_TEMA.map(v => [v, css.getPropertyValue(v).trim()])); };
+function temaAtual() {
+  const css = getComputedStyle(document.documentElement);
+  const tema = Object.fromEntries(KiroPlugins.VARIAVEIS_DO_TEMA.map(v => [v, css.getPropertyValue(v).trim()]));
+  // Os botões dos plug-ins usam o destaque como fundo; a variante forte já garante o contraste do texto.
+  if (Kiro.contraste(tema['--primario-texto'], tema['--acento']) < 4.5) tema['--acento'] = tema['--acento-forte'];
+  return tema;
+}
 const molduraDe = janela => [...document.querySelectorAll('iframe.plugin-moldura')].find(f => f.contentWindow === janela);
 
 // Ícone do plug-in (manifest.icon, validado em plugins.js): nome de um ícone do Kiro, que segue o pacote do tema,
@@ -4793,16 +4799,29 @@ function lerAparencia() {
 // Variações do destaque a partir de uma cor só: tons para botão e o texto que fica legível por cima.
 const PROPRIEDADES_DO_ACENTO = ['--acento', '--acento-forte', '--acento-escuro', '--acento-texto', '--primario-texto'];
 function pintarAcento(raiz, acento) {
-  const texto = contraste(acento, '#000000') >= contraste(acento, '#FFFFFF') ? '#111114' : '#FFFFFF';
+  const texto = contraste(acento, '#000000') >= contraste(acento, '#FFFFFF') ? '#000000' : '#FFFFFF';
+  const mistura = texto === '#FFFFFF' ? 'black' : 'white';
   raiz.setProperty('--acento', acento);
-  raiz.setProperty('--acento-forte', `color-mix(in srgb, ${acento} 78%, black)`);
-  raiz.setProperty('--acento-escuro', `color-mix(in srgb, ${acento} 64%, black)`);
+  raiz.setProperty('--acento-forte', `color-mix(in srgb, ${acento} 78%, ${mistura})`);
+  raiz.setProperty('--acento-escuro', `color-mix(in srgb, ${acento} 64%, ${mistura})`);
   raiz.setProperty('--acento-texto', texto);
   raiz.setProperty('--primario-texto', texto);
 }
 // Último modo de janela pedido ao desktop; começa indefinido para a abertura sempre pedir
 // (a janela pode ter nascido transparente de uma sessão em que o tema era o Liquid Glass).
 let vidroPedido;
+function opacidadeMinimaDoPapel(fundo, textos) {
+  const canal = (cor, i) => parseInt(cor.slice(i, i + 2), 16);
+  const realce = Kiro.luminancia(textos[0]) > .5 ? .07 : 0; // Reserva o branco máximo da textura Paper sobre temas escuros.
+  let minimo = 100;
+  for (let p = 99; p >= 0; p--) {
+    const fundos = ['#000000', '#FFFFFF'].map(tras => '#' + [1, 3, 5].map(i =>
+      Math.round((canal(fundo, i) * p / 100 + canal(tras, i) * (1 - p / 100)) * (1 - realce) + 255 * realce).toString(16).padStart(2, '0')).join(''));
+    if (fundos.some(cor => textos.some(texto => Kiro.contraste(texto, cor) < 4.5))) break;
+    minimo = p;
+  }
+  return minimo;
+}
 function aplicarAparencia(valores) {
   const a = Kiro.aparenciaValida(valores || lerAparencia());
   temaDosIcones = a.tema;
@@ -4829,6 +4848,8 @@ function aplicarAparencia(valores) {
     if (a.acento.toLowerCase() !== APARENCIA_PADRAO.acento.toLowerCase()) pintarAcento(raiz, a.acento);
   }
   if (a.destaque) pintarAcento(raiz, a.destaque);
+  const css = getComputedStyle(html);
+  raiz.setProperty('--papel-contraste-minimo', `${vidro ? 0 : opacidadeMinimaDoPapel(css.getPropertyValue('--content-bg').trim(), ['--ink', '--muted'].map(v => css.getPropertyValue(v).trim()))}%`);
   return a;
 }
 // Botões da janela (app desktop) com as cores do tema: fundo da faixa e cor do texto.
@@ -5426,6 +5447,9 @@ async function showSettings(aba = abaDasConfiguracoes) {
     ${painel('personalizacao', `<section class="cfg-grupo cfg-aparencia">
       <header class="cfg-grupo-topo">${texto(t('Aparência'), t('Muda na hora e vale só para esta instalação.'))}<div class="cfg-botoes"><button type="button" class="secondary cfg-pequeno" id="cfg-primeiros-passos">${t('Primeiros passos')}</button><button type="button" class="secondary cfg-pequeno" id="cor-padrao">${icone('recarregar')} ${t('Restaurar padrão')}</button></div></header>
       <label class="cfg-linha">${texto(t('Tamanho do texto da interface'), t('Ajusta menus e controles; o texto das notas mantém seu tamanho.'))}<select id="cfg-tamanho-interface">${[100, 115, 130, 150].map(n => `<option value="${n}"${tamanhoInterface === n ? ' selected' : ''}>${n}%</option>`).join('')}</select></label>
+      <div class="cfg-linha cfg-linha-coluna">${texto(t('Skin'), t('Define bordas, espaçamento e fontes. As cores vêm do tema.'), 'skin-rotulo')}
+        <div class="skins" role="radiogroup" aria-labelledby="skin-rotulo">${SKINS.map(([id, nome, desc]) => `<label class="skin-opcao"><input type="radio" name="skin" value="${id}" class="sr-only" ${cores.skin === id ? 'checked' : ''} /><span class="skin-nome">${t(nome)}</span><span class="skin-desc">${t(desc)}</span></label>`).join('')}</div>
+      </div>
       <div class="cfg-linha cfg-linha-coluna" id="cfg-vidro" ${cores.tema === 'liquid-glass' ? '' : 'hidden'}>
         <label class="cfg-vidro-controle" for="cfg-transparencia"><span>${t('Transparência do fundo')}</span><output id="cfg-transparencia-valor" for="cfg-transparencia">${cores.transparencia}%</output></label>
         <input type="range" id="cfg-transparencia" min="0" max="80" step="1" value="${cores.transparencia}" aria-describedby="cfg-vidro-detalhe" />
@@ -5433,7 +5457,7 @@ async function showSettings(aba = abaDasConfiguracoes) {
         <label class="cfg-chave cfg-vidro-controle"><span>${t('Fundo sólido nas notas')}</span><input type="checkbox" id="cfg-notas-solidas" ${lerPreferencia('vidroNotasSolidas') === '1' ? 'checked' : ''} /><span class="interruptor" aria-hidden="true"></span></label>
         <label class="cfg-chave cfg-vidro-controle"><span>${t('Fundo sólido no grafo')}</span><input type="checkbox" id="cfg-grafo-solido" ${lerPreferencia('vidroGrafoSolido') === '1' ? 'checked' : ''} /><span class="interruptor" aria-hidden="true"></span></label>
       </div>
-      <div class="cfg-linha cfg-linha-coluna">${texto(t('Tema'), '', 'tema-rotulo')}
+      <div class="cfg-linha cfg-linha-coluna">${texto(t('Tema'), t('Escolhe as cores da interface.'), 'tema-rotulo')}
         ${[['classicos', t('Clássicos')], ['anime', t('Anime')]].map(([grupo, titulo]) => `<div class="temas-grupo"><h4 class="cfg-subtitulo">${titulo}</h4><div class="temas" role="radiogroup" aria-labelledby="tema-rotulo">${TEMAS.filter(tema => tema[2] === grupo).map(opcaoTema).join('')}</div></div>`).join('')}
         <div class="temas-grupo"><div class="temas">${opcaoTema(['personalizado', frase('Personalizado')])}</div></div>
       </div>
@@ -5445,15 +5469,14 @@ async function showSettings(aba = abaDasConfiguracoes) {
         <div class="amostras" role="radiogroup" aria-labelledby="acento-rotulo"><label class="amostra" data-cor-pasta="" title="${t('Do tema')}"><input type="radio" name="destaque" value="" ${cores.destaque ? '' : 'checked'} /><span class="sr-only">${t('Do tema')}</span></label>${ACENTOS.map(([hex, nome]) => `<label class="amostra" style="--cor-pasta:${hex}" title="${t(nome)}"><input type="radio" name="destaque" value="${hex}" ${hex.toLowerCase() === cores.destaque.toLowerCase() ? 'checked' : ''} /><span class="sr-only">${t(nome)}</span></label>`).join('')}<label class="cor-ponto cor-livre" title="${t('Outra cor')}"><input type="color" id="destaque-livre" value="${cores.destaque || cores.acento}" aria-label="${t('Outra cor de destaque')}" /></label></div>
         <p class="cfg-aviso" id="acento-aviso" hidden>${t('Essa cor tem pouco contraste com o fundo: textos e ícones podem ficar difíceis de ler.')}</p>
       </div>
-      <div class="cfg-linha cfg-linha-coluna">${texto(t('Skin'), '', 'skin-rotulo')}
-        <div class="skins" role="radiogroup" aria-labelledby="skin-rotulo">${SKINS.map(([id, nome, desc]) => `<label class="skin-opcao"><input type="radio" name="skin" value="${id}" class="sr-only" ${cores.skin === id ? 'checked' : ''} /><span class="skin-nome">${t(nome)}</span><span class="skin-desc">${t(desc)}</span></label>`).join('')}</div>
-      </div>
+
     </section>`)}
     ${painel('papel', `<section class="cfg-grupo">
       <header class="cfg-grupo-topo">${texto(t('Papel de parede'), t('Imagem até 4K (3840 × 2160), GIF ou vídeo MP4/WebM animado de até 200 MB. Preenche a janela e aparece atrás de todas as telas, menos a de Pastas. Vale só para esta instalação.'))}</header>
       <div class="cfg-linha cfg-linha-coluna" id="cfg-papel"${document.documentElement.classList.contains('com-papel-de-parede') ? ' data-tem-papel' : ''}>${texto(t('Imagem ou vídeo'))}
         <div class="papel-controles"><span class="papel-previa" aria-hidden="true"></span><label class="secondary cfg-pequeno papel-escolher">${icone('imagem')} ${t('Escolher arquivo')}<input type="file" accept="image/*,video/mp4,video/webm" id="papel-arquivo" class="sr-only" /></label><button type="button" class="secondary cfg-pequeno papel-so-com" id="papel-remover">${icone('lixeira')} ${t('Remover')}</button></div>
         <label class="papel-veu papel-so-com"><span class="small-muted">${t('Suavizar a imagem')}</span><input type="range" id="papel-veu" min="0" max="90" step="5" value="${lerPreferencia('papelDeParedeVeu') ?? VEU_PADRAO}" /></label>
+        <p class="small-muted papel-so-com">${t('O contraste mínimo do tema é preservado para manter o texto legível.')}</p>
         <label class="cfg-chave papel-so-video papel-segue-sistema"><span class="small-muted">${t('Pausar o vídeo quando o sistema pede menos movimento')}</span><input type="checkbox" id="papel-segue-sistema" ${videoSegueOSistema() ? 'checked' : ''} /><span class="interruptor" aria-hidden="true"></span></label>
         <label class="papel-veu papel-so-com papel-so-vidro"><span class="small-muted">${t('Transparência do papel de parede')}</span><input type="range" id="papel-transparencia" min="0" max="90" step="5" value="${lerPreferencia('papelTransparencia') ?? 0}" /></label>
         <label class="papel-veu papel-so-com"><span class="small-muted">${t('Opacidade dos cartões')}</span><input type="range" id="papel-opacidade" min="30" max="100" step="5" value="${lerPreferencia('papelOpacidadeCartoes') ?? 100}" /></label>

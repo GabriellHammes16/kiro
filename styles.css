@@ -94,7 +94,7 @@ body.saving { cursor:progress; }
   /* Destaque */
   --accent:var(--acento-forte); --accent-strong:var(--acento-escuro);
   --accent-soft:color-mix(in srgb, var(--acento) 16%, transparent);
-  --accent-text:var(--acento);
+  --accent-text:color-mix(in srgb, var(--acento) 20%, var(--ink));
   --focus-ring:color-mix(in srgb, var(--acento) 75%, transparent);
 
   /* Superfícies e texto */
@@ -1049,8 +1049,10 @@ body, button, input, textarea, select { font-family:var(--fonte-interface); }
    O véu é quase sólido no alto da página, onde título, data e frase encostam direto na imagem,
    e baixa até a força escolhida em Configurações; dali para baixo o texto está sempre num cartão. */
 html.com-papel-de-parede .app-shell:not(.cofre-aberto) > .content {
-  --overlay-wallpaper:color-mix(in srgb, var(--content-bg) var(--papel-veu, 60%), transparent);
-  --overlay-wallpaper-topo:color-mix(in srgb, var(--content-bg) max(var(--papel-veu, 60%), 86%), transparent);
+  /* O controle inteiro percorre a faixa legível, inclusive em paletas claras. */
+  --papel-veu-legivel:calc(var(--papel-contraste-minimo, 0%) + (100% - var(--papel-contraste-minimo, 0%)) * (var(--papel-veu, 60%) / 90%));
+  --overlay-wallpaper:color-mix(in srgb, var(--content-bg) var(--papel-veu-legivel), transparent);
+  --overlay-wallpaper-topo:color-mix(in srgb, var(--content-bg) max(var(--papel-veu-legivel), 86%), transparent);
   --camada-do-veu:linear-gradient(var(--overlay-wallpaper-topo) 0, var(--overlay-wallpaper-topo) 250px, var(--overlay-wallpaper) 420px);
   background-image:var(--camada-do-veu), var(--papel-de-parede);
   background-size:auto, cover; background-position:0 0, center; background-repeat:no-repeat; background-attachment:scroll, fixed;
