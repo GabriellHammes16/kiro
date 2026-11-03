@@ -22,17 +22,19 @@ async function mesclarComOCofre(local) {
   if (editing?.id && !editorDirty) { const n = getNote(editing.id); if (n) editing = { ...n, tags: [...(n.tags || [])], links: [...(n.links || [])] }; }
   return true;
 }
-async function save(origem = null, tentativa = 0) {
+async function save(origem = null, tentativa = 0, opcoes = {}) {
   if (busy || failed || !loaded) return false;
   const snapshot = structuredClone(state);
   setBusy(true); status(t('Salvando…'));
   try {
     Kiro.validateState(snapshot);
     state = doCofre(window.cadernoDesktop ? await window.cadernoDesktop.saveState(snapshot) : await api('state', snapshot));
-    status(t('Salvo no cofre')); render(); eventosDoCofre(origem); return true;
+    status(t('Salvo no cofre'));
+    if (!opcoes.semRender || tentativa > 0) render(); else updateCount();
+    eventosDoCofre(origem); return true;
   } catch (error) {
-    if (tentativa < 2 && await mesclarComOCofre(snapshot).catch(() => false)) { setBusy(false); return save(origem, tentativa + 1); }
-    failed = true; status(mensagemDoErro(error) + ' ' + t('Suas alterações continuam nesta janela. Exporte-as antes de recarregar.'), true); return false;
+    if (tentativa < 2 && await mesclarComOCofre(snapshot).catch(() => false)) { setBusy(false); return save(origem, tentativa + 1, opcoes); }
+    failed = true; if (opcoes.semRender) render(); status(mensagemDoErro(error) + ' ' + t('Suas alterações continuam nesta janela. Exporte-as antes de recarregar.'), true); return false;
   } finally { setBusy(false); }
 }
 function escapeHtml(value = '') { return String(value).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
@@ -51,6 +53,44 @@ function atualizarSeletorDeCofre() {
 }
 function getNote(id) { return state.notes.find(n => n.id === id); }
 function getFluxo(id) { return (state.fluxos || []).find(f => f.id === id); }
+// No Hoje, quando já há moldura de plug-in aberta (ex.: miniatura do Kanban), atualiza só os
+// cartões nativos no lugar para não desmontar o <iframe> e causar piscada a cada tarefa marcada.
+function atualizarHojeSemPiscar(app, html) {
+  if (renderedView !== 'today' || currentView !== 'today' || personalizandoHoje) return false;
+  if (app.querySelector('.hoje-faixas.personalizando') || !app.querySelector('.plugin-painel iframe.plugin-moldura')) return false;
+  const temp = document.createElement('div');
+  temp.innerHTML = html;
+  const faixasAtuais = app.querySelector(':scope > .hoje-faixas'), faixasNovas = temp.querySelector(':scope > .hoje-faixas');
+  if (!faixasAtuais || !faixasNovas || faixasAtuais.children.length !== faixasNovas.children.length) return false;
+  const assinatura = raiz => [...raiz.querySelectorAll('.plugin-painel')].map(p => `${p.dataset.plugin}:${p.dataset.painel}`).join('|');
+  if (assinatura(faixasAtuais) !== assinatura(faixasNovas)) return false;
+  const headAtual = app.querySelector(':scope > .page-head'), headNovo = temp.querySelector(':scope > .page-head');
+  if (headAtual && headNovo) {
+    const personalizar = headNovo.querySelector('[data-hoje-acao="personalizar"]');
+    if (personalizar && app.querySelector('.hoje-acoes [data-hoje-acao="personalizar"]')) personalizar.remove();
+    headAtual.replaceWith(headNovo);
+  }
+  const sincronizarLista = (atual, nova) => {
+    const filhosAtuais = [...atual.children], filhosNovos = [...nova.children];
+    if (filhosAtuais.length !== filhosNovos.length) return false;
+    for (let i = 0; i < filhosNovos.length; i++) {
+      const a = filhosAtuais[i], b = filhosNovos[i];
+      if (a.classList.contains('plugin-painel') && b.classList.contains('plugin-painel') && a.dataset.plugin === b.dataset.plugin && a.dataset.painel === b.dataset.painel) continue;
+      if (a.classList.contains('plugin-painel') || b.classList.contains('plugin-painel')) return false;
+      a.replaceWith(b);
+    }
+    return true;
+  };
+  for (let i = 0; i < faixasNovas.children.length; i++) {
+    const fa = faixasAtuais.children[i], fb = faixasNovas.children[i];
+    if (fa.className !== fb.className) return false;
+    if (fa.classList.contains('hoje-colunas')) {
+      const colsA = [...fa.querySelectorAll(':scope > .stack')], colsB = [...fb.querySelectorAll(':scope > .stack')];
+      if (colsA.length !== colsB.length || !colsA.every((c, j) => sincronizarLista(c, colsB[j]))) return false;
+    } else if (!sincronizarLista(fa, fb)) return false;
+  }
+  return true;
+}
 function render() {
   if(gravacaoAudio?.contexto&&!contextoAudioValido(gravacaoAudio.contexto))gravacaoAudio.parar();
   if (!editing || currentView !== 'studies') { modoFoco = false; document.querySelector('.app-shell').classList.remove('modo-foco'); }
@@ -68,13 +108,26 @@ function render() {
   document.querySelector(".app-shell").classList.toggle("grafo-aberto", currentView === "graph");
   document.querySelector(".app-shell").classList.toggle("pagina-plugin-aberta", !!paginaDoPlugin);
   const app = document.querySelector("#app");
+  const mesmaTela = renderedView === currentView;
+  const rolagemApp = mesmaTela ? app.scrollTop : 0;
+  const rolagemColunas = mesmaTela ? (app.querySelector('.tarefas-lista.por-colunas')?.scrollLeft || 0) : 0;
+  const rolagemStatus = mesmaTela ? new Map([...app.querySelectorAll('.status-secao[data-status] .status-itens')].map(el => [el.closest('.status-secao').dataset.status, el.scrollTop])) : null;
   cancelAnimationFrame(grafoRaf); grafoRaf = null; fecharSugestoes();
   // A página cheia do plug-in não é recriada a cada redesenho: a tela guarda estado próprio.
   const viva = paginaDoPlugin && app.querySelector(`:scope > .plugin-pagina[data-plugin="${CSS.escape(paginaDoPlugin)}"]`);
-  if (!viva) app.innerHTML = paginaDoPlugin ? renderPaginaDoPlugin(paginaDoPlugin) : views[currentView]();
+  if (!viva) {
+    const html = paginaDoPlugin ? renderPaginaDoPlugin(paginaDoPlugin) : views[currentView]();
+    if (!atualizarHojeSemPiscar(app, html)) app.innerHTML = html;
+  }
   // Animar só na troca de tela: um redesenho comum não deve piscar.
   if (renderedView !== currentView) { app.classList.remove("view-enter"); void app.offsetWidth; app.classList.add("view-enter"); renderedView = currentView; }
   bindView(); updateCount();
+  if (mesmaTela) {
+    if (rolagemApp) app.scrollTop = rolagemApp;
+    const cols = rolagemColunas && app.querySelector('.tarefas-lista.por-colunas');
+    if (cols) cols.scrollLeft = rolagemColunas;
+    if (rolagemStatus?.size) for (const [st, top] of rolagemStatus) { const el = app.querySelector(`.status-secao[data-status="${CSS.escape(st)}"] .status-itens`); if (el && top) el.scrollTop = top; }
+  }
   if (rolagemDaNota && editorDaNota) { const rola = editorDaNota.editor.dom.closest('.cofre-nota-corpo'); if (rola) rola.scrollTop = rolagemDaNota; }   // mesmo editor de volta: mesma rolagem
   // O editor da nota é o mesmo de antes do redesenho (montarEditorDaNota): devolve o foco a ele.
   if (focoNoEditor && editorDaNota && document.querySelector('#doc-corpo')?.contains(editorDaNota.editor.dom)) editorDaNota.editor.focar();
@@ -90,8 +143,9 @@ function citadaEm(task, fonte = state.notes) {
 }
 const rotuloDaRepeticao = r => ({ day: frase('Todo dia'), week: frase('Toda semana'), month: frase('Todo mês') })[r.every] || t('A cada {n} dias', { n: r.n });
 function taskRow(task, notas = state.notes) {
-  const atrasada = !task.done && task.due < today();
-  return `<div class="task-item">${check(task.done,"toggle-task",task.id)}<div class="task-title"><span class="task-nome">${escapeHtml(task.title)}</span>${task.description ? `<div class="task-descricao">${escapeHtml(task.description)}</div>` : ''}<div class="task-info"><span class="task-data${atrasada ? ' atrasada' : ''}">${icone('calendario')}${dateLabel(task.due)}</span>${task.repeat ? ` <span class="task-repete" title="${t(rotuloDaRepeticao(task.repeat))}">${icone('recarregar')}</span>` : ''}${task.noteId && getNote(task.noteId) ? ` · ${linkDaNota(getNote(task.noteId))}` : ""}${citadaEm(task, notas)}</div></div>${task.priority === "Alta" ? `<span class="priority">${t('Alta')}</span>` : ""}<div class="task-actions"><button class="icon-button" data-action="edit-task" data-id="${task.id}" title="${t('Editar')}">${icone('renomear')}</button><button class="icon-button" data-action="delete-task" data-id="${task.id}" title="${t('Excluir')}">${icone('lixeira')}</button></div></div>`;
+  const atrasada = !task.done && task.due < today(), st = Kiro.statusDaTarefa(task);
+  const rotuloSt = t((typeof ROTULOS_DE_STATUS !== 'undefined' && ROTULOS_DE_STATUS[st]) || { 'nao-comecado': 'Não começado', andamento: 'Em andamento', pausado: 'Pausado', concluido: 'Concluído' }[st]);
+  return `<div class="task-item" data-id="${task.id}" data-status="${st}">${check(task.done,"toggle-task",task.id)}<div class="task-title"><span class="task-nome">${escapeHtml(task.title)}</span>${task.description ? `<div class="task-descricao">${escapeHtml(task.description)}</div>` : ''}<div class="task-info"><span class="task-data${atrasada ? ' atrasada' : ''}">${icone('calendario')}${dateLabel(task.due)}</span>${task.repeat ? ` <span class="task-repete" title="${t(rotuloDaRepeticao(task.repeat))}">${icone('recarregar')}</span>` : ''}${task.noteId && getNote(task.noteId) ? ` · ${linkDaNota(getNote(task.noteId))}` : ""}${citadaEm(task, notas)}</div></div><button type="button" class="task-status" data-status="${st}" data-status-tarefa="${task.id}" title="${t('Mudar estado')}: ${rotuloSt}" aria-label="${t('Estado')}: ${rotuloSt}"><span class="status-marca" aria-hidden="true"></span><span class="task-status-texto">${rotuloSt}</span></button>${task.priority === "Alta" ? `<span class="priority">${t('Alta')}</span>` : ""}<div class="task-actions"><button class="icon-button" data-action="edit-task" data-id="${task.id}" title="${t('Editar')}">${icone('renomear')}</button><button class="icon-button" data-action="delete-task" data-id="${task.id}" title="${t('Excluir')}">${icone('lixeira')}</button></div></div>`;
 }
 function renderToday() {
   const catalogo = catalogoDaHoje(), l = layoutDaHoje(catalogo);
@@ -461,17 +515,54 @@ function renderTasks() {
 }
 const ROTULOS_DE_STATUS = { 'nao-comecado': frase('Não começado'), andamento: frase('Em andamento'), pausado: frase('Pausado'), concluido: frase('Concluído') };
 const gravarPreferencia = (chave, valor) => { try { localStorage.setItem(`kiro.${chave}`, valor); } catch { /* janela privada: vale só nesta sessão */ } };
-// Leva a tarefa a outro status (Concluído marca como feita) e devolve o foco a ela.
-function moverStatusDaTarefa(id, destino) {
+function iconeStatus(st) {
+  if (st === 'andamento') return '<svg class="icone" viewBox="0 0 24 24" style="color:var(--acento)"><circle cx="12" cy="12" r="7" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 5a7 7 0 0 0 0 14Z" fill="currentColor"/></svg>';
+  if (st === 'pausado') return '<svg class="icone" viewBox="0 0 24 24" style="color:var(--warning)"><circle cx="12" cy="12" r="7" fill="none" stroke="currentColor" stroke-width="2"/><line x1="10" y1="9" x2="10" y2="15" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><line x1="14" y1="9" x2="14" y2="15" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>';
+  if (st === 'concluido') return '<svg class="icone" viewBox="0 0 24 24" style="color:var(--ok, var(--acento))"><circle cx="12" cy="12" r="7" fill="currentColor" stroke="currentColor" stroke-width="2"/><path d="m9 12 2 2 4-4" fill="none" stroke="var(--primario-texto, #fff)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  return '<svg class="icone" viewBox="0 0 24 24" style="color:var(--muted)"><circle cx="12" cy="12" r="7" fill="none" stroke="currentColor" stroke-width="2"/></svg>';
+}
+function itensStatusDaTarefa(id) {
+  const atual = () => state.tasks.find(x => x.id === id);
+  return Kiro.STATUS_DA_TAREFA.map(st => ({
+    rotulo: t(ROTULOS_DE_STATUS[st]),
+    icone: iconeStatus(st),
+    ativo: () => Boolean(atual() && Kiro.statusDaTarefa(atual()) !== st),
+    acao: () => moverStatusDaTarefa(id, st),
+  }));
+}
+function menuDaTarefa(id) {
+  const atual = () => state.tasks.find(x => x.id === id);
+  return [
+    ...itensStatusDaTarefa(id),
+    { separador: true },
+    { rotulo: t('Editar'), icone: icone('renomear'), acao: () => atual() && taskModal(atual()) },
+    { rotulo: t('Copiar citação'), icone: icone('link'), acao: async () => { const x = atual(); if (x && await copiarTexto(Kiro.taskReference(x))) status(t('Citação copiada: cole numa nota.')); } },
+    { separador: true },
+    { rotulo: t('Excluir'), icone: icone('lixeira'), acao: () => action('delete-task', id) },
+  ];
+}
+// Leva a tarefa a outro status (Concluído marca como feita) e devolve o foco a ela sem piscar.
+async function moverStatusDaTarefa(id, destino) {
   const tarefa = state.tasks.find(x => x.id === id);
   if (!tarefa || busy || failed || !loaded || Kiro.statusDaTarefa(tarefa) === destino) return;
   const antes = state.tasks;
   state.tasks = state.tasks.map(x => x.id === id ? Kiro.moverTarefa(x, destino) : x);
   criarProximas(antes);
-  save(); render();
-  document.querySelector(`[data-tarefa="${CSS.escape(id)}"]`)?.focus();
+  if (typeof render === 'function') render();
+  (document.querySelector(`[data-tarefa="${CSS.escape(id)}"]`) || document.querySelector(`[data-status-tarefa="${CSS.escape(id)}"]`))?.focus({ preventScroll: true });
+  const salvo = await save(null, 0, { semRender: true });
+  editorDaNota?.editor.redesenhar?.();
+  if (salvo) status(`${tarefa.title} · ${t(ROTULOS_DE_STATUS[destino])}`);
 }
 document.addEventListener('click', e => {
+  const btnStatus = e.target.closest?.('[data-status-tarefa]');
+  if (btnStatus) {
+    e.stopPropagation();
+    if (menuAberto?._origem === btnStatus) return void fecharMenuContexto();
+    const r = btnStatus.getBoundingClientRect();
+    abrirMenuContexto({ preventDefault() {}, clientX: r.left, clientY: r.bottom + 4 }, document.body, itensStatusDaTarefa(btnStatus.dataset.statusTarefa), { compacto: true, origem: btnStatus });
+    return;
+  }
   const v = e.target.closest?.('[data-tarefas-visao]');
   if (v) { gravarPreferencia('tarefasVisao', v.dataset.tarefasVisao); render(); $(`[data-tarefas-visao="${v.dataset.tarefasVisao}"]`)?.focus(); return; }
   const dia = e.target.closest?.('[data-calendario-dia]');
@@ -485,6 +576,11 @@ document.addEventListener('click', e => {
     taskModal({ title: '', due: prazo, priority: 'Média', noteId: '' }); return;
   }
   if (e.target.closest?.('[data-recolher-concluido]')) { gravarPreferencia('tarefasConcluidoAberto', lerPreferencia('tarefasConcluidoAberto') === '1' ? '0' : '1'); render(); return; }
+});
+document.addEventListener('contextmenu', e => {
+  const linha = e.target.closest?.('.task-item[data-id]');
+  if (!linha || e.target.closest?.('a, input, textarea, select')) return;
+  abrirMenuContexto(e, document.body, menuDaTarefa(linha.dataset.id), { compacto: true });
 });
 document.addEventListener('keydown', e => {
   const dia = e.target.closest?.('[data-calendario-dia]');
@@ -512,13 +608,15 @@ document.addEventListener('dragstart', e => {
   e.dataTransfer.effectAllowed = 'move';
   e.dataTransfer.setData('text/kiro-tarefa', tarefaArrastada);
 });
-const limparStatusAlvo = () => document.querySelectorAll('.status-secao.alvo').forEach(x => x.classList.remove('alvo'));
+const limparStatusAlvo = exceto => document.querySelectorAll('.status-secao.alvo').forEach(x => { if (x !== exceto) x.classList.remove('alvo'); });
 document.addEventListener('dragover', e => {
   const secao = tarefaArrastada && e.target.closest?.('.status-secao');
-  limparStatusAlvo();
-  if (!secao) return;
+  if (!secao) { limparStatusAlvo(); return; }
   e.preventDefault();
-  secao.classList.add('alvo');
+  const t = state.tasks.find(x => x.id === tarefaArrastada);
+  const ativa = t && Kiro.statusDaTarefa(t) !== secao.dataset.status ? secao : null;
+  limparStatusAlvo(ativa);
+  if (ativa) ativa.classList.add('alvo');
 });
 document.addEventListener('drop', e => {
   const secao = tarefaArrastada && e.target.closest?.('.status-secao');
@@ -1573,7 +1671,7 @@ function action(type,id,evento) {
     return;
   }
   if (busy || failed || !loaded) return;
-  if(type==="new-subfolder") folderModal({title:"",description:"",parentId:id}); if(type==="toggle-habit") marcarHabito(id); if(type==="toggle-habit-day"){const [habito,dia]=id.split("|");marcarHabito(habito,dia);} if(type==="toggle-task") alternarTarefa(id); if(type==="toggle-note-task") marcarTarefaDaNota(id); if(type==="edit-note") abrirPorId(id,{novaAba:Boolean(evento?.ctrlKey||evento?.metaKey)}); if(type==="abrir-fluxo") abrirPorId(id,{novaAba:Boolean(evento?.ctrlKey||evento?.metaKey)}); if(type==="new-note-folder") abrirNota(notaVazia({folderId:id})); if(type==="edit-task") taskModal(state.tasks.find(x=>x.id===id)); if(type==="edit-folder") folderModal(state.folders.find(x=>x.id===id)); if(type==="delete-task"){state.tasks=state.tasks.filter(x=>x.id!==id);save();render();} if(type==="delete-folder") deleteFolder(id); }
+  if(type==="new-subfolder") folderModal({title:"",description:"",parentId:id}); if(type==="toggle-habit") marcarHabito(id); if(type==="toggle-habit-day"){const [habito,dia]=id.split("|");marcarHabito(habito,dia);} if(type==="toggle-task") alternarTarefa(id); if(type==="toggle-note-task") marcarTarefaDaNota(id); if(type==="edit-note") abrirPorId(id,{novaAba:Boolean(evento?.ctrlKey||evento?.metaKey)}); if(type==="abrir-fluxo") abrirPorId(id,{novaAba:Boolean(evento?.ctrlKey||evento?.metaKey)}); if(type==="new-note-folder") abrirNota(notaVazia({folderId:id})); if(type==="edit-task") taskModal(state.tasks.find(x=>x.id===id)); if(type==="edit-folder") folderModal(state.folders.find(x=>x.id===id)); if(type==="delete-task"){state.tasks=state.tasks.filter(x=>x.id!==id);render();save(null,0,{semRender:true});} if(type==="delete-folder") deleteFolder(id); }
 // Excluir uma pasta leva junto suas subpastas; as notas continuam no cofre, na raiz.
 function deleteFolder(id) {
   const ids=Kiro.descendants(state.folders,id);
@@ -1720,9 +1818,11 @@ function modal(title, body) { modalDirty=false; document.querySelector("#modal-r
 function closeModal(force=false){ if(!force && (busy || (modalDirty && !confirm(t('Descartar as alterações deste formulário?')))))return false; document.querySelector('#modal-root').innerHTML='';modalDirty=false;const aoFechar=aoFecharAcoesRapidas;aoFecharAcoesRapidas=null;aoFechar?.();return true; }
 function taskModal(task={title:"",due:today(),priority:"Média",noteId:""}) {
   const ATALHOS = [[0, frase('Hoje')], [1, frase('Amanhã')], [7, frase('Próxima semana')]];
+  const stAtual = Kiro.statusDaTarefa(task);
   modal(task.id?t("Editar tarefa"):t("Nova tarefa"), `<form class="form" id="task-form">
     <div class="field"><label for="tarefa-titulo">${t('Tarefa')}</label><input id="tarefa-titulo" name="title" required autofocus value="${escapeHtml(task.title)}" placeholder="${t('O que precisa ser feito?')}" /></div>
     <div class="field"><label for="tarefa-data">${t('Data')}</label><div class="tarefa-datas"><input id="tarefa-data" name="due" type="date" value="${task.due}" required />${ATALHOS.map(([n, r]) => `<button type="button" class="chip" data-somar-dias="${n}">${t(r)}</button>`).join('')}</div></div>
+    <div class="field"><span class="rotulo-campo" id="tarefa-estado">${t('Estado')}</span><div class="segmentos" role="radiogroup" aria-labelledby="tarefa-estado">${Kiro.STATUS_DA_TAREFA.map(st=>`<label class="segmento" data-status="${st}"><input type="radio" name="status" value="${st}" ${st===stAtual?"checked":""} /><span><span class="status-marca" aria-hidden="true"></span> ${t(ROTULOS_DE_STATUS[st])}</span></label>`).join("")}</div></div>
     <div class="field"><span class="rotulo-campo" id="tarefa-prioridade">${t('Prioridade')}</span><div class="segmentos" role="radiogroup" aria-labelledby="tarefa-prioridade">${[frase("Baixa"),frase("Média"),frase("Alta")].map(p=>`<label class="segmento"><input type="radio" name="priority" value="${p}" ${p===task.priority?"checked":""} /><span>${t(p)}</span></label>`).join("")}</div></div>
     <div class="field"><label for="tarefa-repete">${t('Repetir')}</label><div class="tarefa-datas"><select id="tarefa-repete" name="repeat">${[['', frase('Não repete')], ['day', frase('Todo dia')], ['week', frase('Toda semana')], ['month', frase('Todo mês')], ['days', frase('A cada N dias')]].map(([v, r]) => `<option value="${v}" ${v === (task.repeat?.every || '') ? 'selected' : ''}>${t(r)}</option>`).join('')}</select><input id="tarefa-repete-n" name="repeatN" type="number" min="1" max="365" value="${task.repeat?.n || 2}" aria-label="${t('Número de dias')}" ${task.repeat?.every === 'days' ? '' : 'hidden'} /></div></div>
     <div class="field"><label for="tarefa-descricao">${t('Descrição (opcional)')}</label><textarea id="tarefa-descricao" name="description" maxlength="5000" rows="3" placeholder="${t('Detalhes, passos, links…')}">${escapeHtml(task.description || '')}</textarea></div>
@@ -1735,7 +1835,7 @@ function taskModal(task={title:"",due:today(),priority:"Média",noteId:""}) {
   data.addEventListener('input', marcarAtalho); marcarAtalho();
   $('#tarefa-repete').onchange = e => { $('#tarefa-repete-n').hidden = e.target.value !== 'days'; };
   $('#tarefa-titulo')?.focus();
-  document.querySelector("#cancel").onclick=()=>closeModal();document.querySelector("#task-form").onsubmit=e=>{e.preventDefault();const f=new FormData(e.currentTarget);const saved={...task,id:task.id||uid(),title:f.get("title"),due:f.get("due"),priority:f.get("priority"),noteId:f.get("noteId"),done:task.done||false};const rep=f.get("repeat"),n=Math.min(365,Math.max(1,Math.round(Number(f.get("repeatN"))||2)));if(rep)saved.repeat=rep==="days"?{every:"days",n}:{every:rep};else delete saved.repeat;const descricao=String(f.get("description")||"").trim();if(descricao)saved.description=descricao;else delete saved.description;state.tasks=task.id?state.tasks.map(t=>t.id===task.id?saved:t):[saved,...state.tasks];save();closeModal(true);render();}; }
+  document.querySelector("#cancel").onclick=()=>closeModal();document.querySelector("#task-form").onsubmit=e=>{e.preventDefault();const f=new FormData(e.currentTarget);let saved={...task,id:task.id||uid(),title:f.get("title"),due:f.get("due"),priority:f.get("priority"),noteId:f.get("noteId"),done:task.done||false};const stEscolhido=f.get("status");if(Kiro.STATUS_DA_TAREFA.includes(stEscolhido))saved=Kiro.moverTarefa(saved,stEscolhido);const rep=f.get("repeat"),n=Math.min(365,Math.max(1,Math.round(Number(f.get("repeatN"))||2)));if(rep)saved.repeat=rep==="days"?{every:"days",n}:{every:rep};else delete saved.repeat;const descricao=String(f.get("description")||"").trim();if(descricao)saved.description=descricao;else delete saved.description;const antes=state.tasks;state.tasks=task.id?state.tasks.map(t=>t.id===task.id?saved:t):[saved,...state.tasks];criarProximas(antes);closeModal(true);render();save(null,0,{semRender:true});}; }
 const NOMES_DE_COR = { "":frase("Sem cor"), azul:frase("Azul"), verde:frase("Verde"), amarelo:frase("Amarelo"), laranja:frase("Laranja"), vermelho:frase("Vermelho"), rosa:frase("Rosa"), roxo:frase("Roxo"), cinza:frase("Cinza") };
 function folderModal(folder={title:"",description:"",parentId:""}) { modal(folder.id?t("Editar pasta"):t("Nova pasta de estudo"), `<form class="form" id="folder-form"><div class="field"><label>${t('Nome da pasta')}</label><input name="title" required value="${escapeHtml(folder.title)}" placeholder="${t('Ex.: JAVA, Inglês, programação')}" /><small class="small-muted">${t('Vira uma pasta de verdade no cofre: sem &lt; &gt; : " / \\ | ? * e sem ponto ou espaço no início ou no final.')}</small></div><div class="field"><label>${t('Dentro de')}</label><select name="parentId"><option value="">${t('Raiz do cofre')}</option>${state.folders.filter(f=>!(folder.id?Kiro.descendants(state.folders,folder.id):new Set()).has(f.id)).sort(byTitle).map(f=>`<option value="${f.id}" ${f.id===(folder.parentId||"")?"selected":""}>${escapeHtml(f.path||f.title)}</option>`).join("")}</select></div><div class="field"><span class="rotulo-campo" id="cor-pasta-rotulo">${t('Cor')}</span><div class="amostras" role="radiogroup" aria-labelledby="cor-pasta-rotulo">${["",...Kiro.FOLDER_COLORS].map(cor=>`<label class="amostra" data-cor-pasta="${cor}" title="${t(NOMES_DE_COR[cor])}"><input type="radio" name="color" value="${cor}" ${cor===(folder.color||"")?"checked":""} /><span class="sr-only">${t(NOMES_DE_COR[cor])}</span></label>`).join("")}</div></div><div class="field"><label>${t('Descrição')}</label><textarea name="description" placeholder="${t('Qual é seu objetivo com esta pasta?')}">${escapeHtml(folder.description||"")}</textarea></div><div class="form-actions"><button type="button" class="secondary" id="cancel">${t('Cancelar')}</button><button class="primary">${t('Salvar pasta')}</button></div></form>`);document.querySelector("#cancel").onclick=()=>closeModal();document.querySelector("#folder-form").onsubmit=e=>{e.preventDefault();const f=new FormData(e.currentTarget);const title=f.get("title").trim();
   // Validar aqui evita que um nome inválido bloqueie a janela no salvamento.
@@ -1987,11 +2087,14 @@ function avisoAtalhoGlobal(mostrar) {
   if (!el) { el = document.createElement('div'); el.id = 'aviso-atalho-global'; el.setAttribute('role', 'alert'); document.body.append(el); }
   el.textContent = t('Atalho global indisponível: outro aplicativo pode estar usando a combinação.');
 }
-let focoAntesDoBusy=null;   // inert tira o foco de qualquer coisa focada; ao sair do "ocupado" ele volta pra onde estava
+let focoAntesDoBusy=null, timerDoBusy=null;   // inert tira o foco de qualquer coisa focada; em gravações rápidas (<150 ms) evita piscar
 function setBusy(value){
   if(value&&!busy)focoAntesDoBusy=document.activeElement;
-  busy=value;document.body.classList.toggle('saving',value);$('.app-shell').inert=value;$('#modal-root').inert=value;
-  if(!value){
+  busy=value;clearTimeout(timerDoBusy);
+  if(value){
+    timerDoBusy=setTimeout(()=>{if(!busy)return;document.body.classList.add('saving');$('.app-shell').inert=true;$('#modal-root').inert=true;},150);
+  }else{
+    document.body.classList.remove('saving');$('.app-shell').inert=false;$('#modal-root').inert=false;
     const f=focoAntesDoBusy;focoAntesDoBusy=null;
     // Se o elemento saiu do documento nesse meio-tempo (ex.: um redesenho o substituiu, ou o
     // modal que o continha fechou), não há pra onde voltar: quem substituiu cuida do próprio foco.
@@ -2059,12 +2162,14 @@ async function tirarDaCaixa(id,folderId){
 const extraButton=(action,label,id='',cls='secondary',nome='')=>`<button type="button" class="${cls}" data-extra="${action}" data-id="${escapeHtml(id)}"${nome?` aria-label="${nome}" title="${nome}"`:''}>${label}</button>`;
 function enhanceView(){
   if(currentView!=='today')return;
-  // Captura numa faixa própria logo abaixo da frase, na largura dos cards: não depende de quantas linhas a frase ocupa.
-  $('.page-head').insertAdjacentHTML('afterend',`<div class="hoje-acoes"><form id="capture-form" class="capture"><label for="capture-text" class="sr-only">${t('Captura rápida')}</label>${icone('mais')}<input id="capture-text" required autocomplete="off" placeholder="${t('Capturar uma ideia, pergunta ou lembrete…')}" /><kbd class="atalho" title="${t('De qualquer tela')}">${teclaDe('captura')}</kbd><button class="primary captura-enviar" aria-label="${t('Guardar')}" title="${t('Guardar')} (Enter)">${icone('direita')}</button></form></div>`);
-  // A nota diária já tem botão na barra lateral: na faixa da captura fica o Personalizar, que sai do cabeçalho.
-  const personalizar=$('.page-head [data-hoje-acao="personalizar"]');
-  if(personalizar)$('.hoje-acoes').append(personalizar);
-  $('#capture-form').onsubmit=async e=>{e.preventDefault();if(await capturar($('#capture-text').value))$('#capture-text')?.focus();};
+  if(!$('#app > .hoje-acoes')){
+    // Captura numa faixa própria logo abaixo da frase, na largura dos cards: não depende de quantas linhas a frase ocupa.
+    $('.page-head').insertAdjacentHTML('afterend',`<div class="hoje-acoes"><form id="capture-form" class="capture"><label for="capture-text" class="sr-only">${t('Captura rápida')}</label>${icone('mais')}<input id="capture-text" required autocomplete="off" placeholder="${t('Capturar uma ideia, pergunta ou lembrete…')}" /><kbd class="atalho" title="${t('De qualquer tela')}">${teclaDe('captura')}</kbd><button class="primary captura-enviar" aria-label="${t('Guardar')}" title="${t('Guardar')} (Enter)">${icone('direita')}</button></form></div>`);
+    // A nota diária já tem botão na barra lateral: na faixa da captura fica o Personalizar, que sai do cabeçalho.
+    const personalizar=$('.page-head [data-hoje-acao="personalizar"]');
+    if(personalizar)$('.hoje-acoes').append(personalizar);
+    $('#capture-form').onsubmit=async e=>{e.preventDefault();if(await capturar($('#capture-text').value))$('#capture-text')?.focus();};
+  }
   document.querySelectorAll('[data-revisar-aba]').forEach(b=>b.onclick=()=>{filtroDaRevisao=b.dataset.revisarAba;const card=b.closest('.para-revisar');card.dataset.filtro=filtroDaRevisao;card.querySelectorAll('[data-revisar-aba]').forEach(x=>x.setAttribute('aria-pressed',String(x===b)));});
   desenharPaineisDosPlugins();
 }
@@ -2495,14 +2600,15 @@ function opcoesDoEditor({ atual = () => editorDaNota?.editor, menu = menuDaNota 
     },
   };
 }
-// Caixinha da tarefa citada numa nota: conclui ou reabre a tarefa e redesenha só as citações e o contador.
+// Caixinha da tarefa: conclui ou reabre a tarefa imediatamente na tela e grava sem piscar.
 async function alternarTarefa(id) {
   const tarefa = state.tasks.find(x => x.id === id);
   if (!tarefa || busy || failed || !loaded) return;
   const antes = state.tasks;
   state.tasks = state.tasks.map(x => x.id === id ? { ...x, done: !x.done } : x);
   criarProximas(antes);
-  const salvo = await save();
+  if (typeof render === 'function') render();
+  const salvo = await save(null, 0, { semRender: true });
   updateCount();
   editorDaNota?.editor.redesenhar?.();
   if (salvo) status(tarefa.done

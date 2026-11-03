@@ -27,6 +27,27 @@ test('lista e calendário renderizam tarefas citadas sem tratar índice como not
     const html = contexto.renderTasks();
     assert.match(html, /Entregar proposta/);
     assert.match(html, /Contexto da proposta/);
+    assert.match(html, /data-status-tarefa="t1"/);
     if (visao === 'calendario') assert.equal((html.match(/role="gridcell"/g) || []).length, 42);
   }
+});
+
+test('troca de estado desenha uma única vez de forma otimista sem segundo redesenho no save', async () => {
+  const task = { id: 't1', title: 'Estudar', due: '2026-10-26', priority: 'Média', done: false };
+  let renders = 0, opcoesSave = null;
+  const contexto = {
+    Kiro, state: { tasks: [task], notes: [] }, busy: false, failed: false, loaded: true,
+    ROTULOS_DE_STATUS: { 'nao-comecado': 'Não começado', andamento: 'Em andamento', pausado: 'Pausado', concluido: 'Concluído' },
+    t: s => s, criarProximas() {}, status() {}, editorDaNota: null,
+    CSS: { escape: String }, document: { querySelector: () => ({ focus() {} }) },
+    render: () => { renders++; },
+    save: async (_o, _t, op) => { opcoesSave = op; return true; },
+  };
+  vm.createContext(contexto);
+  const inicio = fonte.indexOf('async function moverStatusDaTarefa(');
+  vm.runInContext(fonte.slice(inicio, fonte.indexOf('\n}', inicio) + 2), contexto);
+  await contexto.moverStatusDaTarefa('t1', 'andamento');
+  assert.equal(Kiro.statusDaTarefa(contexto.state.tasks[0]), 'andamento');
+  assert.equal(renders, 1);
+  assert.equal(opcoesSave?.semRender, true);
 });

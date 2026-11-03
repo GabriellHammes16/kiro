@@ -43,11 +43,11 @@
     const origem = columnaDe(t), destino = SEGUINTE[origem];
     if (!destino) return;
     columns[id] = destino;
-    if (destino === 'finalizado') vuelta[id] = origem;
+    if (destino === 'finalizado') { vuelta[id] = origem; t.done = true; }
+    desenhar();
     await kiro.storage.set('columns', columns);
     await kiro.storage.set('vuelta', vuelta);
     if (destino === 'finalizado') await kiro.tasks.update(id, { done: true });
-    await carregar();
   }
 
   function desenhar() {

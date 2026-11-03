@@ -1140,6 +1140,8 @@
     'Não foi possível criar a pasta de backup no Google Drive.': 'Could not create the backup folder in Google Drive.',
     'Falha ao enviar arquivo para o Google Drive.': 'Failed to upload file to Google Drive.',
     'Não foi possível remover uma cópia antiga no Google Drive.': 'Could not remove an old copy in Google Drive.',
+    'Mudar estado': 'Change status',
+    'Estado': 'Status',
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = frases;
   else root.KiroIdiomas.registrar('en', frases);

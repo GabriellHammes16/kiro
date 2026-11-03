@@ -55,21 +55,24 @@
     s.style.color = erro ? 'var(--acento-forte)' : 'var(--muted)';
   }
 
-  // ---- Guardar a columna nova + sincronizar done ----
+  // ---- Guardar a columna nova + sincronizar done (otimista, sem piscar) ----
   async function mover(id, columna) {
     const t = tarefas.find(x => x.id === id);
     if (!t) return;
     const origen = columnaDe(t);
     if (origen === columna) return;
     const aFinalizado = columna === 'finalizado' && !t.done;
+    const eraFinalizado = origen === 'finalizado' && t.done;
     if (aFinalizado) vuelta[id] = origen;
-    else if (origen === 'finalizado' && t.done) delete vuelta[id];
+    else if (eraFinalizado) delete vuelta[id];
     columns[id] = columna;
+    if (aFinalizado) t.done = true;
+    else if (columna !== 'finalizado' && eraFinalizado) t.done = false;
+    render();
     await kiro.storage.set('columns', columns);
     await kiro.storage.set('vuelta', vuelta);
     if (aFinalizado) await kiro.tasks.update(id, { done: true });
-    else if (columna !== 'finalizado' && t.done) await kiro.tasks.update(id, { done: false });
-    await cargar();
+    else if (columna !== 'finalizado' && eraFinalizado) await kiro.tasks.update(id, { done: false });
   }
 
   function render() {
@@ -96,26 +99,31 @@
     }
     for (const c of $('#tauler').querySelectorAll('.col')) {
       c.addEventListener('dragover', e => { if (arrastrando) { e.preventDefault(); c.setAttribute('data-sobre', 'true'); } });
-      c.addEventListener('dragleave', () => c.setAttribute('data-sobre', 'false'));
+      c.addEventListener('dragleave', e => { if (!c.contains(e.relatedTarget)) c.setAttribute('data-sobre', 'false'); });
       c.addEventListener('drop', e => {
         e.preventDefault();
         c.setAttribute('data-sobre', 'false');
-        if (arrastrando) mover(arrastrando, c.dataset.col);
+        const id = arrastrando; arrastrando = null;
+        if (id) mover(id, c.dataset.col);
       });
     }
     for (const i of $('#tauler').querySelectorAll('.check input')) i.addEventListener('change', alternar);
     for (const b of $('#tauler').querySelectorAll('.titulo')) b.addEventListener('click', () => abrirEdicion(b.closest('.card').dataset.id));
+    for (const b of $('#tauler').querySelectorAll('[data-mover]')) b.addEventListener('click', () => mover(b.closest('.card').dataset.id, b.dataset.mover));
   }
 
   function tarjeta(t) {
+    const col = columnaDe(t), idx = COLUMNAS.indexOf(col);
+    const ant = idx > 0 ? COLUMNAS[idx - 1] : null, prox = idx < COLUMNAS.length - 1 ? COLUMNAS[idx + 1] : null;
     const fecha = t.due
       ? `<span class="data"${vencida(t.due) && !t.done ? ' vencida="true"' : ''}>${escapar(t.due)}</span>`
       : '';
     const prio = `<span class="chip" prio="${escapar(t.priority)}">${escapar(t.priority)}</span>`;
+    const setas = `<span class="acoes-col">${ant ? `<button type="button" class="mover-col" data-mover="${ant}" title="Mover para ${escapar(rotulo(ant))}" aria-label="Mover para ${escapar(rotulo(ant))}">‹</button>` : ''}${prox ? `<button type="button" class="mover-col" data-mover="${prox}" title="Mover para ${escapar(rotulo(prox))}" aria-label="Mover para ${escapar(rotulo(prox))}">›</button>` : ''}</span>`;
     return `<article class="card" draggable="true" data-id="${escapar(t.id)}">
       <label class="check"><input type="checkbox"${t.done ? ' checked' : ''} aria-label="${t.done ? 'Marcar como pendiente' : 'Marcar como finalizada'}"></label>
       <div class="corpo"><p class="titulo"${t.done ? ' grizo="true"' : ''} title="Editar tarefa">${escapar(t.title)}</p>
-        <div class="meta">${prio}${fecha}</div></div>
+        <div class="meta">${prio}${fecha}${setas}</div></div>
     </article>`;
   }
 

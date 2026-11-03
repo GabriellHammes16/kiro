@@ -861,11 +861,19 @@ body, button, input, textarea, select { font-family:var(--fonte-interface); }
 /* Caixa de entrada: ações em ícones logo depois do título. */
 .caixa-acoes { display:flex; gap:2px; margin-left:auto; flex:0 0 auto; }
 
-/* Tarefas: prioridade encostada na direita; editar/excluir aparecem por cima só no hover. */
+/* Tarefas: estado clicável, prioridade e ações alinhados sem sobrepor o botão de estado. */
 .task-item { position:relative; }
-.task-item .priority { margin-left:auto; }
-.task-item .task-actions { position:absolute; right:0; top:50%; transform:translateY(-50%); padding-left:16px; background:linear-gradient(to right, transparent, var(--panel) 16px); opacity:0; pointer-events:none; transition:opacity var(--rapido) var(--curva); }
+.task-status { display:inline-flex; align-items:center; gap:6px; margin-left:auto; padding:3px 9px; border-radius:var(--raio-pilula); border:1px solid var(--line); background:var(--surface-subtle); color:var(--muted); font-size:var(--fs-legenda); font-weight:500; line-height:1.2; white-space:nowrap; cursor:pointer; flex:0 0 auto; transition:background-color var(--rapido) var(--curva), border-color var(--rapido) var(--curva), color var(--rapido) var(--curva); }
+.task-status::after { content:"▾"; font-size:10px; opacity:.65; margin-left:1px; }
+.task-status:hover { background:var(--surface-hover); border-color:var(--border-strong); color:var(--ink); }
+.task-status:focus-visible { outline:2px solid var(--focus-ring); outline-offset:1px; }
+.task-status[data-status="andamento"] { border-color:color-mix(in srgb, var(--acento) 45%, var(--line)); background:var(--accent-soft); color:var(--accent-text); }
+.task-status[data-status="pausado"] { border-color:color-mix(in srgb, var(--warning) 48%, var(--line)); background:color-mix(in srgb, var(--warning) 14%, transparent); color:var(--warning); }
+.task-status[data-status="concluido"] { border-color:color-mix(in srgb, var(--ok, var(--acento)) 42%, var(--line)); background:color-mix(in srgb, var(--ok, var(--acento)) 13%, transparent); color:var(--ink); }
+.task-item .priority { margin-left:0; flex:0 0 auto; }
+.task-item .task-actions { flex:0 0 auto; opacity:0; pointer-events:none; transition:opacity var(--rapido) var(--curva); }
 .task-item:hover .task-actions, .task-item:focus-within .task-actions { opacity:1; pointer-events:auto; }
+.segmento > span { display:inline-flex; align-items:center; justify-content:center; gap:6px; }
 
 /* Semana fixa dos hábitos: dia que ainda não chegou é só a letra. */
 .habito-dia.futuro { display:inline-grid; place-items:center; border-color:transparent; opacity:.35; cursor:default; }
@@ -1628,10 +1636,15 @@ html:not(.papel-em-video) .papel-so-video { display:none; }
 @media (max-width:640px) { .tarefas-lista.por-colunas { grid-template-columns:1fr; } }
 .por-colunas .status-secao { min-height:160px; margin:0; padding:var(--esp-3) var(--esp-2) var(--esp-2); border:1px solid var(--line); background:var(--panel); }
 .por-colunas .status-secao.alvo { border-style:dashed; }
-.por-colunas .status-secao h2 { padding:0 var(--esp-1) var(--esp-2); margin:0 0 var(--esp-1); border-bottom:1px solid var(--line); }
-.por-colunas .task-item { flex-wrap:wrap; row-gap:4px; min-height:0; padding-top:var(--esp-2); padding-bottom:var(--esp-2); }
-.por-colunas .task-title { min-width:0; overflow-wrap:anywhere; }
-.por-colunas .task-item .priority { margin-left:auto; }
+.por-colunas .status-secao h2 { padding:0 var(--esp-1) var(--esp-2); margin:0 0 var(--esp-2); border-bottom:1px solid var(--line); }
+.por-colunas .status-itens { display:grid; gap:6px; }
+.por-colunas .status-item { border:1px solid var(--line); background:var(--surface-subtle); }
+.por-colunas .status-item .task-item { border-bottom:0; flex-wrap:wrap; align-items:flex-start; row-gap:6px; min-height:0; padding:var(--esp-2); }
+.por-colunas .task-item > .check { margin-top:2px; }
+.por-colunas .task-title { flex:1 1 calc(100% - 34px); min-width:0; overflow-wrap:anywhere; }
+.por-colunas .task-status { margin-left:28px; padding:2px 7px; font-size:11px; }
+.por-colunas .task-item .priority { margin-left:0; }
+.por-colunas .task-item .task-actions { margin-left:auto; }
 @keyframes kiroFlashLinha { 0% { background: color-mix(in srgb, var(--acento) 28%, transparent); } 100% { background: transparent; } }
 .linha-destaque-flash { animation: kiroFlashLinha 1.2s ease-out; border-radius: var(--raio-p, 4px); }
 
