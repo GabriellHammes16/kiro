@@ -6,6 +6,7 @@ const KiroPlugins = require('../plugins.js');
 const { readFile, readdir, mkdir, copyFile } = require('node:fs/promises');
 const { join, dirname } = require('node:path');
 const { existsSync, readFileSync } = require('node:fs');
+const { release } = require('node:os');
 const { Vault, atomicWrite } = require('../vault.cjs');
 const { palavraValida, palavraParaDicionario } = require('../corretor.js');
 const { instalarPluginsInclusos } = require('./plugins-inclusos.cjs');
@@ -40,9 +41,19 @@ const ARQUIVOS_DO_KIRO = new Set(['plugin-worker.js', 'plugins.js', 'kiro-frame.
 const JANELA_PROPRIA = process.platform === 'win32';
 const ALTURA_DA_BARRA = 32;
 // Vidro (tema Liquid Glass): janela transparente de verdade, para o desktop aparecer atrás do véu que o
-// controle de transparência regula. O acrylic do Windows desfoca e tinge tanto que vira um cinza chapado.
+// controle de transparência regula. O estilo original pede o desfoque do sistema (a página não enxerga o
+// desktop, então backdrop-filter não o alcança); o estilo escuro deixa o desktop nítido.
 // `transparent` só vale na criação: trocar o tema recria a janela, e a escolha fica em janela.json.
 const VIDRO_NATIVO = process.platform === 'darwin' || process.platform === 'win32';
+// O acrylic pelo Electron exige o Windows 11 22H2 (build 22621); sem ele o desktop fica nítido atrás do véu.
+const DESFOQUE_NATIVO = process.platform === 'darwin' || (process.platform === 'win32' && Number(release().split('.')[2]) >= 22621);
+// Só liga: no Windows, o material "none" deixa a janela transparente opaca; desligar recria a janela.
+const janelasDesfocadas = new WeakSet();
+function ligarDesfoque(janela) {
+  janelasDesfocadas.add(janela);
+  if (process.platform === 'darwin') janela.setVibrancy('under-window');
+  else janela.setBackgroundMaterial('acrylic');
+}
 const janelasDeVidro = new WeakSet();
 const arquivoDoVidro = () => join(app.getPath('userData'), 'janela.json');
 function vidroSalvo() {
@@ -235,16 +246,17 @@ else app.whenReady().then(async () => {
   ipcMain.on('corretor:trocar', (event, palavra) => { if (palavraValida(palavra)) event.sender.replaceMisspelling(palavra); });
   ipcMain.on('corretor:adicionar', (event, palavra) => { if (palavraParaDicionario(palavra)) event.sender.session.addWordToSpellCheckerDictionary(palavra); });
   // A nova janela nasce no lugar da antiga (antes de fechá-la, senão o app encerra) e recarrega a página.
-  ipcMain.handle('janela:vidro', async (event, ligado) => {
+  ipcMain.handle('janela:vidro', async (event, ligado, comDesfoque) => {
     const janela = BrowserWindow.fromWebContents(event.sender);
     const vidro = ligado === true && VIDRO_NATIVO;
+    const desfoque = vidro && comDesfoque === true && DESFOQUE_NATIVO;
     if (vidro !== vidroSalvo()) await atomicWrite(arquivoDoVidro(), JSON.stringify({ vidro }));
-    if (janela && janelasDeVidro.has(janela) !== vidro) {
+    if (janela && (janelasDeVidro.has(janela) !== vidro || (janelasDesfocadas.has(janela) && !desfoque))) {
       const nova = createWindow(vidro, janela.getNormalBounds());
       if (janela.isMaximized()) nova.maximize();
       janela.destroy();
-    }
-    return vidro;
+    } else if (janela && desfoque && !janelasDesfocadas.has(janela)) ligarDesfoque(janela); // recriada: a página nova pede de novo
+    return { ativo: vidro, desfoque };
   });
   // Cores dos botões da janela: só as duas cores, validadas, para a janela que pediu.
   ipcMain.on('janela:cores', (event, cores) => {

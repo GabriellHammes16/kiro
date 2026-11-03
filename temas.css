@@ -339,6 +339,49 @@ html.tema-liquid-glass.skin-minimal .hoje-acoes .capture:not(:focus-within) { bo
 html.tema-liquid-glass.skin-paper :is(.card, .note-card, .cfg-grupo, .modal) { background-image:var(--paper-textura), var(--vidro-realce); }
 html.tema-liquid-glass.skin-neon .new-note:not(:hover) { box-shadow:var(--vidro-reflexo), 0 0 12px color-mix(in srgb, var(--acento) 28%, transparent); }
 html.tema-liquid-glass.skin-sharp { --vidro-sombra:4px 4px 0 #00000066; }
+/* Estilo original (padrão), como o Liquid Glass da Apple: material claro que não pinta nada por conta própria,
+   desfoque com saturação do que está atrás (acrylic/vibrancy para o desktop, backdrop-filter para o papel de
+   parede), lente nas bordas, brilho especular em cantos opostos e sombra suave. A classe .vidro-escuro mantém
+   as regras acima sem alteração. */
+html.tema-liquid-glass:not(.vidro-escuro) {
+  --vidro-fundo-legivel:#00000000;
+  --vidro-base-painel:#00000000;
+  --vidro-realce:linear-gradient(150deg, #FFFFFF2B 0%, #FFFFFF12 45%, #FFFFFF1F 100%);
+  --vidro-superficie-forte:linear-gradient(150deg, #FFFFFF30 0%, #FFFFFF1F 50%, #FFFFFF28 100%);
+  --vidro-borda:#FFFFFF2E;
+  --vidro-reflexo:inset 1.5px 1.5px 1px -1px #FFFFFFCC, inset -1.5px -1.5px 1px -1px #FFFFFF80, inset 0 0 14px #FFFFFF14;
+  --vidro-sombra:0 18px 44px #0000004D, 0 3px 10px #00000033;
+  --vidro-desfoque:blur(14px) saturate(180%);
+  --vidro-desfoque-lente:url(#vidro-lente) blur(10px) saturate(180%);
+}
+/* O papel de parede cobre o véu do body: o piso de leitura vai na própria camada dele, até atrás da barra de título. */
+html.tema-liquid-glass.com-papel-de-parede:not(.vidro-escuro, .papel-em-video) body:has(> .app-shell:not(.cofre-aberto))::before {
+  background:linear-gradient(#0A0A0C80 0 0), linear-gradient(color-mix(in srgb, var(--content-bg) var(--papel-veu, 60%), transparent) 0 0), var(--papel-de-parede) center / cover no-repeat;
+}
+html.tema-liquid-glass.papel-em-video:not(.vidro-escuro) { --vidro-fundo-legivel:#0A0A0C80; }
+/* Na janela transparente sem papel de parede, quem desfoca é o sistema: backdrop-filter só repintaria o véu. */
+html.tema-liquid-glass.vidro-nativo:not(.vidro-escuro, .com-papel-de-parede) { --vidro-desfoque:none; --vidro-desfoque-lente:none; }
+html.tema-liquid-glass.vidro-nativo.com-papel-de-parede:not(.vidro-escuro) { --vidro-desfoque:blur(14px) saturate(180%); }
+/* Véu: piso fixo + controle de transparência. Desktop nítido é a variante "clear" da Apple e pede o véu mais denso;
+   com o desfoque do sistema, que já traz a própria tinta, ele fica leve. */
+html.tema-liquid-glass.vidro-nativo:not(.vidro-escuro) { --muted:#E5E5EA; }
+html.tema-liquid-glass.vidro-nativo:not(.vidro-escuro) body { background:color-mix(in srgb, #0A0A0C calc(44% + var(--vidro-opacidade, 65%) * .4), transparent); }
+html.tema-liquid-glass.vidro-nativo.vidro-desfocado:not(.vidro-escuro) body { background:color-mix(in srgb, #0A0A0C calc(16% + var(--vidro-opacidade, 65%) * .4), transparent); }
+html.tema-liquid-glass:not(.vidro-escuro) :is(.sidebar, .cofre-lateral, .painel-direito) { -webkit-backdrop-filter:var(--vidro-desfoque-lente); backdrop-filter:var(--vidro-desfoque-lente); }
+/* As barras somem: abas e botões flutuam direto sobre o fundo, sem faixa. */
+html.tema-liquid-glass:not(.vidro-escuro) :is(#barra-titulo, .abas-menu, .abas-barra) { background:transparent; }
+/* Menus e janelas ficam sobre texto: variante "regular", com base escura e lente. */
+@media not (prefers-reduced-transparency: reduce) {
+  html.tema-liquid-glass:not(.vidro-escuro) :is(.modal, .ctx-menu) {
+    background:var(--vidro-realce), #1C1C1E8C; border-color:var(--vidro-borda); box-shadow:var(--vidro-reflexo), 0 30px 80px #00000059;
+    -webkit-backdrop-filter:url(#vidro-lente) blur(24px) saturate(180%); backdrop-filter:url(#vidro-lente) blur(24px) saturate(180%);
+  }
+}
+@media (prefers-reduced-motion:no-preference) {
+  /* Reação ao toque, como .interactive(): o vidro cede e volta com mola. */
+  html.tema-liquid-glass:not(.vidro-escuro) :is(.primary, .secondary, .new-note) { transition:transform .32s cubic-bezier(.3, 1.6, .5, 1), background var(--rapido, .15s); }
+  html.tema-liquid-glass:not(.vidro-escuro) :is(.primary, .secondary, .new-note):active { transform:scale(.96); }
+}
 .cfg-vidro-controle { display:flex; justify-content:space-between; gap:16px; width:100%; }
 .cfg-vidro-controle output { color:var(--accent-text); font-variant-numeric:tabular-nums; }
 #cfg-transparencia { width:100%; accent-color:var(--acento); cursor:pointer; }

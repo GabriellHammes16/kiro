@@ -2,7 +2,7 @@ const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('cadernoDesktop', {
   janelaPropria: process.platform === 'win32',
   coresDaJanela: cores => ipcRenderer.send('janela:cores', cores),
-  definirVidro: ligado => ipcRenderer.invoke('janela:vidro', ligado === true),
+  definirVidro: (ligado, comDesfoque) => ipcRenderer.invoke('janela:vidro', ligado === true, comDesfoque === true),
   definirCorretor: ligado => ipcRenderer.send('corretor:definir', ligado === true),
   aoMenuDoCorretor: fn => ipcRenderer.on('corretor:menu', (_evento, dados) => fn(dados)),
   trocarPalavra: palavra => ipcRenderer.send('corretor:trocar', palavra),

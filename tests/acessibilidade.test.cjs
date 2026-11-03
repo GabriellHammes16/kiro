@@ -152,3 +152,23 @@ test('Glass: composição no desktop branco mantém contraste mesmo sem véu glo
   assert.match(css, /html\.tema-liquid-glass \.app-shell:not\(\.cofre-aberto\) \{ background:var\(--vidro-fundo-legivel\)/);
   assert.match(css, /html\.tema-liquid-glass \.app-shell:not\(\.cofre-aberto\) > \.content \{ background:transparent/);
 });
+
+test('Glass original: véu padrão mantém o texto legível no desktop branco, sem desfoque do sistema', () => {
+  const css = fs.readFileSync(require.resolve('../temas.css'), 'utf8');
+  const bloco = css.match(/html\.tema-liquid-glass:not\(\.vidro-escuro\) \{([^}]+)\}/)[1];
+  const [, piso, fator] = css.match(/\.vidro-nativo:not\(\.vidro-escuro\) body \{ background:color-mix\(in srgb, #0A0A0C calc\((\d+)% \+ var\(--vidro-opacidade, 65%\) \* ([\d.]+)\)/);
+  const veu = (Number(piso) + 65 * Number(fator)) / 100; // 65% = transparência padrão (35)
+  const cinza = Math.round(255 * (1 - veu) + 10 * veu);
+  const hex = v => '#' + Math.round(v).toString(16).padStart(2, '0').repeat(3);
+  for (const texto of ['#FFFFFF', '#E5E5EA']) assert.ok(Kiro.contraste(texto, hex(cinza)) >= 4.5, `${texto} sobre o véu`);
+  const tintas = bloco.match(/--vidro-(?:realce|superficie-forte):[^;]+/g).join().match(/#FFFFFF[0-9A-F]{2}/g);
+  assert.ok(tintas.length >= 6);
+  for (const tinta of tintas) {
+    const alpha = parseInt(tinta.slice(7), 16) / 255;
+    assert.ok(Kiro.contraste('#FFFFFF', hex(255 * alpha + cinza * (1 - alpha))) >= 4.5, `branco sobre ${tinta}`);
+  }
+});
+
+test('Glass: nunca pede o material "none", que deixa a janela transparente opaca no Windows', () => {
+  assert.doesNotMatch(fs.readFileSync(require.resolve('../electron/main.cjs'), 'utf8'), /setBackgroundMaterial\([^)]*none/);
+});

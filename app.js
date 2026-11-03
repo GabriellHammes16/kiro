@@ -4916,6 +4916,8 @@ function pintarAcento(raiz, acento) {
 // Último modo de janela pedido ao desktop; começa indefinido para a abertura sempre pedir
 // (a janela pode ter nascido transparente de uma sessão em que o tema era o Liquid Glass).
 let vidroPedido;
+const TRANSPARENCIA_REDUZIDA = matchMedia('(prefers-reduced-transparency: reduce)');
+TRANSPARENCIA_REDUZIDA.addEventListener('change', () => aplicarAparencia());
 function opacidadeMinimaDoPapel(fundo, textos) {
   const canal = (cor, i) => parseInt(cor.slice(i, i + 2), 16);
   const realce = Kiro.luminancia(textos[0]) > .5 ? .07 : 0; // Reserva o branco máximo da textura Paper sobre temas escuros.
@@ -4938,12 +4940,18 @@ function aplicarAparencia(valores) {
   raiz.setProperty('--vidro-opacidade', `${100 - a.transparencia}%`);
   const vidro = a.tema === 'liquid-glass';
   if (!vidro) html.classList.remove('vidro-nativo');
-  if (vidro !== vidroPedido && window.cadernoDesktop?.definirVidro) {
-    vidroPedido = vidro;
-    window.cadernoDesktop.definirVidro(vidro).then(ativo => {
-      html.classList.toggle('vidro-nativo', ativo === true && html.classList.contains('tema-liquid-glass'));
+  const escuro = lerPreferencia('vidroEstilo') === 'escuro';
+  html.classList.toggle('vidro-escuro', vidro && escuro);
+  // Com "efeitos de transparência" desligados no sistema, o acrylic vira cor chapada: fica o desktop nítido.
+  const comDesfoque = !escuro && !TRANSPARENCIA_REDUZIDA.matches;
+  const pedido = `${vidro}|${comDesfoque}`;
+  if (pedido !== vidroPedido && window.cadernoDesktop?.definirVidro) {
+    vidroPedido = pedido;
+    window.cadernoDesktop.definirVidro(vidro, comDesfoque).then(({ ativo, desfoque }) => {
+      html.classList.toggle('vidro-nativo', ativo && html.classList.contains('tema-liquid-glass'));
+      html.classList.toggle('vidro-desfocado', desfoque);
       coresDaJanela();
-    }).catch(() => html.classList.remove('vidro-nativo'));
+    }).catch(() => html.classList.remove('vidro-nativo', 'vidro-desfocado'));
   }
   // Tema pronto traz as próprias variáveis (temas.css); o Personalizado põe fundos e acento inline,
   // e o destaque escolhido vale por cima de qualquer tema.
@@ -5557,6 +5565,8 @@ async function showSettings(aba = abaDasConfiguracoes) {
         <div class="skins" role="radiogroup" aria-labelledby="skin-rotulo">${SKINS.map(([id, nome, desc]) => `<label class="skin-opcao"><input type="radio" name="skin" value="${id}" class="sr-only" ${cores.skin === id ? 'checked' : ''} /><span class="skin-nome">${t(nome)}</span><span class="skin-desc">${t(desc)}</span></label>`).join('')}</div>
       </div>
       <div class="cfg-linha cfg-linha-coluna" id="cfg-vidro" ${cores.tema === 'liquid-glass' ? '' : 'hidden'}>
+        <span class="rotulo-campo" id="cfg-vidro-estilo">${t('Estilo do vidro')}</span>
+        <div class="segmentos" role="radiogroup" aria-labelledby="cfg-vidro-estilo">${[['original', t('Original')], ['escuro', t('Escuro')]].map(([v, r]) => `<label class="segmento"><input type="radio" name="vidro-estilo" value="${v}" ${(lerPreferencia('vidroEstilo') === 'escuro' ? 'escuro' : 'original') === v ? 'checked' : ''} /><span>${r}</span></label>`).join('')}</div>
         <label class="cfg-vidro-controle" for="cfg-transparencia"><span>${t('Transparência do fundo')}</span><output id="cfg-transparencia-valor" for="cfg-transparencia">${cores.transparencia}%</output></label>
         <input type="range" id="cfg-transparencia" min="0" max="80" step="1" value="${cores.transparencia}" aria-describedby="cfg-vidro-detalhe" />
         <p class="small-muted" id="cfg-vidro-detalhe">${t('Mais transparência revela a área de trabalho, sem apagar o texto. No navegador, o tema usa um fundo interno.')}</p>
@@ -5668,6 +5678,12 @@ async function showSettings(aba = abaDasConfiguracoes) {
     verificarLembretes();
   });
   for (const k of ['tarefas', 'habitos']) $(`#cfg-hora-${k}`)?.addEventListener('change', e => { e.stopPropagation(); modalDirty = false; if (/^\d{2}:\d{2}$/.test(e.target.value)) { gravarPreferencia(`lembreteHora.${k}`, e.target.value); verificarLembretes(); } });
+  document.querySelectorAll('input[name="vidro-estilo"]').forEach(r => r.addEventListener('change', e => {
+    e.stopPropagation(); modalDirty = false;
+    gravarPreferencia('vidroEstilo', r.value);
+    aplicarAparencia();
+    coresDaJanela();
+  }));
   $('#cfg-notas-solidas')?.addEventListener('change', e => {
     e.stopPropagation(); modalDirty = false;
     gravarPreferencia('vidroNotasSolidas', e.target.checked ? '1' : '0');
