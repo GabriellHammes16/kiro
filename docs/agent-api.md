@@ -214,6 +214,16 @@ seção IA e integrações, na barra lateral:
 **Excluir vem desligado por padrão.** Arquivo ausente ou corrompido cai no
 padrão — nunca em permissão mais aberta.
 
+**Confirmação:** com `requireConfirmationForDestructive` ligado, ferramenta
+`destructive` só roda se o contexto trouxer `confirmar(mensagem)` e ele devolver
+`true`. Sem a função, responde `CONFIRMATION_UNAVAILABLE`; com resposta negativa,
+`CONFIRMATION_DECLINED`.
+
+**Limites do `AgentToolkit`:** 600 escritas por minuto e 6.000 por hora por instância
+(`RATE_LIMITED`, com `details.retryAfterSeconds`). A contagem vem antes da validação
+e leitura não conta. Na API: 1.000.000 de caracteres por nota (`NOTE_TOO_LARGE` ao
+crescer por `append` ou `prepend`) e 2.000 cartões por fluxo (`FLUXO_TOO_LARGE`).
+
 ## Segurança
 
 Toda entrada de agente é tratada como não confiável.
@@ -222,7 +232,8 @@ Toda entrada de agente é tratada como não confiável.
   barra invertida, unidade de disco (`C:`), caminho iniciado em `/` ou `~`,
   caractere nulo e mais de 15 níveis.
 - Nomes ocultos (iniciados em `.`) são recusados, assim como `.history`,
-  `.trash`, `.staging`, `.kiro`, `caderno.json` e o journal de transação.
+  `.trash`, `.staging`, `.kiro`, `caderno.json` e o journal de transação. Nomes
+  curtos do Windows (`KIRO~1`) também, porque abririam essas mesmas pastas.
 - Nomes de pasta passam pela mesma validação da interface: sem `< > : " / \ | ?
   *`, sem nomes reservados do Windows, sem ponto ou espaço nas pontas.
 - Abaixo disso, o `safePath()` do Vault ainda confere o caminho resolvido e

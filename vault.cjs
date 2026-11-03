@@ -60,6 +60,11 @@ const FOLDER_MARKER = '.kiro-folder.json';
 const FOLDER_MARKERS = [FOLDER_MARKER, '.kuroi-folder.json'];
 // Cada gravação copia o cofre inteiro para .history. Sem teto, isso cresce sem fim.
 const HISTORY_LIMIT = 30;
+const SUFIXO_PRESERVADA = '-preservada';
+// Escrita de agente copia só o que mudou, em fila própria: um agente escrevendo em sequência
+// não fica lento com o tamanho do cofre nem expulsa as cópias completas dos salvamentos do app.
+const SUFIXO_PARCIAL = '-parcial';
+const SNAPSHOT_ID = /^\d+-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(-preservada|-parcial)?$/;
 // Imagens coladas nas notas moram numa pasta marcada na raiz do cofre. A marca tira
 // a pasta da varredura: as imagens não viram pasta na árvore, não entram na revisão
 // (colar não gera conflito com a nota aberta) e não são copiadas para .history a
@@ -133,7 +138,9 @@ function rewritePaths(body, source, destination, changes) {
   });
 }
 class Vault {
-  constructor(directory, { historyLimit = HISTORY_LIMIT } = {}) { this.directory = path.resolve(directory); this.queue = Promise.resolve(); this.historyLimit = historyLimit; }
+  // reaproveitarLeituras: uma escrita relê o cofre várias vezes; arquivo com a mesma data e tamanho não volta ao disco.
+  // ponytail: uma edição externa com data e tamanho idênticos passaria batido; só o servidor de agentes liga isto, o app segue lendo do disco.
+  constructor(directory, { historyLimit = HISTORY_LIMIT, reaproveitarLeituras = false } = {}) { this.directory = path.resolve(directory); this.queue = Promise.resolve(); this.historyLimit = historyLimit; this.leiturasGuardadas = reaproveitarLeituras ? new Map() : null; }
   exclusive(operation) { const result=this.queue.then(operation); this.queue=result.catch(()=>{}); return result; }
   async safePath(relative) {
     if (typeof relative!=='string'||!relative||relative.includes(':')||relative.includes('\\')||relative.split('/').some(p=>!p||p==='.'||p==='..')) throw new Error(frase('Caminho inválido.'));
@@ -163,11 +170,23 @@ class Vault {
   }
   async scan() {
     const files=new Map(), directories=[];
+    const lerGuardado=async file=>{
+      const alvo=path.join(this.directory,file), info=await fs.stat(alvo), guardado=this.leiturasGuardadas.get(file);
+      const data=guardado&&guardado.mtimeMs===info.mtimeMs&&guardado.size===info.size?guardado.data:await fs.readFile(alvo);
+      this.leiturasGuardadas.set(file,{data,mtimeMs:info.mtimeMs,size:info.size});
+      return {data,mtime:Math.round(info.mtimeMs),birthtime:Math.round(info.birthtimeMs)};
+    };
     const walk=async(relative='')=>{
-      for(const entry of await fs.readdir(path.join(this.directory,relative),{withFileTypes:true})){
+      const entradas=await fs.readdir(path.join(this.directory,relative),{withFileTypes:true});
+      // Arquivo comum, numa pasta que o walk já conferiu: pode pular o safePath. Atalho não cai aqui,
+      // porque não é isFile(), e segue para o safePath, que o recusa.
+      const lidos=this.leiturasGuardadas?new Map(await Promise.all(entradas.filter(e=>e.isFile()&&(relative||(!e.name.startsWith('.')&&e.name!=='caderno.json'))).map(async e=>[e.name,await lerGuardado(relative?`${relative}/${e.name}`:e.name)]))):null;
+      for(const entry of entradas){
         if(!relative&&(entry.name.startsWith('.')||entry.name==='caderno.json'))continue;
         if(!relative&&entry.isDirectory()&&await temMarcaDeAnexos(path.join(this.directory,entry.name)))continue;
         const file=relative?`${relative}/${entry.name}`:entry.name;
+        const jaLido=lidos?.get(entry.name);
+        if(jaLido){files.set(file,jaLido);continue;}
         const target=await this.safePath(file);
         if(entry.isDirectory()){directories.push(file);await walk(file);}
         else if(entry.isFile()){const info=await fs.stat(target);files.set(file,{data:await fs.readFile(target),mtime:Math.round(info.mtimeMs),birthtime:Math.round(info.birthtimeMs)});}
@@ -239,8 +258,18 @@ class Vault {
     return {state:{...state,revision,vaultPath:this.directory},files,directories,metadata};
   }
   load(){return this.exclusive(async()=>(await this.read()).state);}
+  // Cópia de um único arquivo, fora da fila que tidy() poda. O sufixo no nome evita abrir cada pasta para saber.
+  preservarVersao(arquivo){return this.exclusive(async()=>{
+    const id=`${Date.now()}-${randomUUID()}${SUFIXO_PRESERVADA}`;
+    await atomicWrite(await this.safePath(`.history/${id}/${arquivo}`),await fs.readFile(await this.safePath(arquivo)));
+    return id;
+  });}
+  descartarVersaoPreservada(id){return this.exclusive(async()=>{
+    if(!SNAPSHOT_ID.test(id||'')||!id.endsWith(SUFIXO_PRESERVADA))return;
+    await fs.rm(await this.safePath(`.history/${id}`),{recursive:true,force:true});
+  });}
   async historyNote({noteId,snapshotId}){
-    if(!/^[a-zA-Z0-9_-]{1,100}$/.test(noteId||'')||!/^\d+-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(snapshotId||''))throw new Error(frase('Histórico inválido.'));
+    if(!/^[a-zA-Z0-9_-]{1,100}$/.test(noteId||'')||!SNAPSHOT_ID.test(snapshotId||''))throw new Error(frase('Histórico inválido.'));
     const root=`.history/${snapshotId}`; let found=null;
     const walk=async(relative='')=>{
       for(const entry of await fs.readdir(await this.safePath(relative?`${root}/${relative}`:root),{withFileTypes:true})){
@@ -261,7 +290,7 @@ class Vault {
     if(!/^[a-zA-Z0-9_-]{1,100}$/.test(noteId||''))throw new Error(frase('Nota inválida.'));
     let ids;try{ids=await fs.readdir(await this.safePath('.history'));}catch(error){if(error.code==='ENOENT')return [];throw error;}
     const versions=[];
-    for(const snapshotId of ids.filter(id=>/^\d+-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(id)).sort().reverse()){
+    for(const snapshotId of ids.filter(id=>SNAPSHOT_ID.test(id)).sort().reverse()){
       try{await this.historyNote({noteId,snapshotId});versions.push({snapshotId,when:Number(snapshotId.split('-')[0])});}
       catch(error){if(error.message!==frase('Nota não encontrada no histórico.'))throw error;}
     }
@@ -281,8 +310,8 @@ class Vault {
       try{return await operation();}finally{await lock.close();await fs.unlink(lockPath);}
     });
   }
-  save(input){const snapshot=upgradeBackup(input);return this.locked(()=>this.write(snapshot));}
-  async write(input,restoring=null){
+  save(input,{copiaParcial=false}={}){const snapshot=upgradeBackup(input);return this.locked(()=>this.write(snapshot,null,copiaParcial));}
+  async write(input,restoring=null,copiaParcial=false){
     validateState(input);const before=await this.read();
     if(input.revision!==before.state.revision)throw new Error(frase('O cofre mudou em outro editor. Exporte suas alterações e recarregue antes de salvar.'));
     for(const note of input.notes){const old=before.state.notes.find(n=>n.id===note.id);if(old&&old.title!==note.title)input=aplicarRenomeacaoDeLinks(input,note.id,old.title,note.title).state;}
@@ -370,10 +399,12 @@ class Vault {
     const removals=[...oldFiles.keys()].filter(file=>!desired.has(file));
     const removedDirs=before.directories.filter(d=>!desiredDirs.has(d)).sort((a,b)=>b.length-a.length);
     if(!writes.length&&!removals.length&&!removedDirs.length&&desiredDirs.size===before.directories.length)return before.state;
-    const transaction=`${Date.now()}-${randomUUID()}`, backup=`.history/${transaction}`, stage=`.staging/${transaction}`;
+    const transaction=`${Date.now()}-${randomUUID()}`, nomeDaCopia=`${transaction}${copiaParcial?SUFIXO_PARCIAL:''}`, backup=`.history/${nomeDaCopia}`, stage=`.staging/${transaction}`;
     // Back up attachments, hidden contents of visible folders, and empty folders.
-    for(const dir of before.directories)await fs.mkdir(await this.safePath(`${backup}/${dir}`),{recursive:true});
-    for(const [file,v]of oldFiles)await atomicWrite(await this.safePath(`${backup}/${file}`),v.data);
+    // Cópia parcial: tudo o que esta gravação sobrescreve ou remove, mais o caderno.json (tarefas e hábitos).
+    const afetados=new Set([...writes.map(([file])=>file),...removals,'caderno.json']);
+    for(const dir of copiaParcial?removedDirs:before.directories)await fs.mkdir(await this.safePath(`${backup}/${dir}`),{recursive:true});
+    for(const [file,v]of oldFiles)if(!copiaParcial||afetados.has(file))await atomicWrite(await this.safePath(`${backup}/${file}`),v.data);
     for(const [file,data]of writes)await atomicWrite(await this.safePath(`${stage}/${file}`),data);
     if((await this.read()).state.revision!==input.revision)throw new Error(frase('O cofre mudou durante o salvamento. Recarregue antes de continuar.'));
     const deletedFolders=beforeFolders.filter(f=>!paths.has(f.id));
@@ -400,7 +431,7 @@ class Vault {
     for(const dir of [...desiredDirs].sort((a,b)=>a.length-b.length))await fs.mkdir(await this.safePath(dir),{recursive:true});
     for(const [file]of writes)await fs.rename(await this.safePath(`${stage}/${file}`),await this.safePath(file));
     await fs.unlink(await this.safePath('.transaction.json'));
-    try{await this.tidy(transaction);}catch{/* a faxina não pode falhar um salvamento já aplicado */}
+    try{await this.tidy(nomeDaCopia);}catch{/* a faxina não pode falhar um salvamento já aplicado */}
     return (await this.read()).state;
   }
   /** Pasta onde vão as imagens coladas: a primeira que está livre ou já é do Kiro. */
@@ -550,10 +581,12 @@ class Vault {
     let entradas;
     try{entradas=await fs.readdir(await this.safePath('.history'));}
     catch(erro){if(erro.code==='ENOENT')return;throw erro;}
-    const ordenadas=entradas.filter(nome=>/^\d+-[\w-]+$/.test(nome)).sort((a,b)=>Number(a.split('-')[0])-Number(b.split('-')[0]));
-    for(const antiga of ordenadas.slice(0,Math.max(0,ordenadas.length-this.historyLimit))){
-      if(antiga===transaction)continue;
-      await fs.rm(await this.safePath(`.history/${antiga}`),{recursive:true,force:true});
+    const ordenadas=entradas.filter(nome=>/^\d+-[\w-]+$/.test(nome)&&!nome.endsWith(SUFIXO_PRESERVADA)).sort((a,b)=>Number(a.split('-')[0])-Number(b.split('-')[0]));
+    for(const fila of [ordenadas.filter(nome=>nome.endsWith(SUFIXO_PARCIAL)),ordenadas.filter(nome=>!nome.endsWith(SUFIXO_PARCIAL))]){
+      for(const antiga of fila.slice(0,Math.max(0,fila.length-this.historyLimit))){
+        if(antiga===transaction)continue;
+        await fs.rm(await this.safePath(`.history/${antiga}`),{recursive:true,force:true});
+      }
     }
   }
   async archive(transaction,entry,before,fluxosGravados=new Set()){

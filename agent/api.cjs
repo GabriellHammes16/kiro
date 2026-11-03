@@ -10,16 +10,30 @@
  * não conhece MCP e não fala com nenhum serviço externo.
  */
 const fs = require('node:fs/promises');
-const { randomUUID } = require('node:crypto');
+const path = require('node:path');
+const { createHash, randomUUID } = require('node:crypto');
 const domain = require('../domain.js');
 const KiroFluxo = require('../fluxo.js');
-const { AgentError, vaultRelativePath, folderSegments, noteTitle, tagList } = require('./security.cjs');
+const { atomicWrite } = require('../vault.cjs');
+const { pastaInterna } = require('./config.cjs');
+const { AgentError, vaultRelativePath, folderSegments, noteTitle, tagList, MAX_NOTE_CONTENT } = require('./security.cjs');
 const { KiroEvents } = require('./events.cjs');
 
 const { pathKey, normalize, wikiLinks, findLinkedNote, localDate, habitStats, tags: tagsDaNota, validFolderName, safeUrl } = domain;
 
 const CONFLITO = /mudou|ocupado/i;
 const MAX_LIMITE = 200;
+// ponytail: as 3 mais recentes por nota; a pessoa e a IA alternando muito ainda expulsam as antigas. Subir se isso pesar.
+const VERSOES_POR_NOTA = 3;
+
+const resumir = texto => createHash('sha256').update(texto).digest('hex');
+// Texto de cada nota e fluxo do cofre. Vazio não tem o que preservar.
+function conteudos(state) {
+  const mapa = new Map();
+  for (const n of state.notes) mapa.set(n.id, { file: n.file, texto: n.body || '' });
+  for (const f of state.fluxos || []) if (f.canvas) mapa.set(f.id, { file: f.file, texto: f.canvas.nodes.length ? JSON.stringify(f.canvas) : '' });
+  return mapa;
+}
 
 /** Normaliza caractere a caractere mantendo o índice original, para recortar trechos. */
 function dobrarComIndices(texto) {
@@ -59,6 +73,7 @@ const setaParaIA = e => ({ id: e.id, from: e.fromNode, to: e.toNode, ...(e.label
 
 // ---- Entrada da IA para fluxos. O schema só confere o topo; cada cartão é validado aqui.
 const MAX_TEXTO_CARTAO = 5000;
+const MAX_CARTOES_DO_FLUXO = 2000;
 const CAMPOS_DO_CARTAO = ['id', 'type', 'text', 'note', 'url', 'label', 'color', 'x', 'y', 'width', 'height'];
 
 function objeto(valor, onde) {
@@ -127,6 +142,7 @@ class KiroAgentApi {
     if (!vault || typeof vault.load !== 'function') throw new Error('KiroAgentApi precisa de um Vault.');
     this.vault = vault;
     this.events = events || new KiroEvents();
+    this.registroDeVersoes = path.join(pastaInterna(vault.directory), 'agent-versoes.json');
 
     // Fachada no formato pedido: kiro.notes.create(), kiro.folders.list()...
     this.notes = {
@@ -175,9 +191,12 @@ class KiroAgentApi {
     let ultimoErro;
     for (let tentativa = 0; tentativa < 3; tentativa++) {
       const antes = await this.vault.load();
+      const anteriores = conteudos(antes);
       const resultado = alterar(antes);
+      await this.#preservarTextoDaPessoa(anteriores, conteudos(antes));
       try {
-        const depois = await this.vault.save(antes);
+        const depois = await this.vault.save(antes, { copiaParcial: true });
+        await this.#lembrarTextoDoAgente(anteriores, depois);
         return { antes, depois, resultado };
       } catch (erro) {
         if (!CONFLITO.test(erro.message) || tentativa === 2) throw erro;
@@ -185,6 +204,39 @@ class KiroAgentApi {
       }
     }
     throw ultimoErro;
+  }
+
+  // .history guarda só as últimas gravações: sem isto, um agente escrevendo em sequência expulsaria
+  // o texto que a pessoa escreveu. O que o próprio agente escreveu não é guardado, então ele não
+  // consegue encher essas vagas sozinho.
+  async #lerRegistroDeVersoes() {
+    try { return JSON.parse(await fs.readFile(this.registroDeVersoes, 'utf8')); } catch { return {}; }
+  }
+
+  async #preservarTextoDaPessoa(anteriores, atuais) {
+    let registro = null;
+    for (const [id, { file, texto }] of anteriores) {
+      const novo = atuais.get(id);
+      if (!novo || novo.texto === texto || !texto || !file) continue;
+      registro ||= await this.#lerRegistroDeVersoes();
+      const dados = (registro[id] ||= { versoes: [] });
+      const resumo = resumir(texto);
+      if (dados.agente === resumo || dados.preservado === resumo) continue;
+      dados.versoes.push(await this.vault.preservarVersao(file));
+      dados.preservado = resumo;
+      for (const antiga of dados.versoes.splice(0, Math.max(0, dados.versoes.length - VERSOES_POR_NOTA))) await this.vault.descartarVersaoPreservada(antiga);
+      await atomicWrite(this.registroDeVersoes, JSON.stringify(registro));
+    }
+  }
+
+  async #lembrarTextoDoAgente(anteriores, depois) {
+    const mudaram = [...conteudos(depois)].filter(([id, { texto }]) => anteriores.get(id)?.texto !== texto);
+    if (!mudaram.length) return;
+    try {
+      const registro = await this.#lerRegistroDeVersoes();
+      for (const [id, { texto }] of mudaram) (registro[id] ||= { versoes: [] }).agente = resumir(texto);
+      await atomicWrite(this.registroDeVersoes, JSON.stringify(registro));
+    } catch { /* a gravação já valeu; o pior caso é guardar uma cópia a mais na próxima */ }
   }
 
   #acharNota(state, { id, path: caminho }) {
@@ -343,6 +395,7 @@ class KiroAgentApi {
         if (modo === 'replace') nota.body = texto;
         else if (modo === 'append') nota.body = nota.body ? `${nota.body.replace(/\s*$/, '')}\n\n${texto}` : texto;
         else nota.body = nota.body ? `${texto}\n\n${nota.body.replace(/^\s*/, '')}` : texto;
+        if (nota.body.length > MAX_NOTE_CONTENT) throw new AgentError('NOTE_TOO_LARGE', `A nota passaria de ${MAX_NOTE_CONTENT} caracteres. Divida o conteúdo em mais notas.`);
       }
       if (novoTitulo) nota.title = novoTitulo;
       if (novasTags) nota.tags = novasTags;
@@ -869,6 +922,7 @@ class KiroAgentApi {
       const semPosicao = novos.filter(n => n.x === undefined || n.y === undefined).map(({ x, y, ...n }) => n);
       c = { ...c, nodes: [...c.nodes, ...novos.filter(n => n.x !== undefined && n.y !== undefined)] };
       c = { ...c, nodes: [...c.nodes, ...KiroFluxo.inserirPerto(c, semPosicao, [...c.edges, ...setas])], edges: [...c.edges, ...setas] };
+      if (novos.length && c.nodes.length > MAX_CARTOES_DO_FLUXO) throw new AgentError('FLUXO_TOO_LARGE', `Um fluxo aceita até ${MAX_CARTOES_DO_FLUXO} cartões. Divida o conteúdo em outro fluxo.`);
       const lido = KiroFluxo.ler(KiroFluxo.serializar(c));
       if (lido.erro) throw new AgentError('INVALID_INPUT', lido.erro);
       fluxo.canvas = c;

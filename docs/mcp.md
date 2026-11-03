@@ -149,7 +149,9 @@ protocolo, para que o modelo leia a mensagem e corrija a chamada:
 
 Códigos: `INVALID_INPUT`, `INVALID_PATH`, `PATH_TRAVERSAL`, `RESERVED_PATH`,
 `INVALID_NAME`, `NOTE_NOT_FOUND`, `FOLDER_NOT_FOUND`, `NOTE_EXISTS`,
-`PERMISSION_DENIED`, `AGENT_DISABLED`, `UNKNOWN_TOOL`.
+`PERMISSION_DENIED`, `AGENT_DISABLED`, `MCP_DISABLED`, `UNKNOWN_TOOL`,
+`CONFIRMATION_UNAVAILABLE`, `CONFIRMATION_DECLINED`, `RATE_LIMITED` (com
+`details.retryAfterSeconds`), `NOTE_TOO_LARGE`, `FLUXO_TOO_LARGE`.
 
 ## Segurança
 
@@ -161,7 +163,17 @@ Vale saber:
 - **Excluir vem desligado por padrão.** `kiro_delete_note` responde
   `PERMISSION_DENIED` até você ligar em **Configurações › IA e integrações**, na barra lateral.
 - **Desligar tudo** é uma caixa na mesma tela: com `enabled: false`, toda
-  ferramenta responde `AGENT_DISABLED`.
+  ferramenta responde `AGENT_DISABLED`. Recursos (`kiro://`) obedecem às mesmas
+  permissões das ferramentas.
+- **Desligar só o MCP** (`mcp.enabled: false`) esvazia as listas de ferramentas e
+  recursos, e toda chamada responde `MCP_DISABLED`, mesmo em conexão já aberta.
+- **Confirmar exclusão:** com `requireConfirmationForDestructive` ligado, o Kiro
+  pede a confirmação pelo cliente (*elicitation* do MCP). Cliente sem esse recurso
+  recebe `CONFIRMATION_UNAVAILABLE` e nada é excluído: para excluir por ele, é
+  preciso desligar a opção.
+- **Limites de volume:** 600 escritas por minuto e 6.000 por hora por conexão (leitura
+  não conta), 1.000.000 de caracteres por nota e 2.000 cartões por fluxo. Mensagem
+  acima de 64 MiB encerra o servidor.
 - **O agente só alcança o cofre.** Não existe ferramenta de arquivo genérico nem
   de execução de comando.
 - **Conteúdo de nota é dado, não instrução.** Uma nota do cofre pode conter

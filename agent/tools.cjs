@@ -9,8 +9,13 @@
  *
  * Nomes sem prefixo. A camada MCP publica os mesmos com "kiro_" na frente.
  */
-const { AgentError } = require('./security.cjs');
+const { AgentError, MAX_NOTE_CONTENT } = require('./security.cjs');
 const { validate } = require('./schema.cjs');
+
+// Teto de escritas, para um agente em loop não encher o disco. Leitura não conta: não grava nada.
+// ponytail: conta por processo e zera ao reiniciar o servidor; compartilhar em .kiro/ se vários clientes juntos virarem problema.
+const TETOS_DE_ESCRITA = [{ janelaMs: 60_000, maximo: 600 }, { janelaMs: 3_600_000, maximo: 6_000 }];
+const MAIOR_JANELA_MS = Math.max(...TETOS_DE_ESCRITA.map(t => t.janelaMs));
 
 const PERIODO = {
   since: { type: 'string', pattern: '^\\d{4}-\\d{2}-\\d{2}$', description: 'Só notas criadas ou alteradas a partir deste dia (AAAA-MM-DD, fuso local). Para "ontem", use since e until com a data de ontem. A data de hoje vem em get_daily_note sem argumentos.' },
@@ -42,7 +47,7 @@ const FERRAMENTAS = [
       properties: {
         title: { type: 'string', description: 'Título da nota. Vira o nome do arquivo e o alvo de links [[assim]].', maxLength: 200 },
         folder: { type: 'string', description: 'Pasta de destino relativa ao cofre, por exemplo "Projetos/Ideias". Vazio grava na raiz do cofre.' },
-        content: { type: 'string', description: 'Corpo da nota em Markdown.' },
+        content: { type: 'string', maxLength: MAX_NOTE_CONTENT, description: `Corpo da nota em Markdown. Até ${MAX_NOTE_CONTENT} caracteres; acima disso, divida em mais notas.` },
         tags: { type: 'array', items: { type: 'string' }, maxItems: 50, description: 'Tags da nota, sem o "#".' },
       },
       required: ['title'],
@@ -68,7 +73,7 @@ const FERRAMENTAS = [
       type: 'object',
       properties: {
         ...alvoNota,
-        content: { type: 'string', description: 'Texto Markdown a gravar, acrescentar ou inserir, conforme "mode".' },
+        content: { type: 'string', maxLength: MAX_NOTE_CONTENT, description: `Texto Markdown a gravar, acrescentar ou inserir, conforme "mode". A nota inteira aceita até ${MAX_NOTE_CONTENT} caracteres.` },
         mode: { type: 'string', enum: ['replace', 'append', 'prepend'], default: 'replace', description: 'replace troca o corpo inteiro; append acrescenta ao final; prepend insere no começo.' },
         title: { type: 'string', maxLength: 200, description: 'Novo título. Renomeia o arquivo no cofre.' },
         tags: { type: 'array', items: { type: 'string' }, maxItems: 50, description: 'Substitui a lista de tags da nota.' },
@@ -84,6 +89,7 @@ const FERRAMENTAS = [
     permission: 'delete',
     description: 'Move uma nota para a lixeira do Kiro. Não apaga em definitivo: devolve um trashEntryId que permite restaurar a nota depois.',
     inputSchema: { type: 'object', properties: { ...alvoNota } },
+    pergunta: async (api, args) => `Mover para a lixeira a nota "${(await api.readNote(args)).title}"?`,
     run: (api, args, ctx) => api.deleteNote(args, ctx),
     target: (args, resultado) => resultado?.deleted?.path || args.path || args.id,
   },
@@ -373,6 +379,10 @@ const FERRAMENTAS = [
     permission: 'delete',
     description: 'Exclui uma tarefa pelo id. Atenção: tarefas não vão para a lixeira; a exclusão é definitiva. Para tirar uma tarefa do caminho sem apagar, use set_task_status com "concluido".',
     inputSchema: { type: 'object', properties: { id: { type: 'string', description: 'Id da tarefa.' } }, required: ['id'] },
+    pergunta: async (api, args) => {
+      const tarefa = (await api.load()).tasks.find(x => x.id === args.id);
+      return `Excluir para sempre a tarefa "${tarefa ? tarefa.title : args.id}"? Tarefas não vão para a lixeira.`;
+    },
     run: (api, args, ctx) => api.deleteTask(args, ctx),
     target: args => args.id,
   },
@@ -396,6 +406,36 @@ class AgentToolkit {
     this.audit = audit || null;
     this.config = config || null;
     this.tools = new Map(FERRAMENTAS.map(f => [f.name, f]));
+    this.agora = Date.now;
+    this.escritas = [];
+    this.ritmoJaAuditado = false;
+  }
+
+  // Conta antes de validar: tentativa inválida em loop também gasta disco, na auditoria.
+  #contarEscrita() {
+    const agora = this.agora();
+    this.escritas = this.escritas.filter(t => agora - t < MAIOR_JANELA_MS);
+    for (const { janelaMs, maximo } of TETOS_DE_ESCRITA) {
+      const naJanela = this.escritas.filter(t => agora - t < janelaMs);
+      if (naJanela.length >= maximo) {
+        const retryAfterSeconds = Math.ceil((naJanela[0] + janelaMs - agora) / 1000);
+        throw new AgentError('RATE_LIMITED', `Muitas escritas seguidas: o limite é ${maximo} a cada ${janelaMs / 60_000} minuto(s). Tente de novo em ${retryAfterSeconds} s.`, { retryAfterSeconds });
+      }
+    }
+    this.escritas.push(agora);
+    this.ritmoJaAuditado = false;
+  }
+
+  /** Quem responde é a pessoa, pelo cliente; sem como perguntar, a exclusão não acontece. */
+  async #confirmar(ferramenta, args, contexto) {
+    if (ferramenta.risk !== 'destructive' || !this.config) return;
+    if (!(await this.config.load()).requireConfirmationForDestructive) return;
+    if (typeof contexto.confirmar !== 'function') {
+      throw new AgentError('CONFIRMATION_UNAVAILABLE', 'Este cliente de IA não consegue pedir confirmação ao usuário. Para excluir por ele, a pessoa precisa desligar "Confirmar ações destrutivas" em Configurações › IA e integrações.');
+    }
+    if (!(await contexto.confirmar(await ferramenta.pergunta(this.api, args)))) {
+      throw new AgentError('CONFIRMATION_DECLINED', 'O usuário não confirmou a exclusão. Nada foi alterado.');
+    }
   }
 
   /** Descritores públicos, sem os handlers. */
@@ -427,8 +467,10 @@ class AgentToolkit {
     const cliente = { client: contexto.clientId || 'unknown', clientName: contexto.clientName };
     let validados = {};
     try {
+      if (ferramenta.risk !== 'read') this.#contarEscrita();
       validados = validate(args, ferramenta.inputSchema);
       await this.#permitir(ferramenta);
+      await this.#confirmar(ferramenta, validados, contexto);
       const resultado = await ferramenta.run(this.api, validados, { clientId: cliente.client, clientName: cliente.clientName });
       if (this.audit && ferramenta.risk !== 'read') {
         await this.audit.record({
@@ -439,7 +481,10 @@ class AgentToolkit {
       }
       return resultado;
     } catch (erro) {
-      if (this.audit && ferramenta.risk !== 'read') {
+      // Só a primeira recusa da rajada entra: o resto empurraria registros úteis para fora da rotação.
+      const repetida = erro.code === 'RATE_LIMITED' && this.ritmoJaAuditado;
+      if (erro.code === 'RATE_LIMITED') this.ritmoJaAuditado = true;
+      if (this.audit && ferramenta.risk !== 'read' && !repetida) {
         await this.audit.record({
           ...cliente, action: nome, risk: ferramenta.risk,
           target: ferramenta.target(validados || {}, null), status: 'error',

@@ -23,7 +23,8 @@
     return localDate(dataLocal(novoAno, novoMes + 1, Math.min(dia, ultimoDia)));
   }
   function safeUrl(value) {
-    try { const url = new URL(value); return ['http:', 'https:'].includes(url.protocol) ? url.href : ''; } catch { return ''; }
+    // new URL aceita aspas e < > no host e as devolve cruas em href, o que abriria atributos no HTML.
+    try { const url = new URL(value); return ['http:', 'https:'].includes(url.protocol) && !/["'`<>]/.test(url.hostname) ? url.href : ''; } catch { return ''; }
   }
   // Status da tarefa além de feita/não feita: só 'andamento' e 'pausado' são guardados (status da tarefa).
   // Sem campo é "não começado"; done=true é "concluído" e mantém o status de antes, para reabrir onde estava.

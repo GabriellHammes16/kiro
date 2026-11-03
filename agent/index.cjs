@@ -56,7 +56,7 @@ function resolveVaultDirectory(explicito) {
 function createKiroAgent({ vaultDirectory, events } = {}) {
   const directory = resolveVaultDirectory(vaultDirectory);
   const barramento = events || new KiroEvents();
-  const vault = new Vault(directory);
+  const vault = new Vault(directory, { reaproveitarLeituras: true });
   const api = new KiroAgentApi(vault, { events: barramento });
   const audit = new AuditLog(directory);
   const config = new AgentConfig(directory);

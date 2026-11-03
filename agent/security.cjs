@@ -17,6 +17,16 @@ const RESERVED = new Set(['.history', '.trash', '.staging', '.kiro', 'caderno.js
   '.kuroi', '.kuroi.lock']);
 const MAX_SEGMENTS = 15;
 const MAX_TITLE = 200;
+// 1 milhão de caracteres dá umas 500 páginas. Cada gravação copia o cofre para .history,
+// então notas gigantes pesam várias vezes no disco.
+const MAX_NOTE_CONTENT = 1_000_000;
+
+// Nome curto do Windows (KIRO~1, HISTOR~1, CADERN~1.JSO): abre a pasta real com outro nome
+// e passaria pela checagem de nomes ocultos. Até 8 caracteres antes da extensão, como no 8.3.
+function pareceNomeCurto(parte) {
+  const nome = parte.replace(/[. ]+$/, '');
+  return /^[^.]+~\d+(\.[^.]{0,3})?$/.test(nome) && nome.split('.')[0].length <= 8;
+}
 
 function texto(valor, campo) {
   if (typeof valor !== 'string') throw new AgentError('INVALID_INPUT', `O campo "${campo}" deve ser um texto.`);
@@ -41,6 +51,7 @@ function vaultRelativePath(entrada, { campo = 'path', extensao = null } = {}) {
     if (!parte) throw new AgentError('INVALID_PATH', 'O caminho tem uma barra sobrando.');
     if (parte === '.' || parte === '..') throw new AgentError('PATH_TRAVERSAL', 'Navegar para fora do cofre não é permitido.');
     if (parte.startsWith('.')) throw new AgentError('RESERVED_PATH', 'Arquivos e pastas ocultos não fazem parte do cofre.');
+    if (pareceNomeCurto(parte)) throw new AgentError('RESERVED_PATH', `"${parte}" parece um nome curto do Windows, que pode apontar para uma área interna. Use outro nome.`);
   }
   if (RESERVED.has(partes[0])) throw new AgentError('RESERVED_PATH', `"${partes[0]}" é uma área interna do Kiro.`);
   if (extensao && !new RegExp(`\\.${extensao}$`, 'i').test(bruto)) {
@@ -83,4 +94,4 @@ function tagList(entrada, { campo = 'tags' } = {}) {
 
 const mesmoCaminho = (a, b) => pathKey(String(a || '')) === pathKey(String(b || ''));
 
-module.exports = { AgentError, vaultRelativePath, folderSegments, noteTitle, tagList, mesmoCaminho, RESERVED };
+module.exports = { AgentError, vaultRelativePath, folderSegments, noteTitle, tagList, mesmoCaminho, RESERVED, MAX_NOTE_CONTENT };

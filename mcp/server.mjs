@@ -27,6 +27,10 @@ const require = createRequire(import.meta.url);
 const { createKiroAgent } = require('../agent/index.cjs');
 
 const PREFIXO = 'kiro_';
+// O padrão do SDK (10 MiB) derruba a conexão antes da validação. Com folga, a IA recebe o erro
+// legível de nota grande demais; acima disso a mensagem não é lida e o servidor encerra.
+const TETO_DA_MENSAGEM = 64 * 1024 * 1024;
+const ESPERA_DA_CONFIRMACAO_MS = 5 * 60_000;
 
 function argumentoCofre(argv) {
   const i = argv.indexOf('--vault');
@@ -38,13 +42,28 @@ function identificar(servidor) {
   const info = servidor.getClientVersion?.();
   const nome = info?.name ? String(info.name) : '';
   const id = nome.toLowerCase().replace(/[^a-z0-9._-]+/g, '-').replace(/^-|-$/g, '');
-  return { clientId: id || 'mcp-client', clientName: nome || undefined };
+  return {
+    clientId: id || 'mcp-client',
+    clientName: nome || undefined,
+    confirmar: servidor.getClientCapabilities?.()?.elicitation?.form ? mensagem => perguntarAoUsuario(servidor, mensagem) : undefined,
+  };
+}
+
+async function perguntarAoUsuario(servidor, message) {
+  const resposta = await servidor.elicitInput({
+    message,
+    requestedSchema: { type: 'object', properties: { confirmar: { type: 'boolean', title: 'Confirmar' } }, required: ['confirmar'] },
+  }, { timeout: ESPERA_DA_CONFIRMACAO_MS });
+  return resposta.action === 'accept' && resposta.content?.confirmar === true;
 }
 
 const texto = valor => ({ content: [{ type: 'text', text: JSON.stringify(valor, null, 2) }] });
 
 async function main() {
-  const { toolkit, api, directory } = createKiroAgent({ vaultDirectory: argumentoCofre(process.argv) });
+  const { toolkit, config, directory } = createKiroAgent({ vaultDirectory: argumentoCofre(process.argv) });
+  // Lido a cada pedido: desligar na tela vale para quem já está conectado.
+  const ligado = async () => (await config.load()).mcp.enabled;
+  const DESLIGADO = 'O servidor MCP está desligado nas configurações do Kiro.';
 
   const servidor = new Server(
     { name: 'kiro', version: '0.5.0' },
@@ -52,7 +71,7 @@ async function main() {
   );
 
   servidor.setRequestHandler(ListToolsRequestSchema, async () => ({
-    tools: toolkit.list().map(f => ({
+    tools: !(await ligado()) ? [] : toolkit.list().map(f => ({
       name: `${PREFIXO}${f.name}`,
       description: f.description,
       inputSchema: f.inputSchema,
@@ -70,6 +89,7 @@ async function main() {
     const nome = String(pedido.params.name || '');
     const interno = nome.startsWith(PREFIXO) ? nome.slice(PREFIXO.length) : nome;
     try {
+      if (!(await ligado())) throw Object.assign(new Error(DESLIGADO), { code: 'MCP_DISABLED' });
       return texto(await toolkit.call(interno, pedido.params.arguments || {}, identificar(servidor)));
     } catch (erro) {
       // Erro de ferramenta volta como resultado, não como falha de protocolo:
@@ -82,7 +102,7 @@ async function main() {
   });
 
   servidor.setRequestHandler(ListResourcesRequestSchema, async () => ({
-    resources: [
+    resources: !(await ligado()) ? [] : [
       { uri: 'kiro://vault', name: 'Cofre Kiro', description: 'Caminho, revisão e contagens do cofre aberto.', mimeType: 'application/json' },
       { uri: 'kiro://daily', name: 'Nota diária', description: 'Nota do dia de hoje, se existir.', mimeType: 'application/json' },
     ],
@@ -90,17 +110,22 @@ async function main() {
 
   servidor.setRequestHandler(ReadResourceRequestSchema, async pedido => {
     const uri = String(pedido.params.uri || '');
+    if (!(await ligado())) throw new Error(DESLIGADO);
     const responder = valor => ({ contents: [{ uri, mimeType: 'application/json', text: JSON.stringify(valor, null, 2) }] });
-    if (uri === 'kiro://vault') return responder(await api.describeVault());
-    if (uri === 'kiro://daily') return responder(await api.getDailyNote({}));
+    // Pelo toolkit, não pela API: recurso é leitura e obedece à mesma permissão das ferramentas.
+    const ler = (ferramenta, args = {}) => toolkit.call(ferramenta, args, identificar(servidor)).then(responder);
+    if (uri === 'kiro://vault') return ler('get_vault_info');
+    if (uri === 'kiro://daily') return ler('get_daily_note');
     const nota = uri.match(/^kiro:\/\/notes\/(.+)$/);
-    if (nota) return responder(await api.readNote({ id: decodeURIComponent(nota[1]) }));
+    if (nota) return ler('read_note', { id: decodeURIComponent(nota[1]) });
     throw new Error(`Recurso desconhecido: ${uri}`);
   });
 
   // stdout pertence ao protocolo; qualquer aviso vai para stderr.
   process.stderr.write(`Kiro MCP ativo. Cofre: ${directory}\n`);
-  await servidor.connect(new StdioServerTransport());
+  // Conexão fechada por mensagem acima do teto: sair, para o cliente não ficar esperando resposta.
+  servidor.onclose = () => process.exit(0);
+  await servidor.connect(new StdioServerTransport(process.stdin, process.stdout, { maxBufferSize: TETO_DA_MENSAGEM }));
 }
 
 main().catch(erro => {

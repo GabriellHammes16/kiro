@@ -8,7 +8,105 @@ const path = require('node:path');
 const { Client } = require('@modelcontextprotocol/sdk/client/index.js');
 const { StdioClientTransport } = require('@modelcontextprotocol/sdk/client/stdio.js');
 
+const { ElicitRequestSchema } = require('@modelcontextprotocol/sdk/types.js');
+
 const json = resultado => JSON.parse(resultado.content[0].text);
+
+async function conectar(t, { capabilities = {} } = {}) {
+  const pasta = await fs.mkdtemp(path.join(os.tmpdir(), 'kiro-mcp-'));
+  const cliente = new Client({ name: 'kiro-test-client', version: '1.0.0' }, { capabilities });
+  const transporte = new StdioClientTransport({
+    command: process.execPath, args: [path.join(__dirname, '..', 'mcp', 'server.mjs'), '--vault', pasta], stderr: 'ignore',
+  });
+  t.after(async () => {
+    await cliente.close().catch(() => {});
+    await fs.rm(pasta, { recursive: true, force: true }).catch(() => {});
+  });
+  return { cliente, pasta, transporte };
+}
+const configurar = async (pasta, conf) => {
+  await fs.mkdir(path.join(pasta, '.kiro'), { recursive: true });
+  await fs.writeFile(path.join(pasta, '.kiro', 'agent.json'), JSON.stringify(conf));
+};
+const CONF = { enabled: true, mcp: { enabled: true }, permissions: { read: true, create: true, update: true, delete: false }, requireConfirmationForDestructive: true };
+const erroDe = r => JSON.parse(r.content[0].text).error;
+
+test('recursos MCP obedecem às mesmas permissões das ferramentas', async t => {
+  const { cliente, pasta, transporte } = await conectar(t);
+  await cliente.connect(transporte);
+  const nota = json(await cliente.callTool({ name: 'kiro_create_note', arguments: { title: 'Particular', content: 'PRIVADO' } })).note;
+  const uris = ['kiro://vault', 'kiro://daily', `kiro://notes/${nota.id}`];
+  assert.match((await cliente.readResource({ uri: uris[2] })).contents[0].text, /PRIVADO/);
+
+  for (const conf of [{ ...CONF, permissions: { ...CONF.permissions, read: false } }, { ...CONF, enabled: false }]) {
+    await configurar(pasta, conf);
+    for (const uri of uris) await assert.rejects(cliente.readResource({ uri }), /permitir|desligada/, uri);
+  }
+});
+
+test('interruptor do servidor MCP: desligado não lista nem executa nada', async t => {
+  const { cliente, pasta, transporte } = await conectar(t);
+  await cliente.connect(transporte);
+  const nota = json(await cliente.callTool({ name: 'kiro_create_note', arguments: { title: 'N', content: 'x' } })).note;
+  await configurar(pasta, { ...CONF, mcp: { enabled: false } });
+
+  assert.deepEqual((await cliente.listTools()).tools, []);
+  assert.deepEqual((await cliente.listResources()).resources, []);
+  const chamada = await cliente.callTool({ name: 'kiro_read_note', arguments: { id: nota.id } });
+  assert.equal(chamada.isError, true);
+  assert.equal(erroDe(chamada), 'MCP_DISABLED');
+  await assert.rejects(cliente.readResource({ uri: `kiro://notes/${nota.id}` }), /desligado/);
+
+  await configurar(pasta, CONF);
+  assert.ok((await cliente.listTools()).tools.length > 0);
+});
+
+test('exclusão pede confirmação ao usuário pelo cliente e recusa quem não consegue perguntar', async t => {
+  const comPergunta = await conectar(t, { capabilities: { elicitation: { form: {} } } });
+  let resposta = { action: 'decline' };
+  const perguntas = [];
+  comPergunta.cliente.setRequestHandler(ElicitRequestSchema, async pedido => { perguntas.push(pedido.params.message); return resposta; });
+  await comPergunta.cliente.connect(comPergunta.transporte);
+  await configurar(comPergunta.pasta, { ...CONF, permissions: { ...CONF.permissions, delete: true } });
+  const nota = json(await comPergunta.cliente.callTool({ name: 'kiro_create_note', arguments: { title: 'Minha nota', content: 'x' } })).note;
+  const excluir = () => comPergunta.cliente.callTool({ name: 'kiro_delete_note', arguments: { id: nota.id } });
+
+  assert.equal(erroDe(await excluir()), 'CONFIRMATION_DECLINED');
+  assert.match(perguntas[0], /Minha nota/);
+  resposta = { action: 'accept', content: { confirmar: false } };
+  assert.equal(erroDe(await excluir()), 'CONFIRMATION_DECLINED');
+  resposta = { action: 'accept', content: { confirmar: true } };
+  assert.equal(json(await excluir()).success, true);
+
+  const semPergunta = await conectar(t);
+  await semPergunta.cliente.connect(semPergunta.transporte);
+  const outra = json(await semPergunta.cliente.callTool({ name: 'kiro_create_note', arguments: { title: 'Outra', content: 'x' } })).note;
+  await configurar(semPergunta.pasta, { ...CONF, permissions: { ...CONF.permissions, delete: true } });
+  const recusa = await semPergunta.cliente.callTool({ name: 'kiro_delete_note', arguments: { id: outra.id } });
+  assert.equal(erroDe(recusa), 'CONFIRMATION_UNAVAILABLE');
+});
+
+test('nota gigante volta como erro legível e o servidor continua de pé', async t => {
+  const { cliente, transporte } = await conectar(t);
+  await cliente.connect(transporte);
+  for (const mb of [5, 11, 30]) {
+    const r = await cliente.callTool({ name: 'kiro_create_note', arguments: { title: `G${mb}`, content: 'x'.repeat(mb * 1024 * 1024) } }, undefined, { timeout: 30000 });
+    assert.equal(r.isError, true, `${mb} MB`);
+    assert.match(r.content[0].text, /passa de 1000000/);
+  }
+  assert.equal(json(await cliente.callTool({ name: 'kiro_create_note', arguments: { title: 'Depois', content: 'ok' } })).success, true);
+});
+
+test('mensagem acima do teto do transporte encerra o servidor em vez de travar o cliente', async t => {
+  const { cliente, transporte } = await conectar(t);
+  await cliente.connect(transporte);
+  const inicio = Date.now();
+  await assert.rejects(
+    cliente.callTool({ name: 'kiro_create_note', arguments: { title: 'Enorme', content: 'x'.repeat(70 * 1024 * 1024) } }, undefined, { timeout: 60000 }),
+    /Connection closed/,
+  );
+  assert.ok(Date.now() - inicio < 30000);
+});
 
 test('servidor MCP publica as ferramentas e opera o cofre por stdio', async t => {
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'kiro-mcp-'));

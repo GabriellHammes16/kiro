@@ -3222,7 +3222,7 @@ function mdInline(texto) {
     })
     .replace(/\[([^\][\n]*)\]\(([^)\s]+)\)/g, (inteiro, rotulo, url) => {
       const limpa = Kiro.safeUrl(desescapar(url));
-      return limpa ? reservar(`<a href="${limpa}" target="_blank" rel="noopener noreferrer">${rotulo || url}</a>`) : inteiro;
+      return limpa ? reservar(`<a href="${escapeHtml(limpa)}" target="_blank" rel="noopener noreferrer">${rotulo || url}</a>`) : inteiro;
     })
     .replace(/\*\*([^\n*]+)\*\*/g, '<strong>$1</strong>')
     .replace(/(^|[^*])\*([^\n*]+)\*(?!\*)/g, '$1<em>$2</em>')

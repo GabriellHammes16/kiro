@@ -86,6 +86,8 @@ O cofre antigo é reconhecido automaticamente. O Markdown existente prevalece so
 
 Antes de cada salvamento que altera arquivos, uma cópia do cofre anterior é criada em `.history/<data-id>/`. No primeiro salvamento, essa cópia inclui o JSON legado. Os testes usam cofres temporários, sem editar o cofre pessoal.
 
+Escritas de agentes de IA copiam só o que mudaram, em fila própria (`<data-id>-parcial`), e não expulsam as cópias completas. Antes de um agente alterar um texto que não foi escrito por agente, o Kiro guarda essa versão em `<data-id>-preservada`, fora das filas: ela aparece no histórico da nota, com até 3 cópias por nota.
+
 **Mover para lixeira** remove a nota da pasta ativa e a guarda em `.trash/`. **Lixeira → Restaurar** recupera seu conteúdo e ID. Movimentar uma nota ou renomear sua pasta remove o arquivo antigo da área ativa, mantendo a cópia de recuperação.
 
 Cada arquivo é gravado por substituição atômica. Um registro `.transaction.json` identifica salvamentos interrompidos entre arquivos: nesse caso o aplicativo bloqueia a abertura para não aceitar dados parciais. Com o aplicativo fechado, preserve uma cópia da pasta e restaure o snapshot indicado em `backup` nesse registro em uma pasta vazia; abra essa pasta como outro cofre. Uma interrupção abrupta também pode deixar `.kiro.lock`; só remova esse arquivo depois de confirmar que nenhum processo está usando o cofre.

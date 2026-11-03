@@ -16,7 +16,298 @@ const cliente = { clientId: 'teste', clientName: 'Suite' };
 // assert.rejects com regex compara a mensagem; aqui o contrato é o código do erro.
 const codigo = (...aceitos) => erro => aceitos.includes(erro.code) || (() => { throw erro; })();
 // A exclusão vem desligada por padrão, como na tela de configurações.
-const permitirExclusao = config => config.save({ permissions: { delete: true } });
+const permitirExclusao = config => config.save({ permissions: { delete: true }, requireConfirmationForDestructive: false });
+
+test('confirmação de exclusão: sem como perguntar recusa, "não" recusa e só "sim" exclui', async t => {
+  const { toolkit, config } = await montar(t);
+  await config.save({ permissions: { delete: true } });
+  const nota = await toolkit.call('create_note', { title: 'Guardar' }, cliente);
+  const alvo = { id: nota.note.id };
+
+  await assert.rejects(toolkit.call('delete_note', alvo, cliente), codigo('CONFIRMATION_UNAVAILABLE'));
+  await assert.rejects(toolkit.call('delete_note', alvo, { ...cliente, confirmar: async () => false }), codigo('CONFIRMATION_DECLINED'));
+  assert.equal((await toolkit.call('read_note', alvo, cliente)).title, 'Guardar');
+
+  let pergunta = '';
+  const apagada = await toolkit.call('delete_note', alvo, { ...cliente, confirmar: async m => { pergunta = m; return true; } });
+  assert.equal(apagada.success, true);
+  assert.match(pergunta, /Guardar/);
+
+  const tarefa = await toolkit.call('create_task', { title: 'Pagar conta' }, cliente);
+  let perguntaTarefa = '';
+  await toolkit.call('delete_task', { id: tarefa.task.id }, { ...cliente, confirmar: async m => { perguntaTarefa = m; return true; } });
+  assert.match(perguntaTarefa, /Pagar conta/);
+});
+
+test('ritmo: passou do teto por minuto ou por hora, escrita recusa e leitura segue', async t => {
+  const { toolkit, directory } = await montar(t);
+  let agora = 1_000_000;
+  toolkit.agora = () => agora;
+  // Título inválido: conta no ritmo sem gastar tempo gravando.
+  const tentar = () => toolkit.call('create_note', { title: 1 }, cliente);
+  for (let i = 0; i < 600; i++) await assert.rejects(tentar(), codigo('INVALID_INPUT'));
+
+  await assert.rejects(tentar(), erro => erro.code === 'RATE_LIMITED' && erro.details.retryAfterSeconds === 60);
+  await assert.rejects(tentar(), codigo('RATE_LIMITED'));
+  assert.equal((await toolkit.call('list_notes', {}, cliente)).notes.length, 0);
+  const registros = (await fs.readFile(path.join(directory, '.kiro', 'audit.log'), 'utf8')).split('\n').filter(l => l.includes('RATE_LIMITED'));
+  assert.equal(registros.length, 1, 'uma rajada recusada não pode encher a auditoria');
+
+  agora += 60_000;
+  await assert.rejects(tentar(), codigo('INVALID_INPUT'));
+
+  // Teto por hora: 6.000 escritas em lotes que respeitam o teto por minuto.
+  toolkit.escritas = Array.from({ length: 5_999 }, (_, i) => agora - 61_000 - i);
+  await assert.rejects(tentar(), codigo('INVALID_INPUT'));
+  await assert.rejects(tentar(), erro => erro.code === 'RATE_LIMITED' && /6000/.test(erro.message));
+});
+
+const preservadas = async directory => (await fs.readdir(path.join(directory, '.history')).catch(() => [])).filter(n => n.endsWith('-preservada'));
+
+test('versão de antes da IA sobrevive à poda do histórico e pode ser restaurada', async t => {
+  const { toolkit, vault, directory } = await montar(t);
+  let estado = await vault.load();
+  estado = await vault.save({ ...estado, notes: [{ id: 'humana', title: 'Importante', body: 'TEXTO-ORIGINAL', links: [], tags: [], folderId: '', createdAt: 1, updatedAt: 1 }] });
+  vault.historyLimit = 2;
+
+  await toolkit.call('update_note', { id: 'humana', content: '', mode: 'replace' }, cliente);
+  for (let i = 0; i < 5; i++) await toolkit.call('create_note', { title: `Lote ${i}`, content: 'x' }, cliente);
+
+  const versoes = await vault.history({ noteId: 'humana' });
+  const guardada = versoes.find(v => v.snapshotId.endsWith('-preservada'));
+  assert.ok(guardada, 'a versão anterior precisa continuar no histórico da nota');
+  assert.equal((await vault.readHistory({ noteId: 'humana', snapshotId: guardada.snapshotId })).body, 'TEXTO-ORIGINAL');
+  const entradas = await fs.readdir(path.join(directory, '.history'));
+  assert.ok(entradas.filter(n => n.endsWith('-parcial')).length <= 2, 'a fila das escritas de agente continua limitada');
+
+  const atual = await vault.load();
+  const restaurada = await vault.restoreHistory({ noteId: 'humana', snapshotId: guardada.snapshotId, revision: atual.revision });
+  assert.equal(restaurada.notes.find(n => n.id === 'humana').body, 'TEXTO-ORIGINAL');
+});
+
+const nota = (id, body) => ({ id, title: id, body, links: [], tags: [], folderId: '', createdAt: 1, updatedAt: 1 });
+
+test('escrita de agente copia só o que mudou; salvamento do app continua copiando tudo', async t => {
+  const { toolkit, vault, directory } = await montar(t);
+  let estado = await vault.load();
+  estado = await vault.save({ ...estado, notes: [nota('a', 'A1'), nota('b', 'B1')] });
+  await toolkit.call('update_note', { id: 'a', content: 'A2' }, cliente);
+
+  const historico = await fs.readdir(path.join(directory, '.history'));
+  const parcial = historico.find(n => n.endsWith('-parcial'));
+  const copiados = (await fs.readdir(path.join(directory, '.history', parcial))).sort();
+  assert.equal(copiados.length, 2, copiados.join());
+  assert.ok(copiados.includes('caderno.json'));
+  assert.ok(copiados.some(f => f.startsWith('a-')));
+  assert.equal((await vault.readHistory({ noteId: 'a', snapshotId: parcial })).body, 'A1');
+  await assert.rejects(vault.readHistory({ noteId: 'b', snapshotId: parcial }), /não encontrada/);
+
+  estado = await vault.load();
+  estado.notes.find(n => n.id === 'a').body = 'A3';
+  await vault.save(estado);
+  const novas = (await fs.readdir(path.join(directory, '.history'))).filter(n => !historico.includes(n));
+  assert.equal(novas.length, 1);
+  assert.ok(!novas[0].endsWith('-parcial'));
+  assert.ok((await fs.readdir(path.join(directory, '.history', novas[0]))).some(f => f.startsWith('b-')), 'cópia do app segue completa');
+});
+
+test('escritas de agente têm fila própria e não expulsam as cópias completas do app', async t => {
+  const { toolkit, vault, directory } = await montar(t);
+  vault.historyLimit = 2;
+  let estado = await vault.load();
+  estado = await vault.save({ ...estado, notes: [nota('a', 'A1')] });
+  estado.notes[0].body = 'A2';
+  await vault.save(estado);
+  const completas = (await fs.readdir(path.join(directory, '.history'))).sort();
+  assert.ok(completas.length >= 1);
+  for (let i = 0; i < 6; i++) await toolkit.call('create_note', { title: `L${i}`, content: 'x' }, cliente);
+  const depois = await fs.readdir(path.join(directory, '.history'));
+  for (const c of completas) assert.ok(depois.includes(c), 'cópia completa foi expulsa');
+  assert.equal(depois.filter(n => n.endsWith('-parcial')).length, 2);
+});
+
+test('escrita parcial interrompida: bloqueia o cofre e a cópia tem o que precisa para recuperar', async t => {
+  const { toolkit, vault, directory } = await montar(t);
+  let estado = await vault.load();
+  estado = await vault.save({ ...estado, folders: [{ id: 'p', title: 'Pasta', parentId: '', description: '' }], notes: [{ ...nota('a', 'ORIGINAL'), folderId: 'p' }, nota('b', 'OUTRA')] });
+  const arquivo = estado.notes.find(n => n.id === 'a').file;
+
+  // Falha exatamente ao aplicar a gravação sobre a nota de verdade.
+  const original = fs.rename;
+  fs.rename = async (de, para) => {
+    if (para.endsWith(arquivo.split('/').pop()) && de.includes('.staging') && !para.includes('.staging')) throw new Error('queda simulada');
+    return original(de, para);
+  };
+  t.after(() => { fs.rename = original; });
+  await assert.rejects(toolkit.call('update_note', { id: 'a', content: 'NOVO' }, cliente), /queda simulada/);
+  fs.rename = original;
+
+  await assert.rejects(vault.load(), /interrompido/);
+  const diario = JSON.parse(await fs.readFile(path.join(directory, '.transaction.json'), 'utf8'));
+  assert.match(diario.backup, /-parcial$/);
+  assert.equal(await fs.readFile(path.join(directory, diario.backup, arquivo), 'utf8').then(s => s.includes('ORIGINAL')), true);
+  await fs.access(path.join(directory, diario.backup, 'caderno.json'));
+  await fs.access(path.join(directory, diario.stage, arquivo));
+});
+
+test('leitura reaproveitada ainda enxerga mudança feita por fora do Kiro', async t => {
+  const { toolkit, vault, directory } = await montar(t);
+  let estado = await vault.load();
+  estado = await vault.save({ ...estado, notes: [nota('a', 'A1')] });
+  const arquivo = path.join(directory, estado.notes[0].file);
+  assert.equal((await toolkit.call('read_note', { id: 'a' }, cliente)).content, 'A1');
+
+  // Mesmo tamanho, outro conteúdo: como um editor externo ou um sincronizador faria.
+  const texto = await fs.readFile(arquivo, 'utf8');
+  await new Promise(r => setTimeout(r, 20));
+  await fs.writeFile(arquivo, texto.replace('A1', 'X9'));
+  assert.equal((await toolkit.call('read_note', { id: 'a' }, cliente)).content, 'X9');
+
+  // Arquivo novo e arquivo apagado por fora.
+  await fs.writeFile(path.join(directory, 'de-fora.md'), 'Veio de fora');
+  assert.ok((await toolkit.call('search_notes', { query: 'Veio de fora' }, cliente)).total === 1);
+  await fs.rm(path.join(directory, 'de-fora.md'));
+  assert.equal((await toolkit.call('search_notes', { query: 'Veio de fora' }, cliente)).total, 0);
+
+  // Escrita da IA sobre a versão de fora preserva o texto de fora.
+  await toolkit.call('update_note', { id: 'a', content: 'da IA' }, cliente);
+  const guardadas = await preservadas(directory);
+  assert.equal((await vault.readHistory({ noteId: 'a', snapshotId: guardadas.at(-1) })).body, 'X9');
+});
+
+test('leitura reaproveitada continua recusando atalho para fora do cofre', async t => {
+  const { toolkit, directory } = await montar(t);
+  await toolkit.call('create_note', { title: 'Isca', content: 'x' }, cliente);
+  const fora = await fs.mkdtemp(path.join(os.tmpdir(), 'kiro-fora-'));
+  t.after(() => fs.rm(fora, { recursive: true, force: true }));
+  await fs.writeFile(path.join(fora, 'segredo.md'), 'SEGREDO');
+  try { await fs.symlink(fora, path.join(directory, 'Atalho'), 'junction'); }
+  catch (erro) { if (erro.code === 'EPERM') return t.skip('links simbólicos indisponíveis'); throw erro; }
+  await assert.rejects(toolkit.call('search_notes', { query: 'SEGREDO' }, cliente), /simbólicos/);
+});
+
+test('escrita parcial que move nota guarda o arquivo antigo e exclusão segue indo para a lixeira', async t => {
+  const { toolkit, vault, directory, config } = await montar(t);
+  let estado = await vault.load();
+  estado = await vault.save({ ...estado, notes: [nota('a', 'A1'), nota('b', 'B1')] });
+  await toolkit.call('move_note', { id: 'a', folder: 'Nova' }, cliente);
+  const movida = (await vault.load()).notes.find(n => n.id === 'a');
+  assert.match(movida.file, /^Nova\//);
+  assert.equal(movida.body, 'A1');
+  const ultimos = (await fs.readdir(path.join(directory, '.history'))).filter(n => n.endsWith('-parcial')).sort();
+  assert.ok((await fs.readdir(path.join(directory, '.history', ultimos.at(-1)))).some(f => f.startsWith('a-')));
+
+  await config.save({ permissions: { delete: true }, requireConfirmationForDestructive: false });
+  const apagada = await toolkit.call('delete_note', { id: 'b' }, cliente);
+  assert.equal(apagada.recoverable, true);
+  await toolkit.call('restore_note', { entryId: apagada.trashEntryId }, cliente);
+  assert.equal((await vault.load()).notes.find(n => n.id === 'b').body, 'B1');
+});
+
+test('só guarda texto que não é de agente, sem duplicar nem acumular', async t => {
+  const { toolkit, vault, directory } = await montar(t);
+  // Nota criada pela IA: nada a preservar, por mais que ela reescreva.
+  const criada = await toolkit.call('create_note', { title: 'Da IA', content: 'um' }, cliente);
+  for (const texto of ['dois', 'tres']) await toolkit.call('update_note', { id: criada.note.id, content: texto }, cliente);
+  assert.equal((await preservadas(directory)).length, 0);
+  // Mudar só as tags não troca o texto.
+  await toolkit.call('add_tag', { id: criada.note.id, tags: ['a'] }, cliente);
+  assert.equal((await preservadas(directory)).length, 0);
+
+  // A pessoa edita: a próxima escrita da IA guarda a versão da pessoa, uma vez só.
+  const editar = async corpo => {
+    const estado = await vault.load();
+    estado.notes.find(n => n.id === criada.note.id).body = corpo;
+    await vault.save(estado);
+  };
+  await editar('da pessoa');
+  await toolkit.call('update_note', { id: criada.note.id, content: 'quatro' }, cliente);
+  await toolkit.call('update_note', { id: criada.note.id, content: 'cinco' }, cliente);
+  const nomes = await preservadas(directory);
+  assert.equal(nomes.length, 1);
+  assert.equal((await vault.readHistory({ noteId: criada.note.id, snapshotId: nomes[0] })).body, 'da pessoa');
+
+  // Teto por nota: as três mais recentes.
+  for (const corpo of ['p2', 'p3', 'p4', 'p5']) {
+    await editar(corpo);
+    await toolkit.call('update_note', { id: criada.note.id, content: `ia ${corpo}` }, cliente);
+  }
+  const finais = await preservadas(directory);
+  assert.equal(finais.length, 3);
+  const corpos = await Promise.all(finais.map(s => vault.readHistory({ noteId: criada.note.id, snapshotId: s }).then(r => r.body)));
+  assert.deepEqual(corpos.sort(), ['p3', 'p4', 'p5']);
+
+  // Nota vazia não tem o que guardar.
+  await editar('');
+  await toolkit.call('update_note', { id: criada.note.id, content: 'seis' }, cliente);
+  assert.equal((await preservadas(directory)).length, 3);
+});
+
+test('fluxo: os cartões de antes da IA ficam guardados', async t => {
+  const { toolkit, vault, directory } = await montar(t);
+  const criado = await toolkit.call('create_fluxo', { title: 'Mapa', nodes: [{ id: 'a', type: 'text', text: 'CARTAO-DA-PESSOA' }] }, cliente);
+  // A pessoa edita o fluxo no app; a IA depois apaga tudo.
+  const estado = await vault.load();
+  const fluxo = estado.fluxos.find(f => f.id === criado.fluxo.id);
+  fluxo.canvas = { ...fluxo.canvas, nodes: fluxo.canvas.nodes.map(n => ({ ...n, text: 'EDITADO-PELA-PESSOA' })) };
+  await vault.save(estado);
+  const lido = await toolkit.call('read_fluxo', { id: criado.fluxo.id }, cliente);
+  await toolkit.call('update_fluxo', { id: criado.fluxo.id, remove_nodes: lido.nodes.map(n => n.id) }, cliente);
+
+  const [nome, ...resto] = await preservadas(directory);
+  assert.equal(resto.length, 0);
+  assert.match(await fs.readFile(path.join(directory, '.history', nome, 'Mapa.canvas'), 'utf8'), /EDITADO-PELA-PESSOA/);
+});
+
+test('tamanho: nota acima do teto é recusada, inclusive crescendo por append', async t => {
+  const { toolkit, directory } = await montar(t);
+  const MAX = 1_000_000;
+  await assert.rejects(toolkit.call('create_note', { title: 'Grande', content: 'x'.repeat(MAX + 1) }, cliente), codigo('INVALID_INPUT'));
+  const nota = await toolkit.call('create_note', { title: 'No teto', content: 'x'.repeat(MAX - 10) }, cliente);
+  await assert.rejects(toolkit.call('update_note', { id: nota.note.id, content: 'y'.repeat(100), mode: 'append' }, cliente), codigo('NOTE_TOO_LARGE'));
+  await assert.rejects(toolkit.call('update_note', { id: nota.note.id, content: 'y'.repeat(100), mode: 'prepend' }, cliente), codigo('NOTE_TOO_LARGE'));
+  assert.equal((await toolkit.call('read_note', { id: nota.note.id }, cliente)).content.length, MAX - 10);
+  assert.ok((await fs.readdir(directory)).some(f => f.startsWith('no-teto')));
+  // Nota antiga maior que o teto: ainda dá para encurtar e renomear.
+  await toolkit.call('update_note', { id: nota.note.id, content: 'curta', mode: 'replace', title: 'Curta' }, cliente);
+});
+
+test('fluxo: teto de cartões no total, não só por chamada', async t => {
+  const { toolkit } = await montar(t);
+  const cartoes = (de, n) => Array.from({ length: n }, (_, i) => ({ id: `c${de + i}`, type: 'text', text: 'x', x: i * 200, y: de, width: 100, height: 60 }));
+  const fluxo = await toolkit.call('create_fluxo', { title: 'Mapa', nodes: cartoes(0, 300) }, cliente);
+  for (let i = 1; i < 6; i++) await toolkit.call('update_fluxo', { id: fluxo.fluxo.id, add_nodes: cartoes(i * 1000, 300) }, cliente);
+  await toolkit.call('update_fluxo', { id: fluxo.fluxo.id, add_nodes: cartoes(9000, 200) }, cliente);
+  await assert.rejects(toolkit.call('update_fluxo', { id: fluxo.fluxo.id, add_nodes: cartoes(9500, 1) }, cliente), codigo('FLUXO_TOO_LARGE'));
+});
+
+test('nome curto do Windows (8.3) não serve de atalho para as pastas internas', async t => {
+  const { toolkit, directory } = await montar(t);
+  const nota = await toolkit.call('create_note', { title: 'Fica' }, cliente);
+  for (const pasta of ['KIRO~1', 'kiro~1', 'HISTOR~1', 'TRASH~1', 'Ok/KIRO~1', 'KIRO~1.', 'KIRO~1 ', 'CADERN~1.JSO', 'A~123456']) {
+    await assert.rejects(toolkit.call('move_note', { id: nota.note.id, folder: pasta }, cliente), codigo('RESERVED_PATH', 'INVALID_NAME'), pasta);
+    await assert.rejects(toolkit.call('create_note', { title: 'Nova', folder: pasta }, cliente), codigo('RESERVED_PATH', 'INVALID_NAME'), pasta);
+    await assert.rejects(toolkit.call('create_folder', { path: pasta }, cliente), codigo('RESERVED_PATH', 'INVALID_NAME'), pasta);
+  }
+  assert.equal((await toolkit.call('read_note', { id: nota.note.id }, cliente)).title, 'Fica');
+  assert.deepEqual((await fs.readdir(path.join(directory, '.kiro'))).filter(f => f.endsWith('.md')), []);
+  // Nomes comuns com til continuam valendo.
+  for (const pasta of ['Projeto~2', 'a~b', 'rascunho~', 'Notas~2026x']) await toolkit.call('create_folder', { path: pasta }, cliente);
+});
+
+test('safeUrl recusa endereço com aspas no host, que injetariam atributos no link', () => {
+  const { safeUrl } = require('../domain.js');
+  assert.equal(safeUrl('https://a.com"data-action="delete-task"data-id="1"x="'), '');
+  assert.equal(safeUrl("https://a.com'onclick='x"), '');
+  assert.equal(safeUrl('https://a.com<img'), '');
+  assert.equal(safeUrl('https://example.com/a?b=1'), 'https://example.com/a?b=1');
+});
+
+test('link do Markdown escapa o endereço ao entrar no atributo', () => {
+  const app = require('node:fs').readFileSync(path.join(__dirname, '..', 'app.js'), 'utf8');
+  assert.ok(app.includes('<a href="${escapeHtml(limpa)}" target="_blank"'));
+  assert.ok(!app.includes('<a href="${limpa}"'));
+});
 
 test('create_note grava Markdown na pasta pedida e devolve o caminho', async t => {
   const { toolkit, directory } = await montar(t);
