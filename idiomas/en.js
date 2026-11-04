@@ -984,6 +984,8 @@
     'Número de dias': 'Number of days',
     'Lembretes': 'Reminders',
     'Imprimir nota': 'Print note',
+    'Mais opções da nota': 'More note options',
+    'Esta nota': 'This note',
     '# Objetivo': '# Objective',
     '## Ideias principais': '## Main ideas',
     '## Exemplos': '## Examples',

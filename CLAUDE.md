@@ -12,3 +12,13 @@ conhecimento em `graphify-out/` — ele já mapeia os 125 arquivos do repositór
 - Mapa visual: `graphify-out/graph.html`
 
 Depois de mudanças grandes no código, atualize o grafo: `/graphify . --update`
+
+## Criar temas, skins e plug-ins
+
+Siga o padrão antes de escrever qualquer coisa. Cor e forma vêm sempre das variáveis, nunca de valor fixo.
+
+| Vai criar | Leia | Confira com |
+|---|---|---|
+| Tema ou skin | `docs/temas.md` | `node --test tests/temas.test.cjs` |
+| Plug-in | `docs/plugins.md`, com exemplos em `examples/plugins/`, e a seção "Plug-ins" de `docs/temas.md` | `node --test tests/plugins.test.cjs` |
+| Tela ou componente | Seção "Regras para componentes" de `docs/temas.md` | `node --test tests/temas.test.cjs` |

@@ -1,6 +1,24 @@
 /* ---- Temas ----
    Uma classe por tema no <html> (e no mini-card de Configurações). Só cores; o resto
-   do visual continua em styles.css. Pares de texto/fundo passam 4.5:1 (WCAG AA). */
+   do visual continua em styles.css. Pares de texto/fundo passam 4.5:1 (WCAG AA).
+   O padrão para criar temas e skins está em docs/temas.md e é cobrado por tests/temas.test.cjs. */
+
+/* Derivação: um tema só precisa de --bg, --ink, --acento e --acento-texto; o resto sai daqui e pode ser sobrescrito.
+   Vale também no mini-card de Configurações, senão ele herdaria as cores derivadas do tema em uso.
+   Tem de vir antes dos temas: com a mesma especificidade, o bloco do tema ganha por vir depois. */
+:where(html, .tema-opcao)[class*="tema-"] {
+  --content-bg:var(--bg);
+  --panel:color-mix(in srgb, var(--ink) 6%, var(--bg));
+  --panel-raised:color-mix(in srgb, var(--ink) 10%, var(--bg));
+  --sidebar-bg:color-mix(in srgb, var(--ink) 3%, var(--bg));
+  --campo:color-mix(in srgb, var(--ink) 3%, var(--bg));
+  --muted:color-mix(in srgb, var(--ink) 70%, var(--bg));
+  --line:color-mix(in srgb, var(--ink) 18%, var(--bg));
+  --acento-2:var(--muted);
+  --acento-forte:var(--acento);
+  --acento-escuro:color-mix(in srgb, var(--acento) 88%, var(--bg));
+  --primario-texto:var(--acento-texto);
+}
 
 /* Clássicos (o primeiro é a identidade do Kiro: preto neutro e branco, sem matiz) */
 .tema-kiro {
@@ -162,7 +180,7 @@
 /* Sharp: bordas marcadas. */
 .skin-sharp { --shadow:4px 4px 0 color-mix(in srgb, var(--muted) 35%, transparent); }
 .skin-sharp :where(.card, .note-card, .cfg-grupo, .modal, .ctx-menu, .doc-details, .grafo-painel, .code-area) { border-width:2px; border-color:color-mix(in srgb, var(--muted) 65%, var(--line)); box-shadow:var(--shadow); }
-.skin-sharp :where(.primary, .secondary, .new-note, .search, .field input, .field textarea, .field select, .add-link input, .tema-opcao, .skin-opcao) { border-width:1.5px; }
+.skin-sharp :where(.primary, .secondary, .new-note, .sidebar-topo .busca-rapida, .search, .field input, .field textarea, .field select, .add-link input, .tema-opcao, .skin-opcao) { border-width:1.5px; }
 .skin-sharp .hoje-acoes .capture { border-width:2px; }
 
 /* Suave: cantos redondos e sombras leves. */
@@ -269,13 +287,17 @@ html.tema-liquid-glass :is(.sidebar, .cofre-lateral, .painel-direito, .card, .no
 }
 html.tema-liquid-glass :is(.cofre-lateral, .painel-direito) { box-shadow:var(--vidro-reflexo); }
 html.tema-liquid-glass :is(.secondary, .new-note, .segmentos) { box-shadow:var(--vidro-reflexo); }
-html.tema-liquid-glass :is(.secondary, .new-note):hover { background:var(--vidro-superficie-forte); }
+html.tema-liquid-glass .secondary:hover { background:var(--vidro-superficie-forte); }
+html.tema-liquid-glass .sidebar-topo .busca-rapida { border-color:var(--vidro-borda); }
+/* O vidro forte fica só no item ativo: com ele, "Nova nota" parecia sempre selecionado. */
+html.tema-liquid-glass .new-note:not(:hover) { background:#FFFFFF0A; box-shadow:inset 0 1px 0 #FFFFFF1A; }
+html.tema-liquid-glass :is(.new-note, .sidebar-topo .busca-rapida):hover { background:#FFFFFF14; box-shadow:inset 0 1px 0 #FFFFFF26; }
 html.tema-liquid-glass :is(.modal, .ctx-menu) {
   background:var(--vidro-superficie);
   border-color:#FFFFFF4D; box-shadow:var(--vidro-reflexo), 0 30px 80px #00000059;
   -webkit-backdrop-filter:blur(40px) saturate(190%); backdrop-filter:blur(40px) saturate(190%);
 }
-html.tema-liquid-glass .modal-backdrop { background:#0000002E; -webkit-backdrop-filter:blur(6px); backdrop-filter:blur(6px); }
+html.tema-liquid-glass { --overlay:#0A0A0C99; --overlay-desfoque:blur(22px) saturate(120%); }
 html.tema-liquid-glass :is(.search, .capture, .field input, .field textarea, .field select, .add-link input):focus-within {
   border-color:#FFFFFF80; box-shadow:var(--vidro-reflexo), 0 0 0 3px #FFFFFF33;
 }
@@ -331,8 +353,12 @@ html.tema-liquid-glass #papel-video { opacity:var(--papel-opacidade, 1); }
 /* O controle de transparência do papel de parede só existe no Liquid Glass. */
 html:not(.tema-liquid-glass) .papel-so-vidro { display:none; }
 html.tema-liquid-glass .app-shell:not(.cofre-aberto) > .content { background:transparent; }
-html.tema-liquid-glass .aba.ativa { background:var(--vidro-superficie-forte); box-shadow:var(--vidro-reflexo); }
+/* Sem folha embaixo para encaixar, a aba é uma pílula centrada na barra, alinhada com as setas e o +. */
+html.tema-liquid-glass .abas-barra { align-items:center; padding-top:0; }
+html.tema-liquid-glass .aba { height:28px; border-radius:var(--raio-controle); }
+html.tema-liquid-glass .aba.ativa { background:var(--vidro-superficie-forte); box-shadow:inset 0 1px 0 #FFFFFF59, 0 1px 4px #00000040; }
 html.tema-liquid-glass .aba.ativa::before, html.tema-liquid-glass .aba.ativa::after { display:none; }
+html.tema-liquid-glass .painel-direito-alternar { background:transparent; }
 /* As skins continuam definindo bordas e textura sobre as superfícies de vidro. */
 html.tema-liquid-glass.skin-minimal :where(.card, .note-card, .cfg-grupo, .doc-details, .grafo-painel) { border-color:transparent; box-shadow:none; }
 html.tema-liquid-glass.skin-minimal .hoje-acoes .capture:not(:focus-within) { border-color:transparent; }
@@ -354,6 +380,8 @@ html.tema-liquid-glass:not(.vidro-escuro) {
   --vidro-desfoque:blur(14px) saturate(180%);
   --vidro-desfoque-lente:url(#vidro-lente) blur(10px) saturate(180%);
 }
+/* No navegador sem papel de parede, atrás do vidro só há o gradiente do fundo: não há o que desfocar. */
+html.tema-liquid-glass:not(.vidro-nativo, .com-papel-de-parede) { --vidro-desfoque:none; --vidro-desfoque-lente:none; }
 /* O papel de parede cobre o véu do body: o piso de leitura vai na própria camada dele, até atrás da barra de título. */
 html.tema-liquid-glass.com-papel-de-parede:not(.vidro-escuro, .papel-em-video) body:has(> .app-shell:not(.cofre-aberto))::before {
   background:linear-gradient(#0A0A0C80 0 0), linear-gradient(color-mix(in srgb, var(--content-bg) var(--papel-veu, 60%), transparent) 0 0), var(--papel-de-parede) center / cover no-repeat;
@@ -373,14 +401,36 @@ html.tema-liquid-glass:not(.vidro-escuro) :is(#barra-titulo, .abas-menu, .abas-b
 /* Menus e janelas ficam sobre texto: variante "regular", com base escura e lente. */
 @media not (prefers-reduced-transparency: reduce) {
   html.tema-liquid-glass:not(.vidro-escuro) :is(.modal, .ctx-menu) {
-    background:var(--vidro-realce), #1C1C1E8C; border-color:var(--vidro-borda); box-shadow:var(--vidro-reflexo), 0 30px 80px #00000059;
+    background:var(--vidro-realce), #1C1C1ED9; border-color:var(--vidro-borda); box-shadow:var(--vidro-reflexo), 0 30px 80px #00000059;
     -webkit-backdrop-filter:url(#vidro-lente) blur(24px) saturate(180%); backdrop-filter:url(#vidro-lente) blur(24px) saturate(180%);
   }
+  html.tema-liquid-glass:not(.vidro-escuro) .modal { -webkit-backdrop-filter:none; backdrop-filter:none; }
 }
 @media (prefers-reduced-motion:no-preference) {
   /* Reação ao toque, como .interactive(): o vidro cede e volta com mola. */
   html.tema-liquid-glass:not(.vidro-escuro) :is(.primary, .secondary, .new-note) { transition:transform .32s cubic-bezier(.3, 1.6, .5, 1), background var(--rapido, .15s); }
   html.tema-liquid-glass:not(.vidro-escuro) :is(.primary, .secondary, .new-note):active { transform:scale(.96); }
+}
+/* O tema vale em todas as telas: o que usa as variáveis de painel e campo vira vidro sem regra própria. */
+html.tema-liquid-glass { --panel:#FFFFFF10; --campo:#0000003D; --panel-raised:#2C2C2EF5; }
+/* Avisos e barras que flutuam sobre o conteúdo precisam de base própria para serem lidos. */
+html.tema-liquid-glass :is(#save-status, #conflitos-sincronizacao, #aviso-atalho-global, .fluxo-barra, .grafo-painel, .hoje-opcoes) { background:var(--vidro-realce), #1C1C1EEB; }
+html.tema-liquid-glass :is(.resumo-item, .por-colunas .status-secao, .calendario-mes, .calendario-selecionado, .grafo-lista, .hoje-rodape, .doc-details, .plugin-bloco, .habito-stats) {
+  background:var(--vidro-realce); border-color:var(--vidro-borda); box-shadow:var(--vidro-reflexo);
+}
+html.tema-liquid-glass .por-colunas .status-secao { border-radius:var(--raio-card); }
+html.tema-liquid-glass .por-colunas .status-item { border-color:var(--vidro-borda); background:#FFFFFF0D; }
+/* Colunas e calendário já têm superfície própria: o cartão que os embrulha não pode aparecer atrás deles. */
+html.tema-liquid-glass .tarefas-lista:is(.por-colunas, :has(> .calendario-layout)) { padding:0; background:transparent; border:0; box-shadow:none; -webkit-backdrop-filter:none; backdrop-filter:none; }
+/* Controle segmentado em cápsula: cantos concêntricos e sem as linhas diagonais do reflexo, que viravam uma ponta. */
+html.tema-liquid-glass .segmentos { box-shadow:inset 0 1px 0 #FFFFFF26; }
+html.tema-liquid-glass .segmento input:checked + span { background:#FFFFFF2E; box-shadow:inset 0 1px 0 #FFFFFF59, 0 1px 4px #00000040; }
+html.tema-liquid-glass.skin-padrao :is(.segmentos, .segmento span) { border-radius:999px; }
+/* Caixas de seleção redondas, como no iOS; Sharp e Terminal mantêm os cantos retos. */
+html.tema-liquid-glass:not(.skin-sharp, .skin-terminal) { --raio-caixa:50%; }
+html.tema-liquid-glass select::picker(select) {
+  background:var(--vidro-realce), #1C1C1EF2; border-color:var(--vidro-borda); box-shadow:var(--vidro-reflexo), 0 18px 44px #00000066;
+  -webkit-backdrop-filter:blur(24px) saturate(180%); backdrop-filter:blur(24px) saturate(180%);
 }
 .cfg-vidro-controle { display:flex; justify-content:space-between; gap:16px; width:100%; }
 .cfg-vidro-controle output { color:var(--accent-text); font-variant-numeric:tabular-nums; }

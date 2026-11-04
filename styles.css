@@ -105,6 +105,7 @@ body.saving { cursor:progress; }
   --placeholder:color-mix(in srgb, var(--muted) 80%, transparent);
   --border-strong:color-mix(in srgb, var(--line) 72%, var(--ink));
   --overlay:rgba(0,0,0,.6);
+  --overlay-desfoque:none;
   --scrollbar:color-mix(in srgb, var(--ink) 16%, transparent);
   --scrollbar-hover:color-mix(in srgb, var(--ink) 28%, transparent);
   --switch-knob:#FFFFFF;
@@ -170,7 +171,8 @@ body { background:var(--content-bg); }
 .search::placeholder,.field input::placeholder,.field textarea::placeholder,.add-link input::placeholder { color:var(--placeholder); }
 .search:focus,.field input:focus,.field textarea:focus,.field select:focus,.add-link input:focus { border-color:var(--focus-ring); box-shadow:0 0 0 3px var(--accent-soft); outline:none; }
 .field label { color:var(--muted); }.note-card p { color:var(--muted); }.note-meta, .task-info, .small-muted { color:var(--muted); }
-.modal-backdrop { background:var(--overlay); }.modal { background:var(--panel-raised); border:1px solid var(--line); box-shadow:var(--shadow-md); }
+/* Quem desfoca o que está atrás da janela é a camada de fundo: um backdrop-filter dentro dela não enxerga além dela. */
+.modal-backdrop { background:var(--overlay); -webkit-backdrop-filter:var(--overlay-desfoque); backdrop-filter:var(--overlay-desfoque); }.modal { background:var(--panel-raised); border:1px solid var(--line); box-shadow:var(--shadow-md); }
 .link-row { border-color:var(--line); }
 
 @media (min-width:781px) {
@@ -694,6 +696,8 @@ body, button, input, textarea, select { font-family:var(--fonte-interface); }
 .caixa-entrada { margin-bottom:0; }
 /* Card não estica para acompanhar a coluna vizinha: sem vazio embaixo. */
 .stack { align-content:start; }
+/* Sem isto a coluna implícita cresce até a palavra mais longa do cartão e ele invade a coluna vizinha. */
+.stack, .hoje-faixas { grid-template-columns:minmax(0, 1fr); }
 .today-grid { align-items:start; }
 .card-head { min-height:32px; align-items:center; margin-bottom:var(--esp-3); gap:var(--esp-2); }
 .card-head h2 { font-size:var(--fs-destaque); }
@@ -713,7 +717,7 @@ body, button, input, textarea, select { font-family:var(--fonte-interface); }
 .card-head > h2 + .small-muted + .icon-button, .card-head > .small-muted + .icon-button { margin-left:0; }
 
 /* Área de clique maior sem mudar o desenho. */
-.check { position:relative; }
+.check { position:relative; border-radius:var(--raio-caixa, 6px); }
 .check::before { content:""; position:absolute; inset:-10px; } /* ::after desenha o ✓ */
 .cofre-lateral .tree-row { min-height:28px; padding-top:4px; padding-bottom:4px; }
 
@@ -820,7 +824,7 @@ body, button, input, textarea, select { font-family:var(--fonte-interface); }
 .segmentos { display:flex; gap:4px; padding:3px; border:1px solid var(--line); border-radius:var(--raio-controle); background:var(--panel); }
 .segmento { flex:1; position:relative; cursor:pointer; }
 .segmento input { position:absolute; opacity:0; inset:0; margin:0; cursor:pointer; }
-.segmento span { display:block; text-align:center; padding:7px 8px; border-radius:6px; font-size:var(--fs-secundario); font-weight:600; color:var(--muted); transition:background var(--rapido) var(--curva), color var(--rapido) var(--curva); }
+.segmento span { display:block; text-align:center; padding:7px 8px; border-radius:max(0px, calc(var(--raio-controle) - 4px)); font-size:var(--fs-secundario); font-weight:600; color:var(--muted); transition:background var(--rapido) var(--curva), color var(--rapido) var(--curva); }
 .segmento input:checked + span { background:var(--accent-soft); color:var(--ink); box-shadow:inset 0 0 0 1px color-mix(in srgb, var(--acento) 40%, transparent); }
 .segmento input:focus-visible + span { outline:2px solid var(--focus-ring); outline-offset:1px; }
 .cfg-idioma { flex:0 0 auto; min-width:220px; }
@@ -862,7 +866,9 @@ body, button, input, textarea, select { font-family:var(--fonte-interface); }
 .caixa-acoes { display:flex; gap:2px; margin-left:auto; flex:0 0 auto; }
 
 /* Tarefas: estado clicável, prioridade e ações alinhados sem sobrepor o botão de estado. */
-.task-item { position:relative; }
+.task-item { position:relative; flex-wrap:wrap; }
+/* Em cartão estreito o estado desce para a linha de baixo, em vez de espremer o título. */
+.task-item > .task-title { flex:1 1 60%; min-width:0; overflow-wrap:anywhere; }
 .task-status { display:inline-flex; align-items:center; gap:6px; margin-left:auto; padding:3px 9px; border-radius:var(--raio-pilula); border:1px solid var(--line); background:var(--surface-subtle); color:var(--muted); font-size:var(--fs-legenda); font-weight:500; line-height:1.2; white-space:nowrap; cursor:pointer; flex:0 0 auto; transition:background-color var(--rapido) var(--curva), border-color var(--rapido) var(--curva), color var(--rapido) var(--curva); }
 .task-status::after { content:"▾"; font-size:10px; opacity:.65; margin-left:1px; }
 .task-status:hover { background:var(--surface-hover); border-color:var(--border-strong); color:var(--ink); }
@@ -873,7 +879,7 @@ body, button, input, textarea, select { font-family:var(--fonte-interface); }
 .task-item .priority { margin-left:0; flex:0 0 auto; }
 .task-item .task-actions { flex:0 0 auto; opacity:0; pointer-events:none; transition:opacity var(--rapido) var(--curva); }
 .task-item:hover .task-actions, .task-item:focus-within .task-actions { opacity:1; pointer-events:auto; }
-.segmento > span { display:inline-flex; align-items:center; justify-content:center; gap:6px; }
+.segmento > span { display:flex; align-items:center; justify-content:center; gap:6px; }
 
 /* Semana fixa dos hábitos: dia que ainda não chegou é só a letra. */
 .habito-dia.futuro { display:inline-grid; place-items:center; border-color:transparent; opacity:.35; cursor:default; }
@@ -1024,17 +1030,24 @@ body, button, input, textarea, select { font-family:var(--fonte-interface); }
 .app-shell.pagina-plugin-aberta > .content { padding:0; }
 
 /* ---- Barra lateral: topo sem marca e modo compacto (só ícones) ---- */
-.sidebar-topo { display:flex; align-items:center; gap:4px; margin:-6px 0 4px; }
+.sidebar-topo { display:flex; align-items:center; gap:4px; margin:-6px 0 8px; }
 .sidebar-topo .busca-rapida { flex:1; min-width:0; }
 .sidebar-topo .lateral-alternar { flex:0 0 40px; min-width:40px; min-height:40px; padding:0; }
-.sidebar-topo .busca-rapida { padding:0 10px; }
+.sidebar-topo .busca-rapida { padding:0 9px; gap:8px; font-size:var(--fs-interface); }
 /* ---- Topo da barra lateral: busca, recolher e ações rápidas ---- */
-.busca-rapida { display:flex; align-items:center; gap:9px; width:100%; min-height:40px; padding:0 10px; border:0; border-radius:var(--raio-controle); background:transparent; color:var(--muted); font-size:13px; cursor:pointer; transition:color var(--rapido, .15s) ease, background-color var(--rapido, .15s) ease; }
+.busca-rapida { display:flex; align-items:center; gap:9px; width:100%; min-height:40px; padding:0 10px; border:0; border-radius:var(--raio-controle); background:transparent; color:var(--muted); font-size:13px; cursor:pointer; transition:color var(--rapido, .15s) ease, background-color var(--rapido, .15s) ease, border-color var(--rapido, .15s) ease, transform var(--lento) cubic-bezier(.3, 1.6, .5, 1); }
 .busca-rapida:hover { background:var(--surface-hover); color:var(--ink); }
+/* "Ir para nota" parece um campo de busca: fundo de campo e contorno, para ler como clicável e diferente do "Nova nota". */
+.sidebar-topo .busca-rapida { border:1px solid var(--line); background:var(--campo); }
+.sidebar-topo .busca-rapida:hover { background:var(--surface-hover); border-color:var(--border-strong); }
+/* O botão cede ao clicar e a janela do "Ir para nota" abre com um pequeno impulso. */
+@keyframes irParaAbre { from { opacity:0; transform:translateY(-10px) scale(.96); } to { opacity:1; transform:none; } }
+.modal:has(.ir-busca) { animation:irParaAbre var(--lento) cubic-bezier(.2, 1.25, .35, 1) both; }
+@media (prefers-reduced-motion:no-preference) { .busca-rapida:active { transform:scale(.97); } }
 .busca-rapida:focus-visible, .nota-diaria:focus-visible { outline:2px solid var(--focus-ring); outline-offset:2px; }
 .busca-rapida span.rotulo { flex:1; min-width:0; text-align:left; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-.acoes-rapidas { display:flex; gap:4px; margin:0 0 20px; }
-.acoes-rapidas .new-note { flex:1; width:auto; min-width:0; min-height:40px; justify-content:flex-start; padding:0 10px; white-space:nowrap; }
+.acoes-rapidas { display:flex; gap:4px; margin:0 0 16px; }
+.acoes-rapidas .new-note { flex:1; width:auto; min-width:0; min-height:40px; justify-content:flex-start; padding:0 9px; gap:8px; white-space:nowrap; }
 .acoes-rapidas :is(.nota-diaria, .acao-icone) { display:inline-flex; flex:0 0 40px; width:40px; min-height:40px; align-items:center; justify-content:center; padding:0; border:0; border-radius:var(--raio-controle); background:transparent; color:var(--muted); cursor:pointer; transition:color var(--rapido, .15s) ease, background-color var(--rapido, .15s) ease; }
 .acoes-rapidas :is(.nota-diaria, .acao-icone):hover { background:var(--surface-hover); color:var(--ink); }
 /* Rodapé da barra lateral: Lixeira e Configurações lado a lado, só com ícone. */
@@ -1117,7 +1130,8 @@ html.janela-propria #barra-titulo { position:fixed; top:0; left:0; right:0; z-in
 .acoes-rapidas + nav { margin-top:0; }
 .lateral-alternar { color:var(--muted); }
 .lateral-alternar:hover { color:var(--ink); }
-.lateral-alternar .icone { width:17px; height:17px; transition:transform var(--medio) var(--curva); }
+.lateral-alternar .icone { width:17px; height:17px; opacity:.7; transition:transform var(--medio) var(--curva), opacity var(--rapido) var(--curva); }
+.lateral-alternar:hover .icone { opacity:1; }
 @media (min-width:781px) {
   .sidebar { transition:flex-basis .2s ease, width .2s ease, padding .2s ease; }
   .app-shell.lateral-compacta > .sidebar { flex-basis:64px; width:64px; padding-left:8px; padding-right:8px; }
@@ -1663,6 +1677,7 @@ html:not(.papel-em-video) .papel-so-video { display:none; }
 .doc-bar-acoes { display:inline-flex; align-items:center; flex-wrap:wrap; gap:6px; }
 .doc-bar-acoes .quiet-button { width:auto; min-height:var(--alt-p); padding:0 10px; border:1px solid var(--line); border-radius:var(--raio-controle); background:transparent; color:var(--muted); font-size:var(--fs-legenda); font-weight:500; white-space:nowrap; }
 .doc-bar-acoes .quiet-button:hover { color:var(--ink); background:var(--surface-hover); border-color:var(--border-strong); }
+.doc-bar-acoes .quiet-button[hidden] { display:none; }
 .doc-favorito.ativo { color:var(--warning, #ffd166); }
 .cofre-favoritos { margin:0 0 var(--esp-2); padding:0 0 var(--esp-2); border-bottom:1px solid var(--line); }
 .cofre-favoritos-titulo { display:flex; align-items:center; justify-content:space-between; padding:4px 10px; font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); }
@@ -1719,4 +1734,24 @@ html:not(.papel-em-video) .papel-so-video { display:none; }
   #nota-impressao pre { white-space:pre-wrap; overflow-wrap:anywhere; }
   #nota-impressao button, #nota-impressao .md-alca, #nota-impressao .md-pdf-acoes, #nota-impressao .md-pdf-paginas { display:none !important; }
   #nota-impressao a { text-decoration:underline; }
+}
+
+/* Caixas e listas de seleção desenhadas pelo tema, em vez das do sistema. :where() mantém os ajustes locais valendo. */
+:where(input[type="checkbox"]:not(.sr-only)) {
+  appearance:none; display:inline-grid; place-content:center; flex:0 0 auto; width:16px; height:16px; margin:0;
+  border:1.5px solid var(--border-strong); border-radius:var(--raio-caixa, 5px); background:var(--campo);
+  color:var(--primario-texto); vertical-align:middle; cursor:pointer;
+}
+:where(input[type="checkbox"]:not(.sr-only):checked) { border-color:var(--accent); background:var(--accent); }
+:where(input[type="checkbox"]:not(.sr-only):checked)::after { content:"✓"; font-size:11px; line-height:1; }
+@supports (appearance:base-select) {
+  :where(select) { appearance:base-select; display:inline-flex; align-items:center; gap:6px; padding:0 8px; border:1px solid var(--line); border-radius:var(--raio-controle); background:var(--campo); color:var(--ink); }
+  select::picker(select) {
+    appearance:base-select; margin-block:4px; padding:4px; max-height:min(320px, 60vh); overflow-y:auto;
+    border:1px solid var(--line); border-radius:var(--raio-card); background:var(--panel-raised); color:var(--ink); box-shadow:var(--shadow-md);
+  }
+  select option { padding:7px 10px; border-radius:var(--raio-controle); cursor:pointer; }
+  select option:hover, select option:focus-visible { background:var(--surface-hover); outline:none; }
+  select option:checked { background:var(--surface-active); font-weight:600; }
+  select::picker-icon { color:var(--muted); }
 }

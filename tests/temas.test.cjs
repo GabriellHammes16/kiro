@@ -6,8 +6,10 @@ const { TEMAS, SKINS, APARENCIA_PADRAO, contraste, aparenciaValida, classesDaApa
 
 const raiz = path.join(__dirname, '..');
 const ler = nome => fs.readFileSync(path.join(raiz, nome), 'utf8');
-const VARIAVEIS = ['bg', 'panel', 'panel-raised', 'sidebar-bg', 'content-bg', 'campo', 'ink', 'muted', 'line',
-  'acento', 'acento-2', 'acento-forte', 'acento-escuro', 'acento-texto', 'primario-texto'];
+// O padrão de docs/temas.md: estas são obrigatórias; as outras saem do bloco de derivação de temas.css.
+const OBRIGATORIAS = ['bg', 'ink', 'acento', 'acento-texto'];
+const VARIAVEIS = [...OBRIGATORIAS, 'panel', 'panel-raised', 'sidebar-bg', 'content-bg', 'campo', 'muted', 'line',
+  'acento-2', 'acento-forte', 'acento-escuro', 'primario-texto'];
 const PADRAO = { tema: 'kiro', skin: 'padrao' };
 
 // Lê `--nome:#hex` de um trecho de CSS.
@@ -16,6 +18,29 @@ const variaveis = trecho => Object.fromEntries([...trecho.matchAll(/--([\w-]+)\s
 function blocoDoTema(css, id) {
   const re = new RegExp(`([^{}]*\\.tema-${id}(?![\\w-])[^{}]*)\\{([^}]*)\\}`, 'g');
   return Object.assign({}, ...[...css.matchAll(re)].map(m => variaveis(m[2])));
+}
+
+// Calcula as derivadas como o navegador: var(--x) ou color-mix(in srgb, var(--a) N%, var(--b)).
+const canais = hex => [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16));
+const paraHex = c => `#${c.map(n => Math.round(n).toString(16).padStart(2, '0')).join('')}`.toUpperCase();
+function derivacao(css) {
+  const bloco = css.match(/:where\(html, \.tema-opcao\)\[class\*="tema-"\]\s*\{([^}]*)\}/);
+  assert.ok(bloco, 'bloco de derivação ausente em temas.css');
+  return Object.fromEntries([...bloco[1].matchAll(/--([\w-]+)\s*:\s*([^;]+);/g)].map(m => [m[1], m[2].trim()]));
+}
+function completar(proprias, regras) {
+  const t = { ...proprias };
+  const valor = expressao => {
+    const direto = expressao.match(/^var\(--([\w-]+)\)$/);
+    if (direto) return obter(direto[1]);
+    const mistura = expressao.match(/^color-mix\(in srgb, var\(--([\w-]+)\) (\d+)%, var\(--([\w-]+)\)\)$/);
+    assert.ok(mistura, `derivação não reconhecida: ${expressao}`);
+    const [a, p, b] = [canais(obter(mistura[1])), Number(mistura[2]) / 100, canais(obter(mistura[3]))];
+    return paraHex(a.map((n, i) => n * p + b[i] * (1 - p)));
+  };
+  const obter = nome => t[nome] ?? (t[nome] = valor(regras[nome]));
+  for (const nome of Object.keys(regras)) obter(nome);
+  return t;
 }
 
 test('aparência padrão: vazio, lixo ou nada viram Escuro Clássico + Padrão', () => {
@@ -102,12 +127,15 @@ test('migração: salvo antigo sem tema vira personalizado só se tinha cores pr
   assert.equal(aparenciaValida({ sidebar: '#223344' }).skin, 'padrao');
 });
 
-test('temas.css define todas as variáveis para cada tema e o seletor de cada skin', () => {
+test('temas.css define as variáveis obrigatórias de cada tema e o seletor de cada skin', () => {
   const css = ler('temas.css');
+  const regras = derivacao(css);
+  assert.deepEqual(VARIAVEIS.filter(v => !OBRIGATORIAS.includes(v) && !regras[v]), [], 'variáveis opcionais sem derivação');
+  assert.ok(css.indexOf(':where(html, .tema-opcao)') < css.indexOf('.tema-kiro {'), 'a derivação tem de vir antes dos temas para eles poderem sobrescrevê-la');
   for (const id of [...TEMAS.map(([id]) => id), 'personalizado']) {
     const bloco = blocoDoTema(css, id);
-    const faltando = VARIAVEIS.filter(v => !bloco[v]);
-    assert.deepEqual(faltando, [], `tema ${id}: variáveis faltando em temas.css`);
+    const faltando = OBRIGATORIAS.filter(v => !bloco[v]);
+    assert.deepEqual(faltando, [], `tema ${id}: variáveis obrigatórias faltando em temas.css`);
   }
   for (const [id] of SKINS) assert.match(css, new RegExp(`\\.skin-${id}(?![\\w-])`), `skin ${id}: seletor .skin-${id} ausente em temas.css`);
 });
@@ -142,8 +170,9 @@ test('contraste mínimo de 4.5:1 em todos os temas', () => {
     ['acento-texto', 'acento'],
   ];
   const falhas = [];
+  const regras = derivacao(css);
   for (const [id] of TEMAS) {
-    const t = blocoDoTema(css, id);
+    const t = completar(blocoDoTema(css, id), regras);
     for (const [frente, fundo] of pares) {
       if (!t[frente] || !t[fundo]) continue; // variável faltando já falha no teste acima
       const valor = contraste(t[frente], t[fundo]);
@@ -166,7 +195,7 @@ const repetidos = lista => [...lista.reduce((m, x) => m.set(x, (m.get(x) || 0) +
 const colisoes = (itens, valor, rotulo) => [...Map.groupBy(itens, valor).values()].filter(g => g.length > 1).map(g => g.map(rotulo).join(' = '));
 const normalizar = nome => nome.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '');
 // Blocos de variáveis de tema: seletor único `.tema-<id>` no começo da linha, com --content-bg dentro.
-const blocosDeTema = css => [...css.matchAll(/^\.tema-([\w-]+)\s*\{([^}]*)\}/gm)].filter(m => /--content-bg\s*:/.test(m[2])).map(m => ({ id: m[1], vars: variaveis(m[2]) }));
+const blocosDeTema = css => [...css.matchAll(/^\.tema-([\w-]+)\s*\{([^}]*)\}/gm)].filter(m => /--bg\s*:/.test(m[2])).map(m => ({ id: m[1], vars: completar(variaveis(m[2]), derivacao(css)) }));
 const IDS_COM_PERSONALIZADO = () => [...TEMAS.map(([id]) => id), 'personalizado'];
 
 test('sem temas nem skins duplicados em domain.js (ids e nomes, ignorando caixa e acento)', () => {
@@ -223,4 +252,58 @@ test('interface nova acompanha o tema: .plugin-* sem cor fixa e contador do card
   // --acento puro sobre --accent-soft fica abaixo de 4.5:1 em kiro, evangelion e demon-blood.
   const contadores = regras.filter(r => /\.card-head\s*\.small-muted/.test(r.seletor) && /(^|;)\s*color\s*:\s*var\(--acento\)/.test(r.corpo)).map(r => r.seletor);
   assert.deepEqual(contadores, [], 'contador do cabeçalho do card com color:var(--acento) (ilegível em alguns temas)');
+});
+
+test('padrão de tema: as quatro variáveis obrigatórias bastam, no escuro e no claro', () => {
+  const regras = derivacao(ler('temas.css'));
+  const exemplos = {
+    escuro: { bg: '#101820', ink: '#F2F4F7', acento: '#7DD3C0', 'acento-texto': '#06201A' },
+    claro: { bg: '#FBF7F0', ink: '#22262B', acento: '#8A3D1F', 'acento-texto': '#FFFFFF' },
+  };
+  const pares = [['ink', 'panel'], ['ink', 'panel-raised'], ['ink', 'sidebar-bg'], ['ink', 'campo'], ['ink', 'content-bg'],
+    ['muted', 'bg'], ['muted', 'panel'], ['muted', 'panel-raised'], ['acento', 'panel'], ['primario-texto', 'acento-forte'], ['primario-texto', 'acento-escuro']];
+  const falhas = [];
+  for (const [nome, proprias] of Object.entries(exemplos)) {
+    const t = completar(proprias, regras);
+    assert.deepEqual(VARIAVEIS.filter(v => !t[v]), [], `tema ${nome}: variável sem valor`);
+    for (const [frente, fundo] of pares) if (contraste(t[frente], t[fundo]) < 4.5) falhas.push(`${nome}: --${frente} sobre --${fundo} = ${contraste(t[frente], t[fundo]).toFixed(2)}`);
+  }
+  assert.deepEqual(falhas, []);
+});
+
+test('padrão de tema: fundo claro declara color-scheme:light', () => {
+  const css = ler('temas.css');
+  const regras = derivacao(css);
+  const claros = [...css.matchAll(/([^{}]*)\{[^}]*color-scheme\s*:\s*light[^}]*\}/g)].map(m => m[1]).join(' ');
+  const falhas = TEMAS.map(([id]) => id).filter(id => {
+    const { bg } = completar(blocoDoTema(css, id), regras);
+    const fundoClaro = contraste(bg, '#000000') > contraste(bg, '#FFFFFF');
+    return fundoClaro !== new RegExp(`\\.tema-${id}(?![\\w-])`).test(claros);
+  });
+  assert.deepEqual(falhas, [], 'tema cujo color-scheme não combina com o fundo');
+});
+
+test('padrão de tema: só o Liquid Glass tem regras próprias por componente', () => {
+  const ids = [...TEMAS.map(([id]) => id), 'personalizado'].filter(id => id !== 'liquid-glass');
+  const fora = [];
+  for (const arquivo of ['styles.css', 'temas.css']) for (const m of ler(arquivo).matchAll(/([^{}]*)\{/g)) {
+    const seletor = m[1].trim();
+    for (const id of ids) if (new RegExp(`\\.tema-${id}(?![\\w-])[^,)]*[ >+~]`).test(seletor) && !/:is\(\.tema-/.test(seletor)) fora.push(`${arquivo}: ${seletor}`);
+  }
+  assert.deepEqual(fora, [], 'um tema só escolhe cores: use uma variável em vez de regra por componente');
+});
+
+test('padrão de skin: skins não declaram cores do tema', () => {
+  const css = ler('temas.css');
+  const fora = [];
+  for (const m of css.matchAll(/([^{}]*)\{([^}]*)\}/g)) {
+    if (!/\.skin-/.test(m[1]) || /\.tema-/.test(m[1])) continue;
+    for (const v of VARIAVEIS) if (new RegExp(`(^|[;\\s])--${v}\\s*:`).test(m[2])) fora.push(`${m[1].trim()}: --${v}`);
+  }
+  assert.deepEqual(fora, [], 'skin escolhe forma, não cor');
+});
+
+test('docs/temas.md cobre todas as variáveis de cor', () => {
+  const doc = ler('docs/temas.md');
+  assert.deepEqual(VARIAVEIS.filter(v => !doc.includes(`\`--${v}\``)), [], 'variáveis sem explicação em docs/temas.md');
 });

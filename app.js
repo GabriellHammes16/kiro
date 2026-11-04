@@ -554,6 +554,8 @@ async function moverStatusDaTarefa(id, destino) {
   editorDaNota?.editor.redesenhar?.();
   if (salvo) status(`${tarefa.title} · ${t(ROTULOS_DE_STATUS[destino])}`);
 }
+// A lista de sugestões do navegador não segue o tema e cobre a nota: vale para qualquer campo, inclusive os futuros.
+document.addEventListener('focusin', e => { if (e.target.matches('input:not([autocomplete])')) e.target.autocomplete = 'off'; });
 document.addEventListener('click', e => {
   const btnStatus = e.target.closest?.('[data-status-tarefa]');
   if (btnStatus) {
@@ -663,6 +665,11 @@ const TRACOS = {
   grafo: '<circle cx="6" cy="7" r="2.3"/><circle cx="18" cy="8" r="2.3"/><circle cx="11" cy="17.6" r="2.3"/><path d="M8.2 7.6 15.8 8.4M7.2 9.1l2.7 6.4M16.5 10.1l-4 5.5"/>',
   nota: '<path d="M12 3.6 20.4 12 12 20.4 3.6 12z"/>',
   mais: '<path d="M12 5.5v13M5.5 12h13"/>',
+  'mais-opcoes': '<path d="M5.5 12h.01M12 12h.01M18.5 12h.01" stroke-width="2.6"/>',
+  imprimir: '<path d="M7.5 9V4.5h9V9"/><path d="M7.5 17H6a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-1.5"/><path d="M7.5 14h9v5.5h-9z"/>',
+  anexo: '<path d="m19 11.5-7.1 7.1a4.6 4.6 0 0 1-6.5-6.5l7.4-7.4a3 3 0 0 1 4.3 4.3l-7.4 7.4a1.5 1.5 0 0 1-2.1-2.1l6.7-6.7"/>',
+  microfone: '<rect x="9" y="4" width="6" height="10.5" rx="3"/><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v2.5"/>',
+  historico: '<path d="M4.5 12a7.5 7.5 0 1 0 2.4-5.5L4.5 8.8"/><path d="M4.5 4.5v4.3h4.3M12 8v4.3l2.8 1.7"/>',
   abaixo: '<path d="M6.5 9.5 12 15l5.5-5.5"/>',
   marcado: '<path d="M5.5 12.5 10 17l8.5-9.5"/>',
   calendario: '<rect x="3.5" y="5.5" width="17" height="14.5" rx="2"/><path d="M8 3.5v4M16 3.5v4M3.5 10.5h17"/>',
@@ -2379,9 +2386,10 @@ function renderEditor(){
   const opcoes=`<option value="">${t('Raiz do cofre')}</option>`+state.folders.slice().sort(byTitle).map(f=>`<option value="${f.id}" ${f.id===nota.folderId?'selected':''}>${escapeHtml(f.path||f.title)}</option>`).join('');
   const modelos=opcoesDeModelos();
   const ehFav = Boolean(nota.id && Kiro.ehFavorito(favoritos, 'nota', nota.id));
-  const botaoFav = `<button type="button" class="quiet-button" id="doc-audio">${t('Anexar áudio')}</button><button type="button" class="quiet-button" id="doc-gravar">${gravacaoAudio ? t('Parar gravação') : t('Gravar áudio')}</button>`+(nota.id ? `<button type="button" class="quiet-button" id="doc-historico">${t('Histórico')}</button><button type="button" class="icon-button doc-favorito${ehFav ? ' ativo' : ''}" id="doc-favorito" title="${ehFav ? t('Remover dos favoritos') : t('Favoritar')}" aria-label="${ehFav ? t('Remover dos favoritos') : t('Favoritar')}">${icone(ehFav ? 'estrela-cheia' : 'estrela')}</button>` : '');
+  // O "Parar gravação" só aparece gravando; as demais ações ficam no menu "Mais opções" e no botão direito.
+  const botaoFav = `<button type="button" class="quiet-button" id="doc-gravar"${gravacaoAudio ? '' : ' hidden'}>${t('Parar gravação')}</button>`+(nota.id ? `<button type="button" class="icon-button doc-favorito${ehFav ? ' ativo' : ''}" id="doc-favorito" title="${ehFav ? t('Remover dos favoritos') : t('Favoritar')}" aria-label="${ehFav ? t('Remover dos favoritos') : t('Favoritar')}">${icone(ehFav ? 'estrela-cheia' : 'estrela')}</button>` : '');
   const barraBusca = `<div class="barra-busca-nota" id="barra-busca-nota"${buscaNaNota.aberta ? '' : ' hidden'}><div class="busca-nota-linha"><input type="search" id="busca-nota-termo" value="${escapeHtml(buscaNaNota.termo)}" placeholder="${t('Localizar na nota…')}" aria-label="${t('Localizar na nota')}" autocomplete="off" /><button type="button" class="chip busca-nota-aa" id="busca-nota-aa" aria-pressed="${buscaNaNota.maiusculas}" title="${t('Diferenciar maiúsculas e minúsculas')}">Aa</button><span class="small-muted busca-nota-contagem" id="busca-nota-contagem">0/0</span><button type="button" class="icon-button" id="busca-nota-ant" title="${t('Anterior')}" aria-label="${t('Anterior')}">↑</button><button type="button" class="icon-button" id="busca-nota-prox" title="${t('Próxima')}" aria-label="${t('Próxima')}">↓</button><button type="button" class="icon-button" id="busca-nota-fechar" title="${t('Fechar')}" aria-label="${t('Fechar')}">${icone('fechar')}</button></div><div class="busca-nota-linha" id="busca-nota-linha-sub"${buscaNaNota.substituir ? '' : ' hidden'}><input type="text" id="busca-nota-sub" value="${escapeHtml(buscaNaNota.substituto)}" placeholder="${t('Substituir por…')}" aria-label="${t('Substituir por')}" autocomplete="off" /><button type="button" class="secondary cfg-pequeno" id="busca-nota-trocar">${t('Substituir')}</button><button type="button" class="secondary cfg-pequeno" id="busca-nota-todas">${t('Substituir tudo')}</button></div></div>`;
-  return `<div class="foco-controles"><button type="button" class="secondary cfg-pequeno" id="doc-foco">${modoFoco ? t('Sair do modo foco') : t('Modo foco')}</button><span id="foco-detalhes" ${modoFoco ? '' : 'hidden'}><label>${t('Meta de palavras')} <input type="number" min="0" id="foco-meta" value="${metaFoco || ''}" /></label> <span id="foco-contagem" role="status"></span></span></div><header class="doc-bar"><div class="crumbs"><span>${pasta?escapeHtml(pasta.path||pasta.title):t('Raiz do cofre')}</span><span>/</span><span class="crumb-atual">${escapeHtml(nota.title||t('Sem título'))}</span></div><div class="doc-bar-acoes"><button type="button" class="quiet-button" id="doc-imprimir">${t('Imprimir nota')}</button><button type="button" class="quiet-button" id="doc-pdf">${t('Exportar nota para PDF')}</button>${botaoFav}<span class="doc-ponto" id="doc-state" title="${t('Alterações não salvas')}"></span></div></header>${barraBusca}
+  return `<div class="foco-controles"><button type="button" class="secondary cfg-pequeno" id="doc-foco">${modoFoco ? t('Sair do modo foco') : t('Modo foco')}</button><span id="foco-detalhes" ${modoFoco ? '' : 'hidden'}><label>${t('Meta de palavras')} <input type="number" min="0" id="foco-meta" value="${metaFoco || ''}" /></label> <span id="foco-contagem" role="status"></span></span></div><header class="doc-bar"><div class="crumbs"><span>${pasta?escapeHtml(pasta.path||pasta.title):t('Raiz do cofre')}</span><span>/</span><span class="crumb-atual">${escapeHtml(nota.title||t('Sem título'))}</span></div><div class="doc-bar-acoes">${botaoFav}<button type="button" class="icon-button" id="doc-mais" aria-haspopup="menu" title="${t('Mais opções da nota')}" aria-label="${t('Mais opções da nota')}">${icone('mais-opcoes')}</button><span class="doc-ponto" id="doc-state" title="${t('Alterações não salvas')}"></span></div></header>${barraBusca}
 <input class="doc-title" id="doc-title" value="${escapeHtml(nota.title)}" placeholder="${t('Sem título')}" aria-label="${t('Título da nota')}" />
 <section class="doc-details" id="doc-details" hidden><div class="two-cols"><div class="field"><label for="doc-folder">${t('Pasta')}</label><select id="doc-folder">${opcoes}</select></div><div class="field"><label for="doc-tags">${t('Tags (separadas por vírgulas)')}</label><input id="doc-tags" value="${escapeHtml(nota.tags.join(', '))}" placeholder="${t('ideias, estudos')}" /></div></div><div class="two-cols"><div class="field"><label for="doc-template">${t('Modelo')}</label><select id="doc-template"><option value="">${t('Escolher modelo…')}</option>${modelos}</select></div><div class="field"><label for="doc-link">${t('Anexar link')}</label><div class="add-link"><input id="doc-link" placeholder="${t('Cole um link de aula ou vídeo')}" /><button type="button" class="secondary" id="doc-link-add">${t('Anexar')}</button></div></div></div><div class="links-list" id="doc-links"></div></section>
 <div class="doc-corpo" id="doc-corpo"></div>${renderMencoes(nota)}`;
@@ -2529,11 +2537,13 @@ function bindEditor(){
   const montado=montagemDoEditor=montarEditorDaNota(corpo);
   document.querySelectorAll('[data-editor]').forEach(b=>b.onclick=()=>acaoEditor(b.dataset.editor));
   $('#doc-favorito')?.addEventListener('click', () => { if (editing?.id) alternarItemFavorito({ tipo: 'nota', alvo: editing.id, titulo: editing.title }); });
-  $('#doc-historico')?.addEventListener('click', () => mostrarHistoricoNota());
-  $('#doc-audio')?.addEventListener('click', () => escolherAudio());
   $('#doc-gravar')?.addEventListener('click', () => gravarAudio());
-  $('#doc-imprimir')?.addEventListener('click', () => imprimirNota());
-  $('#doc-pdf')?.addEventListener('click', () => imprimirNota(true));
+  $('#doc-mais')?.addEventListener('click', e => {
+    const botao = e.currentTarget;
+    if (menuAberto?._origem === botao) return void fecharMenuContexto();
+    const r = botao.getBoundingClientRect();
+    abrirMenuContexto({ preventDefault() {}, clientX: r.left, clientY: r.bottom + 4 }, document.body, acoesDaNota(), { compacto: true, origem: botao, direita: r.right });
+  });
   bindBuscaNaNota();
   desenharLinksDoc();estadoDoc();
   // Nota nova começa pelo título; nota existente sem texto já abre o campo para escrever.
@@ -3535,12 +3545,12 @@ async function gravarAudio(){
     if(sessao.cancelada||!contextoAudioValido(contexto)){stream.getTracks().forEach(t=>t.stop());gravacaoAudio=null;return;}
     if(!MediaRecorder.isTypeSupported('audio/webm'))throw new Error(t('Gravação de áudio não suportada.'));
     const recorder=new MediaRecorder(stream,{mimeType:'audio/webm'}), partes=[];let tamanho=0, falhou=false;
-    const limpar=()=>{clearTimeout(timer);stream.getTracks().forEach(t=>t.stop());if(gravacaoAudio===sessao)gravacaoAudio=null;const botao=$('#doc-gravar');if(botao)botao.textContent=t('Gravar áudio');};
+    const limpar=()=>{clearTimeout(timer);stream.getTracks().forEach(t=>t.stop());if(gravacaoAudio===sessao)gravacaoAudio=null;const botao=$('#doc-gravar');if(botao)botao.hidden=true;};
     sessao.parar=()=>{if(recorder.state!=='inactive')recorder.stop();};
     recorder.ondataavailable=e=>{tamanho+=e.data.size;if(tamanho>LIMITE_DE_AUDIO){falhou=true;sessao.parar();}else if(e.data.size)partes.push(e.data);};
     recorder.onerror=()=>{falhou=true;sessao.parar();limpar();status(t('Não foi possível gravar áudio.'),true);};
     recorder.onstop=()=>{limpar();if(!falhou&&partes.length&&contextoAudioValido(contexto))inserirAudio(new File(partes,'gravacao.webm',{type:'audio/webm'}),contexto);else if(falhou)status(t('Não foi possível gravar áudio.'),true);};
-    const timer=setTimeout(()=>sessao.parar(),10*60*1000);recorder.start(1000);$('#doc-gravar').textContent=t('Parar gravação');
+    const timer=setTimeout(()=>sessao.parar(),10*60*1000);recorder.start(1000);const parar=$('#doc-gravar');if(parar)parar.hidden=false;
   }catch(erro){stream?.getTracks().forEach(t=>t.stop());if(gravacaoAudio===sessao)gravacaoAudio=null;status(t('Não foi possível gravar áudio: {erro}',{erro:mensagemDoErro(erro)}),true);}
 }
 
@@ -3815,8 +3825,20 @@ function menuDaNota() {
     { separador: true },
     { rotulo: t('Salvar'), icone: icone('salvar'), acao: () => salvarNota() },
     { rotulo: t('Detalhes'), icone: icone('detalhes'), acao: () => acaoEditor('detalhes') },
+    { rotulo: t('Esta nota'), icone: icone('mais-opcoes'), filhos: acoesDaNota() },
     { rotulo: t('Fechar nota'), icone: icone('fechar'), acao: () => acaoEditor('fechar') },
     { rotulo: t('Mover para lixeira'), icone: icone('lixeira'), ativo: () => Boolean(editing?.id), acao: () => acaoEditor('lixeira') },
+  ];
+}
+// As mesmas ações no botão "Mais opções" da nota e no botão direito sobre o texto.
+function acoesDaNota() {
+  return [
+    { rotulo: t('Imprimir nota'), icone: icone('imprimir'), acao: () => imprimirNota() },
+    { rotulo: t('Exportar nota para PDF'), icone: icone('exportar'), acao: () => imprimirNota(true) },
+    { separador: true },
+    { rotulo: t('Anexar áudio'), icone: icone('anexo'), acao: () => escolherAudio() },
+    { rotulo: gravacaoAudio ? t('Parar gravação') : t('Gravar áudio'), icone: icone('microfone'), acao: () => gravarAudio() },
+    ...(editing?.id ? [{ separador: true }, { rotulo: t('Histórico'), icone: icone('historico'), acao: () => mostrarHistoricoNota() }] : []),
   ];
 }
 let menuAberto = null;
@@ -3861,6 +3883,10 @@ function montarNivel(itens, area) {
       linha.addEventListener('mouseenter', () => {
         sub.classList.remove('para-esquerda');
         if (linha.getBoundingClientRect().right + sub.offsetWidth > window.innerWidth - 8) sub.classList.add('para-esquerda');
+        // Sobe o que passaria do fim da janela, para o último item não ficar cortado.
+        sub.style.top = '';
+        const excesso = sub.getBoundingClientRect().bottom - (window.innerHeight - 8);
+        if (excesso > 0) sub.style.top = `${-7 - excesso}px`;
       });
     } else if (habilitado) {
       linha.addEventListener('click', async () => {
