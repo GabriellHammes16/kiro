@@ -1438,6 +1438,7 @@ div.fluxo-editor { overflow:auto; }
 .fluxo-pdf { height:100%; margin:0; border:0; border-radius:0; }
 .fluxo-pdf .md-pdf-paginas { flex:1; min-height:0; }
 .fluxo-pdf-topo { cursor:grab; }
+.fluxo-pdf img { -webkit-user-drag:none; user-select:none; }
 .fluxo-imagem { display:block; width:100%; height:100%; object-fit:contain; border-radius:var(--raio-controle); }
 .fluxo-nota-titulo { font-weight:600; margin-bottom:6px; }
 .fluxo-nota-previa { font-size:13px; color:var(--muted); }
