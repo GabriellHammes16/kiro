@@ -17,7 +17,7 @@ const variaveis = trecho => Object.fromEntries([...trecho.matchAll(/--([\w-]+)\s
 // Junta todos os blocos cujo seletor contém `.tema-<id>` (ex.: `.tema-x,.tema-y{...}`).
 function blocoDoTema(css, id) {
   const re = new RegExp(`([^{}]*\\.tema-${id}(?![\\w-])[^{}]*)\\{([^}]*)\\}`, 'g');
-  // .vidro-claro é um estado passageiro do Liquid Glass, não a paleta do tema.
+  // .vidro-claro é um dos estilos do Liquid Glass; a paleta conferida aqui é a do tema.
   return Object.assign({}, ...[...css.matchAll(re)].filter(m => !m[1].includes('.vidro-claro')).map(m => variaveis(m[2])));
 }
 

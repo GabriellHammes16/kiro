@@ -5148,9 +5148,12 @@ function aplicarAparencia(valores) {
   html.classList.add(...Kiro.classesDaAparencia(a));
   raiz.setProperty('--vidro-opacidade', `${100 - a.transparencia}%`);
   const vidro = a.tema === 'liquid-glass';
-  if (!vidro) html.classList.remove('vidro-nativo', 'vidro-claro');
+  if (!vidro) html.classList.remove('vidro-nativo');
   const escuro = lerPreferencia('vidroEstilo') === 'escuro';
   html.classList.toggle('vidro-escuro', vidro && escuro);
+  // O tom é escolha da pessoa e não acompanha o fundo: numa superfície grande, como a janela, a troca distrai.
+  html.classList.toggle('vidro-claro', vidro && !escuro);
+  window.cadernoDesktop?.definirTomDoVidro?.(!vidro ? 'system' : escuro ? 'dark' : 'light');
   // Com "efeitos de transparência" desligados no sistema, o acrylic vira cor chapada: fica o desktop nítido.
   const comDesfoque = !escuro && !TRANSPARENCIA_REDUZIDA.matches;
   const pedido = `${vidro}|${comDesfoque}`;
@@ -5160,7 +5163,6 @@ function aplicarAparencia(valores) {
       html.classList.toggle('vidro-nativo', ativo && html.classList.contains('tema-liquid-glass'));
       html.classList.toggle('vidro-desfocado', desfoque);
       html.classList.toggle('vidro-cantos-sistema', cantos === true);
-      window.cadernoDesktop.adaptarVidro?.(cantos === true && lerPreferencia('vidroAdaptativo') !== '0');
       coresDaJanela();
     }).catch(() => html.classList.remove('vidro-nativo', 'vidro-desfocado', 'vidro-cantos-sistema'));
   }
@@ -5178,10 +5180,6 @@ function aplicarAparencia(valores) {
   return a;
 }
 // Botões da janela (app desktop) com as cores do tema: fundo da faixa e cor do texto.
-window.cadernoDesktop?.aoTomDoVidro?.(tom => {
-  document.documentElement.classList.toggle('vidro-claro', tom === 'claro' && document.documentElement.classList.contains('vidro-cantos-sistema'));
-  coresDaJanela();
-});
 function coresDaJanela() {
   if (!window.cadernoDesktop?.janelaPropria) return;
   const estilo = getComputedStyle(document.documentElement);
@@ -5787,9 +5785,7 @@ async function showSettings(aba = abaDasConfiguracoes) {
       </div>
       <div class="cfg-linha cfg-linha-coluna" id="cfg-vidro" ${cores.tema === 'liquid-glass' ? '' : 'hidden'}>
         <span class="rotulo-campo" id="cfg-vidro-estilo">${t('Estilo do vidro')}</span>
-        <div class="segmentos" role="radiogroup" aria-labelledby="cfg-vidro-estilo">${[['original', t('Original')], ['escuro', t('Escuro')]].map(([v, r]) => `<label class="segmento"><input type="radio" name="vidro-estilo" value="${v}" ${(lerPreferencia('vidroEstilo') === 'escuro' ? 'escuro' : 'original') === v ? 'checked' : ''} /><span>${r}</span></label>`).join('')}</div>
-        <label class="cfg-chave cfg-vidro-controle"><span>${t('Adaptar o vidro ao fundo')}</span><input type="checkbox" id="cfg-vidro-adaptativo" ${lerPreferencia('vidroAdaptativo') === '0' ? '' : 'checked'} /><span class="interruptor" aria-hidden="true"></span></label>
-        <p class="small-muted">${t('No estilo Original, no Windows: com o Kiro em foco, lê o brilho da tela a cada 5 segundos para clarear o vidro sobre fundos claros. A imagem é descartada na hora e nada é guardado.')}</p>
+        <div class="segmentos" role="radiogroup" aria-labelledby="cfg-vidro-estilo">${[['claro', t('Claro')], ['escuro', t('Escuro')]].map(([v, r]) => `<label class="segmento"><input type="radio" name="vidro-estilo" value="${v}" ${(lerPreferencia('vidroEstilo') === 'escuro' ? 'escuro' : 'claro') === v ? 'checked' : ''} /><span>${r}</span></label>`).join('')}</div>
         <label class="cfg-vidro-controle" for="cfg-transparencia"><span>${t('Transparência do fundo')}</span><output id="cfg-transparencia-valor" for="cfg-transparencia">${cores.transparencia}%</output></label>
         <input type="range" id="cfg-transparencia" min="0" max="80" step="1" value="${cores.transparencia}" aria-describedby="cfg-vidro-detalhe" />
         <p class="small-muted" id="cfg-vidro-detalhe">${t('Mais transparência revela a área de trabalho, sem apagar o texto. No navegador, o tema usa um fundo interno.')}</p>
@@ -5907,10 +5903,6 @@ async function showSettings(aba = abaDasConfiguracoes) {
     aplicarAparencia();
     coresDaJanela();
   }));
-  $('#cfg-vidro-adaptativo')?.addEventListener('change', e => {
-    gravarPreferencia('vidroAdaptativo', e.target.checked ? '1' : '0');
-    window.cadernoDesktop?.adaptarVidro?.(e.target.checked && document.documentElement.classList.contains('vidro-cantos-sistema'));
-  });
   $('#cfg-notas-solidas')?.addEventListener('change', e => {
     e.stopPropagation(); modalDirty = false;
     gravarPreferencia('vidroNotasSolidas', e.target.checked ? '1' : '0');
@@ -6512,6 +6504,39 @@ window.cadernoDesktop?.aoPedirFechar?.(async()=>{
   window.cadernoDesktop.responderFechar(ok);
 });
 window.addEventListener('focus',()=>reload());
+// Liquid Glass: o brilho das superfícies segue o mouse. As luzes ficam numa camada própria, fora do conteúdo: dentro das
+// superfícies, elas mudariam o :last-child e cada movimento recalcularia o que há dentro. No máximo 60 vezes por segundo, só perto do mouse.
+const SUPERFICIES_COM_LUZ='.sidebar,.cofre-lateral,.painel-direito,.card,.note-card,.capture', ALCANCE_DA_LUZ=240;
+const SEM_ANIMACAO=matchMedia('(prefers-reduced-motion: reduce)');
+const luzes=new Map();
+let camadaDasLuzes=null, luzEm=null, luzAgendada=false, ultimaLuz=0;
+function apagarLuz(superficie){luzes.get(superficie)?.remove();luzes.delete(superficie);}
+const apagarLuzes=()=>{if(luzes.size)[...luzes.keys()].forEach(apagarLuz);};
+function moverLuz(agora){
+  luzAgendada=false;ultimaLuz=agora;
+  if(!camadaDasLuzes?.isConnected){camadaDasLuzes=document.createElement('div');camadaDasLuzes.id='luzes-vidro';camadaDasLuzes.setAttribute('aria-hidden','true');document.body.append(camadaDasLuzes);}
+  for(const superficie of luzes.keys())if(!superficie.isConnected)apagarLuz(superficie);
+  const {x,y}=luzEm;
+  for(const el of document.querySelectorAll(SUPERFICIES_COM_LUZ)){
+    const r=el.getBoundingClientRect();
+    if(x<=r.left-ALCANCE_DA_LUZ||x>=r.right+ALCANCE_DA_LUZ||y<=r.top-ALCANCE_DA_LUZ||y>=r.bottom+ALCANCE_DA_LUZ||!r.width){apagarLuz(el);continue;}
+    let luz=luzes.get(el);
+    if(!luz){
+      luz=document.createElement('span');luz.className='luz-vidro';luz.style.borderRadius=getComputedStyle(el).borderRadius;
+      luz.style.cssText+=`;left:${r.left}px;top:${r.top}px;width:${r.width}px;height:${r.height}px`;
+      camadaDasLuzes.append(luz);luzes.set(el,luz);
+    }
+    luz.style.setProperty('--luz-x',`${x-r.left}px`);luz.style.setProperty('--luz-y',`${y-r.top}px`);
+  }
+}
+document.addEventListener('pointermove',e=>{
+  if(e.pointerType==='touch'||SEM_ANIMACAO.matches||!document.documentElement.classList.contains('tema-liquid-glass'))return;
+  luzEm={x:e.clientX,y:e.clientY};
+  if(!luzAgendada&&e.timeStamp-ultimaLuz>=16){luzAgendada=true;requestAnimationFrame(moverLuz);}
+},{passive:true});
+document.documentElement.addEventListener('pointerleave',apagarLuzes);
+// A camada não acompanha a rolagem: a luz some e volta no próximo movimento do mouse, já no lugar certo.
+document.addEventListener('scroll',apagarLuzes,{capture:true,passive:true});
 // ---- Lembretes: aviso-resumo das tarefas do dia e dos hábitos de hoje, uma vez por dia cada ----
 const lembretesLigados = () => lerPreferencia('lembretes') === '1';
 const horaDoLembrete = k => lerPreferencia(`lembreteHora.${k}`) || (k === 'tarefas' ? '09:00' : '20:00');

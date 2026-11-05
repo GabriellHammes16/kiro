@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, Menu, shell, dialog, protocol, safeStorage, globalShortcut, desktopCapturer, nativeTheme, screen } = require('electron');
+const { app, BrowserWindow, ipcMain, Menu, shell, dialog, protocol, safeStorage, globalShortcut, nativeTheme } = require('electron');
 const ligacaoRede = require('../ligacao-rede-plugins.cjs');
 const { criarGuardaDeSegredos } = require('../segredos-plugins.cjs');
 const { criarAgendadorDeBackup } = require('../agendador-backup.cjs');
@@ -81,55 +81,6 @@ async function prepararCorretor(sessao) {
   }
   const idiomas = IDIOMAS_DO_CORRETOR.filter(i => sessao.availableSpellCheckerLanguages.includes(i));
   if (idiomas.length) sessao.setSpellCheckerLanguages(idiomas); // vazio: fica o padrão do sistema
-}
-// Vidro adaptativo (Windows): como o da Apple, o vidro segue o que está atrás dele. Fundo claro pede vidro claro
-// com texto escuro, sem escurecer o vidro. A janela não enxerga atrás de si, então o brilho vem de uma miniatura da
-// tela, lida só com ela em foco e descartada na hora. Os limites são medidos: o vidro claro brilha mais sobre qualquer fundo.
-// Cada leitura trava o processo principal por ~250 ms, em qualquer tamanho de miniatura: o custo é abrir a captura.
-// Por isso a leitura é rara; ao ver uma mudança, confirma logo depois, em vez de esperar o intervalo inteiro.
-const BRILHO_PARA_CLAREAR = 85, BRILHO_PARA_ESCURECER = 218, INTERVALO_DO_VIDRO = 15000, CONFIRMAR_O_VIDRO = 1500;
-function tomDoVidro(atual, brilho) {
-  if (atual === 'claro') return brilho < BRILHO_PARA_ESCURECER ? 'escuro' : 'claro';
-  return brilho > BRILHO_PARA_CLAREAR ? 'claro' : 'escuro';
-}
-async function brilhoDaJanela(janela) {
-  const b = janela.getBounds(), tela = screen.getDisplayMatching(b);
-  const fontes = await desktopCapturer.getSources({ types: ['screen'], thumbnailSize: { width: 240, height: 240 } });
-  const miniatura = fontes.find(f => f.display_id === String(tela.id))?.thumbnail;
-  if (!miniatura || miniatura.isEmpty()) return null;
-  const { width, height } = miniatura.getSize(), k = width / tela.bounds.width, pontos = miniatura.toBitmap(), valores = [];
-  const limitar = (v, max) => Math.max(0, Math.min(max, Math.round(v)));
-  const [x0, x1] = [limitar((b.x - tela.bounds.x) * k, width), limitar((b.x - tela.bounds.x + b.width) * k, width)];
-  const [y0, y1] = [limitar((b.y - tela.bounds.y) * k, height), limitar((b.y - tela.bounds.y + b.height) * k, height)];
-  for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) { const i = (y * width + x) * 4; valores.push((pontos[i] + pontos[i + 1] + pontos[i + 2]) / 3); }
-  return valores.length ? valores.sort((p, q) => p - q)[valores.length >> 1] : null;
-}
-const vidrosAdaptativos = new WeakMap();
-function adaptarVidro(janela, ligado) {
-  vidrosAdaptativos.get(janela)?.();
-  vidrosAdaptativos.delete(janela);
-  const enviar = tom => { if (!janela.isDestroyed()) janela.webContents.send('vidro:tom', tom); };
-  if (!ligado) { nativeTheme.themeSource = 'system'; enviar('escuro'); return; }
-  let tom = 'escuro', seguidas = 0, lendo = false, confirmacao = null;
-  const pintar = () => { nativeTheme.themeSource = tom === 'claro' ? 'light' : 'dark'; janela.setBackgroundMaterial('acrylic'); enviar(tom); };
-  const ler = async () => {
-    if (lendo || janela.isDestroyed() || !janela.isFocused() || janela.isMinimized()) return;
-    lendo = true;
-    try {
-      const brilho = await brilhoDaJanela(janela);
-      if (brilho === null || janela.isDestroyed()) return;
-      if (tomDoVidro(tom, brilho) === tom) { seguidas = 0; return; }
-      if (++seguidas < 2) { clearTimeout(confirmacao); confirmacao = setTimeout(ler, CONFIRMAR_O_VIDRO); return; } // uma janela clara passando não troca o vidro
-      tom = tom === 'claro' ? 'escuro' : 'claro'; seguidas = 0;
-      pintar();
-    } catch { /* sem leitura da tela: o vidro fica como está */ } finally { lendo = false; }
-  };
-  const relogio = setInterval(ler, INTERVALO_DO_VIDRO);
-  janela.on('focus', ler); janela.on('moved', ler);
-  const parar = () => { clearInterval(relogio); clearTimeout(confirmacao); if (!janela.isDestroyed()) { janela.off('focus', ler); janela.off('moved', ler); } };
-  janela.once('closed', parar);
-  vidrosAdaptativos.set(janela, parar);
-  pintar(); ler();
 }
 // Fechar com algo não salvo: a página tenta gravar e, se conseguir, a janela fecha sem perguntar nada.
 // Só quando não dá para gravar (erro, formulário aberto) a pessoa decide. Vale só para fechar: 'close' vem antes do beforeunload.
@@ -359,9 +310,12 @@ else app.whenReady().then(async () => {
     } else if (janela && desfoque && !janelasDesfocadas.has(janela)) ligarDesfoque(janela); // recriada: a página nova pede de novo
     return { ativo: vidro, desfoque, cantos };
   });
-  ipcMain.on('janela:adaptar', (event, ligado) => {
+  // O tom do sistema é o que tinge o acrylic. Reaplicar o material faz a troca valer na hora, sem passar por "none", que pisca.
+  ipcMain.on('janela:tom-do-vidro', (event, tom) => {
+    if (!['light', 'dark', 'system'].includes(tom) || nativeTheme.themeSource === tom) return;
+    nativeTheme.themeSource = tom;
     const janela = BrowserWindow.fromWebContents(event.sender);
-    if (janela) adaptarVidro(janela, ligado === true && janelasComCantos.has(janela));
+    if (janela && janelasDesfocadas.has(janela) && process.platform !== 'darwin') janela.setBackgroundMaterial('acrylic');
   });
   // Cores dos botões da janela: só as duas cores, validadas, para a janela que pediu.
   ipcMain.on('janela:cores', (event, cores) => {

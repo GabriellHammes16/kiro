@@ -127,6 +127,6 @@ Use `examples/plugins/` como ponto de partida.
 
 O Liquid Glass é o único tema com regras próprias (`html.tema-liquid-glass`), porque é um material, com desfoque, reflexo e janela transparente, e não só uma paleta. O teste não aceita essa exceção em outro tema.
 
-No estilo Original no Windows, o vidro segue o brilho do que está atrás dele: sobre fundo claro, a classe `.vidro-claro` troca as variáveis para vidro claro com texto escuro. O brilho vem de uma miniatura da tela lida em `electron/main.cjs`, e os limites foram medidos com o controle de transparência no padrão.
+O vidro tem dois estilos fixos, escolhidos em Configurações: Claro (classe `.vidro-claro`, com texto escuro) e Escuro (`.vidro-escuro`). O tom não acompanha o que está atrás da janela, porque em superfícies grandes a troca distrai. O brilho que segue o mouse fica na camada `#luzes-vidro`, fora do conteúdo, para o movimento não recalcular nada dentro das superfícies.
 
 Se surgir um segundo tema com material próprio, o certo é transformar essas regras em variáveis, em vez de copiá-las.

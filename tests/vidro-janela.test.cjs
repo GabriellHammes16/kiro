@@ -35,21 +35,26 @@ test('o evento de fim de carga não toca na janela, que pode ter sido recriada e
   assert.doesNotMatch(evento, /\bwindow\./);
 });
 
-test('vidro adaptativo: clareia sobre fundo claro, escurece sobre fundo escuro, sem oscilar entre os dois', () => {
-  const fonte = fs.readFileSync(path.join(__dirname, '../electron/main.cjs'), 'utf8');
-  const limites = fonte.match(/const BRILHO_PARA_CLAREAR = \d+, BRILHO_PARA_ESCURECER = \d+/)[0];
-  const inicio = fonte.indexOf('function tomDoVidro(');
-  const contexto = {};
-  vm.runInNewContext(`${limites}; ${fonte.slice(inicio, fonte.indexOf('\n}', inicio) + 2)}; this.tomDoVidro = tomDoVidro;`, contexto);
-  const { tomDoVidro } = contexto;
-  // Brilhos medidos no app: vidro escuro sobre preto, azul e cinza-claro; vidro claro sobre preto, cinza e branco.
-  assert.equal(tomDoVidro('escuro', 53), 'escuro');
-  assert.equal(tomDoVidro('escuro', 82), 'escuro');
-  assert.equal(tomDoVidro('escuro', 90), 'claro');
-  assert.equal(tomDoVidro('claro', 191), 'escuro');
-  assert.equal(tomDoVidro('claro', 215), 'escuro');
-  assert.equal(tomDoVidro('claro', 227), 'claro');
-  assert.equal(tomDoVidro('claro', 239), 'claro');
+test('o tom do vidro é escolhido, e não lido da tela', () => {
+  const main = fs.readFileSync(path.join(__dirname, '../electron/main.cjs'), 'utf8');
+  assert.doesNotMatch(main, /desktopCapturer/);
+  assert.match(main, /\['light', 'dark', 'system'\]\.includes\(tom\)/);
+  const app = fs.readFileSync(path.join(__dirname, '../app.js'), 'utf8');
+  assert.match(app, /classList\.toggle\('vidro-claro', vidro && !escuro\)/);
+});
+
+test('a luz do vidro fica numa camada própria, fora do conteúdo', () => {
+  const app = fs.readFileSync(path.join(__dirname, '../app.js'), 'utf8');
+  assert.match(app, /camadaDasLuzes\.append\(luz\)/);
+  assert.doesNotMatch(app, /\bel\.append\(luz\)/);
+});
+
+test('a faixa do topo fica apagada em página que não rola', () => {
+  const css = fs.readFileSync(path.join(__dirname, '../temas.css'), 'utf8');
+  const regra = css.slice(css.indexOf('.pagina-plugin-aberta)::before'), css.indexOf('@container scroll-state'));
+  assert.ok(regra.includes('opacity:0;'));
+  // A animação ligada à rolagem ficava presa acesa ao passar de uma tela rolada para uma que não rola.
+  assert.ok(!css.includes('animation-timeline'));
 });
 
 test('janela transparente no Windows maximiza pelo duplo clique, que chega como SC_MAXIMIZE', () => {

@@ -200,6 +200,8 @@
 .skin-paper :where(.content, .card, .note-card, .cfg-grupo, .modal) {
   background-image:var(--paper-textura);
 }
+/* No Fluxo o grão fica numa camada própria: o tamanho do fundo dele acompanha o zoom da grade. */
+.skin-paper .fluxo::before { content:""; position:absolute; inset:0; pointer-events:none; background-image:var(--paper-textura); }
 .skin-paper :where(.page-head h1, .cfg-grupo-topo strong, .card h2) { font-family:var(--fonte-leitura); }
 
 /* ---- Configurações → Aparência: cards de tema e lista de skins ---- */
@@ -346,6 +348,11 @@ html.tema-liquid-glass.grafo-solido .grafo-tela {
   margin:12px; height:calc(var(--altura-util, 100vh) - 24px); border-radius:22px;
   background:var(--content-bg); border:1px solid var(--vidro-borda);
 }
+/* Fluxo: como o grafo, os cartões ficam direto sobre o vidro. */
+html.tema-liquid-glass .fluxo { background-color:transparent; }
+/* Plug-in com fundo próprio: painel flutuante, com o mesmo respiro e cantos das notas com fundo sólido. */
+html.tema-liquid-glass .plugin-pagina { margin:12px; height:calc(var(--altura-util, 100vh) - 24px); min-height:0; }
+html.tema-liquid-glass .plugin-pagina .plugin-moldura { border:1px solid var(--vidro-borda); border-radius:22px; }
 /* Papel de parede na janela toda, até atrás da barra de título: as barras flutuam por cima dele, sem quinas.
    Fica numa camada própria para a "Transparência do papel de parede" (--papel-opacidade) deixar o desktop aparecer. */
 html.tema-liquid-glass.com-papel-de-parede:not(.papel-em-video) body:has(> .app-shell:not(.cofre-aberto))::before {
@@ -436,8 +443,8 @@ html.tema-liquid-glass select::picker(select) {
   background:var(--vidro-realce), #1C1C1EF2; border-color:var(--vidro-borda); box-shadow:var(--vidro-reflexo), 0 18px 44px #00000066;
   -webkit-backdrop-filter:blur(24px) saturate(180%); backdrop-filter:blur(24px) saturate(180%);
 }
-/* Vidro claro (electron/main.cjs): sobre fundo claro, o vidro clareia e o texto escurece, como o da Apple. */
-html.tema-liquid-glass.vidro-nativo.vidro-claro:not(.vidro-escuro) {
+/* Vidro claro: o estilo padrão. Fica claro sobre qualquer fundo, sem acompanhar o que está atrás. */
+html.tema-liquid-glass.vidro-claro:not(.vidro-escuro) {
   --ink:#1C1C1E; --muted:#3C3C43; --line:#0000001F; --surface-hover:#0000000F; --surface-active:#0000001A;
   --acento:#1C1C1E; --acento-forte:#1C1C1E; --acento-escuro:#3A3A3C; --acento-texto:#FFFFFF; --primario-texto:#FFFFFF; --acento-2:#3C3C43;
   --danger:#A81E22; --panel:#FFFFFF40; --campo:#FFFFFF66; --panel-raised:#F2F2F7F5;
@@ -445,11 +452,50 @@ html.tema-liquid-glass.vidro-nativo.vidro-claro:not(.vidro-escuro) {
   --overlay:#FFFFFF66; --bg:#F2F2F7; --content-bg:#F2F2F7; --sidebar-bg:#EBEBF0;
   color-scheme:light;
 }
-html.tema-liquid-glass.vidro-nativo.vidro-claro.vidro-desfocado:not(.vidro-escuro) body { background:color-mix(in srgb, #FFFFFF calc(16% + var(--vidro-opacidade, 65%) * .4), transparent); }
+html.tema-liquid-glass.vidro-nativo.vidro-claro:not(.vidro-escuro) body { background:color-mix(in srgb, #FFFFFF calc(44% + var(--vidro-opacidade, 65%) * .4), transparent); }
+html.tema-liquid-glass.vidro-nativo.vidro-claro.vidro-desfocado:not(.vidro-escuro) body { background:color-mix(in srgb, #FFFFFF calc(36% + var(--vidro-opacidade, 65%) * .4), transparent); } /* medido sobre preto: o suficiente para 4,5:1 no texto de alerta */
+/* Sem janela nativa (navegador) e com papel de parede, o que fica atrás do vidro também precisa ser claro. */
+html.tema-liquid-glass.vidro-claro:not(.vidro-escuro) { --vidro-papel:radial-gradient(80% 60% at 85% 5%, #FFFFFFB3 0, #FFFFFF00 60%), radial-gradient(70% 60% at 5% 100%, #C7CBD866 0, #C7CBD800 60%), linear-gradient(160deg, #E4E6EC 0%, #F2F2F7 55%, #DFE2EA 100%); }
+html.tema-liquid-glass.vidro-claro:not(.vidro-nativo, .vidro-escuro) body { background:color-mix(in srgb, #FFFFFF calc(var(--vidro-opacidade, 65%) * .3), transparent); }
+html.tema-liquid-glass.vidro-claro.com-papel-de-parede:not(.vidro-escuro, .papel-em-video) body:has(> .app-shell:not(.cofre-aberto))::before {
+  background:linear-gradient(#FFFFFF80 0 0), linear-gradient(color-mix(in srgb, var(--content-bg) var(--papel-veu, 60%), transparent) 0 0), var(--papel-de-parede) center / cover no-repeat;
+}
+html.tema-liquid-glass.vidro-claro.papel-em-video:not(.vidro-escuro) { --vidro-fundo-legivel:#FFFFFF80; }
 html.tema-liquid-glass.vidro-claro:not(.vidro-escuro) :is(#save-status, #conflitos-sincronizacao, #aviso-atalho-global, .fluxo-barra, .grafo-painel, .hoje-opcoes, .modal, .ctx-menu) { background:var(--vidro-realce), #F2F2F7E6; box-shadow:var(--vidro-reflexo), 0 18px 44px #00000026; }
 html.tema-liquid-glass.vidro-claro:not(.vidro-escuro) .primary { background:var(--acento-forte); color:var(--primario-texto); border-color:transparent; box-shadow:0 4px 14px #00000026; }
 html.tema-liquid-glass.vidro-claro:not(.vidro-escuro) .check:not(.done) { background:#FFFFFF66; border-color:#0000004D; box-shadow:none; }
 html.tema-liquid-glass.vidro-claro:not(.vidro-escuro) .page-head :is(h1, p) { text-shadow:none; }
+/* Brilho que segue o mouse (app.js): um véu leve na superfície e um fio mais forte na borda. */
+#luzes-vidro { position:fixed; inset:0; z-index:4; overflow:hidden; pointer-events:none; contain:strict; }
+html:not(.tema-liquid-glass) #luzes-vidro { display:none; }
+.luz-vidro { position:absolute; background:radial-gradient(220px circle at var(--luz-x) var(--luz-y), #FFFFFF26, #FFFFFF00 70%); }
+.luz-vidro::after {
+  content:""; position:absolute; inset:0; border-radius:inherit; padding:1px; background:radial-gradient(220px circle at var(--luz-x) var(--luz-y), #FFFFFFF2, #FFFFFF00 70%);
+  -webkit-mask:linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite:xor; mask:linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+}
+/* O que flutua sobre o conteúdo deixa ver e entorta o que passa por baixo. */
+@media not (prefers-reduced-transparency: reduce) {
+  html.tema-liquid-glass.vidro-claro:not(.vidro-escuro) :is(.grafo-painel, .fluxo-barra, .ctx-menu, #aviso-desfazer) {
+    background:var(--vidro-realce), #F2F2F7B8;
+    -webkit-backdrop-filter:url(#vidro-lente) blur(14px) saturate(180%); backdrop-filter:url(#vidro-lente) blur(14px) saturate(180%);
+  }
+  /* Borda de rolagem: o conteúdo desfoca e some aos poucos sob o topo. Uma faixa só, porque quem rola aqui é a página;
+     ela só acende quando há conteúdo rolado acima. */
+  html.tema-liquid-glass.vidro-claro:not(.vidro-escuro) body { container-type:scroll-state; }
+  html.tema-liquid-glass.vidro-claro:not(.vidro-escuro) .app-shell:not(.cofre-aberto, .grafo-aberto, .pagina-plugin-aberta)::before {
+    content:""; position:fixed; z-index:1; top:0; left:0; right:0; height:56px; pointer-events:none; opacity:0;
+    background:linear-gradient(#FFFFFF33, #FFFFFF00);
+    -webkit-backdrop-filter:blur(8px); backdrop-filter:blur(8px);
+    -webkit-mask:linear-gradient(#000 55%, #0000); mask:linear-gradient(#000 55%, #0000);
+    transition:opacity var(--rapido);
+  }
+  @container scroll-state(scrollable:top) {
+    html.tema-liquid-glass.vidro-claro:not(.vidro-escuro) .app-shell:not(.cofre-aberto, .grafo-aberto, .pagina-plugin-aberta)::before { opacity:1; }
+  }
+  html.tema-liquid-glass.vidro-claro:not(.vidro-escuro) .cofre-nota-corpo:not(.com-fluxo) {
+    -webkit-mask:linear-gradient(#0000, #000 20px); mask:linear-gradient(#0000, #000 20px);
+  }
+}
 html.tema-liquid-glass.vidro-claro:not(.grafo-solido) .grafo-tela { --graph-node:#000000CC; --graph-node-muted:#00000073; --graph-edge:#0000004D; }
 .cfg-vidro-controle { display:flex; justify-content:space-between; gap:16px; width:100%; }
 .cfg-vidro-controle output { color:var(--accent-text); font-variant-numeric:tabular-nums; }
