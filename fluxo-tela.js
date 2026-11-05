@@ -16,6 +16,8 @@
   const LIMITE_DO_TEXTO = 200000;
   const textoLimitado = texto => (texto.length > LIMITE_DO_TEXTO ? `${texto.slice(0, LIMITE_DO_TEXTO)}\n${t('… mais {n} caracteres', { n: texto.length - LIMITE_DO_TEXTO })}` : texto);
   // Linhas de um CSV como conteúdo de <table>: a primeira é o cabeçalho.
+  // O player do YouTube: o mesmo <iframe> no cartão e na tela inteira. nocookie, e só criado quando a pessoa pede.
+  const videoIframeHtml = id => `<iframe class="fluxo-video-player" src="https://www.youtube-nocookie.com/embed/${encodeURIComponent(id)}?autoplay=1" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>`;
   function tabelaHtml(texto) {
     const { linhas, restantes } = F.lerCsv(texto);
     const celulas = (l, tag) => l.map(x => `<${tag}>${esc(x)}</${tag}>`).join('');
@@ -81,6 +83,8 @@
     }
     // Cartão de link: o endereço primeiro; a prévia (título, descrição, imagem do cofre) entra quando chega.
     function linkHtml(c) {
+      const idVideo = F.idDoYoutube(c.url);
+      if (idVideo) return videoHtml(c, idVideo);
       const previa = c.kiroPrevia || {}, endereco = c.url.replace(/^[a-z][a-z0-9+.-]*:\/\//i, '').replace(/\/$/, '');
       const topo = topoHtml(c, previa.titulo || endereco);
       if (c.kiroRecolhido) return topo;
@@ -88,6 +92,15 @@
       const titulo = previa.titulo ? `<p class="fluxo-link-titulo">${esc(previa.titulo)}</p>` : '';
       const descricao = previa.descricao ? `<p class="fluxo-link-descricao">${esc(previa.descricao)}</p>` : '';
       return `${topo}<div class="fluxo-link-corpo">${imagem}${titulo}${descricao}<p class="fluxo-link">${esc(c.url)}</p></div>`;
+    }
+    // Cartão de vídeo do YouTube: aberto, miniatura com botão de tocar (nada do YouTube carrega antes do clique).
+    // O corpo é reaproveitado entre desenhos, e o player some junto com ele ao recolher ou apagar.
+    function videoHtml(c, id) {
+      const topo = topoHtml(c, c.kiroPrevia?.titulo || t('Vídeo do YouTube'));
+      if (c.kiroRecolhido) return topo;
+      const miniatura = `<img class="fluxo-video-miniatura" src="https://i.ytimg.com/vi/${encodeURIComponent(id)}/hqdefault.jpg" alt="" draggable="false">`;
+      const tocar = `<button type="button" class="fluxo-video-tocar" aria-label="${t('Tocar')}" title="${t('Tocar')}">${opcoes.icone('tocar')}</button>`;
+      return `${topo}<div class="fluxo-arquivo-corpo fluxo-video-corpo" data-reusar="${esc(c.id)}|${esc(id)}" data-video="${esc(id)}">${miniatura}${tocar}</div>`;
     }
     // Cartão de arquivo: topo (seta que recolhe, nome, Abrir) e corpo. Recolhido, o corpo nem é
     // desenhado. Só caminho relativo ao cofre vira mídia: um .canvas de fora não aponta para ../ nem para o disco.
@@ -258,10 +271,10 @@
       return r.id;
     }
     // Link novo: nasce com o endereço e a prévia (título, descrição, imagem) entra quando chega, fora do desfazer.
-    // YouTube fica de fora (é da Task 5). Qualquer falha da busca deixa o cartão como está.
+    // YouTube também: guarda só o título. Qualquer falha da busca deixa o cartão como está.
     function novoLink(url, p) {
       const base = { type: 'link', url, width: 320, height: 100 };
-      adicionarNo(base, p, F.idDoYoutube(url) || !opcoes.previaDeLink ? undefined : idNo => {
+      adicionarNo(base, p, !opcoes.previaDeLink ? undefined : idNo => {
         Promise.resolve(opcoes.previaDeLink(url)).then(previa => receberPrevia(idNo, previa), () => {});
       });
     }
@@ -274,10 +287,11 @@
       const vivo = montados.has(inst), base = vivo ? canvas : opcoes.canvasAtual();
       const n = base?.nodes.find(x => x.id === idNo);
       if (!n || n.type !== 'link') return;   // o cartão foi apagado nesse meio tempo
-      const campos = { kiroPrevia: { titulo: previa.titulo ?? null, descricao: previa.descricao ?? null, imagem: previa.imagem ?? null } };
+      const video = F.idDoYoutube(n.url);   // vídeo: só o título, a miniatura vem do YouTube ao tocar
+      const campos = { kiroPrevia: video ? { titulo: previa.titulo ?? null } : { titulo: previa.titulo ?? null, descricao: previa.descricao ?? null, imagem: previa.imagem ?? null } };
       // Cartão ainda no tamanho de partida cresce para caber a prévia.
       const altura = n.kiroRecolhido ? 'kiroAlturaAberta' : 'height';
-      if (!n.kiroAlturaFixa && n[altura] === F.tamanhoPadrao(n).height) campos[altura] = campos.kiroPrevia.imagem ? 240 : 150;
+      if (!video && !n.kiroAlturaFixa && n[altura] === F.tamanhoPadrao(n).height) campos[altura] = campos.kiroPrevia.imagem ? 240 : 150;
       if (!vivo) { s.historico = F.editarNoHistorico(s.historico, idNo, campos); opcoes.aoMudar(F.editarCartao(base, idNo, campos)); opcoes.redesenhar(); return; }
       canvas = F.editarCartao(canvas, idNo, campos);
       s.historico = F.editarNoHistorico(s.historico, idNo, campos);   // desfazer não apaga a prévia
@@ -654,7 +668,7 @@
       return { tipo: 'marcar', p0: p, base };
     }
     raiz.addEventListener('pointerdown', e => {
-      if (e.target.closest('.fluxo-barra, .fluxo-editor, .fluxo-abrir, .fluxo-seta-recolher')) return;
+      if (e.target.closest('.fluxo-barra, .fluxo-editor, .fluxo-abrir, .fluxo-seta-recolher, .fluxo-video-tocar')) return;
       raiz.focus({ preventScroll: true });
       // Sobre as áreas que rolam e os controles de áudio e vídeo só seleciona o cartão: sem capturar o ponteiro, a barra de rolagem e os controles funcionam.
       const paginas = e.button === 0 && !espaco && e.target.closest('.md-pdf-paginas, .fluxo-texto, .fluxo-tabela, audio, video');
@@ -739,9 +753,11 @@
     });
     raiz.addEventListener('click', e => {
       if (e.target.closest('.fluxo-conteudo a')) e.preventDefault();
+      const tocar = e.target.closest('.fluxo-video-tocar');
+      if (tocar) { const corpo = tocar.closest('.fluxo-video-corpo'); corpo.innerHTML = videoIframeHtml(corpo.dataset.video); return; }
       const cartao = e.target.closest('.fluxo-arquivo-topo')?.closest('.fluxo-cartao');
       if (!cartao) return;
-      if (e.target.closest('.fluxo-abrir')) { const c = no(cartao.dataset.no); if (c?.type === 'link') opcoes.abrirLink(c.url); else abrirArquivo(cartao.dataset.no); }
+      if (e.target.closest('.fluxo-abrir')) { const c = no(cartao.dataset.no); if (c?.type === 'link') { const idVideo = F.idDoYoutube(c.url); if (idVideo && opcoes.abrirVideo) opcoes.abrirVideo(idVideo, raiz); else opcoes.abrirLink(c.url); } else abrirArquivo(cartao.dataset.no); }
       else if (e.target.closest('.fluxo-seta-recolher')) mudar(F.alternarRecolhido(canvas, cartao.dataset.no));
     });
     // Página do PDF que está no topo, guardada na sessão: o scroll não borbulha, daí a captura.
@@ -886,5 +902,5 @@
   }
   function desmontarTodos() { for (const m of [...montados]) m.desmontar(); }
   const ocupado = () => [...montados].some(m => m.ocupado());
-  root.KiroFluxoTela = { montar, desmontarTodos, ocupado, tabelaHtml, textoLimitado };
+  root.KiroFluxoTela = { montar, desmontarTodos, ocupado, tabelaHtml, textoLimitado, videoIframeHtml };
 })(globalThis);

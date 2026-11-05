@@ -130,6 +130,8 @@ function createWindow(vidro = vidroSalvo(), limites = {}, cantos = vidro && CANT
   // Depois da página, para não atrasar a abertura. A sessão vem de antes: a página pode pedir outro tipo de
   // janela enquanto carrega, e esta já estaria destruída quando o evento chegasse.
   const sessao = window.webContents.session;
+  // A página é file://, sem Referer: o player do YouTube recusa (erro 153). Só o embed recebe um Referer de aplicativo.
+  sessao.webRequest.onBeforeSendHeaders({ urls: ['https://www.youtube-nocookie.com/*'] }, (detalhes, retorno) => retorno({ requestHeaders: { ...detalhes.requestHeaders, Referer: 'https://kiro.app/' } }));
   window.webContents.once('did-finish-load', () => prepararCorretor(sessao).catch(() => { /* sem corretor, o app segue */ }));
   // Botão direito num campo de texto: a página abre o próprio menu com a palavra e as sugestões.
   window.webContents.on('context-menu', (_evento, p) => {

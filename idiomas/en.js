@@ -822,6 +822,8 @@
     'Esse tipo de arquivo não cabe no Fluxo.': 'This file type does not fit in the Flow.',
     'Recolher': 'Collapse',
     'Mostrar conteúdo': 'Show content',
+    'Tocar': 'Play',
+    'Vídeo do YouTube': 'YouTube video',
     'Abrir no programa do sistema': 'Open in system app',
     '… mais {n} caracteres': '… {n} more characters',
     '… mais {n} linhas': '… {n} more rows',

@@ -84,3 +84,21 @@ test('os corpos reaproveitaveis ficam na sessao, para o autosave nao parar a mid
   assert.match(corpo, /s\.corpos = new Map\(\)/);
   assert.match(corpo, /new Map\(s\.corpos\)/);
 });
+
+test('link do YouTube vira cartao de video: miniatura, iframe do embed e corpo reaproveitado', () => {
+  const i = fonte.indexOf('function linkHtml');
+  assert.ok(i > 0);
+  const corpo = fonte.slice(i, fonte.indexOf('function arquivoHtml', i));   // linkHtml e videoHtml
+  assert.ok(corpo.includes('F.idDoYoutube('));
+  assert.ok(corpo.includes('data-reusar'));
+  assert.ok(corpo.includes('i.ytimg.com/vi/'));
+  assert.ok(fonte.includes('youtube-nocookie.com/embed/'));   // o iframe, que o cartão e a tela inteira compartilham
+});
+
+test('a CSP libera so o embed e a miniatura do YouTube, e o main manda o Referer do embed', () => {
+  const html = fs.readFileSync(path.join(__dirname, '../index.html'), 'utf8');
+  assert.ok(html.includes("frame-src 'self' kiro-plugin: https://www.youtube-nocookie.com;"));
+  assert.match(html, /img-src [^;]*https:\/\/i\.ytimg\.com/);
+  const main = fs.readFileSync(path.join(__dirname, '../electron/main.cjs'), 'utf8');
+  assert.ok(main.includes("'https://www.youtube-nocookie.com/*'") && main.includes('Referer'));
+});

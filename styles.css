@@ -1458,6 +1458,12 @@ div.fluxo-editor { overflow:auto; }
 .fluxo-tabela-mais { color:var(--muted); font-style:italic; }
 .fluxo-arquivo-corpo audio { flex:none; width:100%; margin:auto 0; }
 .fluxo-arquivo-corpo video { flex:1; min-height:0; width:100%; object-fit:contain; background:var(--panel-2); }
+.fluxo-video-corpo { position:relative; background:var(--panel-2); }
+.fluxo-video-miniatura { display:block; flex:1; min-height:0; width:100%; object-fit:cover; }
+.fluxo-video-tocar { position:absolute; left:50%; top:50%; display:grid; place-items:center; width:56px; height:56px; padding:0; border:0; border-radius:50%; transform:translate(-50%,-50%); background:var(--acento); color:var(--acento-texto); box-shadow:var(--shadow-md); cursor:pointer; }
+.fluxo-video-tocar .icone { width:26px; height:26px; fill:currentColor; }
+.fluxo-video-player { flex:1; min-height:0; width:100%; border:0; }
+.tela-imagem .fluxo-video-player { flex:none; width:min(1280px, 100%); aspect-ratio:16/9; max-height:100%; border-radius:var(--raio-controle); box-shadow:var(--shadow-md); }
 .fluxo-nota-titulo { font-weight:600; margin-bottom:6px; }
 .fluxo-nota-previa { font-size:13px; color:var(--muted); }
 .fluxo-nota-previa :is(h1,h2,h3) { font-size:14px; margin:6px 0; }

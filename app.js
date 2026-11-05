@@ -725,6 +725,7 @@ const TRACOS = {
   recolher: '<path d="M7 17 12 12.5 17 17M7 11 12 6.5 17 11"/>',
   esquerda: '<path d="M14 5.5 7.5 12 14 18.5"/>',
   direita: '<path d="M10 5.5 16.5 12 10 18.5"/>',
+  tocar: '<path d="M8.5 5.5v13l10-6.5z"/>',
   grafico: '<path d="M4 20h16M7 16.5V11M12 16.5V6M17 16.5v-3.5"/>',
   arquivar: '<path d="M4 5.5h16v4H4zM5.5 9.5V18a1.5 1.5 0 0 0 1.5 1.5h10a1.5 1.5 0 0 0 1.5-1.5V9.5M10 13.5h4"/>',
   chama: '<path d="M12 21c-3.6 0-6-2.5-6-5.9 0-3.2 2.3-5 3.5-7.6.4 1.7 1.4 2.8 2.4 3.1.3-2.4 1.6-4.3 3.1-5.6.5 2.7 3 4.6 3 8.5 0 4.3-2.5 7.5-6 7.5z"/>',
@@ -1249,6 +1250,7 @@ function montarFluxos() {
       arquivosDoEvento: arquivosDoFluxo,
       lerTexto: lerTextoDoAnexo,
       abrirArquivo: abrirArquivoDoFluxo,
+      abrirVideo: abrirVideoDoFluxo,
       arquivoDaNota: id => getNote(id)?.file || null,
       guardarImagem: guardarImagemDoFluxo,
       abrirPdfNoSistema: window.cadernoDesktop ? arquivo => window.cadernoDesktop.openAttachment(arquivo).catch(() => { /* sem leitor padrão: fica quieto */ }) : null,
@@ -3811,6 +3813,11 @@ async function abrirArquivoDoFluxo(arquivo, tipo, { pagina, origem } = {}) {
     try { texto = await lerTextoDoAnexo(arquivo); } catch { return status(t('Não foi possível ler o arquivo.'), true); }
     abrirTelaInteira(tipo === 'tabela' ? `<table class="fluxo-tabela">${KiroFluxoTela.tabelaHtml(texto)}</table>` : `<pre class="fluxo-texto">${escapeHtml(KiroFluxoTela.textoLimitado(texto))}</pre>`, peloFundo);
   } else return;
+  origemDoFoco = origem || null;
+}
+// Abrir de um cartão de vídeo do YouTube: o mesmo player, grande. Só o fundo fecha.
+function abrirVideoDoFluxo(id, origem) {
+  abrirTelaInteira(KiroFluxoTela.videoIframeHtml(id), evento => { if (evento.target === telaDeImagem && evento.detail <= 1) fecharImagemInteira(); });
   origemDoFoco = origem || null;
 }
 function abrirTelaInteira(conteudo, aoClicar = fecharImagemInteira) {
