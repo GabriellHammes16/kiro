@@ -49,6 +49,7 @@ contextBridge.exposeInMainWorld('cadernoDesktop', {
   pluginData: id => ipcRenderer.invoke('plugins:data:get', id),
   savePluginData: (id, dados) => ipcRenderer.invoke('plugins:data:set', id, dados),
   pluginFetch: (id, pedido) => ipcRenderer.invoke('plugins:fetch', id, pedido),
+  previaDeLink: url => ipcRenderer.invoke('fluxo:previa', url),
   pluginSecrets: id => ipcRenderer.invoke('plugins:secrets:state', id),
   savePluginSecret: (id, nome, valor) => ipcRenderer.invoke('plugins:secrets:set', id, nome, valor),
   removePluginSecret: (id, nome) => ipcRenderer.invoke('plugins:secrets:remove', id, nome),

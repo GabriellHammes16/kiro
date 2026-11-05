@@ -71,19 +71,30 @@
         if (!nota) return `<p class="fluxo-ausente">${t('Nota não encontrada')}<br><small>${esc(c.file)}</small></p>`;
         return `<div class="fluxo-nota-titulo">${esc(nota.titulo)}</div><div class="fluxo-nota-previa">${nota.html}</div>`;
       }
-      if (c.type === 'link') {
-        const titulo = c.url.replace(/^[a-z][a-z0-9+.-]*:\/\//i, '').replace(/\/$/, '');
-        return `<p class="fluxo-link-titulo">${esc(titulo)}</p><p class="fluxo-link">${esc(c.url)}</p>`;
-      }
+      if (c.type === 'link') return linkHtml(c);
       return '';
+    }
+    // Topo dos cartões de arquivo e de link: seta que recolhe, nome e (se houver) Abrir.
+    function topoHtml(c, nome, { abrir = true, total = '' } = {}) {
+      const rotuloSeta = c.kiroRecolhido ? t('Mostrar conteúdo') : t('Recolher');
+      return `<div class="fluxo-arquivo-topo"><button type="button" class="icon-button fluxo-seta-recolher" aria-expanded="${!c.kiroRecolhido}" aria-label="${rotuloSeta}" title="${rotuloSeta}">${opcoes.icone('direita')}</button><span class="fluxo-arquivo-nome">${esc(nome)}${total}</span>${abrir ? `<button type="button" class="secondary cfg-pequeno fluxo-abrir">${t('Abrir')}</button>` : ''}</div>`;
+    }
+    // Cartão de link: o endereço primeiro; a prévia (título, descrição, imagem do cofre) entra quando chega.
+    function linkHtml(c) {
+      const previa = c.kiroPrevia || {}, endereco = c.url.replace(/^[a-z][a-z0-9+.-]*:\/\//i, '').replace(/\/$/, '');
+      const topo = topoHtml(c, previa.titulo || endereco);
+      if (c.kiroRecolhido) return topo;
+      const imagem = previa.imagem && F.caminhoSeguro(previa.imagem) ? `<img class="fluxo-link-imagem" src="${esc(opcoes.urlDoArquivo(previa.imagem))}" alt="" draggable="false">` : '';
+      const titulo = previa.titulo ? `<p class="fluxo-link-titulo">${esc(previa.titulo)}</p>` : '';
+      const descricao = previa.descricao ? `<p class="fluxo-link-descricao">${esc(previa.descricao)}</p>` : '';
+      return `${topo}<div class="fluxo-link-corpo">${imagem}${titulo}${descricao}<p class="fluxo-link">${esc(c.url)}</p></div>`;
     }
     // Cartão de arquivo: topo (seta que recolhe, nome, Abrir) e corpo. Recolhido, o corpo nem é
     // desenhado. Só caminho relativo ao cofre vira mídia: um .canvas de fora não aponta para ../ nem para o disco.
     function arquivoHtml(c, tipo) {
       if (!F.caminhoSeguro(c.file)) return `<p class="fluxo-arquivo">${esc(c.file)}</p>`;
       const nome = c.file.split('/').pop(), aberto = !c.kiroRecolhido, url = esc(opcoes.urlDoArquivo(c.file));
-      const rotuloSeta = aberto ? t('Recolher') : t('Mostrar conteúdo');
-      const topo = `<div class="fluxo-arquivo-topo"><button type="button" class="icon-button fluxo-seta-recolher" aria-expanded="${aberto}" aria-label="${rotuloSeta}" title="${rotuloSeta}">${opcoes.icone('direita')}</button><span class="fluxo-arquivo-nome">${esc(nome)}<span class="md-pdf-total"></span></span>${tipo === 'audio' ? '' : `<button type="button" class="secondary cfg-pequeno fluxo-abrir">${t('Abrir')}</button>`}</div>`;
+      const topo = topoHtml(c, nome, { abrir: tipo !== 'audio', total: '<span class="md-pdf-total"></span>' });
       if (!aberto) return topo;
       const corpos = {
         // O pdf-nota.js ativa sozinho este bloco ao entrar na página; a página vem da sessão para o redesenho completo não voltar à primeira.
@@ -218,12 +229,12 @@
     const centroDaVista = () => { const [w, h] = tamanho(); return F.paraCanvas(s.vista, w / 2, h / 2); };
     // Novo cartão centrado em p. Depois de um await (modal, gravação de imagem) o app pode ter
     // redesenhado a tela e este editor já não ser o montado: aí vale o canvas que está no estado.
-    function adicionarNo(base, p) {
+    function adicionarNo(base, p, aoCriar) {
       // Um salvamento em andamento troca `state` por baixo dos nós: gravar agora cairia no
       // `state` antigo e `render()` (fim do save) reconstruiria a tela sem este cartão. Esperar
       // a folga: depois a chamada de novo cai na instância viva ou no ramo morto com
       // canvasAtual + redesenhar (F1).
-      if (opcoes.salvando?.()) return void setTimeout(() => adicionarNo(base, p), 150);
+      if (opcoes.salvando?.()) return void setTimeout(() => adicionarNo(base, p, aoCriar), 150);
       if (!montados.has(inst)) {
         // Instância morta: gravar direto no canvas mais recente do estado (não no `canvas` desta
         // closure, que ficou parado no momento em que a tela redesenhou) e pedir um redesenho.
@@ -236,13 +247,41 @@
         s.selecao = new Set([r.id]);
         opcoes.aoMudar(r.canvas);
         opcoes.redesenhar();
+        aoCriar?.(r.id);
         return r.id;
       }
       terminarEdicao();   // um upload que termina enquanto se digita comita o texto, não o redesenha por baixo (M1)
       const r = F.adicionarCartao(canvas, { ...base, x: encaixar(p.x - base.width / 2), y: encaixar(p.y - base.height / 2) });
       s.selecao = new Set([r.id]);
       mudar(r.canvas);
+      aoCriar?.(r.id);
       return r.id;
+    }
+    // Link novo: nasce com o endereço e a prévia (título, descrição, imagem) entra quando chega, fora do desfazer.
+    // YouTube fica de fora (é da Task 5). Qualquer falha da busca deixa o cartão como está.
+    function novoLink(url, p) {
+      const base = { type: 'link', url, width: 320, height: 100 };
+      adicionarNo(base, p, F.idDoYoutube(url) || !opcoes.previaDeLink ? undefined : idNo => {
+        Promise.resolve(opcoes.previaDeLink(url)).then(previa => receberPrevia(idNo, previa), () => {});
+      });
+    }
+    // Instância viva: troca no canvas desta tela. Morta (o salvamento automático remontou a tela enquanto
+    // a busca corria): grava no canvas mais recente do estado e redesenha. Sem desfazer em nenhum dos dois.
+    function receberPrevia(idNo, previa) {
+      if (!previa || typeof previa !== 'object') return;
+      if (opcoes.salvando?.()) return void setTimeout(() => receberPrevia(idNo, previa), 150);
+      const vivo = montados.has(inst), base = vivo ? canvas : opcoes.canvasAtual();
+      const n = base?.nodes.find(x => x.id === idNo);
+      if (!n || n.type !== 'link') return;   // o cartão foi apagado nesse meio tempo
+      const campos = { kiroPrevia: { titulo: previa.titulo ?? null, descricao: previa.descricao ?? null, imagem: previa.imagem ?? null } };
+      // Cartão ainda no tamanho de partida cresce para caber a prévia.
+      const altura = n.kiroRecolhido ? 'kiroAlturaAberta' : 'height';
+      if (!n.kiroAlturaFixa && n[altura] === F.tamanhoPadrao(n).height) campos[altura] = campos.kiroPrevia.imagem ? 240 : 150;
+      if (!vivo) { opcoes.aoMudar(F.editarCartao(base, idNo, campos)); opcoes.redesenhar(); return; }
+      terminarEdicao();   // redesenhar com um texto em edição o perderia
+      canvas = F.editarCartao(canvas, idNo, campos);
+      desenhar();
+      opcoes.aoMudar(canvas);
     }
     async function adicionarNota(p) { const nota = await opcoes.escolherNota(); if (nota) adicionarNo({ type: 'file', file: nota.arquivo, width: 400, height: 280 }, p); }
     // Tamanho do tipo; o PDF novo entra recolhido (a barra de título), para não cobrir o fluxo.
@@ -252,7 +291,7 @@
     }
     async function adicionarArquivo(p) { const caminho = await opcoes.escolherImagem(); if (caminho) adicionarNo(cartaoDeArquivo(caminho), p); }
     function abrirArquivo(idNo) { const c = no(idNo); if (c?.type === 'file' && F.caminhoSeguro(c.file)) opcoes.abrirArquivo(c.file, F.tipoDoArquivo(c.file), { pagina: s.paginasDoPdf.get(idNo) || 1, origem: raiz }); }
-    async function adicionarLink(p) { const url = await opcoes.pedirLink(); if (url) adicionarNo({ type: 'link', url, width: 320, height: 100 }, p); }
+    async function adicionarLink(p) { const url = await opcoes.pedirLink(); if (url) novoLink(url, p); }
     function criarGrupo(p) {
       const sel = canvas.nodes.filter(n => s.selecao.has(n.id));
       const caixa = sel.length ? F.caixaDe(sel) : { x: p.x - 200, y: p.y - 150, width: 400, height: 300 };
@@ -269,7 +308,7 @@
     function colarTexto(texto, p) {
       const limpo = String(texto).trim();
       if (!limpo) return;
-      if (/^https?:\/\/\S+$/i.test(limpo)) return void adicionarNo({ type: 'link', url: limpo, width: 320, height: 100 }, p);
+      if (/^https?:\/\/\S+$/i.test(limpo)) return void novoLink(limpo, p);
       adicionarNo({ type: 'text', text: limpo, width: 320, height: F.alturaEstimada(limpo) }, p);
     }
     // Editar texto: o editor do app (opcoes.montarEditor) ou, sem ele, um <textarea> no lugar do
@@ -453,7 +492,10 @@
         ...(ids.length === 1 && no(idNo)?.type === 'group' ? [{ rotulo: t('Renomear grupo'), icone: opcoes.icone('renomear'), acao: () => editarGrupo(idNo) }] : []),
         ...(ids.length === 1 && arquivoDoMenu(idNo) ? menuDoArquivo(idNo) : []),
         ...(ids.length === 1 && no(idNo)?.type === 'file' && F.tipoDoArquivo(no(idNo).file) === 'nota' ? [{ rotulo: t('Abrir nota'), icone: opcoes.icone('nota'), acao: () => opcoes.abrirNota(no(idNo).file) }] : []),
-        ...(ids.length === 1 && no(idNo)?.type === 'link' ? [{ rotulo: t('Abrir link'), icone: opcoes.icone('link'), acao: () => opcoes.abrirLink(no(idNo).url) }] : []),
+        ...(ids.length === 1 && no(idNo)?.type === 'link' ? [
+          { rotulo: no(idNo).kiroRecolhido ? t('Mostrar conteúdo') : t('Recolher'), icone: opcoes.icone('direita'), acao: () => mudar(F.alternarRecolhido(canvas, idNo)) },
+          { rotulo: t('Abrir link'), icone: opcoes.icone('link'), acao: () => opcoes.abrirLink(no(idNo).url) },
+        ] : []),
         { separador: true },
         { rotulo: ids.length > 1 ? t('Excluir {n} cartões', { n: ids.length }) : t('Excluir'), icone: opcoes.icone('lixeira'), acao: () => mudar(F.removerCartoes(canvas, ids)) },
       ];
@@ -698,7 +740,7 @@
       if (e.target.closest('.fluxo-conteudo a')) e.preventDefault();
       const cartao = e.target.closest('.fluxo-arquivo-topo')?.closest('.fluxo-cartao');
       if (!cartao) return;
-      if (e.target.closest('.fluxo-abrir')) abrirArquivo(cartao.dataset.no);
+      if (e.target.closest('.fluxo-abrir')) { const c = no(cartao.dataset.no); if (c?.type === 'link') opcoes.abrirLink(c.url); else abrirArquivo(cartao.dataset.no); }
       else if (e.target.closest('.fluxo-seta-recolher')) mudar(F.alternarRecolhido(canvas, cartao.dataset.no));
     });
     // Página do PDF que está no topo, guardada na sessão: o scroll não borbulha, daí a captura.

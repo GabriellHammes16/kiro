@@ -7,6 +7,7 @@ import { homedir } from 'node:os';
 import vaultModule from './vault.cjs';
 import agentModule from './agent/index.cjs';
 import ligacaoRede from './ligacao-rede-plugins.cjs';
+import ligacaoPrevia from './ligacao-previa.cjs';
 import segredosModule from './segredos-plugins.cjs';
 import agendadorBackupModule from './agendador-backup.cjs';
 import KiroPlugins from './plugins.js';
@@ -23,7 +24,7 @@ const vault = new Vault(vaultDirectory);
 const devTools = dev ? (await import('./dev/devtools.mjs')).createDevTools(root) : null;
 if (dev && !process.env.KIRO_VAULT && !process.env.KUROI_VAULT) await (await import('./dev/seed.cjs')).default.semearSeVazio(vaultDirectory);
 const agentConfig = new agentModule.AgentConfig(vaultDirectory);
-const publicFiles = { '/': ['index.html', 'text/html'], '/index.html': ['index.html', 'text/html'], '/app.js': ['app.js', 'text/javascript'], '/idiomas.js': ['idiomas.js', 'text/javascript'], '/idiomas/en.js': ['idiomas/en.js', 'text/javascript'], '/corretor.js': ['corretor.js', 'text/javascript'], '/editor-nota.js': ['editor-nota.js', 'text/javascript'], '/editor-widgets.js': ['editor-widgets.js', 'text/javascript'], '/ortografia.js': ['ortografia.js', 'text/javascript'], '/domain.js': ['domain.js', 'text/javascript'], '/pdf-nota.js': ['pdf-nota.js', 'text/javascript'], '/plugins.js': ['plugins.js', 'text/javascript'], '/abas.js': ['abas.js', 'text/javascript'], '/fluxo.js': ['fluxo.js', 'text/javascript'], '/fluxo-tela.js': ['fluxo-tela.js', 'text/javascript'],'/hoje.js': ['hoje.js', 'text/javascript'], '/icones-tema.js': ['icones-tema.js', 'text/javascript'], '/plugin-worker.js': ['plugin-worker.js', 'text/javascript'], '/kiro-frame.js': ['kiro-frame.js', 'text/javascript'],'/styles.css': ['styles.css', 'text/css'], '/temas.css': ['temas.css', 'text/css'],'/kiro-logo.png': ['kiro-logo.png', 'image/png'], '/kiro-abertura.png': ['kiro-abertura.png', 'image/png'] };
+const publicFiles = { '/': ['index.html', 'text/html'], '/index.html': ['index.html', 'text/html'], '/app.js': ['app.js', 'text/javascript'], '/idiomas.js': ['idiomas.js', 'text/javascript'], '/idiomas/en.js': ['idiomas/en.js', 'text/javascript'], '/corretor.js': ['corretor.js', 'text/javascript'], '/editor-nota.js': ['editor-nota.js', 'text/javascript'], '/editor-widgets.js': ['editor-widgets.js', 'text/javascript'], '/ortografia.js': ['ortografia.js', 'text/javascript'], '/domain.js': ['domain.js', 'text/javascript'], '/pdf-nota.js': ['pdf-nota.js', 'text/javascript'], '/plugins.js': ['plugins.js', 'text/javascript'], '/abas.js': ['abas.js', 'text/javascript'], '/fluxo.js': ['fluxo.js', 'text/javascript'], '/fluxo-tela.js': ['fluxo-tela.js', 'text/javascript'], '/previa-link.js': ['previa-link.js', 'text/javascript'],'/hoje.js': ['hoje.js', 'text/javascript'], '/icones-tema.js': ['icones-tema.js', 'text/javascript'], '/plugin-worker.js': ['plugin-worker.js', 'text/javascript'], '/kiro-frame.js': ['kiro-frame.js', 'text/javascript'],'/styles.css': ['styles.css', 'text/css'], '/temas.css': ['temas.css', 'text/css'],'/kiro-logo.png': ['kiro-logo.png', 'image/png'], '/kiro-abertura.png': ['kiro-abertura.png', 'image/png'] };
 const allowedHosts = new Set([`localhost:${port}`, `127.0.0.1:${port}`]);
 const { version } = JSON.parse(await readFile(join(root, 'package.json'), 'utf8'));
 // Corpo JSON com teto de tamanho: o erro sobe para o catch e vira 400.
@@ -217,6 +218,12 @@ createServer(async (request, response) => {
       const id = decodeURIComponent(rota.slice('/api/plugin-data/'.length));
       if (request.method === 'GET') return send(response, 200, await vault.readPluginData(id));
       if (request.method === 'POST') return send(response, 200, await vault.writePluginData(id, await lerJson(request, 1024 * 1024)));
+    }
+    // Prévia de link do Fluxo: mesma busca do Electron; qualquer falha volta como null.
+    if (rota === '/api/previa' && request.method === 'POST') {
+      if (!mesmaOrigem(request)) return send(response, 403, { error: frase('Só a própria página do Kiro pode usar esta rota.') });
+      const { url } = await lerJson(request, 4096);
+      return send(response, 200, typeof url === 'string' ? await ligacaoPrevia.buscarPrevia({ vault, url, ...redeFalsa }) : null);
     }
     // kiro.fetch e chaves: a página não é confiável; ligacao-rede-plugins.cjs relê tudo do cofre.
     if (rota === '/api/plugin-fetch' || rota.startsWith('/api/plugin-secrets/')) {

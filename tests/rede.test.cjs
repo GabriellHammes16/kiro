@@ -222,3 +222,37 @@ test('segredo nunca aparece em erro; chave ausente ou inválida é erro', async 
   await assert.rejects(rodar(transporte([]), {}, pedido({ secret: 'apiKey' })), /chave/i);
   await assert.rejects(rodar(transporte([]), { cabecalhoDoSegredo: async () => ({ nome: 'authorization', valor: 'a\r\nx: y' }) }, pedido({ secret: 'apiKey' })), erro => /chave/i.test(erro.message) && !erro.message.includes('x: y'));
 });
+
+test('qualquerHost aceita qualquer host público e segue redirecionamento para outro', async () => {
+  const t = transporte([
+    { status: 301, headers: { location: 'https://outro.com/b' } },
+    { status: 200, text: 'fim', headers: { 'content-type': 'text/html' } },
+  ]);
+  const r = await rodar(t, { hostsConcedidos: [], qualquerHost: true, agente: 'Kiro' }, pedido({ url: 'https://site.com/a', host: 'site.com' }));
+  assert.equal(r.text, 'fim');
+  assert.deepEqual(t.vistos.map(v => v.hostname), ['site.com', 'outro.com']);
+  assert.equal(t.vistos[0].headers['user-agent'], 'Kiro');
+});
+
+test('qualquerHost continua recusando IP literal, porta e redirecionamento para a rede local', async () => {
+  const opcoes = { hostsConcedidos: [], qualquerHost: true };
+  await assert.rejects(rodar(transporte([]), opcoes, pedido({ url: 'https://127.0.0.1/x' })), /nome do host/);
+  await assert.rejects(rodar(transporte([]), opcoes, pedido({ url: 'https://site.com:8443/x' })), /porta 443/);
+  await assert.rejects(rodar(transporte([{ status: 302, headers: { location: 'https://127.0.0.1/x' } }]), opcoes, pedido({ url: 'https://site.com/a' })), /Redirecionamento recusado/);
+  // Nome público que resolve para a rede local: barrado na conexão.
+  const local = (h, o, cb) => cb(null, [{ address: '127.0.0.1', family: 4 }]);
+  await assert.rejects(rodar(transporte([]), { ...opcoes, lookup: local }, pedido({ url: 'https://site.com/a' })), /rede local/);
+});
+
+test('sem qualquerHost, host não concedido segue recusado', async () => {
+  await assert.rejects(rodar(transporte([]), {}, pedido({ url: 'https://site.com/a' })), /host não liberado/);
+});
+
+test('binario devolve buffer no lugar de text', async () => {
+  const bytes = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0xff]);
+  const t = transporte([{ status: 200, chunks: [bytes], headers: { 'content-type': 'image/png' } }]);
+  const r = await rodar(t, { binario: true });
+  assert.ok(Buffer.isBuffer(r.buffer) && r.buffer.equals(bytes));
+  assert.equal(r.text, undefined);
+  assert.equal(r.bytes, 5);
+});

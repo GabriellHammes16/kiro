@@ -1240,6 +1240,7 @@ function montarFluxos() {
       escolherNota: () => irParaNota({ escolher: true }),
       escolherImagem: escolherImagemDoSistema,
       pedirLink: pedirLinkDoFluxo,
+      previaDeLink: url => (window.cadernoDesktop ? window.cadernoDesktop.previaDeLink(url) : api('previa', { url })),
       canvasAtual: () => getFluxo(fluxo.id)?.canvas,
       // Um salvamento em andamento troca `state`: adicionarNo espera acabar para não perder o
       // cartão que um paste/seletor assíncrono estava prestes a gravar (F1).

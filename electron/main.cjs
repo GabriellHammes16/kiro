@@ -1,5 +1,6 @@
 const { app, BrowserWindow, ipcMain, Menu, shell, dialog, protocol, safeStorage, globalShortcut, nativeTheme } = require('electron');
 const ligacaoRede = require('../ligacao-rede-plugins.cjs');
+const { buscarPrevia } = require('../ligacao-previa.cjs');
 const { criarGuardaDeSegredos } = require('../segredos-plugins.cjs');
 const { criarAgendadorDeBackup } = require('../agendador-backup.cjs');
 const KiroPlugins = require('../plugins.js');
@@ -351,6 +352,8 @@ else app.whenReady().then(async () => {
   });
   const contextoDeRede = () => ({ vault, guarda, versaoDoKiro: app.getVersion() });
   ipcMain.handle('plugins:fetch', (_event, pluginId, pedido) => ligacaoRede.atenderFetch({ ...contextoDeRede(), pluginId, pedido }));
+  // Prévia de link do Fluxo: a busca e a gravação da imagem acontecem aqui; a página só passa o endereço.
+  ipcMain.handle('fluxo:previa', (_event, url) => buscarPrevia({ vault, url }));
   ipcMain.handle('plugins:secrets:state', (_event, pluginId) => ligacaoRede.estadoDasChaves({ ...contextoDeRede(), pluginId }));
   ipcMain.handle('plugins:secrets:set', (_event, pluginId, nome, valor) => {
     if (!safeStorage.isEncryptionAvailable()) throw new Error(frase('A cifra do sistema não está disponível neste computador; a chave não foi gravada.'));

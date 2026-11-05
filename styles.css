@@ -1463,6 +1463,12 @@ div.fluxo-editor { overflow:auto; }
 .fluxo-nota-previa :is(h1,h2,h3) { font-size:14px; margin:6px 0; }
 .fluxo-ausente { margin:0; color:var(--muted); font-style:italic; }
 .fluxo-link-titulo { margin:0 0 4px; font-weight:600; word-break:break-all; }
+/* Cartão de link: imagem, título, descrição e endereço no corpo; recolhido, só o topo. */
+.fluxo-link-corpo { flex:1; min-height:0; display:flex; flex-direction:column; gap:4px; box-sizing:border-box; padding:10px 14px; overflow:hidden; }
+.fluxo-link-corpo > p { margin:0; }
+.fluxo-link-imagem { display:block; flex:1 1 auto; min-height:0; width:100%; object-fit:cover; border-radius:var(--raio-controle); }
+.fluxo-link-descricao { flex:none; color:var(--muted); font-size:var(--fs-secundario); display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; }
+.fluxo-link-corpo .fluxo-link { flex:none; font-size:var(--fs-secundario); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; word-break:normal; }
 .fluxo-grupo-editor { position:absolute; width:220px; height:auto; transform:translateY(-110%); padding:4px 8px; border:1px solid var(--acento); border-radius:6px; background:var(--panel); font-size:14px; }
 .tree-tipo { flex:0 0 auto; margin-left:auto; padding-left:8px; font-size:10px; letter-spacing:.06em; color:var(--muted); }
 .painel-fluxo { display:flex; align-items:center; gap:6px; width:100%; padding:4px 6px; border:0; border-radius:6px; background:none; color:var(--ink); font:inherit; text-align:left; cursor:pointer; }

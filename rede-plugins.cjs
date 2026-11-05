@@ -63,7 +63,8 @@ function lookupProtegido(base) {
 }
 
 // Devolve a URL conferida ou lança com o motivo.
-function conferirDestino(endereco, hostsConcedidos, prefixo) {
+// qualquerHost (prévia de link): sem lista de hosts; https, porta, IP literal e rede local seguem barrados.
+function conferirDestino(endereco, hostsConcedidos, prefixo, qualquerHost = false) {
   const recusa = motivo => { throw erroProprio(prefixo + motivo); };
   let url;
   try { url = new URL(endereco); } catch { recusa('endereço (URL) inválido.'); }
@@ -72,7 +73,7 @@ function conferirDestino(endereco, hostsConcedidos, prefixo) {
   if (url.username || url.password) recusa('URL com usuário ou senha não é permitida.');
   const host = url.hostname.toLowerCase();
   if (net.isIP(host.replace(/^\[|\]$/g, ''))) recusa('use o nome do host, não um endereço IP.');
-  if (!hostsConcedidos.includes(host)) recusa(`host não liberado: ${host}.`);
+  if (!qualquerHost && !hostsConcedidos.includes(host)) recusa(`host não liberado: ${host}.`);
   return url;
 }
 
@@ -92,7 +93,7 @@ function lerCorpo(resposta, limite) {
   });
 }
 
-async function executarPedido(pedido, { hostsConcedidos = [], cabecalhoDoSegredo, hostDoSegredo, lookup = dns.lookup, requisitar = https.request, limites } = {}) {
+async function executarPedido(pedido, { hostsConcedidos = [], cabecalhoDoSegredo, hostDoSegredo, lookup = dns.lookup, requisitar = https.request, limites, qualquerHost = false, binario = false, agente = 'Kiro-Plugins' } = {}) {
   const lim = { ...LIMITES, ...limites };
   const concedidos = hostsConcedidos.map(h => String(h).toLowerCase());
   const lookupSeguro = lookupProtegido(lookup);
@@ -100,7 +101,7 @@ async function executarPedido(pedido, { hostsConcedidos = [], cabecalhoDoSegredo
   let acabou = false;
 
   const cadeia = async () => {
-    let url = conferirDestino(String(pedido.url), concedidos, 'Pedido recusado: ');
+    let url = conferirDestino(String(pedido.url), concedidos, 'Pedido recusado: ', qualquerHost);
     const hostSegredo = hostDoSegredo || url.hostname;
     let segredo = null;
     if (pedido.secret) {
@@ -113,7 +114,7 @@ async function executarPedido(pedido, { hostsConcedidos = [], cabecalhoDoSegredo
     for (let saltos = 0; ; saltos++) {
       if (acabou) return; // o tempo estourou enquanto esperava: não abre outra conexão
       const host = url.hostname;
-      const headers = { ...pedido.headers, 'user-agent': 'Kiro-Plugins' };
+      const headers = { ...pedido.headers, 'user-agent': agente };
       if (body === null) delete headers['content-type'];
       else headers['content-length'] = String(Buffer.byteLength(body));
       if (segredo && host === hostSegredo) headers[segredo.nome.toLowerCase()] = String(segredo.valor);
@@ -132,13 +133,14 @@ async function executarPedido(pedido, { hostsConcedidos = [], cabecalhoDoSegredo
         const buffer = await lerCorpo(resposta, lim.resposta);
         const devolvidos = {};
         for (const nome of CABECALHOS_DE_RESPOSTA) if (typeof resposta.headers[nome] === 'string') devolvidos[nome] = resposta.headers[nome];
-        return { status: resposta.statusCode, headers: devolvidos, text: buffer.toString('utf8'), bytes: buffer.length, redirecionamentos: saltos };
+        const corpo = binario ? { buffer } : { text: buffer.toString('utf8') };
+        return { status: resposta.statusCode, headers: devolvidos, ...corpo, bytes: buffer.length, redirecionamentos: saltos };
       }
       resposta.destroy();
       if (saltos + 1 > lim.redirecionamentos) throw erroProprio(`Muitos redirecionamentos (limite de ${lim.redirecionamentos}).`);
       let proxima;
       try { proxima = new URL(String(location), url).href; } catch { throw erroProprio(frase('Redirecionamento recusado: endereço (URL) inválido.')); }
-      url = conferirDestino(proxima, concedidos, 'Redirecionamento recusado: ');
+      url = conferirDestino(proxima, concedidos, 'Redirecionamento recusado: ', qualquerHost);
       if (resposta.statusCode === 303 || ((resposta.statusCode === 301 || resposta.statusCode === 302) && method === 'POST')) {
         method = 'GET';
         body = null;
