@@ -35,13 +35,13 @@ test('as guias são limpas ao soltar e ao cancelar o gesto', () => {
 });
 
 test('PDF não é tratado como nota', () => {
-  assert.match(fonte, /F\.ehPdf\(c\.file\)/);
+  assert.match(fonte, /F\.tipoDoArquivo\(c\.file\) !== 'nota'/);
   assert.doesNotMatch(fonte, /type === 'file' && !F\.ehImagem\(no\(idNo\)\.file\) \?/);
 });
 
-test('o PDF reaproveita o elemento para não piscar ao redesenhar', () => {
+test('o corpo do arquivo (PDF, vídeo) reaproveita o elemento para não piscar ao redesenhar', () => {
   const i = fonte.indexOf('function desenhar()');
-  assert.match(fonte.slice(i, i + 900), /fluxo-pdf/);
+  assert.match(fonte.slice(i, i + 1200), /data-reusar/);
 });
 
 test('rolar as páginas não é capturado pelo Fluxo', () => {
@@ -57,4 +57,22 @@ test('Copiar e Recortar do menu não usam execCommand', () => {
 
 test('segurar o atalho de balão não cria um cartão por repetição', () => {
   assert.match(fonte, /e\.repeat/);
+});
+
+test('cartao de arquivo recolhe pelo modelo e reaproveita o corpo ja desenhado', () => {
+  assert.ok(fonte.includes('F.alternarRecolhido('));
+  assert.ok(fonte.includes('data-reusar'));
+});
+
+test('o Fluxo escolhe os arquivos aceitos por uma lista propria', () => {
+  assert.ok(fonte.includes('opcoes.arquivosDoEvento'));
+  assert.doesNotMatch(fonte, /opcoes\.imagensColadas/);
+});
+
+test('as notas continuam so com imagem e PDF: imagensDoEvento filtra por TIPOS_DE_IMAGEM', () => {
+  const app = fs.readFileSync(path.join(__dirname, '../app.js'), 'utf8');
+  const i = app.indexOf('function imagensDoEvento');
+  assert.ok(i > 0);
+  assert.match(app.slice(i, i + 400), /TIPOS_DE_IMAGEM\.includes/);
+  assert.doesNotMatch(app.slice(i, app.indexOf('async function guardarImagem(', i)), /tipoDoArquivo|TIPOS_DO_FLUXO/);
 });

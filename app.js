@@ -1245,10 +1245,11 @@ function montarFluxos() {
       // cartão que um paste/seletor assíncrono estava prestes a gravar (F1).
       salvando: () => busy,
       aviso: (texto, erro) => status(texto, erro),
-      imagensColadas: dados => imagensDoEvento(dados),
+      arquivosDoEvento: arquivosDoFluxo,
+      lerTexto: lerTextoDoAnexo,
+      abrirArquivo: abrirArquivoDoFluxo,
       arquivoDaNota: id => getNote(id)?.file || null,
       guardarImagem: guardarImagemDoFluxo,
-      ampliarPdf: abrirPdfInteiro,
       abrirPdfNoSistema: window.cadernoDesktop ? arquivo => window.cadernoDesktop.openAttachment(arquivo).catch(() => { /* sem leitor padrão: fica quieto */ }) : null,
       transformarEmNota: (idNo, texto) => transformarCartaoEmNota(fluxo.id, idNo, texto),
       // Instância morta (o modal ficou aberto tempo bastante para o salvamento automático redesenhar
@@ -3671,11 +3672,26 @@ async function guardarImagem(arquivo) {
   if (!resposta.ok) throw new Error(resultado.error || t('Não foi possível guardar a imagem.'));
   return resultado;
 }
+// Os arquivos que o Fluxo aceita (colar, arrastar, botão da barra): lista própria, as notas seguem
+// só com TIPOS_DE_IMAGEM. O cofre confere o conteúdo de verdade ao gravar; aqui basta o nome.
+const EXTENSOES_DO_FLUXO = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'pdf', 'txt', 'md', 'csv', 'mp3', 'wav', 'm4a', 'mp4'];
+const aceitoNoFluxo = arquivo => TIPOS_DE_IMAGEM.includes(arquivo.type) || EXTENSOES_DO_FLUXO.includes((/\.([^.]+)$/.exec(arquivo.name || '') || [])[1]?.toLowerCase());
+function arquivosDoFluxo(dados) {
+  if (!dados) return [];
+  const arquivos = [...(dados.files || [])].filter(aceitoNoFluxo);
+  if (arquivos.length) return arquivos;
+  return [...(dados.items || [])].filter(item => item.kind === 'file').map(item => item.getAsFile()).filter(arquivo => arquivo && aceitoNoFluxo(arquivo));
+}
+async function lerTextoDoAnexo(arquivo) {
+  const resposta = await fetch(urlDoAnexo(arquivo));
+  if (!resposta.ok) throw new Error(String(resposta.status));
+  return resposta.text();
+}
 // Seletor de arquivos do sistema → anexo do cofre (mesmo caminho da imagem colada). Devolve o caminho.
 function escolherImagemDoSistema() {
   return new Promise(resolve => {
     const campo = document.createElement('input');
-    campo.type = 'file'; campo.accept = TIPOS_DE_IMAGEM.join(',');
+    campo.type = 'file'; campo.accept = EXTENSOES_DO_FLUXO.map(x => `.${x}`).join(',');
     campo.addEventListener('cancel', () => resolve(null));
     campo.addEventListener('change', async () => {
       const arquivo = campo.files?.[0];
@@ -3779,6 +3795,21 @@ function abrirPdfInteiro(arquivo, pagina, origem) {
     // detail > 1: o 2º clique de um duplo clique em Ampliar cairia no fundo que acabou de aparecer.
     if (evento.target === telaDeImagem && evento.detail <= 1) fecharImagemInteira();
   });
+  origemDoFoco = origem || null;
+}
+// Abrir de um cartão de arquivo do Fluxo: cada tipo tem a sua tela inteira. `origem` recebe o foco ao fechar.
+async function abrirArquivoDoFluxo(arquivo, tipo, { pagina, origem } = {}) {
+  const fonte = urlDoAnexo(arquivo);
+  // Só o fundo fecha: clicar no vídeo, no texto ou na tabela não (selecionar e rolar).
+  const peloFundo = evento => { if (evento.target === telaDeImagem && evento.detail <= 1) fecharImagemInteira(); };
+  if (tipo === 'pdf') return abrirPdfInteiro(arquivo, pagina || 1, origem);
+  if (tipo === 'imagem') abrirImagemInteira(fonte, arquivo.split('/').pop());
+  else if (tipo === 'video') abrirTelaInteira(`<video src="${escapeHtml(fonte)}" controls autoplay></video>`, peloFundo);
+  else if (tipo === 'texto' || tipo === 'tabela') {
+    let texto;
+    try { texto = await lerTextoDoAnexo(arquivo); } catch { return status(t('Não foi possível ler o arquivo.'), true); }
+    abrirTelaInteira(tipo === 'tabela' ? `<table class="fluxo-tabela">${KiroFluxoTela.tabelaHtml(texto)}</table>` : `<pre class="fluxo-texto">${escapeHtml(KiroFluxoTela.textoLimitado(texto))}</pre>`, peloFundo);
+  } else return;
   origemDoFoco = origem || null;
 }
 function abrirTelaInteira(conteudo, aoClicar = fecharImagemInteira) {
