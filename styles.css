@@ -1413,6 +1413,9 @@ html.janela-propria #barra-titulo { position:fixed; top:0; left:0; right:0; z-in
 .fluxo-alca[data-lado="right"] { left:100%; top:50%; }
 .fluxo-cartao:hover > .fluxo-alca, .fluxo-cartao.selecionado > .fluxo-alca { opacity:1; }
 .fluxo-canto { position:absolute; right:-4px; bottom:-4px; width:14px; height:14px; cursor:nwse-resize; }
+.fluxo-dica { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; pointer-events:none; color:var(--muted); }
+.fluxo-dica[hidden] { display:none; }
+.fluxo-dica p { margin:2px 0; }
 .fluxo-marca { position:absolute; border:calc(1px / var(--zoom, 1)) dashed var(--acento); background:color-mix(in srgb, var(--acento) 10%, transparent); pointer-events:none; }
 .fluxo-barra { position:absolute; left:50%; bottom:16px; transform:translateX(-50%); display:flex; gap:4px; align-items:center; padding:4px; border:1px solid var(--line); border-radius:10px; background:var(--panel); }
 .fluxo-zoom { min-width:56px; border:0; background:none; color:var(--muted); font:inherit; cursor:pointer; }

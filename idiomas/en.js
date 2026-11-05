@@ -812,6 +812,8 @@
     'Não foi possível usar essa pasta: {erro}': 'Could not use this folder: {erro}',
     // fluxo-tela.js
     'Fluxo {titulo}': 'Flow {titulo}',
+    'Dois cliques para criar um cartão': 'Double-click to create a card',
+    'Cole ou arraste um PDF ou uma imagem para cá': 'Paste or drag a PDF or an image here',
     'Adicionar cartão': 'Add card',
     'Adicionar cartão (ou dois cliques no fundo)': 'Add card (or double-click the background)',
     'Adicionar nota do cofre': 'Add vault note',

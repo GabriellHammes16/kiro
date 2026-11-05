@@ -36,11 +36,13 @@
     <div class="fluxo-cartoes"></div>
     <div class="fluxo-marca" hidden></div>
   </div>
+  <div class="fluxo-dica"><p>${t('Dois cliques para criar um cartão')}</p><p>${t('Cole ou arraste um PDF ou uma imagem para cá')}</p></div>
   <div class="fluxo-barra"><button type="button" class="icon-button" data-fluxo-acao="cartao" title="${t('Adicionar cartão (ou dois cliques no fundo)')}" aria-label="${t('Adicionar cartão')}">${opcoes.icone('mais')}</button><button type="button" class="icon-button" data-fluxo-acao="nota" title="${t('Adicionar nota do cofre')}" aria-label="${t('Adicionar nota do cofre')}">${opcoes.icone('nota')}</button><button type="button" class="icon-button" data-fluxo-acao="imagem" title="${t('Adicionar imagem')}" aria-label="${t('Adicionar imagem')}">${opcoes.icone('imagem')}</button><button type="button" class="fluxo-zoom" data-fluxo-acao="enquadrar" title="${t('Enquadrar tudo (Shift+1)')}" aria-label="${t('Enquadrar tudo')}">100%</button></div>
 </div>`;
     const raiz = host.firstElementChild;
     const mundo = raiz.querySelector('.fluxo-mundo'), caminhos = raiz.querySelector('.fluxo-caminhos'), cartoes = raiz.querySelector('.fluxo-cartoes');
     const previa = raiz.querySelector('.fluxo-seta-previa'), marca = raiz.querySelector('.fluxo-marca'), rotuloZoom = raiz.querySelector('.fluxo-zoom');
+    const dica = raiz.querySelector('.fluxo-dica');
     const ponta = `url(#fluxo-ponta-${n})`;
     const no = idNo => canvas.nodes.find(x => x.id === idNo);
     const elDoCartao = idNo => cartoes.querySelector(`[data-no="${CSS.escape(idNo)}"]`);
@@ -91,6 +93,7 @@
       const ordem = c => (c.type === 'group' ? 0 : 1);
       cartoes.innerHTML = [...canvas.nodes].sort((a, b) => ordem(a) - ordem(b)).map(cartaoHtml).join('');
       desenharSetas();
+      dica.hidden = canvas.nodes.length > 0;
     }
     // Altura que o Markdown de um cartão de texto ocupa na largura dele, mais a borda.
     function alturaDoTexto(texto, largura) {
@@ -245,11 +248,20 @@
         if (altura > atual.height) novo = F.redimensionar(novo, idNo, atual.width, encaixarPraCima(altura));
         mudar(novo);
       };
-      editor = { concluir };
+      editor = { concluir, id: idNo };
       campo.addEventListener('keydown', e => {
         e.stopPropagation();   // Delete, Ctrl+Z etc. são do texto, não do fluxo
         if (e.key === 'Escape') { e.preventDefault(); concluir(true); raiz.focus({ preventScroll: true }); }
       });
+      // Em captura: o Ctrl+Enter do CodeMirror marcaria a tarefa antes do ouvinte acima.
+      const aoCriarVizinho = e => {
+        const qual = atalhoDoEvento(e);
+        if (!qual) return;
+        e.preventDefault(); e.stopPropagation();
+        concluir(true);
+        criarVizinho(idNo, qual === 'ligado');
+      };
+      campo.addEventListener('keydown', aoCriarVizinho, true);
       // Sair do cartão grava (também quando o salvamento automático tira o foco: destino nulo).
       campo.addEventListener('focusout', e => { if (!campo.contains(e.relatedTarget)) concluir(true); });
       if (ed) ed.focar('fim'); else campo.focus();
@@ -380,6 +392,26 @@
       opcoes.menu(e, cartao ? menuDoCartao(cartao.dataset.no) : seta ? menuDaSeta(seta.dataset.seta) : menuDoFundo(pontoDoCanvas(e)));
     });
     function criarCartaoNoCentro() { criarCartao(centroDaVista()); }
+    // Atalhos editáveis de criar balão: 'proximo' (abaixo da base) ou 'ligado' (à direita, com seta).
+    function atalhoDoEvento(e) {
+      const c = root.Kiro.combinacaoDoEvento(e);
+      if (!c) return null;
+      return c === opcoes.atalho?.('fluxoProximo') ? 'proximo' : c === opcoes.atalho?.('fluxoLigado') ? 'ligado' : null;
+    }
+    // Balão novo ao lado de idBase, já em edição. Sem base, cai no centro da vista.
+    function criarVizinho(idBase, ligado) {
+      const base = no(idBase);
+      if (!base) return criarCartaoNoCentro();
+      const largura = !ligado && base.type === 'text' ? base.width : 260;
+      const pos = F.lugarLivre(canvas, ligado
+        ? { x: base.x + base.width + 80, y: base.y, width: largura, height: 60 }
+        : { x: base.x, y: base.y + base.height + F.GRADE, width: largura, height: 60 });
+      const passo = F.adicionarCartao(canvas, { type: 'text', text: '', ...pos, width: largura, height: 60 });
+      const novo = ligado ? F.ligar(passo.canvas, { fromNode: base.id, fromSide: 'right', toNode: passo.id, toSide: 'left' }).canvas : passo.canvas;
+      s.selecao = new Set([passo.id]);
+      mudar(novo);   // um passo só de desfazer para cartão + seta
+      editar(passo.id);
+    }
 
     // ---- Gestos (ponteiro) ----
     // Cada gesto: { mover(g, e), soltar(g, e) }. As próximas partes do editor acrescentam os seus.
@@ -530,6 +562,13 @@
       if (e.target !== raiz || !s.seta || (e.key !== 'Delete' && e.key !== 'Backspace')) return;
       e.preventDefault(); e.stopPropagation();
       mudar(F.removerSetas(canvas, [s.seta]));
+    });
+    // Antes do Enter abaixo, que abriria a edição do cartão: o atalho de balão também usa Enter.
+    raiz.addEventListener('keydown', e => {
+      const qual = e.target === raiz && atalhoDoEvento(e);
+      if (!qual) return;
+      e.preventDefault(); e.stopImmediatePropagation();
+      criarVizinho(s.selecao.size === 1 ? [...s.selecao][0] : null, qual === 'ligado');
     });
     raiz.addEventListener('keydown', e => {
       if (e.target !== raiz) return;

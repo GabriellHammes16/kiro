@@ -15,3 +15,12 @@ test('copiar e recortar respeitam o texto em edição', () => {
 test('a área do fluxo só vale quando o texto copiado ainda é o mesmo', () => {
   assert.match(fonte, /areaDoFluxo\?\.texto === /);
 });
+
+test('o atalho de criar balão é lido antes do editor, em captura', () => {
+  assert.ok(fonte.includes("opcoes.atalho?.('fluxoProximo')"));
+  assert.match(fonte, /campo\.addEventListener\('keydown', aoCriarVizinho, true\)/);
+});
+
+test('Enter sozinho não cria balão', () => {
+  assert.doesNotMatch(fonte, /e\.key === 'Enter'[^\n]*criarVizinho/);
+});
