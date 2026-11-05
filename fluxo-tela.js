@@ -5,7 +5,7 @@
 (function (root) {
   const F = root.KiroFluxo;
   const t = (frase, valores) => root.KiroIdiomas.t(frase, valores);
-  const sessoes = new Map();       // id do fluxo → { vista, selecao, seta, historico, grade }
+  const sessoes = new Map();       // id do fluxo → { vista, selecao, seta, historico, grade, mouseNaTela, ultimaColagem, ultimaSeta }
   const montados = new Set();
   // Último trecho copiado no Fluxo, para colar em outro fluxo. Só vale se o texto da área de
   // transferência ainda for o mesmo que gravamos junto. Vale até o Kiro fechar.
@@ -17,7 +17,7 @@
   const corData = cor => (F.CORES.includes(cor) ? ` data-fluxo-cor="${cor}"` : '');
   const corCss = cor => (/^#[0-9a-f]{6}$/i.test(cor || '') ? `--fluxo-cor:${cor};` : '');
   function sessao(id) {
-    if (!sessoes.has(id)) sessoes.set(id, { vista: null, selecao: new Set(), seta: null, historico: F.historicoVazio(), grade: true });
+    if (!sessoes.has(id)) sessoes.set(id, { vista: null, selecao: new Set(), seta: null, historico: F.historicoVazio(), grade: true, mouseNaTela: null, ultimaColagem: null, ultimaSeta: 0 });
     return sessoes.get(id);
   }
   function lerVistas(chave) { try { return JSON.parse(localStorage.getItem(chave)) || {}; } catch { return {}; } }
@@ -30,7 +30,6 @@
     // qualquer cofre, então sem a chave do cofre o Ctrl+Z (e a vista) de um vazariam para o outro.
     const { id } = opcoes, s = sessao(opcoes.chaveDaVista + '\n' + id), n = ++contador;
     let canvas = opcoes.canvas, gesto = null, editor = null, espaco = false, timerVista = null;
-    let mouseNaTela = null, ultimaColagem = null, ultimaSeta = 0;   // ponto do mouse, colagem anterior, hora da última seta
     host.innerHTML = `<div class="fluxo" tabindex="0" role="application" aria-label="${esc(t('Fluxo {titulo}', { titulo: opcoes.titulo }))}">
   <div class="fluxo-mundo">
     <svg class="fluxo-setas" aria-hidden="true"><defs><marker id="fluxo-ponta-${n}" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0 10 5 0 10z" fill="context-stroke"/></marker></defs><g class="fluxo-caminhos"></g><path class="fluxo-seta-previa" d=""/></svg>
@@ -127,7 +126,7 @@
     // ---- Mudanças ----
     function mudar(novo) {
       if (novo === canvas) return;
-      ultimaSeta = 0;
+      s.ultimaSeta = 0;
       s.historico = F.empilhar(s.historico, canvas);
       canvas = novo;
       desenhar();
@@ -136,7 +135,7 @@
     function voltar(fn) {
       const r = fn(s.historico, canvas);
       if (!r) return;
-      ultimaSeta = 0;
+      s.ultimaSeta = 0;
       terminarEdicao();
       s.historico = r.historico; canvas = r.canvas;
       desenhar(); opcoes.aoMudar(canvas);
@@ -485,7 +484,7 @@
       const g = escolherGesto(e);
       if (g) iniciar(e, g);
     });
-    raiz.addEventListener('pointermove', e => { mouseNaTela = pontoDaTela(e); if (gesto) GESTOS[gesto.tipo].mover(gesto, e); });
+    raiz.addEventListener('pointermove', e => { s.mouseNaTela = pontoDaTela(e); if (gesto) GESTOS[gesto.tipo].mover(gesto, e); });
     raiz.addEventListener('pointerup', e => { if (!gesto) return; const g = gesto; gesto = null; GESTOS[g.tipo].soltar(g, e); });
     raiz.addEventListener('pointercancel', () => { if (!gesto) return; gesto = null; previa.classList.remove('ativa'); marca.hidden = true; desenhar(); aplicarVista(); });
     // Roda: rola (Shift = na horizontal); Ctrl+roda: zoom no cursor. Conteúdo longo de um
@@ -604,9 +603,9 @@
     // um degrau na diagonal a cada vez, para o novo conjunto não cair em cima do anterior.
     function colarTrecho(trecho, p) {
       if (!trecho.nodes.length) return;
-      const repete = ultimaColagem && ultimaColagem.x === p.x && ultimaColagem.y === p.y;
-      ultimaColagem = { x: p.x, y: p.y, n: repete ? ultimaColagem.n + 1 : 0 };
-      const caixa = F.caixaDe(trecho.nodes, 0), passo = ultimaColagem.n * F.GRADE * 2;
+      const repete = s.ultimaColagem && s.ultimaColagem.x === p.x && s.ultimaColagem.y === p.y;
+      s.ultimaColagem = { x: p.x, y: p.y, n: repete ? s.ultimaColagem.n + 1 : 0 };
+      const caixa = F.caixaDe(trecho.nodes, 0), passo = s.ultimaColagem.n * F.GRADE * 2;
       const r = F.colarCartoes(canvas, trecho, encaixar(p.x - caixa.width / 2) + passo, encaixar(p.y - caixa.height / 2) + passo);
       selecionar(r.ids);
       mudar(r.canvas);
@@ -616,16 +615,16 @@
       const passo = F.GRADE * (e.shiftKey ? 5 : 1);
       const dx = { ArrowLeft: -passo, ArrowRight: passo }[e.key] || 0, dy = { ArrowUp: -passo, ArrowDown: passo }[e.key] || 0;
       const novo = F.moverCartoes(canvas, comConteudo([...s.selecao]), dx, dy), agora = Date.now();
-      if (agora - ultimaSeta < 500) { canvas = novo; desenhar(); opcoes.aoMudar(canvas); }
+      if (agora - s.ultimaSeta < 500) { canvas = novo; desenhar(); opcoes.aoMudar(canvas); }
       else mudar(novo);
-      ultimaSeta = agora;
+      s.ultimaSeta = agora;
     }
     raiz.addEventListener('paste', e => {
       if (editor || e.target !== raiz || !e.clipboardData) return;
       const copiado = e.clipboardData.getData('text/plain');
       if (copiado && areaDoFluxo?.texto === copiado) {
         e.preventDefault();
-        return void colarTrecho(areaDoFluxo.trecho, mouseNaTela ? F.paraCanvas(s.vista, mouseNaTela.x, mouseNaTela.y) : centroDaVista());
+        return void colarTrecho(areaDoFluxo.trecho, s.mouseNaTela ? F.paraCanvas(s.vista, s.mouseNaTela.x, s.mouseNaTela.y) : centroDaVista());
       }
       const imagens = opcoes.imagensColadas(e.clipboardData);   // mesmo filtro do editor de notas (M5)
       if (imagens.length) { e.preventDefault(); return void colarImagens(imagens, centroDaVista()); }
