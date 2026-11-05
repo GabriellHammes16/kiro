@@ -76,3 +76,11 @@ test('as notas continuam so com imagem e PDF: imagensDoEvento filtra por TIPOS_D
   assert.match(app.slice(i, i + 400), /TIPOS_DE_IMAGEM\.includes/);
   assert.doesNotMatch(app.slice(i, app.indexOf('async function guardarImagem(', i)), /tipoDoArquivo|TIPOS_DO_FLUXO/);
 });
+
+test('os corpos reaproveitaveis ficam na sessao, para o autosave nao parar a midia', () => {
+  assert.match(fonte, /corpos: new Map\(\)/);
+  const i = fonte.indexOf('function desenhar()');
+  const corpo = fonte.slice(i, fonte.indexOf('function alturaDoTexto', i));
+  assert.match(corpo, /s\.corpos = new Map\(\)/);
+  assert.match(corpo, /new Map\(s\.corpos\)/);
+});

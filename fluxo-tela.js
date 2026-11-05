@@ -27,7 +27,7 @@
   const corData = cor => (F.CORES.includes(cor) ? ` data-fluxo-cor="${cor}"` : '');
   const corCss = cor => (/^#[0-9a-f]{6}$/i.test(cor || '') ? `--fluxo-cor:${cor};` : '');
   function sessao(id) {
-    if (!sessoes.has(id)) sessoes.set(id, { vista: null, selecao: new Set(), paginasDoPdf: new Map(), seta: null, historico: F.historicoVazio(), grade: true, mouseNaTela: null, ultimaColagem: null, ultimaSeta: 0 });
+    if (!sessoes.has(id)) sessoes.set(id, { corpos: new Map(), rolagens: new WeakMap(), vista: null, selecao: new Set(), paginasDoPdf: new Map(), seta: null, historico: F.historicoVazio(), grade: true, mouseNaTela: null, ultimaColagem: null, ultimaSeta: 0 });
     return sessoes.get(id);
   }
   function lerVistas(chave) { try { return JSON.parse(localStorage.getItem(chave)) || {}; } catch { return {}; } }
@@ -126,16 +126,21 @@
       for (const sel of s.selecao) if (!no(sel)) s.selecao.delete(sel);
       if (s.seta && !canvas.edges.some(e => e.id === s.seta)) s.seta = null;
       // Corpo já aberto (PDF, texto, vídeo tocando…) volta no lugar do novo, com a rolagem: recarregar piscaria, e o vídeo pararia.
-      const rolantes = el => [...el.querySelectorAll('.md-pdf-paginas, .fluxo-texto, .fluxo-tabela')].map(x => [x, x.scrollTop, x.scrollLeft]);
-      const corpos = [...cartoes.querySelectorAll('[data-reusar]')].map(el => ({ el, chave: el.dataset.reusar, rolagens: rolantes(el) }));
+      // Os corpos vivem na sessão (`s.corpos`), não só neste DOM: o autosave remonta a tela inteira (outra instância de `montar`),
+      // e movidos no mesmo instante da troca o <audio> e o <video> não chegam a pausar.
+      const antigos = new Map(s.corpos);
+      for (const el of cartoes.querySelectorAll('[data-reusar]')) antigos.set(el.dataset.reusar, el);
       // Grupos primeiro: ficam atrás dos cartões.
       const ordem = c => (c.type === 'group' ? 0 : 1);
       cartoes.innerHTML = [...canvas.nodes].sort((a, b) => ordem(a) - ordem(b)).map(cartaoHtml).join('');
-      for (const a of corpos) {
-        const novo = [...cartoes.querySelectorAll('[data-reusar]')].find(x => x.dataset.reusar === a.chave);
-        if (!novo) continue;
-        novo.replaceWith(a.el);
-        for (const [x, topo, esquerda] of a.rolagens) { x.scrollTop = topo; x.scrollLeft = esquerda; }
+      s.corpos = new Map();   // só ficam os que ainda existem
+      for (const novo of cartoes.querySelectorAll('[data-reusar]')) {
+        const chave = novo.dataset.reusar, velho = antigos.get(chave);
+        if (velho) {
+          novo.replaceWith(velho);
+          for (const x of velho.querySelectorAll('.md-pdf-paginas, .fluxo-texto, .fluxo-tabela')) { const [topo, esquerda] = s.rolagens.get(x) || [0, 0]; x.scrollTop = topo; x.scrollLeft = esquerda; }
+        }
+        s.corpos.set(chave, velho || novo);
       }
       lerCorpos();
       desenharSetas();
@@ -699,6 +704,7 @@
     // Página do PDF que está no topo, guardada na sessão: o scroll não borbulha, daí a captura.
     raiz.addEventListener('scroll', e => {
       const caixa = e.target;
+      if (caixa.closest?.('[data-reusar]')) s.rolagens.set(caixa, [caixa.scrollTop, caixa.scrollLeft]);   // o elemento solto do DOM perde a rolagem
       if (!caixa.matches?.('.md-pdf-paginas') || !caixa.children.length) return;
       s.paginasDoPdf.set(caixa.closest('.fluxo-cartao').dataset.no, [...caixa.children].filter(p => p.offsetTop - (p.offsetParent === caixa ? 0 : caixa.offsetTop) <= caixa.scrollTop + 4).length || 1);
     }, true);
