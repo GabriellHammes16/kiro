@@ -5,7 +5,7 @@
 (function (root) {
   const F = root.KiroFluxo;
   const t = (frase, valores) => root.KiroIdiomas.t(frase, valores);
-  const sessoes = new Map();       // id do fluxo → { vista, selecao, seta, historico, grade, mouseNaTela, ultimaColagem, ultimaSeta }
+  const sessoes = new Map();       // id do fluxo → { vista, selecao, paginasDoPdf (id do cartão → página), seta, historico, grade, mouseNaTela, ultimaColagem, ultimaSeta }
   const montados = new Set();
   // Último trecho copiado no Fluxo, para colar em outro fluxo. Só vale se o texto da área de
   // transferência ainda for o mesmo que gravamos junto. Vale até o Kiro fechar.
@@ -17,7 +17,7 @@
   const corData = cor => (F.CORES.includes(cor) ? ` data-fluxo-cor="${cor}"` : '');
   const corCss = cor => (/^#[0-9a-f]{6}$/i.test(cor || '') ? `--fluxo-cor:${cor};` : '');
   function sessao(id) {
-    if (!sessoes.has(id)) sessoes.set(id, { vista: null, selecao: new Set(), seta: null, historico: F.historicoVazio(), grade: true, mouseNaTela: null, ultimaColagem: null, ultimaSeta: 0 });
+    if (!sessoes.has(id)) sessoes.set(id, { vista: null, selecao: new Set(), paginasDoPdf: new Map(), seta: null, historico: F.historicoVazio(), grade: true, mouseNaTela: null, ultimaColagem: null, ultimaSeta: 0 });
     return sessoes.get(id);
   }
   function lerVistas(chave) { try { return JSON.parse(localStorage.getItem(chave)) || {}; } catch { return {}; } }
@@ -38,7 +38,7 @@
     <div class="fluxo-guias"></div>
   </div>
   <div class="fluxo-dica"><p>${t('Dois cliques para criar um cartão')}</p><p>${t('Cole ou arraste um PDF ou uma imagem para cá')}</p></div>
-  <div class="fluxo-barra"><button type="button" class="icon-button" data-fluxo-acao="cartao" title="${t('Adicionar cartão (ou dois cliques no fundo)')}" aria-label="${t('Adicionar cartão')}">${opcoes.icone('mais')}</button><button type="button" class="icon-button" data-fluxo-acao="nota" title="${t('Adicionar nota do cofre')}" aria-label="${t('Adicionar nota do cofre')}">${opcoes.icone('nota')}</button><button type="button" class="icon-button" data-fluxo-acao="imagem" title="${t('Adicionar imagem')}" aria-label="${t('Adicionar imagem')}">${opcoes.icone('imagem')}</button><button type="button" class="fluxo-zoom" data-fluxo-acao="enquadrar" title="${t('Enquadrar tudo (Shift+1)')}" aria-label="${t('Enquadrar tudo')}">100%</button></div>
+  <div class="fluxo-barra"><button type="button" class="icon-button" data-fluxo-acao="cartao" title="${t('Adicionar cartão (ou dois cliques no fundo)')}" aria-label="${t('Adicionar cartão')}">${opcoes.icone('mais')}</button><button type="button" class="icon-button" data-fluxo-acao="nota" title="${t('Adicionar nota do cofre')}" aria-label="${t('Adicionar nota do cofre')}">${opcoes.icone('nota')}</button><button type="button" class="icon-button" data-fluxo-acao="imagem" title="${t('Adicionar imagem ou PDF')}" aria-label="${t('Adicionar imagem ou PDF')}">${opcoes.icone('imagem')}</button><button type="button" class="fluxo-zoom" data-fluxo-acao="enquadrar" title="${t('Enquadrar tudo (Shift+1)')}" aria-label="${t('Enquadrar tudo')}">100%</button></div>
 </div>`;
     const raiz = host.firstElementChild;
     const mundo = raiz.querySelector('.fluxo-mundo'), caminhos = raiz.querySelector('.fluxo-caminhos'), cartoes = raiz.querySelector('.fluxo-cartoes');
@@ -55,6 +55,11 @@
     function conteudo(c) {
       if (c.type === 'text') return opcoes.markdown(c.text);
       if (c.type === 'file') {
+        if (F.ehPdf(c.file)) {
+          if (!F.caminhoSeguro(c.file)) return `<p class="fluxo-arquivo">${esc(c.file)}</p>`;
+          // O pdf-nota.js ativa sozinho este bloco ao entrar na página; a página vem da sessão para o redesenho completo não voltar à primeira.
+          return `<details open class="md-pdf fluxo-pdf" data-pdf="${esc(c.file)}" data-pagina="${s.paginasDoPdf.get(c.id) || 1}"><summary class="md-pdf-topo fluxo-pdf-topo"><span class="md-pdf-titulo">${esc(c.file.split('/').pop())}<span class="md-pdf-total"></span></span><button type="button" class="secondary cfg-pequeno fluxo-pdf-ampliar">${t('Ampliar')}</button></summary><div class="md-pdf-paginas"></div></details>`;
+        }
         if (F.ehImagem(c.file)) {
           // Só caminho relativo ao cofre vira <img>: um .canvas de fora não aponta para ../ nem para o disco.
           if (!F.caminhoSeguro(c.file)) return `<p class="fluxo-arquivo">${esc(c.file)}</p>`;
@@ -90,9 +95,17 @@
       // Seleção que aponta para algo que sumiu (desfazer, outra coluna) é descartada.
       for (const sel of s.selecao) if (!no(sel)) s.selecao.delete(sel);
       if (s.seta && !canvas.edges.some(e => e.id === s.seta)) s.seta = null;
+      // PDF já aberto volta no lugar do novo, com a rolagem: recarregar o PDF a cada redesenho piscaria.
+      const pdfs = [...cartoes.querySelectorAll('.fluxo-pdf')].map(el => ({ el, id: el.closest('.fluxo-cartao').dataset.no, rolagem: el.querySelector('.md-pdf-paginas').scrollTop }));
       // Grupos primeiro: ficam atrás dos cartões.
       const ordem = c => (c.type === 'group' ? 0 : 1);
       cartoes.innerHTML = [...canvas.nodes].sort((a, b) => ordem(a) - ordem(b)).map(cartaoHtml).join('');
+      for (const a of pdfs) {
+        const novo = elDoCartao(a.id)?.querySelector('.fluxo-pdf');
+        if (novo?.dataset.pdf !== a.el.dataset.pdf) continue;
+        novo.replaceWith(a.el);
+        a.el.querySelector('.md-pdf-paginas').scrollTop = a.rolagem;
+      }
       desenharSetas();
       dica.hidden = canvas.nodes.length > 0;
     }
@@ -195,7 +208,8 @@
       return r.id;
     }
     async function adicionarNota(p) { const nota = await opcoes.escolherNota(); if (nota) adicionarNo({ type: 'file', file: nota.arquivo, width: 400, height: 280 }, p); }
-    async function adicionarImagem(p) { const caminho = await opcoes.escolherImagem(); if (caminho) adicionarNo({ type: 'file', file: caminho, width: 320, height: 240 }, p); }
+    async function adicionarImagem(p) { const caminho = await opcoes.escolherImagem(); if (caminho) adicionarNo({ type: 'file', file: caminho, ...F.tamanhoPadrao({ type: 'file', file: caminho }) }, p); }
+    function ampliar(idNo) { const c = no(idNo); if (c && F.caminhoSeguro(c.file)) opcoes.ampliarPdf(c.file, s.paginasDoPdf.get(idNo) || 1); }
     async function adicionarLink(p) { const url = await opcoes.pedirLink(); if (url) adicionarNo({ type: 'link', url, width: 320, height: 100 }, p); }
     function criarGrupo(p) {
       const sel = canvas.nodes.filter(n => s.selecao.has(n.id));
@@ -363,7 +377,7 @@
       return [
         { rotulo: t('Adicionar cartão'), icone: opcoes.icone('mais'), acao: () => criarCartao(p) },
         { rotulo: t('Adicionar nota do cofre'), icone: opcoes.icone('nota'), acao: () => adicionarNota(p) },
-        { rotulo: t('Adicionar imagem'), icone: opcoes.icone('imagem'), acao: () => adicionarImagem(p) },
+        { rotulo: t('Adicionar imagem ou PDF'), icone: opcoes.icone('imagem'), acao: () => adicionarImagem(p) },
         { rotulo: t('Adicionar link'), icone: opcoes.icone('link'), acao: () => adicionarLink(p) },
         { rotulo: s.selecao.size ? t('Agrupar seleção') : t('Criar grupo'), icone: opcoes.icone('pastas'), acao: () => criarGrupo(p) },
         { separador: true },
@@ -386,7 +400,8 @@
         ...(ids.length === 1 && no(idNo)?.type === 'text' ? [{ rotulo: t('Editar texto'), icone: opcoes.icone('renomear'), acao: () => editar(idNo) }] : []),
         ...(ids.length === 1 && no(idNo)?.type === 'text' && no(idNo).text.trim() ? [{ rotulo: t('Transformar em nota'), icone: opcoes.icone('nota'), acao: () => transformarEmNota(idNo) }] : []),
         ...(ids.length === 1 && no(idNo)?.type === 'group' ? [{ rotulo: t('Renomear grupo'), icone: opcoes.icone('renomear'), acao: () => editarGrupo(idNo) }] : []),
-        ...(ids.length === 1 && no(idNo)?.type === 'file' && !F.ehImagem(no(idNo).file) ? [{ rotulo: t('Abrir nota'), icone: opcoes.icone('nota'), acao: () => opcoes.abrirNota(no(idNo).file) }] : []),
+        ...(ids.length === 1 && no(idNo)?.type === 'file' && F.ehPdf(no(idNo).file) && F.caminhoSeguro(no(idNo).file) ? [{ rotulo: t('Ampliar'), icone: opcoes.icone('expandir'), acao: () => ampliar(idNo) }, ...(opcoes.abrirPdfNoSistema ? [{ rotulo: t('Abrir no leitor do sistema'), icone: opcoes.icone('notas'), acao: () => opcoes.abrirPdfNoSistema(no(idNo).file) }] : [])] : []),
+        ...(ids.length === 1 && no(idNo)?.type === 'file' && !F.ehImagem(no(idNo).file) && !F.ehPdf(no(idNo).file) ? [{ rotulo: t('Abrir nota'), icone: opcoes.icone('nota'), acao: () => opcoes.abrirNota(no(idNo).file) }] : []),
         ...(ids.length === 1 && no(idNo)?.type === 'link' ? [{ rotulo: t('Abrir link'), icone: opcoes.icone('link'), acao: () => opcoes.abrirLink(no(idNo).url) }] : []),
         { separador: true },
         { rotulo: ids.length > 1 ? t('Excluir {n} cartões', { n: ids.length }) : t('Excluir'), icone: opcoes.icone('lixeira'), acao: () => mudar(F.removerCartoes(canvas, ids)) },
@@ -545,8 +560,11 @@
       return { tipo: 'marcar', p0: p, base };
     }
     raiz.addEventListener('pointerdown', e => {
-      if (e.target.closest('.fluxo-barra, .fluxo-editor')) return;
+      if (e.target.closest('.fluxo-barra, .fluxo-editor, .fluxo-pdf-ampliar')) return;
       raiz.focus({ preventScroll: true });
+      // Sobre as páginas do PDF só seleciona o cartão: sem capturar o ponteiro, a barra de rolagem funciona.
+      const paginas = e.button === 0 && !espaco && e.target.closest('.md-pdf-paginas');
+      if (paginas) { const idNo = paginas.closest('.fluxo-cartao').dataset.no; if (!s.selecao.has(idNo)) selecionar([idNo]); return; }
       const g = escolherGesto(e);
       if (g) iniciar(e, g);
     });
@@ -556,7 +574,7 @@
     // Roda: rola (Shift = na horizontal); Ctrl+roda: zoom no cursor. Conteúdo longo de um
     // cartão rola dentro dele.
     raiz.addEventListener('wheel', e => {
-      if (e.target.closest('.fluxo-editor')) return;
+      if (e.target.closest('.fluxo-editor') || (!e.ctrlKey && e.target.closest('.md-pdf-paginas'))) return;   // as páginas do PDF rolam sozinhas
       const caixa = !e.ctrlKey && e.target.closest('.fluxo-conteudo');
       if (caixa && caixa.scrollHeight > caixa.clientHeight) return;
       e.preventDefault();
@@ -582,6 +600,7 @@
       const cartao = alvo.closest('.fluxo-cartao');
       if (!cartao) return void criarCartao(pontoDoCanvas(e));
       const c = no(cartao.dataset.no);
+      if (c?.type === 'file' && F.ehPdf(c.file)) return void ampliar(c.id);
       if (c?.type === 'file' && !F.ehImagem(c.file)) return void opcoes.abrirNota(c.file);
       if (c?.type === 'link') return void opcoes.abrirLink(c.url);
       if (c?.type === 'group') return void editarGrupo(c.id);
@@ -619,7 +638,20 @@
       else if (tecla === 'a') { e.preventDefault(); selecionar(canvas.nodes.map(x => x.id)); }
       else if (tecla === 'd' && s.selecao.size) { e.preventDefault(); duplicarSelecao(); }
     });
-    raiz.addEventListener('click', e => { if (e.target.closest('.fluxo-conteudo a')) e.preventDefault(); });
+    raiz.addEventListener('click', e => {
+      if (e.target.closest('.fluxo-conteudo a')) e.preventDefault();
+      // O topo do PDF é um <summary>, mas não recolhe; o botão Ampliar vive nele.
+      if (!e.target.closest('.fluxo-pdf-topo')) return;
+      e.preventDefault();
+      const botao = e.target.closest('.fluxo-pdf-ampliar');
+      if (botao) ampliar(botao.closest('.fluxo-cartao').dataset.no);
+    });
+    // Página do PDF que está no topo, guardada na sessão: o scroll não borbulha, daí a captura.
+    raiz.addEventListener('scroll', e => {
+      const caixa = e.target;
+      if (!caixa.matches?.('.md-pdf-paginas') || !caixa.children.length) return;
+      s.paginasDoPdf.set(caixa.closest('.fluxo-cartao').dataset.no, [...caixa.children].filter(p => p.offsetTop <= caixa.scrollTop + 4).length || 1);
+    }, true);
     raiz.querySelector('.fluxo-barra').addEventListener('click', e => {
       const acao = e.target.closest('[data-fluxo-acao]')?.dataset.fluxoAcao;
       if (acao === 'enquadrar') enquadrarTudo();
@@ -630,8 +662,9 @@
     // Nota arrastada da árvore vira cartão no ponto onde foi solta. stopPropagation: senão a
     // área das colunas (bindDragDeAbas) trataria o mesmo arraste e abriria a nota numa coluna.
     const eNota = e => e.dataTransfer?.types.includes('text/kiro-nota');
+    const eArquivo = e => e.dataTransfer?.types.includes('Files');
     raiz.addEventListener('dragover', e => {
-      if (!eNota(e)) return;
+      if (!eNota(e) && !eArquivo(e)) return;
       e.preventDefault(); e.stopPropagation();
       e.dataTransfer.dropEffect = 'copy';
       raiz.classList.add('soltando');
@@ -642,9 +675,13 @@
     const tirarSoltando = () => raiz.classList.remove('soltando');
     document.addEventListener('dragend', tirarSoltando);
     raiz.addEventListener('drop', e => {
-      if (!eNota(e)) return;
+      if (!eNota(e) && !eArquivo(e)) return;
       e.preventDefault(); e.stopPropagation();
       raiz.classList.remove('soltando');
+      if (!eNota(e)) {   // arquivo do sistema: PDF ou imagem
+        const arquivos = opcoes.imagensColadas(e.dataTransfer);
+        return void (arquivos.length ? colarImagens(arquivos, pontoDoCanvas(e)) : opcoes.aviso(t('Arraste um PDF ou uma imagem.'), true));
+      }
       const arquivo = opcoes.arquivoDaNota(e.dataTransfer.getData('text/kiro-nota'));
       if (arquivo) adicionarNo({ type: 'file', file: arquivo, width: 400, height: 280 }, pontoDoCanvas(e));
     });
@@ -653,7 +690,7 @@
     async function colarImagens(arquivos, p) {
       for (const [i, arquivo] of arquivos.entries()) {
         const caminho = await opcoes.guardarImagem(arquivo);
-        if (caminho) adicionarNo({ type: 'file', file: caminho, width: 320, height: 240 }, { x: p.x + i * F.GRADE * 2, y: p.y + i * F.GRADE * 2 });
+        if (caminho) adicionarNo({ type: 'file', file: caminho, ...F.tamanhoPadrao({ type: 'file', file: caminho }) }, { x: p.x + i * F.GRADE * 2, y: p.y + i * F.GRADE * 2 });
       }
     }
     // Copiar e recortar: o trecho vai para `areaDoFluxo` e o texto dos cartões para a área de

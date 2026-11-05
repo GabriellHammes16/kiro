@@ -33,3 +33,18 @@ test('redimensionar à mão fixa a altura e a edição a respeita', () => {
 test('as guias são limpas ao soltar e ao cancelar o gesto', () => {
   assert.ok((fonte.match(/limparGuias\(\)/g) || []).length >= 2);
 });
+
+test('PDF não é tratado como nota', () => {
+  assert.match(fonte, /F\.ehPdf\(c\.file\)/);
+  assert.doesNotMatch(fonte, /type === 'file' && !F\.ehImagem\(no\(idNo\)\.file\) \?/);
+});
+
+test('o PDF reaproveita o elemento para não piscar ao redesenhar', () => {
+  const i = fonte.indexOf('function desenhar()');
+  assert.match(fonte.slice(i, i + 900), /fluxo-pdf/);
+});
+
+test('rolar as páginas não é capturado pelo Fluxo', () => {
+  const i = fonte.indexOf("raiz.addEventListener('wheel'");
+  assert.match(fonte.slice(i, i + 300), /md-pdf-paginas/);
+});

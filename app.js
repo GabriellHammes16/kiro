@@ -1248,6 +1248,8 @@ function montarFluxos() {
       imagensColadas: dados => imagensDoEvento(dados),
       arquivoDaNota: id => getNote(id)?.file || null,
       guardarImagem: guardarImagemDoFluxo,
+      ampliarPdf: abrirPdfInteiro,
+      abrirPdfNoSistema: window.cadernoDesktop ? arquivo => window.cadernoDesktop.openAttachment(arquivo).catch(() => { /* sem leitor padrão: fica quieto */ }) : null,
       transformarEmNota: (idNo, texto) => transformarCartaoEmNota(fluxo.id, idNo, texto),
       // Instância morta (o modal ficou aberto tempo bastante para o salvamento automático redesenhar
       // a tela): render() remonta todo fluxo a partir do estado, e a instância viva nasce já com o
@@ -3276,7 +3278,7 @@ function htmlDoPdf(pdf) {
   const caminho = escapeHtml(pdf.arquivo);
   const url = `${urlDoAnexo(pdf.arquivo)}${pdf.pagina ? `#page=${pdf.pagina}` : ''}`;
   const alt = pdf.altura || 480;
-  return `<details class="md-pdf" data-pdf="${caminho}"${pdf.pagina ? ` data-pagina="${pdf.pagina}"` : ''}><summary class="md-pdf-topo"><span class="md-pdf-titulo">${icone('direita')} ${icone('notas')} ${nome}${pdf.pagina ? ` · p. ${pdf.pagina}` : ''}<span class="md-pdf-total"></span></span><span class="md-pdf-acoes"><span class="md-pdf-mostrar">${t('Mostrar PDF')}</span><span class="md-pdf-recolher">${t('Recolher PDF')}</span><a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer" class="secondary cfg-pequeno md-pdf-abrir">${t('Abrir')}</a></span></summary><div class="md-pdf-paginas" style="height:${alt}px"></div></details>`;
+  return `<details class="md-pdf"${pdf.aberto ? ' open' : ''} data-pdf="${caminho}"${pdf.pagina ? ` data-pagina="${pdf.pagina}"` : ''}><summary class="md-pdf-topo"><span class="md-pdf-titulo">${icone('direita')} ${icone('notas')} ${nome}${pdf.pagina ? ` · p. ${pdf.pagina}` : ''}<span class="md-pdf-total"></span></span><span class="md-pdf-acoes"><span class="md-pdf-mostrar">${t('Mostrar PDF')}</span><span class="md-pdf-recolher">${t('Recolher PDF')}</span><a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer" class="secondary cfg-pequeno md-pdf-abrir">${t('Abrir')}</a></span></summary><div class="md-pdf-paginas" style="height:${alt}px"></div></details>`;
 }
 // As imagens de um trecho da fonte, na mesma ordem em que mdInline as desenha: as
 // crases são mascaradas antes, porque o que está em código não vira imagem.
@@ -3764,12 +3766,23 @@ const aoTeclarNaImagem = evento => {
   fecharImagemInteira();
 };
 function abrirImagemInteira(fonte, nome) {
+  abrirTelaInteira(`<img src="${escapeHtml(fonte)}" alt="${escapeHtml(nome || '')}" />`);
+}
+// O PDF da leitura ampliada: o pdf-nota.js ativa o bloco ao entrar no body. Só o fundo fecha;
+// clicar no PDF não, nem no topo (que não recolhe).
+function abrirPdfInteiro(arquivo, pagina) {
+  abrirTelaInteira(htmlDoPdf({ arquivo, pagina, altura: window.innerHeight - 80, aberto: true }), evento => {
+    if (evento.target.closest('.md-pdf-topo') && !evento.target.closest('a')) evento.preventDefault();
+    if (evento.target === telaDeImagem) fecharImagemInteira();
+  });
+}
+function abrirTelaInteira(conteudo, aoClicar = fecharImagemInteira) {
   fecharImagemInteira();
   telaDeImagem = document.createElement('div');
   telaDeImagem.className = 'tela-imagem';
   telaDeImagem.tabIndex = -1;
-  telaDeImagem.innerHTML = `<img src="${escapeHtml(fonte)}" alt="${escapeHtml(nome || '')}" /><span class="tela-dica">${t('Esc para fechar')}</span>`;
-  telaDeImagem.addEventListener('click', fecharImagemInteira);
+  telaDeImagem.innerHTML = `${conteudo}<span class="tela-dica">${t('Esc para fechar')}</span>`;
+  telaDeImagem.addEventListener('click', aoClicar);
   document.body.appendChild(telaDeImagem);
   document.body.classList.add('com-imagem-inteira');
   telaDeImagem.focus({ preventScroll: true });
