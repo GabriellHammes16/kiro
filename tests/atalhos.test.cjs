@@ -6,7 +6,7 @@ const tecla = (key, extra = {}) => ({ key, code: '', ctrlKey: false, metaKey: fa
 const PADRAO = Object.fromEntries(ATALHOS_EDITAVEIS.map(([id, , , padrao]) => [id, padrao]));
 
 test('padrões incluem o atalho da barra lateral', () => {
-  assert.deepEqual(PADRAO, { captura: 'Ctrl+Space', irPara: 'Ctrl+O', novaNota: 'Ctrl+N', salvar: 'Ctrl+S', lateral: 'Ctrl+\\', painelDireito: 'Ctrl+Shift+L', acoesRapidas: 'Ctrl+K', fecharAba: 'Ctrl+W', novaAba: 'Ctrl+T', imprimir: 'Ctrl+P', configuracoes: 'Ctrl+,' });
+  assert.deepEqual(PADRAO, { captura: 'Ctrl+Space', irPara: 'Ctrl+O', novaNota: 'Ctrl+N', salvar: 'Ctrl+S', lateral: 'Ctrl+\\', painelDireito: 'Ctrl+Shift+L', acoesRapidas: 'Ctrl+K', fecharAba: 'Ctrl+W', novaAba: 'Ctrl+T', imprimir: 'Ctrl+P', configuracoes: 'Ctrl+,', fluxoProximo: 'Ctrl+Enter', fluxoLigado: 'Ctrl+Shift+Enter' });
 });
 
 test('combinação sai do evento de teclado, com Cmd valendo Ctrl', () => {
@@ -52,4 +52,11 @@ test('atalhos salvos: inválido, repetido ou desconhecido volta ao padrão', () 
   assert.deepEqual(atalhosValidos({ irPara: 'Ctrl+N' }), PADRAO);        // colidiria com Nova nota
   // Troca entre dois: ambos continuam válidos.
   assert.deepEqual(atalhosValidos({ irPara: 'Ctrl+N', novaNota: 'Ctrl+O' }), { ...PADRAO, irPara: 'Ctrl+N', novaNota: 'Ctrl+O' });
+});
+
+test('os atalhos de criar balão têm padrão e podem ser trocados', () => {
+  assert.equal(PADRAO.fluxoProximo, 'Ctrl+Enter');
+  assert.equal(PADRAO.fluxoLigado, 'Ctrl+Shift+Enter');
+  assert.equal(atalhosValidos({ fluxoProximo: 'Alt+N' }).fluxoProximo, 'Alt+N');
+  assert.equal(combinacaoDoEvento({ key: 'Enter', ctrlKey: true, shiftKey: true }), 'Ctrl+Shift+Enter');
 });

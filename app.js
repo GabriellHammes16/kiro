@@ -1227,6 +1227,7 @@ function montarFluxos() {
     if (!fluxo?.canvas) continue;
     KiroFluxoTela.montar(host, {
       id: fluxo.id, titulo: fluxo.title, canvas: fluxo.canvas,
+      atalho: id => atalhos[id],
       markdown: renderizarMarkdown, icone,
       montarEditor: montarEditorDoCartao,
       menu: (evento, itens) => abrirMenuContexto(evento, document.body, itens),
@@ -6483,7 +6484,7 @@ document.addEventListener('keydown',e=>{
     abrirBuscaNaNota(combinacao === 'Ctrl+H');
     return;
   }
-  const acao=Object.keys(atalhos).find(id=>atalhos[id]===combinacao);
+  const acao=Object.keys(atalhos).find(id=>!id.startsWith('fluxo')&&atalhos[id]===combinacao); // os do Fluxo quem trata é a tela dele
   if(!acao&&TELAS_DOS_ATALHOS[combinacao]&&!$('#modal-root').firstChild){e.preventDefault();irPara(TELAS_DOS_ATALHOS[combinacao]);return;}
   if(!acao&&e.ctrlKey&&!e.altKey&&['=','+','-','0'].includes(e.key)){e.preventDefault();mudarTamanhoDaInterface(e.key==='0'?0:e.key==='-'?-1:1);return;}
   if(!acao&&(combinacao==='Ctrl+B'||combinacao==='Ctrl+I')&&editorDaNota?.editor.temFoco()){e.preventDefault();envolver(editorDaNota.editor.area(),combinacao==='Ctrl+B'?'**':'*');return;}

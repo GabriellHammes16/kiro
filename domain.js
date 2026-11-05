@@ -516,6 +516,8 @@
     ['novaAba', frase('Nova nota em outra aba'), '', 'Ctrl+T'],
     ['imprimir', frase('Imprimir a nota aberta'), '', 'Ctrl+P'],
     ['configuracoes', frase('Configurações'), '', 'Ctrl+,'],
+    ['fluxoProximo', frase('Fluxo: criar o próximo balão'), '', 'Ctrl+Enter'],
+    ['fluxoLigado', frase('Fluxo: criar balão ligado ao atual'), '', 'Ctrl+Shift+Enter'],
   ];
   // Teclas que o sistema e o editor já usam: trocá-las quebraria copiar, colar, desfazer…
   const RESERVADOS = new Set(['Ctrl+C', 'Ctrl+V', 'Ctrl+X', 'Ctrl+Z', 'Ctrl+Y', 'Ctrl+A', 'Ctrl+Shift+Z', 'Ctrl+R', 'Ctrl+F', 'Ctrl+H', 'Ctrl+B', 'Ctrl+I', 'Ctrl+1', 'Ctrl+2', 'Ctrl+3', 'Ctrl+4', 'Ctrl+5', 'Ctrl+=', 'Ctrl+-', 'Ctrl+0', 'Alt+F4']);

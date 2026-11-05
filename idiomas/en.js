@@ -510,6 +510,8 @@
     'Fechar a aba': 'Close the tab',
     'Nova nota em outra aba': 'New note in another tab',
     'Imprimir a nota aberta': 'Print the open note',
+    'Fluxo: criar o próximo balão': 'Flow: create the next bubble',
+    'Fluxo: criar balão ligado ao atual': 'Flow: create a bubble linked to the current one',
     'Fechar sem salvar': 'Close without saving',
     'Tarefa "{titulo}" excluída.': 'Task "{titulo}" deleted.',
     'Nenhuma pasta ainda': 'No folders yet',
