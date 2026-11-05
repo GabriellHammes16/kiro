@@ -98,7 +98,7 @@ test('servidor recebe imagem colada e só devolve imagens de dentro do cofre', a
     child.once('exit', code => { clearTimeout(limite); reject(new Error(`Servidor terminou: ${code}`)); });
   });
   const base = `http://127.0.0.1:${port}`;
-  assert.equal((await fetch(base + '/api/anexo', { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: 'oi' })).status, 415);
+  assert.equal((await fetch(base + '/api/anexo', { method: 'POST', headers: { 'Content-Type': 'application/zip' }, body: 'oi' })).status, 415);
   assert.equal((await fetch(base + '/api/anexo', { method: 'POST', headers: { 'Content-Type': 'image/png', Origin: 'https://evil.example' }, body: PNG })).status, 403);
 
   const enviada = await fetch(base + '/api/anexo', { method: 'POST', headers: { 'Content-Type': 'image/png', 'X-Kiro-Nome': encodeURIComponent('Captura de tela.png') }, body: PNG });
@@ -112,4 +112,34 @@ test('servidor recebe imagem colada e só devolve imagens de dentro do cofre', a
   assert.deepEqual(Buffer.from(await imagem.arrayBuffer()), PNG);
   for (const ruim of ['/anexo/..%2Fcaderno.json', '/anexo/caderno.json', '/anexo/%2E%2E/x.png', '/anexo/.history/x.png'])
     assert.equal((await fetch(base + ruim)).status, 404, ruim);
+});
+
+test('texto, tabela, M4A e MP4 são conferidos pelo conteúdo', async t => {
+  const vault = await cofre(t);
+  const txt = (await vault.saveAttachment({ name: 'notas.txt', data: Buffer.from('olá\nmundo') })).path;
+  assert.match(txt, /\.txt$/);
+  assert.equal((await vault.readAttachment(txt)).type, 'text/plain; charset=utf-8');
+  const csv = (await vault.saveAttachment({ name: 'tabela.csv', data: Buffer.from('a,b\n1,2') })).path;
+  assert.match(csv, /\.csv$/);
+  assert.equal((await vault.readAttachment(csv)).type, 'text/csv; charset=utf-8');
+  // Um .md não pode virar nota na árvore: é gravado como .txt.
+  assert.match((await vault.saveAttachment({ name: 'ideia.md', data: Buffer.from('# oi') })).path, /\.txt$/);
+  await assert.rejects(vault.saveAttachment({ name: 'falso.txt', data: Buffer.from([0x00, 0x01, 0xff]) }));
+  await assert.rejects(vault.saveAttachment({ name: 'ruim.txt', data: Buffer.from([0xc3, 0x28]) }));
+  await assert.rejects(vault.saveAttachment({ name: 'x.txt', data: Buffer.alloc(5 * 1024 * 1024 + 1, 0x61) }));
+  assert.match((await vault.saveAttachment({ name: 'x.txt', data: Buffer.alloc(5 * 1024 * 1024, 0x61) })).path, /\.txt$/);
+  const caixa = marca => Buffer.concat([Buffer.alloc(4), Buffer.from('ftyp' + marca), Buffer.alloc(8)]);
+  const m4a = (await vault.saveAttachment({ name: 'voz', data: caixa('M4A ') })).path;
+  assert.match(m4a, /\.m4a$/);
+  assert.equal((await vault.readAttachment(m4a)).type, 'audio/mp4');
+  const mp4 = (await vault.saveAttachment({ name: 'filme', data: caixa('isom') })).path;
+  assert.match(mp4, /\.mp4$/);
+  assert.equal((await vault.readAttachment(mp4)).type, 'video/mp4');
+  // Assinatura binária vence a extensão.
+  assert.match((await vault.saveAttachment({ name: 'foto.txt', data: PNG })).path, /\.png$/);
+  // Na leitura, o conteúdo é conferido de novo.
+  await fs.writeFile(path.join(vault.directory, mp4), Buffer.from('nada'));
+  await assert.rejects(vault.readAttachment(mp4));
+  await fs.writeFile(path.join(vault.directory, txt), Buffer.from([0x00, 0x01]));
+  await assert.rejects(vault.readAttachment(txt));
 });

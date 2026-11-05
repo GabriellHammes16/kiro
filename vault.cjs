@@ -79,7 +79,8 @@ const temMarcaDeAnexos = async directory => {
 const ATTACHMENT_LIMIT = 250 * 1024 * 1024;
 const PLUGIN_FILE_LIMIT = 2 * 1024 * 1024;
 const PLUGIN_DATA_LIMIT = 1024 * 1024;
-const IMAGE_TYPES = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp', avif: 'image/avif', bmp: 'image/bmp', pdf: 'application/pdf', wav:'audio/wav', mp3:'audio/mpeg', webm:'audio/webm' };
+const IMAGE_TYPES = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp', avif: 'image/avif', bmp: 'image/bmp', pdf: 'application/pdf', wav:'audio/wav', mp3:'audio/mpeg', webm:'audio/webm', m4a:'audio/mp4', mp4:'video/mp4', txt:'text/plain; charset=utf-8', csv:'text/csv; charset=utf-8' };
+const TEXT_LIMIT = 5 * 1024 * 1024;
 function audioSignature(data){
   if(data.length>=12&&data.toString('ascii',0,4)==='RIFF'&&data.toString('ascii',8,12)==='WAVE')return 'wav';
   if(data.length>=4&&(data.toString('ascii',0,3)==='ID3'||(data[0]===0xff&&(data[1]&0xe0)===0xe0&&(data[1]&0x18)!==0x08&&(data[1]&0x06)!==0)))return 'mp3';
@@ -97,6 +98,17 @@ function attachmentRange(data,header){
   const start=m[1]?Number(m[1]):Math.max(0,data.length-Number(m[2])),end=m[1]?(m[2]?Math.min(Number(m[2]),data.length-1):data.length-1):data.length-1;
   if(!Number.isSafeInteger(start)||!Number.isSafeInteger(end)||start>end||start>=data.length)return {data:Buffer.alloc(0),status:416,headers:{'Content-Range':`bytes */${data.length}`}};
   return {data:data.subarray(start,end+1),status:206,headers:{'Accept-Ranges':'bytes','Content-Range':`bytes ${start}-${end}/${data.length}`,'Content-Length':String(end-start+1)}};
+}
+// Caixa "ftyp" nos bytes 4 a 8; a marca nos bytes 8 a 12 separa áudio M4A de vídeo MP4.
+function mp4Signature(data){
+  if(data.length<12||data.toString('latin1',4,8)!=='ftyp')return null;
+  return data.toString('latin1',8,12)==='M4A '?'m4a':'mp4';
+}
+// Texto não tem assinatura: vale pela extensão (.md vira .txt), por UTF-8 válido e por não ter byte nulo.
+function textSignature(data,extension){
+  if(!['txt','csv','md'].includes(extension)||data.length>TEXT_LIMIT||data.includes(0))return null;
+  try{new TextDecoder('utf-8',{fatal:true}).decode(data);}catch{return null;}
+  return extension==='csv'?'csv':'txt';
 }
 // Pelo conteúdo, não pelo nome nem pelo tipo declarado. SVG fica de fora: pode carregar script.
 function imageSignature(data) {
@@ -447,8 +459,8 @@ class Vault {
     return this.exclusive(async()=>{
       if(!Buffer.isBuffer(data)||!data.length)throw new Error(frase('Imagem vazia.'));
       if(data.length>ATTACHMENT_LIMIT)throw new Error(frase('Imagem maior que 250 MB.'));
-      const extension=imageSignature(data)||audioSignature(data);
-      if(!extension)throw new Error(frase('O arquivo não é uma imagem PNG, JPEG, GIF, WebP, PDF ou áudio WAV, MP3 ou WebM.'));
+      const extension=imageSignature(data)||audioSignature(data)||mp4Signature(data)||textSignature(data,typeof name==='string'?name.split('.').pop().toLowerCase():'');
+      if(!extension)throw new Error(frase('O arquivo não é uma imagem PNG, JPEG, GIF, WebP, PDF, áudio WAV, MP3, WebM ou M4A, vídeo MP4, texto TXT, MD ou tabela CSV (até 5 MB).'));
       const folder=await this.attachmentFolder();
       // A marca vem antes da imagem: a pasta nunca aparece na varredura sem ela.
       const marker=await this.safePath(`${folder}/${ATTACHMENT_MARKER}`);
@@ -470,7 +482,9 @@ class Vault {
     const info=await fs.stat(file);
     if(!info.isFile()||info.size>ATTACHMENT_LIMIT)throw new Error(frase('Imagem inválida.'));
     const data=await fs.readFile(file);
-    if(type.startsWith('audio/')&&audioSignature(data)!==relative.split('.').pop().toLowerCase())throw new Error(frase('Áudio inválido.'));
+    const extension=relative.split('.').pop().toLowerCase();
+    if(/^(audio|video)\//.test(type)&&(audioSignature(data)||mp4Signature(data))!==extension)throw new Error(frase('Áudio ou vídeo inválido.'));
+    if(type.startsWith('text/')&&textSignature(data,extension)!==extension)throw new Error(frase('Texto inválido.'));
     return {data,type};
   }
   /** Plug-ins ficam em <cofre>/.kiro/plugins/<id>/. Só o que está nessa pasta é servido. */

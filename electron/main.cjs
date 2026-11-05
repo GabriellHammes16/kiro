@@ -253,7 +253,7 @@ else app.whenReady().then(async () => {
   // O caminho passa pela mesma contenção de readAttachment (extensão e safePath).
   ipcMain.handle('vault:open-attachment', async (_event, caminho) => {
     const relativo = String(caminho || '');
-    if (!/\.(png|jpe?g|gif|webp|avif|bmp|pdf)$/i.test(relativo)) throw new Error(frase('Imagem inválida.'));
+    if (!/\.(png|jpe?g|gif|webp|avif|bmp|pdf|txt|csv|mp3|wav|webm|m4a|mp4)$/i.test(relativo)) throw new Error(frase('Imagem inválida.'));
     return shell.openPath(await vault.safePath(relativo));
   });
   // `vault` é lido a cada pedido: depois de escolher outro cofre, as imagens vêm do novo.

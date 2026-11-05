@@ -116,7 +116,7 @@ createServer(async (request, response) => {
     }
     if (request.url === '/api/anexo' && request.method === 'POST') {
       // O tipo declarado só filtra o pedido; o Vault confere a imagem pelo conteúdo.
-      if (!['image/png', 'image/jpeg', 'image/gif', 'image/webp', 'application/pdf','audio/wav','audio/x-wav','audio/mpeg','audio/webm'].includes(request.headers['content-type']?.split(';')[0])) return send(response, 415, { error: frase('Envie uma imagem, PDF ou áudio suportado.') });
+      if (!['image/png', 'image/jpeg', 'image/gif', 'image/webp', 'application/pdf','audio/wav','audio/x-wav','audio/mpeg','audio/webm','text/plain','text/csv','text/markdown','audio/mp4','audio/x-m4a','video/mp4'].includes(request.headers['content-type']?.split(';')[0])) return send(response, 415, { error: frase('Envie uma imagem, PDF, áudio, vídeo, texto ou tabela suportados.') });
       let tamanho = 0; const partes = [];
       for await (const parte of request) { tamanho += parte.length; if (tamanho > ATTACHMENT_LIMIT) return send(response, 413, { error: frase('Imagem maior que 250 MB.') }); partes.push(parte); }
       let nome = ''; try { nome = decodeURIComponent(request.headers['x-kiro-nome'] || ''); } catch { /* nome ilegível: a imagem recebe um nome gerado */ }
