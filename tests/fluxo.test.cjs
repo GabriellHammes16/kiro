@@ -385,3 +385,71 @@ test('novoId: 16 hex e fora dos usados', () => {
   assert.match(id, /^[0-9a-f]{16}$/);
   assert.ok(!usados.has(id));
 });
+
+test('ehPdf reconhece a extensão sem diferenciar maiúsculas', () => {
+  assert.equal(F.ehPdf('a/b.PDF'), true);
+  assert.equal(F.ehPdf('a/b.md'), false);
+  assert.equal(F.ehPdf(undefined), false);
+});
+
+test('tamanhoPadrao de PDF é 480 por 640', () => {
+  assert.deepEqual(F.tamanhoPadrao({ type: 'file', file: 'a.pdf' }), { width: 480, height: 640 });
+});
+
+test('copiarCartoes leva só as setas entre os copiados', () => {
+  const c = canvas([cartao('a'), cartao('b'), cartao('c')], [
+    { id: 'e1', fromNode: 'a', toNode: 'b' }, { id: 'e2', fromNode: 'b', toNode: 'c' },
+  ]);
+  const t = F.copiarCartoes(c, ['a', 'b']);
+  assert.deepEqual(t.nodes.map(n => n.id), ['a', 'b']);
+  assert.deepEqual(t.edges.map(e => e.id), ['e1']);
+});
+
+test('colarCartoes cria ids novos, religa as setas e põe o conjunto no ponto', () => {
+  const c = canvas([cartao('a', { x: 100, y: 100 }), cartao('b', { x: 400, y: 200 })], [{ id: 'e1', fromNode: 'a', toNode: 'b' }]);
+  const r = F.colarCartoes(c, F.copiarCartoes(c, ['a', 'b']), 1000, 2000);
+  assert.equal(r.ids.length, 2);
+  assert.equal(r.canvas.nodes.length, 4);
+  const [n1, n2] = r.ids.map(id => r.canvas.nodes.find(n => n.id === id));
+  assert.deepEqual([n1.x, n1.y, n2.x, n2.y], [1000, 2000, 1300, 2100]);
+  const seta = r.canvas.edges.at(-1);
+  assert.deepEqual([seta.fromNode, seta.toNode], r.ids);
+  assert.notEqual(seta.id, 'e1');
+});
+
+test('colarCartoes mantém o grupo atrás dos cartões', () => {
+  const grupo = { id: 'g', type: 'group', x: 0, y: 0, width: 500, height: 500 };
+  const c = canvas([cartao('x'), grupo, cartao('a', { x: 10, y: 10 })]);
+  const r = F.colarCartoes(c, F.copiarCartoes(c, ['g', 'a']), 0, 0);
+  assert.equal(r.canvas.nodes[0].type, 'group');
+  assert.equal(r.canvas.nodes.at(-1).type, 'text');
+});
+
+test('colarCartoes não altera o trecho, que pode ser colado de novo', () => {
+  const c = canvas([cartao('a')]);
+  const t = F.copiarCartoes(c, ['a']);
+  const r1 = F.colarCartoes(c, t, 40, 40);
+  const r2 = F.colarCartoes(r1.canvas, t, 80, 80);
+  assert.equal(new Set(r2.canvas.nodes.map(n => n.id)).size, 3);
+  assert.equal(t.nodes[0].id, 'a');
+});
+
+test('textoDoTrecho junta os conteúdos e nunca sai vazio', () => {
+  assert.equal(F.textoDoTrecho({ nodes: [cartao('a', { text: 'um' }), { id: 'l', type: 'link', url: 'https://x.y' }] }), 'um\n\nhttps://x.y');
+  assert.equal(F.textoDoTrecho({ nodes: [{ id: 'g', type: 'group' }] }), 'Cartões do Kiro');
+});
+
+test('lugarLivre desce até sair de cima de outro cartão e ignora grupos', () => {
+  const c = canvas([cartao('a', { x: 0, y: 100, width: 200, height: 100 }), { id: 'g', type: 'group', x: 0, y: 0, width: 900, height: 900 }]);
+  assert.deepEqual(F.lugarLivre(c, { x: 0, y: 120, width: 200, height: 60 }), { x: 0, y: 220 });
+  assert.deepEqual(F.lugarLivre(c, { x: 500, y: 120, width: 200, height: 60 }), { x: 500, y: 120 });
+});
+
+test('guiasDeAlinhamento encaixa bordas e centros dentro da tolerância', () => {
+  const outro = { x: 100, y: 500, width: 200, height: 100 };
+  const r = F.guiasDeAlinhamento({ x: 103, y: 0, width: 200, height: 100 }, [outro], 6);
+  assert.equal(r.dx, -3);
+  assert.equal(r.dy, 0);
+  assert.deepEqual(r.linhas.filter(l => l.eixo === 'x').map(l => l.pos).sort((a, b) => a - b), [100, 200, 300]);
+  assert.deepEqual(F.guiasDeAlinhamento({ x: 120, y: 0, width: 200, height: 100 }, [outro], 6), { dx: 0, dy: 0, linhas: [] });
+});

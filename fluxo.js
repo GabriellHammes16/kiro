@@ -100,6 +100,33 @@
       .map(e => ({ ...e, id: reservar(), fromNode: novos.get(e.fromNode).id, toNode: novos.get(e.toNode).id }));
     return { canvas: { ...c, nodes: [...c.nodes, ...novos.values()], edges: [...c.edges, ...setas] }, ids: [...novos.values()].map(n => n.id) };
   }
+  const ehPdf = f => /\.pdf$/i.test(f ?? '');
+  // Cópia independente dos cartões (e das setas entre eles) para colar depois, em qualquer canvas.
+  function copiarCartoes(c, ids) {
+    const alvo = new Set(ids);
+    const nodes = c.nodes.filter(n => alvo.has(n.id)), dentro = new Set(nodes.map(n => n.id));
+    return structuredClone({ nodes, edges: c.edges.filter(e => dentro.has(e.fromNode) && dentro.has(e.toNode)) });
+  }
+  // Cola o trecho com ids novos, o canto superior esquerdo do conjunto em (x, y). Grupos vão para
+  // o início da lista (ficam atrás) e os demais para o fim (ficam na frente). O trecho não muda.
+  function colarCartoes(c, trecho, x, y) {
+    const ocupados = usados(c), novos = new Map();
+    const reservar = () => { const id = novoId(ocupados); ocupados.add(id); return id; };
+    const dx = x - Math.min(...trecho.nodes.map(n => n.x)), dy = y - Math.min(...trecho.nodes.map(n => n.y));
+    for (const n of trecho.nodes) novos.set(n.id, { ...structuredClone(n), id: reservar(), x: n.x + dx, y: n.y + dy });
+    const setas = trecho.edges.filter(e => novos.has(e.fromNode) && novos.has(e.toNode))
+      .map(e => ({ ...structuredClone(e), id: reservar(), fromNode: novos.get(e.fromNode).id, toNode: novos.get(e.toNode).id }));
+    const lista = [...novos.values()];
+    return {
+      canvas: { ...c, nodes: [...lista.filter(n => n.type === 'group'), ...c.nodes, ...lista.filter(n => n.type !== 'group')], edges: [...c.edges, ...setas] },
+      ids: lista.map(n => n.id),
+    };
+  }
+  // Texto para a área de transferência: o conteúdo de cada cartão, separado por linha em branco.
+  function textoDoTrecho(trecho) {
+    const partes = trecho.nodes.map(n => n.text ?? n.file ?? n.url ?? n.label).filter(Boolean);
+    return partes.length ? partes.join('\n\n') : 'Cartões do Kiro';
+  }
   function ligar(c, seta) {
     const existe = id => c.nodes.some(n => n.id === id);
     if (seta.fromNode === seta.toNode || !existe(seta.fromNode) || !existe(seta.toNode)) return { canvas: c, id: null };
@@ -215,6 +242,7 @@
   // Tamanho de um cartão que chega sem tamanho (da IA): o mesmo dos cartões criados na tela.
   function tamanhoPadrao(c) {
     if (c.type === 'text') return { width: LARGURA_PADRAO, height: praCima(alturaEstimada(c.text ?? '')) };
+    if (c.type === 'file' && ehPdf(c.file)) return { width: 480, height: 640 };
     if (c.type === 'file') return ehImagem(c.file) ? { width: 320, height: 240 } : { width: 400, height: 280 };
     if (c.type === 'link') return { width: 320, height: 100 };
     return { width: 400, height: 300 };
@@ -305,7 +333,33 @@
     return saida;
   }
 
-  const api = { TIPOS, LADOS, CORES, GRADE, ZOOM, OPOSTO, corValida, ler, serializar, adicionarCartao, moverCartoes, redimensionar, editarCartao, removerCartoes, duplicarCartoes, ligar, editarSeta, removerSetas, encaixar, historicoVazio, empilhar, desfazer, refazer, vistaValida, paraCanvas, zoomEm, enquadrar, pontoDoLado, ladoMaisProximo, ladosDaSeta, caminhoDaSeta, geometriaDaSeta, dentro, renomearArquivos, caminhoSeguro, ehImagem, contidos, caixaDe, alturaEstimada, tamanhoPadrao, raizDe, layout, inserirPerto, novoId };
+  // Desce `base` na grade até o retângulo não cobrir nenhum cartão (grupos não contam).
+  function lugarLivre(c, base) {
+    const posto = { ...base, y: praCima(base.y) };
+    for (let bate; (bate = c.nodes.find(n => n.type !== 'group' && sobrepoe(n, posto)));) posto.y = praCima(bate.y + bate.height + ENTRE_IRMAOS);
+    return { x: posto.x, y: posto.y };
+  }
+  // Guias ao arrastar: encaixa começo/centro/fim da caixa nos do outro cartão, no menor
+  // deslocamento dentro da tolerância (por eixo), e devolve uma linha por coincidência exata.
+  function guiasDeAlinhamento(caixa, outros, tolerancia) {
+    const tres = (o, p, t, d = 0) => [o[p] + d, o[p] + o[t] / 2 + d, o[p] + o[t] + d];
+    const menor = (p, t) => {
+      let melhor = 0, dist = Infinity;
+      for (const o of outros) for (const a of tres(caixa, p, t)) for (const b of tres(o, p, t)) {
+        if (Math.abs(b - a) <= tolerancia && Math.abs(b - a) < dist) { dist = Math.abs(b - a); melhor = b - a; }
+      }
+      return melhor;
+    };
+    const dx = menor('x', 'width'), dy = menor('y', 'height'), linhas = [];
+    for (const [eixo, p, t, d, q, u] of [['x', 'x', 'width', dx, 'y', 'height'], ['y', 'y', 'height', dy, 'x', 'width']]) {
+      for (const o of outros) for (const a of tres(caixa, p, t, d)) for (const b of tres(o, p, t)) {
+        if (a === b) linhas.push({ eixo, pos: b, de: Math.min(caixa[q], o[q]), ate: Math.max(caixa[q] + caixa[u], o[q] + o[u]) });
+      }
+    }
+    return { dx, dy, linhas };
+  }
+
+  const api = { TIPOS, LADOS, CORES, GRADE, ZOOM, OPOSTO, corValida, ler, serializar, adicionarCartao, moverCartoes, redimensionar, editarCartao, removerCartoes, duplicarCartoes, ligar, editarSeta, removerSetas, encaixar, historicoVazio, empilhar, desfazer, refazer, vistaValida, paraCanvas, zoomEm, enquadrar, pontoDoLado, ladoMaisProximo, ladosDaSeta, caminhoDaSeta, geometriaDaSeta, dentro, renomearArquivos, caminhoSeguro, ehImagem, contidos, caixaDe, alturaEstimada, tamanhoPadrao, raizDe, layout, inserirPerto, novoId, ehPdf, copiarCartoes, colarCartoes, textoDoTrecho, lugarLivre, guiasDeAlinhamento };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.KiroFluxo = api;
 })(globalThis);
