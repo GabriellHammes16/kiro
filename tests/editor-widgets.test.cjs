@@ -141,12 +141,12 @@ test('código em lista ou citação: linguagem sem marcador e Copiar sem > nem c
 });
 
 test('bloco de plug-in: id, fonte, posições; não vira cabeçalho de código', () => {
-  const texto = 'a\n```kiro:word-count\nx\ny\n```\nb';
+  const texto = 'a\n```kiro:plugin-teste\nx\ny\n```\nb';
   const { s, els } = achar(texto);
   const b = els.find(e => e.tipo === 'blocoPlugin');
-  assert.equal(b.id, 'word-count');
+  assert.equal(b.id, 'plugin-teste');
   assert.equal(b.fonte, 'x\ny');
-  assert.equal(fatia(s, b), '```kiro:word-count\nx\ny\n```');
+  assert.equal(fatia(s, b), '```kiro:plugin-teste\nx\ny\n```');
   assert.ok(!els.some(e => e.tipo === 'cabecalhoCodigo'));
 });
 

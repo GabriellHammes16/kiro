@@ -15,7 +15,7 @@ This document describes everything that ships today, stages 1 to 4.
 ## Folder layout
 
 ```
-<vault>/.kiro/plugins/word-count/
+<vault>/.kiro/plugins/my-plugin/
   manifest.json
   index.js
 ```
@@ -26,14 +26,10 @@ your worker and your frames — no subfolders, no other file types. An
 `<img src="icon.png">` or a local font file will not load: images and fonts
 must be `data:` URLs. `data.json` appears there once you use `kiro.storage`.
 
-Working examples live in this repository: `examples/plugins/word-count/`
-(commands, panels, blocks), `examples/plugins/wikipedia-summary/` (a block
-that calls a web API with `kiro.fetch`), `examples/plugins/habit-heatmap/`
-(a frame — see [Frames (custom UI)](#frames-custom-ui) below) and
-`examples/plugins/kanban-tasks/` (a Kanban board of your tasks as a frame page, plus a frame panel with a miniature of the pending columns on Today,
-with drag & drop between columns). `npm run dev`
-copies all of them into the example vault. Copying one of these folders is the
-fastest way to start.
+Working examples live in `examples/plugins/`: `flashcards`, `focus-pomodoro`,
+`weekly-review`, `slides` and `kanban-tasks`. The task board demonstrates a full
+frame page plus a miniature Today panel. `npm run dev` copies these examples
+into the development vault.
 
 ### Productivity plugins
 
@@ -66,11 +62,11 @@ existing review or changes the source tasks. Each plugin owns its data in
 
 ```json
 {
-  "id": "word-count",
-  "name": "Word Count",
+  "id": "my-plugin",
+  "name": "My Plugin",
   "version": "1.0.0",
   "author": "Kiro",
-  "description": "Counts words in the open note and lists the longest ones.",
+  "description": "Works with the open note.",
   "minKiro": "0.14.0",
   "permissions": ["notes:read"],
   "network": []
@@ -132,9 +128,9 @@ An ES module with a default export that has an `activate(kiro)` method:
 ```js
 export default {
   async activate(kiro) {
-    kiro.command('count', 'Count words', async () => {
+    kiro.command('show-title', 'Show note title', async () => {
       const note = await kiro.notes.current();
-      kiro.notify(note ? `${note.body.split(/\s+/).length} words` : 'Open a note first.');
+      kiro.notify(note ? note.title : 'Open a note first.');
     });
   },
 };
@@ -510,7 +506,7 @@ manifest error. Every change is saved at once, in your plugin's `data.json`
 under a key only Kiro writes; Today's panels are redrawn, but a frame that is
 already open reads the new values the next time it asks. A stored value that no
 longer fits your declaration falls back to the default. Both example plugins
-`habit-heatmap` and `kanban-tasks` use settings.
+`focus-pomodoro` and `kanban-tasks` use settings.
 
 ## Panels
 
@@ -540,8 +536,8 @@ A note can contain a fenced block whose language is `kiro:` followed by a plugin
 id:
 
 ````markdown
-```kiro:word-count
-Everything in here is handed to the word-count plugin.
+```kiro:my-plugin
+Everything in here is handed to the my-plugin plugin.
 ```
 ````
 
@@ -719,10 +715,8 @@ controls and cards).
 
 ### Example
 
-`examples/plugins/habit-heatmap/` draws a heatmap of habit completions with
-`kiro.habits.list()`, both inside a ` ```kiro:habit-heatmap ` block and as its
-own page — the same `heatmap.html` serves both, reading `kiro.data?.weeks` in
-the block and defaulting to 26 weeks on the page.
+`examples/plugins/kanban-tasks/` uses `board.html` for its full page and
+`mini.html` for its Today panel. Both use the frame runtime and the task API.
 
 ### Redrawing
 

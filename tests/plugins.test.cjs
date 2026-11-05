@@ -2,7 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const P = require('../plugins.js');
 
-const base = { id: 'word-count', name: 'Word Count', version: '1.0.0', author: 'fulano', minKiro: '0.15.0', permissions: ['notes:read'], network: [] };
+const base = { id: 'plugin-teste', name: 'Plugin Teste', version: '1.0.0', author: 'fulano', minKiro: '0.15.0', permissions: ['notes:read'], network: [] };
 const validar = (mudanca = {}) => P.validarManifesto({ ...base, ...mudanca }, { versaoDoKiro: '0.15.0' });
 
 test('manifesto válido é aceito e normalizado', () => {
@@ -13,7 +13,7 @@ test('manifesto válido é aceito e normalizado', () => {
 });
 
 test('manifesto inválido é recusado com motivo', () => {
-  assert.match(validar({ id: 'Word Count' }).erro, /id/i);
+  assert.match(validar({ id: 'Plugin Teste' }).erro, /id/i);
   assert.match(validar({ version: '1' }).erro, /versão|version/i);
   assert.match(validar({ permissions: ['disk:read'] }).erro, /permiss/i);
   assert.match(validar({ minKiro: '9.0.0' }).erro, /Kiro/i);
@@ -62,7 +62,7 @@ const { Vault } = require('../vault.cjs');
 
 async function cofreTemporario() {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'kiro-plugins-'));
-  const plugin = path.join(dir, '.kiro', 'plugins', 'word-count');
+  const plugin = path.join(dir, '.kiro', 'plugins', 'plugin-teste');
   await fs.mkdir(plugin, { recursive: true });
   await fs.writeFile(path.join(plugin, 'manifest.json'), JSON.stringify(base));
   await fs.writeFile(path.join(plugin, 'index.js'), 'export default { async activate() {} };');
@@ -74,14 +74,14 @@ test('o cofre lista plug-ins e serve só arquivos .js', async () => {
   try {
     const encontrados = await vault.listPlugins();
     assert.equal(encontrados.length, 1);
-    assert.equal(encontrados[0].id, 'word-count');
-    assert.equal(encontrados[0].manifesto.name, 'Word Count');
+    assert.equal(encontrados[0].id, 'plugin-teste');
+    assert.equal(encontrados[0].manifesto.name, 'Plugin Teste');
 
-    const codigo = await vault.readPluginFile('word-count', 'index.js');
+    const codigo = await vault.readPluginFile('plugin-teste', 'index.js');
     assert.match(codigo.toString('utf8'), /activate/);
 
-    await assert.rejects(() => vault.readPluginFile('word-count', 'manifest.json'), /js/i);
-    await assert.rejects(() => vault.readPluginFile('word-count', '../../caderno.json'), /inválido|Caminho/i);
+    await assert.rejects(() => vault.readPluginFile('plugin-teste', 'manifest.json'), /js/i);
+    await assert.rejects(() => vault.readPluginFile('plugin-teste', '../../caderno.json'), /inválido|Caminho/i);
     await assert.rejects(() => vault.readPluginFile('../outro', 'index.js'), /inválido|Caminho/i);
   } finally { await fs.rm(dir, { recursive: true, force: true }); }
 });
@@ -90,15 +90,15 @@ test('escolhas do usuário vão e voltam de plugins.json', async () => {
   const { dir, vault } = await cofreTemporario();
   try {
     assert.deepEqual(await vault.readPluginChoices(), {});
-    await vault.writePluginChoices({ 'word-count': { enabled: true, permissions: ['notes:read'], network: [] } });
-    assert.equal((await vault.readPluginChoices())['word-count'].enabled, true);
+    await vault.writePluginChoices({ 'plugin-teste': { enabled: true, permissions: ['notes:read'], network: [] } });
+    assert.equal((await vault.readPluginChoices())['plugin-teste'].enabled, true);
   } finally { await fs.rm(dir, { recursive: true, force: true }); }
 });
 
 test('manifesto quebrado aparece como erro, sem derrubar a lista', async () => {
   const { dir, vault } = await cofreTemporario();
   try {
-    await fs.writeFile(path.join(dir, '.kiro', 'plugins', 'word-count', 'manifest.json'), '{ isso não é json');
+    await fs.writeFile(path.join(dir, '.kiro', 'plugins', 'plugin-teste', 'manifest.json'), '{ isso não é json');
     const encontrados = await vault.listPlugins();
     assert.equal(encontrados.length, 1);
     assert.ok(encontrados[0].erro);
@@ -108,10 +108,10 @@ test('manifesto quebrado aparece como erro, sem derrubar a lista', async () => {
 test('o espaço do plug-in guarda dados e recusa passar de 1 MB', async () => {
   const { dir, vault } = await cofreTemporario();
   try {
-    assert.deepEqual(await vault.readPluginData('word-count'), {});
-    await vault.writePluginData('word-count', { total: 7 });
-    assert.equal((await vault.readPluginData('word-count')).total, 7);
-    await assert.rejects(() => vault.writePluginData('word-count', { grande: 'x'.repeat(1024 * 1024) }), /1 MB/);
+    assert.deepEqual(await vault.readPluginData('plugin-teste'), {});
+    await vault.writePluginData('plugin-teste', { total: 7 });
+    assert.equal((await vault.readPluginData('plugin-teste')).total, 7);
+    await assert.rejects(() => vault.writePluginData('plugin-teste', { grande: 'x'.repeat(1024 * 1024) }), /1 MB/);
   } finally { await fs.rm(dir, { recursive: true, force: true }); }
 });
 
@@ -134,20 +134,20 @@ async function servidorTemporario() {
 test('a rota serve o código do plug-in com os cabeçalhos de segurança', async () => {
   const s = await servidorTemporario();
   try {
-    const ok = await fetch(`http://127.0.0.1:${s.porta}/plugins/word-count/index.js`);
+    const ok = await fetch(`http://127.0.0.1:${s.porta}/plugins/plugin-teste/index.js`);
     assert.equal(ok.status, 200);
     assert.match(ok.headers.get('content-type'), /javascript/);
     assert.match(ok.headers.get('content-security-policy'), /connect-src 'none'/);
     assert.equal(ok.headers.get('x-content-type-options'), 'nosniff');
 
-    const json = await fetch(`http://127.0.0.1:${s.porta}/plugins/word-count/manifest.json`);
+    const json = await fetch(`http://127.0.0.1:${s.porta}/plugins/plugin-teste/manifest.json`);
     assert.equal(json.status, 404);
-    const fuga = await fetch(`http://127.0.0.1:${s.porta}/plugins/word-count/..%2F..%2Fcaderno.json`);
+    const fuga = await fetch(`http://127.0.0.1:${s.porta}/plugins/plugin-teste/..%2F..%2Fcaderno.json`);
     assert.equal(fuga.status, 404);
     // Caminho absoluto e pasta de outro plug-in também não passam.
-    const absoluto = await fetch(`http://127.0.0.1:${s.porta}/plugins/word-count/${encodeURIComponent('C:\\Windows\\win.ini')}`);
+    const absoluto = await fetch(`http://127.0.0.1:${s.porta}/plugins/plugin-teste/${encodeURIComponent('C:\\Windows\\win.ini')}`);
     assert.equal(absoluto.status, 404);
-    const fundo = await fetch(`http://127.0.0.1:${s.porta}/plugins/word-count/sub/index.js`);
+    const fundo = await fetch(`http://127.0.0.1:${s.porta}/plugins/plugin-teste/sub/index.js`);
     assert.equal(fundo.status, 404);
   } finally { await s.parar(); }
 });
@@ -189,11 +189,11 @@ test('o worker é de módulo e importa a parte pura por import', () => {
 });
 
 test('o plug-in de exemplo é válido e pede o mínimo', () => {
-  const pasta = path.join(__dirname, '..', 'examples', 'plugins', 'word-count');
+  const pasta = path.join(__dirname, '..', 'examples', 'plugins', 'flashcards');
   const manifesto = JSON.parse(require('node:fs').readFileSync(path.join(pasta, 'manifest.json'), 'utf8'));
   const r = P.validarManifesto(manifesto, { versaoDoKiro: require('../package.json').version });
   assert.equal(r.ok, true, r.erro);
-  assert.equal(r.manifesto.id, 'word-count');
+  assert.equal(r.manifesto.id, 'flashcards');
   assert.deepEqual(r.manifesto.permissions, ['notes:read']);
   assert.deepEqual(r.manifesto.network, []);
 
@@ -209,18 +209,18 @@ test('o plug-in de exemplo é válido e pede o mínimo', () => {
 
 test('decide quais plug-ins carregar a partir da pasta e das escolhas', () => {
   const achados = [
-    { id: 'word-count', manifesto: base },
+    { id: 'plugin-teste', manifesto: base },
     { id: 'quebrado', erro: 'manifest.json não é um JSON válido.' },
     { id: 'pede-mais', manifesto: { ...base, id: 'pede-mais', permissions: ['notes:read', 'notes:write'] } },
     { id: 'desligado', manifesto: { ...base, id: 'desligado' } },
     { id: 'outro-nome', manifesto: { ...base, id: 'nome-diferente' } },
   ];
   const escolhas = {
-    'word-count': { enabled: true, permissions: ['notes:read'], network: [] },
+    'plugin-teste': { enabled: true, permissions: ['notes:read'], network: [] },
     'pede-mais': { enabled: true, permissions: ['notes:read'], network: [] },
   };
   const plano = P.planoDeCarga(achados, escolhas, { versaoDoKiro: '0.15.0' });
-  assert.deepEqual(plano.carregar.map(p => p.id), ['word-count']);
+  assert.deepEqual(plano.carregar.map(p => p.id), ['plugin-teste']);
   assert.deepEqual(plano.carregar[0].permissoes, ['notes:read']);
   assert.equal(plano.pendentes.find(p => p.id === 'pede-mais').motivo, 'permissoes-novas');
   assert.equal(plano.pendentes.find(p => p.id === 'desligado').motivo, 'desligado');
@@ -241,10 +241,10 @@ test('o hospedeiro do app.js confere a permissão concedida a cada chamada', () 
 });
 
 test('painel declarativo vira marcação com o texto escapado', () => {
-  const html = P.painelParaHtml({ type: 'list', items: [{ title: '<b>oi</b>', detail: 'x & y', action: 'open:1' }] }, { pluginId: 'word-count' });
+  const html = P.painelParaHtml({ type: 'list', items: [{ title: '<b>oi</b>', detail: 'x & y', action: 'open:1' }] }, { pluginId: 'plugin-teste' });
   assert.match(html, /&lt;b&gt;oi&lt;\/b&gt;/);
   assert.match(html, /x &amp; y/);
-  assert.match(html, /data-plugin="word-count"/);
+  assert.match(html, /data-plugin="plugin-teste"/);
   assert.match(html, /data-acao="open:1"/);
   assert.ok(!/<b>/.test(html));
 
@@ -548,23 +548,3 @@ test('validarOpcoesDoPainel recusa declarações erradas', () => {
   recusa(undefined, 'wide');
   recusa([null]);
 });
-
-test('exemplo word-count: o painel declara a opção limit e a respeita', async () => {
-  const { pathToFileURL } = require('node:url');
-  const arquivo = require('node:path').join(__dirname, '..', 'examples', 'plugins', 'word-count', 'index.js');
-  const plugin = (await import(pathToFileURL(arquivo))).default;
-  const paineis = [];
-  const notas = Array.from({ length: 8 }, (_, i) => ({ id: `n${i}`, title: `Nota ${i}`, body: 'palavra '.repeat(i + 1) }));
-  await plugin.activate({
-    command() {}, block() {}, notify() {},
-    notes: { list: async () => notas, current: async () => null },
-    panel: (id, label, render, extra) => paineis.push({ id, render, extra }),
-  });
-  const painel = paineis.find(p => p.id === 'longest');
-  const v = P.validarOpcoesDoPainel(painel.extra?.options, painel.extra?.width);
-  assert.equal(v.ok, true, v.erro);
-  assert.deepEqual(v.opcoes.map(o => o.key), ['limit']);
-  assert.equal((await painel.render({ action: '', values: {}, options: { limit: 3 } })).items.length, 3);
-  assert.equal((await painel.render({ action: '', values: {}, options: { limit: 5 } })).items[0].title, 'Nota 7');
-});
-

@@ -7,12 +7,12 @@ const { spawn } = require('node:child_process');
 const P = require('../plugins.js');
 const { Vault } = require('../vault.cjs');
 
-const base = { id: 'habit-heatmap', name: 'Habit Heatmap', version: '1.0.0', author: 'Kiro', minKiro: '0.14.0', permissions: ['habits:read'], network: [] };
+const base = { id: 'plugin-teste', name: 'Plugin Teste', version: '1.0.0', author: 'Kiro', minKiro: '0.14.0', permissions: ['habits:read'], network: [] };
 const validar = (mudanca = {}) => P.validarManifesto({ ...base, ...mudanca }, { versaoDoKiro: '0.14.0' });
 
 test('page no manifesto: válido passa, o resto recusa', () => {
   assert.equal(validar().manifesto.page, null);
-  assert.deepEqual(validar({ page: { title: 'Heatmap', file: 'page.html' } }).manifesto.page, { title: 'Heatmap', file: 'page.html' });
+  assert.deepEqual(validar({ page: { title: 'Página', file: 'page.html' } }).manifesto.page, { title: 'Página', file: 'page.html' });
   for (const page of [
     'page.html', [], { title: 'X', file: 'page.js' }, { title: 'X', file: 'sub/page.html' },
     { title: 'X', file: '../page.html' }, { title: 'X', file: '..html' }, { title: '', file: 'page.html' },
@@ -22,7 +22,7 @@ test('page no manifesto: válido passa, o resto recusa', () => {
 
 test('ganhar page numa atualização não pede consentimento', () => {
   const registro = { enabled: true, permissions: ['habits:read'], network: [] };
-  assert.equal(P.precisaConsentir(registro, validar({ page: { title: 'Heatmap', file: 'page.html' } }).manifesto), false);
+  assert.equal(P.precisaConsentir(registro, validar({ page: { title: 'Página', file: 'page.html' } }).manifesto), false);
 });
 
 test('validarMoldura confere arquivo e altura', () => {
@@ -75,19 +75,19 @@ test('variáveis do tema incluem as 15 cores, as fontes e os tokens derivados', 
 test('readPluginFile serve .js, .html e .css e recusa o resto', async t => {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'kiro-molduras-'));
   t.after(() => fs.rm(dir, { recursive: true, force: true }));
-  const pasta = path.join(dir, '.kiro', 'plugins', 'habit-heatmap');
+  const pasta = path.join(dir, '.kiro', 'plugins', 'plugin-teste');
   await fs.mkdir(pasta, { recursive: true });
   for (const [nome, corpo] of [['index.js', 'export default {}'], ['page.html', '<p>oi</p>'], ['style.css', 'p{}'], ['manifest.json', '{}'], ['a.svg', '<svg/>']]) await fs.writeFile(path.join(pasta, nome), corpo);
   const vault = new Vault(dir);
-  assert.equal(String(await vault.readPluginFile('habit-heatmap', 'page.html')), '<p>oi</p>');
-  assert.equal(String(await vault.readPluginFile('habit-heatmap', 'style.css')), 'p{}');
-  await assert.rejects(() => vault.readPluginFile('habit-heatmap', 'manifest.json'), /js/i);
-  await assert.rejects(() => vault.readPluginFile('habit-heatmap', 'a.svg'), /js/i);
+  assert.equal(String(await vault.readPluginFile('plugin-teste', 'page.html')), '<p>oi</p>');
+  assert.equal(String(await vault.readPluginFile('plugin-teste', 'style.css')), 'p{}');
+  await assert.rejects(() => vault.readPluginFile('plugin-teste', 'manifest.json'), /js/i);
+  await assert.rejects(() => vault.readPluginFile('plugin-teste', 'a.svg'), /js/i);
 });
 
 test('servidor entrega a tela com sandbox, sem rede e com o runtime injetado', async t => {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'kiro-molduras-http-'));
-  const pasta = path.join(dir, '.kiro', 'plugins', 'habit-heatmap');
+  const pasta = path.join(dir, '.kiro', 'plugins', 'plugin-teste');
   await fs.mkdir(pasta, { recursive: true });
   await fs.writeFile(path.join(pasta, 'page.html'), '<html><head></head><body><script src="page.js"></script></body></html>');
   await fs.writeFile(path.join(pasta, 'style.css'), 'p{}');
@@ -103,7 +103,7 @@ test('servidor entrega a tela com sandbox, sem rede e com o runtime injetado', a
     child.once('exit', code => { clearTimeout(prazo); reject(new Error(`Servidor terminou: ${code}`)); });
   });
   const base = `http://127.0.0.1:${port}`;
-  const tela = await fetch(`${base}/plugins/habit-heatmap/page.html`);
+  const tela = await fetch(`${base}/plugins/plugin-teste/page.html`);
   assert.equal(tela.status, 200);
   assert.match(tela.headers.get('content-type'), /^text\/html/);
   assert.equal(tela.headers.get('x-dns-prefetch-control'), 'off');
@@ -113,26 +113,17 @@ test('servidor entrega a tela com sandbox, sem rede e com o runtime injetado', a
   assert.ok(csp.includes(`script-src ${base}`), csp);
   assert.ok(csp.includes(`frame-ancestors ${base}`), csp);
   assert.match(await tela.text(), /^<script src="\/kiro-frame\.js"><\/script><html><head><\/head>/);
-  const css = await fetch(`${base}/plugins/habit-heatmap/style.css`);
+  const css = await fetch(`${base}/plugins/plugin-teste/style.css`);
   assert.match(css.headers.get('content-type'), /^text\/css/);
   // .js continua com a CSP do worker, sem injeção.
-  assert.equal((await fetch(`${base}/plugins/habit-heatmap/manifest.json`)).status, 404);
+  assert.equal((await fetch(`${base}/plugins/plugin-teste/manifest.json`)).status, 404);
   const runtime = await fetch(`${base}/kiro-frame.js`);
   assert.equal(runtime.status, 200);
   assert.match(await runtime.text(), /RTCPeerConnection/);
 });
 
-test('exemplo habit-heatmap: manifesto válido, tela e docs', async () => {
+test('documentação das molduras descreve a API disponível', async () => {
   const raiz = path.join(__dirname, '..');
-  const versao = require('../package.json').version;
-  const m = JSON.parse(await fs.readFile(path.join(raiz, 'examples/plugins/habit-heatmap/manifest.json'), 'utf8'));
-  const r = P.validarManifesto(m, { versaoDoKiro: versao });
-  assert.equal(r.ok, true, r.erro);
-  assert.deepEqual(r.manifesto.permissions, ['habits:read']);
-  assert.deepEqual(r.manifesto.page, { title: 'Habit Heatmap', file: 'heatmap.html' });
-  const html = await fs.readFile(path.join(raiz, 'examples/plugins/habit-heatmap/heatmap.html'), 'utf8');
-  assert.match(html, /heatmap\.js/);
-  assert.doesNotMatch(html, /<script>(?!\s*<\/script>)/);   // sem script inline: a CSP não deixa
   const docs = await fs.readFile(path.join(raiz, 'docs/plugins.md'), 'utf8');
   for (const trecho of ['kiro.ready', 'kiro.resize', 'kiro.openLink', 'kiro.onData', '"page"', 'frame']) assert.ok(docs.includes(trecho), trecho);
   assert.doesNotMatch(docs, /Stage 4 — isolated frames/);
