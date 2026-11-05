@@ -3758,6 +3758,7 @@ document.addEventListener('click', evento => {
 // Clicar na imagem abre ela inteira sobre a nota; Esc ou um clique fecham. O
 // Markdown da imagem continua a um clique do botão direito, como nos outros blocos.
 let telaDeImagem = null;
+let origemDoFoco = null;
 const aoTeclarNaImagem = evento => {
   if (evento.key !== 'Escape') return;
   // Em captura e parando aqui: o Esc fecha a imagem sem mexer no resto da tela.
@@ -3770,11 +3771,15 @@ function abrirImagemInteira(fonte, nome) {
 }
 // O PDF da leitura ampliada: o pdf-nota.js ativa o bloco ao entrar no body. Só o fundo fecha;
 // clicar no PDF não, nem no topo (que não recolhe).
-function abrirPdfInteiro(arquivo, pagina) {
-  abrirTelaInteira(htmlDoPdf({ arquivo, pagina, altura: window.innerHeight - 80, aberto: true }), evento => {
+// `origem`: o elemento que recebe o foco de volta ao fechar (o Fluxo de onde o PDF foi ampliado).
+function abrirPdfInteiro(arquivo, pagina, origem) {
+  // Cabe na janela: 60 de padding da tela e cerca de 52 do topo do PDF e das bordas.
+  abrirTelaInteira(htmlDoPdf({ arquivo, pagina, altura: window.innerHeight - 112, aberto: true }), evento => {
     if (evento.target.closest('.md-pdf-topo') && !evento.target.closest('a')) evento.preventDefault();
-    if (evento.target === telaDeImagem) fecharImagemInteira();
+    // detail > 1: o 2º clique de um duplo clique em Ampliar cairia no fundo que acabou de aparecer.
+    if (evento.target === telaDeImagem && evento.detail <= 1) fecharImagemInteira();
   });
+  origemDoFoco = origem || null;
 }
 function abrirTelaInteira(conteudo, aoClicar = fecharImagemInteira) {
   fecharImagemInteira();
@@ -3794,6 +3799,8 @@ function fecharImagemInteira() {
   telaDeImagem = null;
   document.body.classList.remove('com-imagem-inteira');
   document.removeEventListener('keydown', aoTeclarNaImagem, true);
+  if (origemDoFoco?.isConnected) origemDoFoco.focus({ preventScroll: true });
+  origemDoFoco = null;
 }
 
 // ---- Menu de contexto do corpo da nota ----

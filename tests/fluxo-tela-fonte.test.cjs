@@ -48,3 +48,13 @@ test('rolar as páginas não é capturado pelo Fluxo', () => {
   const i = fonte.indexOf("raiz.addEventListener('wheel'");
   assert.match(fonte.slice(i, i + 300), /md-pdf-paginas/);
 });
+
+test('Copiar e Recortar do menu não usam execCommand', () => {
+  assert.doesNotMatch(fonte, /execCommand/);
+  assert.match(fonte, /rotulo: t\('Copiar'\)[^\n]*copiarSelecao\(\)/);
+  assert.match(fonte, /rotulo: t\('Recortar'\)[^\n]*removerCartoes\(canvas, copiarSelecao\(\)\)/);
+});
+
+test('segurar o atalho de balão não cria um cartão por repetição', () => {
+  assert.match(fonte, /e\.repeat/);
+});

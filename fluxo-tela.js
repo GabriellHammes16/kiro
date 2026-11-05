@@ -209,7 +209,7 @@
     }
     async function adicionarNota(p) { const nota = await opcoes.escolherNota(); if (nota) adicionarNo({ type: 'file', file: nota.arquivo, width: 400, height: 280 }, p); }
     async function adicionarImagem(p) { const caminho = await opcoes.escolherImagem(); if (caminho) adicionarNo({ type: 'file', file: caminho, ...F.tamanhoPadrao({ type: 'file', file: caminho }) }, p); }
-    function ampliar(idNo) { const c = no(idNo); if (c && F.caminhoSeguro(c.file)) opcoes.ampliarPdf(c.file, s.paginasDoPdf.get(idNo) || 1); }
+    function ampliar(idNo) { const c = no(idNo); if (c && F.caminhoSeguro(c.file)) opcoes.ampliarPdf(c.file, s.paginasDoPdf.get(idNo) || 1, raiz); }
     async function adicionarLink(p) { const url = await opcoes.pedirLink(); if (url) adicionarNo({ type: 'link', url, width: 320, height: 100 }, p); }
     function criarGrupo(p) {
       const sel = canvas.nodes.filter(n => s.selecao.has(n.id));
@@ -293,7 +293,7 @@
       // Em captura: o Ctrl+Enter do CodeMirror marcaria a tarefa antes do ouvinte acima.
       const aoCriarVizinho = e => {
         const qual = atalhoDoEvento(e);
-        if (!qual) return;
+        if (!qual || e.repeat) return;
         e.preventDefault(); e.stopPropagation();
         concluir(true);
         criarVizinho(idNo, qual === 'ligado');
@@ -394,8 +394,8 @@
       const ids = [...s.selecao];
       return [
         { rotulo: t('Cor'), icone: bolinha(no(idNo)?.color), filhos: itensDaCor(cor => mudar(ids.reduce((c, x) => F.editarCartao(c, x, { color: cor }), canvas))) },
-        { rotulo: t('Copiar'), icone: opcoes.icone('copiar'), acao: () => { raiz.focus({ preventScroll: true }); document.execCommand('copy'); } },
-        { rotulo: t('Recortar'), icone: opcoes.icone('cortar'), acao: () => { raiz.focus({ preventScroll: true }); document.execCommand('cut'); } },
+        { rotulo: t('Copiar'), icone: opcoes.icone('copiar'), acao: () => { copiarSelecao(); } },
+        { rotulo: t('Recortar'), icone: opcoes.icone('cortar'), acao: () => { mudar(F.removerCartoes(canvas, copiarSelecao())); } },
         { rotulo: t('Duplicar'), icone: opcoes.icone('copiar'), acao: duplicarSelecao },
         ...(ids.length === 1 && no(idNo)?.type === 'text' ? [{ rotulo: t('Editar texto'), icone: opcoes.icone('renomear'), acao: () => editar(idNo) }] : []),
         ...(ids.length === 1 && no(idNo)?.type === 'text' && no(idNo).text.trim() ? [{ rotulo: t('Transformar em nota'), icone: opcoes.icone('nota'), acao: () => transformarEmNota(idNo) }] : []),
@@ -621,6 +621,7 @@
       const qual = e.target === raiz && atalhoDoEvento(e);
       if (!qual) return;
       e.preventDefault(); e.stopImmediatePropagation();
+      if (e.repeat) return;   // segurar o atalho não cria um cartão por repetição
       criarVizinho(s.selecao.size === 1 ? [...s.selecao][0] : null, qual === 'ligado');
     });
     raiz.addEventListener('keydown', e => {
@@ -650,7 +651,7 @@
     raiz.addEventListener('scroll', e => {
       const caixa = e.target;
       if (!caixa.matches?.('.md-pdf-paginas') || !caixa.children.length) return;
-      s.paginasDoPdf.set(caixa.closest('.fluxo-cartao').dataset.no, [...caixa.children].filter(p => p.offsetTop <= caixa.scrollTop + 4).length || 1);
+      s.paginasDoPdf.set(caixa.closest('.fluxo-cartao').dataset.no, [...caixa.children].filter(p => p.offsetTop - (p.offsetParent === caixa ? 0 : caixa.offsetTop) <= caixa.scrollTop + 4).length || 1);
     }, true);
     raiz.querySelector('.fluxo-barra').addEventListener('click', e => {
       const acao = e.target.closest('[data-fluxo-acao]')?.dataset.fluxoAcao;
@@ -697,9 +698,9 @@
     // transferência (colar fora do Kiro dá texto). Recortar é copiar e remover num passo só.
     function copiarSelecao(e) {
       const ids = comConteudo([...s.selecao]), trecho = F.copiarCartoes(canvas, ids), texto = F.textoDoTrecho(trecho);
-      e.preventDefault();
-      e.clipboardData.setData('text/plain', texto);
       areaDoFluxo = { trecho, texto };
+      if (e) { e.preventDefault(); e.clipboardData.setData('text/plain', texto); }
+      else navigator.clipboard.writeText(texto).catch(() => opcoes.aviso(t('Não foi possível copiar.'), true));   // pelo menu: não há evento de cópia
       return ids;
     }
     raiz.addEventListener('copy', e => { if (editor || e.target !== raiz || !s.selecao.size) return; copiarSelecao(e); });
