@@ -109,3 +109,11 @@ test('corpos reaproveitados mudam de lugar com moveBefore e esperam numa guarda 
   assert.match(fonte.slice(i, i + 400), /guardarCorpo\(el\)/);
   assert.match(fonte, /id = 'fluxo-guarda'/);
 });
+
+test('render() esvazia a guarda no fim, para a midia de um fluxo que saiu da tela parar', () => {
+  const app = fs.readFileSync(path.join(__dirname, '../app.js'), 'utf8');
+  const i = app.indexOf('function render()');
+  const corpo = app.slice(i, app.indexOf('\n}\n', i));
+  assert.ok(corpo.indexOf('KiroFluxoTela.esvaziarGuarda()') > corpo.indexOf('bindView()'));
+  assert.match(fonte, /function esvaziarGuarda\(\)[\s\S]*sessao\.corpos\.delete[\s\S]*guardaDeCorpos\.replaceChildren\(\)/);
+});

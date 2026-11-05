@@ -136,6 +136,7 @@ function render() {
   // O editor da nota é o mesmo de antes do redesenho (montarEditorDaNota): devolve o foco a ele.
   if (focoNoEditor && editorDaNota && document.querySelector('#doc-corpo')?.contains(editorDaNota.editor.dom)) editorDaNota.editor.focar();
   if (editorDaNota && !document.querySelector('#doc-corpo')) { editorDaNota.editor.destruir(); editorDaNota = null; }
+  KiroFluxoTela.esvaziarGuarda();   // os fluxos já foram montados (bindView): o que sobrou na guarda não tem mais tela
 }
 // O redesenho troca os elementos e o teclado voltaria ao começo da tela. O novo elemento é achado pelo id ou pelos data-*.
 function seletorDoFoco(el) {

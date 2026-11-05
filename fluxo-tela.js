@@ -910,7 +910,14 @@
     if (s.foco) { s.foco = false; requestAnimationFrame(() => { if (document.contains(raiz)) raiz.focus({ preventScroll: true }); }); }
     return inst;
   }
+  // Fim do render(): o que nenhuma tela montada pegou de volta (outra tela, fluxo fechado ou apagado, outro cofre) sai do documento e a mídia para.
+  // As sessões esquecem esses corpos: ao voltar, o cartão nasce de novo (o vídeo do YouTube não retoma tocando sozinho).
+  function esvaziarGuarda() {
+    if (!guardaDeCorpos) return;
+    for (const sessao of sessoes.values()) for (const [chave, el] of sessao.corpos) if (el.parentNode === guardaDeCorpos) sessao.corpos.delete(chave);
+    guardaDeCorpos.replaceChildren();
+  }
   function desmontarTodos() { for (const m of [...montados]) m.desmontar(); }
   const ocupado = () => [...montados].some(m => m.ocupado());
-  root.KiroFluxoTela = { montar, desmontarTodos, ocupado, tabelaHtml, textoLimitado, videoIframeHtml };
+  root.KiroFluxoTela = { montar, desmontarTodos, esvaziarGuarda, ocupado, tabelaHtml, textoLimitado, videoIframeHtml };
 })(globalThis);
