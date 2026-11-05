@@ -269,7 +269,8 @@
     // a busca corria): grava no canvas mais recente do estado e redesenha. Sem desfazer em nenhum dos dois.
     function receberPrevia(idNo, previa) {
       if (!previa || typeof previa !== 'object') return;
-      if (opcoes.salvando?.()) return void setTimeout(() => receberPrevia(idNo, previa), 150);
+      // Espera salvamento, arraste/redimensionamento (o soltar gravaria um canvas calculado sem a prévia) e edição aberta.
+      if (opcoes.salvando?.() || (montados.has(inst) && (gesto || editor))) return void setTimeout(() => receberPrevia(idNo, previa), 150);
       const vivo = montados.has(inst), base = vivo ? canvas : opcoes.canvasAtual();
       const n = base?.nodes.find(x => x.id === idNo);
       if (!n || n.type !== 'link') return;   // o cartão foi apagado nesse meio tempo
@@ -277,9 +278,9 @@
       // Cartão ainda no tamanho de partida cresce para caber a prévia.
       const altura = n.kiroRecolhido ? 'kiroAlturaAberta' : 'height';
       if (!n.kiroAlturaFixa && n[altura] === F.tamanhoPadrao(n).height) campos[altura] = campos.kiroPrevia.imagem ? 240 : 150;
-      if (!vivo) { opcoes.aoMudar(F.editarCartao(base, idNo, campos)); opcoes.redesenhar(); return; }
-      terminarEdicao();   // redesenhar com um texto em edição o perderia
+      if (!vivo) { s.historico = F.editarNoHistorico(s.historico, idNo, campos); opcoes.aoMudar(F.editarCartao(base, idNo, campos)); opcoes.redesenhar(); return; }
       canvas = F.editarCartao(canvas, idNo, campos);
+      s.historico = F.editarNoHistorico(s.historico, idNo, campos);   // desfazer não apaga a prévia
       desenhar();
       opcoes.aoMudar(canvas);
     }

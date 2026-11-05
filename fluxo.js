@@ -140,6 +140,12 @@
   // Desfazer guarda canvas inteiros: são imutáveis, então cada passo custa só as referências.
   const historicoVazio = () => ({ antes: [], depois: [] });
   const empilhar = (h, anterior) => ({ antes: [...h.antes, anterior].slice(-LIMITE_HISTORICO), depois: [] });
+  // Aplica `campos` ao cartão em todas as fotos do histórico que o têm: dado que chega depois (prévia de link)
+  // não entra no desfazer, mas desfazer também não o apaga.
+  function editarNoHistorico(h, id, campos) {
+    const foto = c => (c.nodes.some(n => n.id === id) ? editarCartao(c, id, campos) : c);
+    return { antes: h.antes.map(foto), depois: h.depois.map(foto) };
+  }
   function desfazer(h, atual) {
     if (!h.antes.length) return null;
     return { historico: { antes: h.antes.slice(0, -1), depois: [...h.depois, atual] }, canvas: h.antes.at(-1) };
@@ -404,7 +410,7 @@
     return { dx, dy, linhas };
   }
 
-  const api = { TIPOS, LADOS, CORES, GRADE, ZOOM, OPOSTO, corValida, ler, serializar, adicionarCartao, moverCartoes, redimensionar, editarCartao, removerCartoes, duplicarCartoes, ligar, editarSeta, removerSetas, encaixar, historicoVazio, empilhar, desfazer, refazer, vistaValida, paraCanvas, zoomEm, enquadrar, pontoDoLado, ladoMaisProximo, ladosDaSeta, caminhoDaSeta, geometriaDaSeta, dentro, renomearArquivos, caminhoSeguro, ehImagem, contidos, caixaDe, alturaEstimada, tamanhoPadrao, raizDe, layout, inserirPerto, novoId, ehPdf, copiarCartoes, colarCartoes, textoDoTrecho, lugarLivre, guiasDeAlinhamento, tipoDoArquivo, idDoYoutube, ALTURA_RECOLHIDA, alternarRecolhido, lerCsv };
+  const api = { TIPOS, LADOS, CORES, GRADE, ZOOM, OPOSTO, corValida, ler, serializar, adicionarCartao, moverCartoes, redimensionar, editarCartao, removerCartoes, duplicarCartoes, ligar, editarSeta, removerSetas, encaixar, historicoVazio, empilhar, editarNoHistorico, desfazer, refazer, vistaValida, paraCanvas, zoomEm, enquadrar, pontoDoLado, ladoMaisProximo, ladosDaSeta, caminhoDaSeta, geometriaDaSeta, dentro, renomearArquivos, caminhoSeguro, ehImagem, contidos, caixaDe, alturaEstimada, tamanhoPadrao, raizDe, layout, inserirPerto, novoId, ehPdf, copiarCartoes, colarCartoes, textoDoTrecho, lugarLivre, guiasDeAlinhamento, tipoDoArquivo, idDoYoutube, ALTURA_RECOLHIDA, alternarRecolhido, lerCsv };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.KiroFluxo = api;
 })(globalThis);

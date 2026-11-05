@@ -498,3 +498,13 @@ test('tamanhoPadrao por tipo de arquivo e de link', () => {
     [[320, 240], [480, 640], [320, 240], [480, 280], [320, 100], [480, 300], [400, 280]]);
   assert.deepEqual([t({ type: 'link', url: 'https://youtu.be/dQw4w9WgXcQ' }), t({ type: 'link', url: 'https://x.com' })], [[480, 300], [320, 100]]);
 });
+
+test('editarNoHistorico aplica o campo ao cartão em toda foto que o tem, sem mexer nas outras', () => {
+  const sem = canvas([cartao('a')]), com = canvas([cartao('a'), cartao('b')]);
+  const h = { antes: [sem, com], depois: [com] };
+  const r = F.editarNoHistorico(h, 'b', { kiroPrevia: { titulo: 'x' } });
+  assert.equal(r.antes[0], sem);
+  assert.deepEqual(r.antes[1].nodes[1].kiroPrevia, { titulo: 'x' });
+  assert.deepEqual(r.depois[0].nodes[1].kiroPrevia, { titulo: 'x' });
+  assert.equal(h.antes[1].nodes[1].kiroPrevia, undefined);
+});
