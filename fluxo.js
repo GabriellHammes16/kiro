@@ -340,7 +340,7 @@
     return { x: posto.x, y: posto.y };
   }
   // Guias ao arrastar: encaixa começo/centro/fim da caixa nos do outro cartão, no menor
-  // deslocamento dentro da tolerância (por eixo), e devolve uma linha por coincidência exata.
+  // deslocamento dentro da tolerância (por eixo), e devolve uma linha por coincidência exata (a extensão da linha usa a caixa já deslocada no outro eixo).
   function guiasDeAlinhamento(caixa, outros, tolerancia) {
     const tres = (o, p, t, d = 0) => [o[p] + d, o[p] + o[t] / 2 + d, o[p] + o[t] + d];
     const menor = (p, t) => {
@@ -351,9 +351,9 @@
       return melhor;
     };
     const dx = menor('x', 'width'), dy = menor('y', 'height'), linhas = [];
-    for (const [eixo, p, t, d, q, u] of [['x', 'x', 'width', dx, 'y', 'height'], ['y', 'y', 'height', dy, 'x', 'width']]) {
+    for (const [eixo, p, t, d, q, u, dq] of [['x', 'x', 'width', dx, 'y', 'height', dy], ['y', 'y', 'height', dy, 'x', 'width', dx]]) {
       for (const o of outros) for (const a of tres(caixa, p, t, d)) for (const b of tres(o, p, t)) {
-        if (a === b) linhas.push({ eixo, pos: b, de: Math.min(caixa[q], o[q]), ate: Math.max(caixa[q] + caixa[u], o[q] + o[u]) });
+        if (a === b) linhas.push({ eixo, pos: b, de: Math.min(caixa[q] + dq, o[q]), ate: Math.max(caixa[q] + dq + caixa[u], o[q] + o[u]) });
       }
     }
     return { dx, dy, linhas };

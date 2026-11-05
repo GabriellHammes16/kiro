@@ -453,3 +453,13 @@ test('guiasDeAlinhamento encaixa bordas e centros dentro da tolerância', () => 
   assert.deepEqual(r.linhas.filter(l => l.eixo === 'x').map(l => l.pos).sort((a, b) => a - b), [100, 200, 300]);
   assert.deepEqual(F.guiasDeAlinhamento({ x: 120, y: 0, width: 200, height: 100 }, [outro], 6), { dx: 0, dy: 0, linhas: [] });
 });
+
+test('guiasDeAlinhamento: com os dois eixos encaixados, as linhas cobrem a caixa já deslocada', () => {
+  const outro = { x: 100, y: 500, width: 200, height: 100 };
+  const r = F.guiasDeAlinhamento({ x: 103, y: 497, width: 200, height: 100 }, [outro], 6);
+  assert.equal(r.dx, -3);
+  assert.equal(r.dy, 3);
+  const x = r.linhas.filter(l => l.eixo === 'x'), y = r.linhas.filter(l => l.eixo === 'y');
+  for (const l of x) assert.deepEqual([l.de, l.ate], [500, 600]);
+  for (const l of y) assert.deepEqual([l.de, l.ate], [100, 300]);
+});

@@ -35,13 +35,14 @@
     <svg class="fluxo-setas" aria-hidden="true"><defs><marker id="fluxo-ponta-${n}" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0 10 5 0 10z" fill="context-stroke"/></marker></defs><g class="fluxo-caminhos"></g><path class="fluxo-seta-previa" d=""/></svg>
     <div class="fluxo-cartoes"></div>
     <div class="fluxo-marca" hidden></div>
+    <div class="fluxo-guias"></div>
   </div>
   <div class="fluxo-dica"><p>${t('Dois cliques para criar um cartão')}</p><p>${t('Cole ou arraste um PDF ou uma imagem para cá')}</p></div>
   <div class="fluxo-barra"><button type="button" class="icon-button" data-fluxo-acao="cartao" title="${t('Adicionar cartão (ou dois cliques no fundo)')}" aria-label="${t('Adicionar cartão')}">${opcoes.icone('mais')}</button><button type="button" class="icon-button" data-fluxo-acao="nota" title="${t('Adicionar nota do cofre')}" aria-label="${t('Adicionar nota do cofre')}">${opcoes.icone('nota')}</button><button type="button" class="icon-button" data-fluxo-acao="imagem" title="${t('Adicionar imagem')}" aria-label="${t('Adicionar imagem')}">${opcoes.icone('imagem')}</button><button type="button" class="fluxo-zoom" data-fluxo-acao="enquadrar" title="${t('Enquadrar tudo (Shift+1)')}" aria-label="${t('Enquadrar tudo')}">100%</button></div>
 </div>`;
     const raiz = host.firstElementChild;
     const mundo = raiz.querySelector('.fluxo-mundo'), caminhos = raiz.querySelector('.fluxo-caminhos'), cartoes = raiz.querySelector('.fluxo-cartoes');
-    const previa = raiz.querySelector('.fluxo-seta-previa'), marca = raiz.querySelector('.fluxo-marca'), rotuloZoom = raiz.querySelector('.fluxo-zoom');
+    const previa = raiz.querySelector('.fluxo-seta-previa'), marca = raiz.querySelector('.fluxo-marca'), guias = raiz.querySelector('.fluxo-guias'), rotuloZoom = raiz.querySelector('.fluxo-zoom');
     const dica = raiz.querySelector('.fluxo-dica');
     const ponta = `url(#fluxo-ponta-${n})`;
     const no = idNo => canvas.nodes.find(x => x.id === idNo);
@@ -234,21 +235,43 @@
         conteudo.replaceChildren(campo);
       }
       const valor = () => (ed ? ed.texto() : campo.value);
+      // Cartão sem altura fixada cresce com o texto, durante a edição (a medição só vale aqui) e ao
+      // concluir; nunca fica menor que a altura de partida. Altura fixada à mão: o texto rola dentro.
+      const altura0 = c.height;
+      const rolagem = () => {
+        const r = ed ? campo.querySelector('.cm-scroller') : campo;
+        if (!r) return 0;
+        // Com o cartão recolhido, scrollHeight é a altura do conteúdo (senão +24 realimentaria o crescimento).
+        const h = el.style.height, topo = r.scrollTop;
+        el.style.height = '0px';
+        const v = r.scrollHeight;
+        el.style.height = h; r.scrollTop = topo;
+        return v;
+      };
+      const alturaNova = texto => encaixarPraCima(Math.max(altura0, alturaDoTexto(texto, c.width), rolagem() + 24));
+      let quadro = 0;
+      const crescer = () => {
+        quadro = 0;
+        const altura = alturaNova(valor());
+        el.style.height = `${altura}px`;
+        desenharSetas(F.redimensionar(canvas, idNo, c.width, altura));
+      };
       el.classList.add('editando');
       let feito = false;
       const concluir = gravar => {
         if (feito) return;
         feito = true; editor = null;
-        const texto = valor();
+        cancelAnimationFrame(quadro);
+        const texto = valor(), atual = no(idNo);
+        const altura = gravar && atual && !atual.kiroAlturaFixa ? alturaNova(texto) : atual?.height;
         ed?.destruir();
-        const atual = no(idNo);
         if (!gravar || !atual || texto === atual.text) return void desenhar();
         let novo = F.editarCartao(canvas, idNo, { text: texto });
-        const altura = alturaDoTexto(texto, atual.width);
-        if (altura > atual.height) novo = F.redimensionar(novo, idNo, atual.width, encaixarPraCima(altura));
+        if (altura !== atual.height) novo = F.redimensionar(novo, idNo, atual.width, altura);
         mudar(novo);
       };
       editor = { concluir, id: idNo };
+      if (!c.kiroAlturaFixa) campo.addEventListener('input', () => { if (!quadro) quadro = requestAnimationFrame(crescer); });
       campo.addEventListener('keydown', e => {
         e.stopPropagation();   // Delete, Ctrl+Z etc. são do texto, não do fluxo
         if (e.key === 'Escape') { e.preventDefault(); concluir(true); raiz.focus({ preventScroll: true }); }
@@ -423,6 +446,11 @@
     };
     // Um toque sem arrastar (menos de 3 px na tela) não move nada nem vira passo de desfazer.
     const andou = (g, e) => g.andou || (g.andou = Math.hypot(pontoDaTela(e).x - g.tela0.x, pontoDaTela(e).y - g.tela0.y) >= 3);
+    // Guias de alinhamento: uma linha do acento por coincidência, dentro do .fluxo-mundo.
+    const desenharGuias = linhas => {
+      guias.innerHTML = linhas.map(l => `<div class="fluxo-guia" data-eixo="${l.eixo}" style="${l.eixo === 'x' ? `left:${l.pos}px;top:${l.de}px;height:${l.ate - l.de}px` : `top:${l.pos}px;left:${l.de}px;width:${l.ate - l.de}px`}"></div>`).join('');
+    };
+    const limparGuias = () => guias.replaceChildren();
     GESTOS.mover = {
       mover(g, e) {
         if (!andou(g, e)) return;
@@ -431,13 +459,17 @@
         g.dx = encaixar(base.x + p.x - g.p0.x) - base.x;
         g.dy = encaixar(base.y + p.y - g.p0.y) - base.y;
         g.previa = F.moverCartoes(canvas, g.ids, g.dx, g.dy);
+        // A guia vence a grade: o que está sendo movido encaixa nos outros cartões (grupos não contam).
+        const guia = F.guiasDeAlinhamento(F.caixaDe(g.previa.nodes.filter(x => g.ids.includes(x.id)), 0), canvas.nodes.filter(x => x.type !== 'group' && !g.ids.includes(x.id)), 6 / s.vista.zoom);
+        if (guia.dx || guia.dy) { g.dx += guia.dx; g.dy += guia.dy; g.previa = F.moverCartoes(canvas, g.ids, g.dx, g.dy); }
+        desenharGuias(guia.linhas);
         for (const idNo of g.ids) {
           const c = g.previa.nodes.find(x => x.id === idNo), el = elDoCartao(idNo);
           if (el) { el.style.left = `${c.x}px`; el.style.top = `${c.y}px`; }
         }
         desenharSetas(g.previa);
       },
-      soltar(g) { if (g.previa && (g.dx || g.dy)) mudar(g.previa); },
+      soltar(g) { limparGuias(); if (g.previa && (g.dx || g.dy)) mudar(g.previa); },
     };
     GESTOS.redimensionar = {
       mover(g, e) {
@@ -450,7 +482,9 @@
       },
       soltar(g) {
         const antes = no(g.id), depois = g.previa?.nodes.find(x => x.id === g.id);
-        if (depois && (depois.width !== antes.width || depois.height !== antes.height)) mudar(g.previa);
+        if (!depois || (depois.width === antes.width && depois.height === antes.height)) return;
+        // Mexer na altura à mão a fixa: dali em diante o texto rola dentro do cartão em vez de esticá-lo.
+        mudar(depois.height !== antes.height && antes.type === 'text' ? F.editarCartao(g.previa, g.id, { kiroAlturaFixa: true }) : g.previa);
       },
     };
     GESTOS.marcar = {
@@ -518,7 +552,7 @@
     });
     raiz.addEventListener('pointermove', e => { s.mouseNaTela = pontoDaTela(e); if (gesto) GESTOS[gesto.tipo].mover(gesto, e); });
     raiz.addEventListener('pointerup', e => { if (!gesto) return; const g = gesto; gesto = null; GESTOS[g.tipo].soltar(g, e); });
-    raiz.addEventListener('pointercancel', () => { if (!gesto) return; gesto = null; previa.classList.remove('ativa'); marca.hidden = true; desenhar(); aplicarVista(); });
+    raiz.addEventListener('pointercancel', () => { if (!gesto) return; gesto = null; previa.classList.remove('ativa'); marca.hidden = true; limparGuias(); desenhar(); aplicarVista(); });
     // Roda: rola (Shift = na horizontal); Ctrl+roda: zoom no cursor. Conteúdo longo de um
     // cartão rola dentro dele.
     raiz.addEventListener('wheel', e => {

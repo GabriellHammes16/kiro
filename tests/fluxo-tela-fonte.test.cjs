@@ -24,3 +24,12 @@ test('o atalho de criar balão é lido antes do editor, em captura', () => {
 test('Enter sozinho não cria balão', () => {
   assert.doesNotMatch(fonte, /e\.key === 'Enter'[^\n]*criarVizinho/);
 });
+
+test('redimensionar à mão fixa a altura e a edição a respeita', () => {
+  assert.match(fonte, /kiroAlturaFixa: true/);
+  assert.match(fonte, /\.kiroAlturaFixa/);
+});
+
+test('as guias são limpas ao soltar e ao cancelar o gesto', () => {
+  assert.ok((fonte.match(/limparGuias\(\)/g) || []).length >= 2);
+});
