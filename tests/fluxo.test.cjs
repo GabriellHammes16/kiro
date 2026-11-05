@@ -463,3 +463,38 @@ test('guiasDeAlinhamento: com os dois eixos encaixados, as linhas cobrem a caixa
   for (const l of x) assert.deepEqual([l.de, l.ate], [500, 600]);
   for (const l of y) assert.deepEqual([l.de, l.ate], [100, 300]);
 });
+
+test('tipoDoArquivo reconhece cada grupo pela extensão', () => {
+  assert.deepEqual(['a.PDF', 'b.jpg', 'c.txt', 'd.csv', 'e.m4a', 'f.mp4', 'g.md', 'h.docx'].map(F.tipoDoArquivo),
+    ['pdf', 'imagem', 'texto', 'tabela', 'audio', 'video', 'nota', 'nota']);
+});
+
+test('idDoYoutube aceita os formatos comuns e recusa o resto', () => {
+  for (const url of ['https://www.youtube.com/watch?v=dQw4w9WgXcQ&t=3', 'https://youtu.be/dQw4w9WgXcQ', 'https://youtube.com/shorts/dQw4w9WgXcQ', 'https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ'])
+    assert.equal(F.idDoYoutube(url), 'dQw4w9WgXcQ', url);
+  for (const url of ['https://vimeo.com/123', 'https://youtube.com/watch?v=curto', 'https://evil.com/?v=dQw4w9WgXcQ', 'javascript:alert(1)'])
+    assert.equal(F.idDoYoutube(url), null, url);
+});
+
+test('recolher guarda a altura e abrir devolve a mesma', () => {
+  const c = canvas([cartao('a', { type: 'file', file: 'x.pdf', height: 333 })]);
+  const fechado = F.alternarRecolhido(c, 'a');
+  assert.deepEqual([fechado.nodes[0].height, fechado.nodes[0].kiroRecolhido, fechado.nodes[0].kiroAlturaAberta], [F.ALTURA_RECOLHIDA, true, 333]);
+  const aberto = F.alternarRecolhido(fechado, 'a');
+  assert.equal(aberto.nodes[0].height, 333);
+  assert.ok(!('kiroRecolhido' in aberto.nodes[0]) && !('kiroAlturaAberta' in aberto.nodes[0]));
+});
+
+test('lerCsv entende aspas, ponto e vírgula e limita as linhas', () => {
+  assert.deepEqual(F.lerCsv('a;b\n"x;y";"di""z"').linhas, [['a', 'b'], ['x;y', 'di"z']]);
+  const grande = F.lerCsv(Array.from({ length: 250 }, (_, i) => `${i},${i}`).join('\n'));
+  assert.equal(grande.linhas.length, 200);
+  assert.equal(grande.restantes, 50);
+});
+
+test('tamanhoPadrao por tipo de arquivo e de link', () => {
+  const t = c => { const { width, height } = F.tamanhoPadrao(c); return [width, height]; };
+  assert.deepEqual(['a.png', 'a.pdf', 'a.txt', 'a.csv', 'a.mp3', 'a.mp4', 'a.md'].map(file => t({ type: 'file', file })),
+    [[320, 240], [480, 640], [320, 240], [480, 280], [320, 100], [480, 300], [400, 280]]);
+  assert.deepEqual([t({ type: 'link', url: 'https://youtu.be/dQw4w9WgXcQ' }), t({ type: 'link', url: 'https://x.com' })], [[480, 300], [320, 100]]);
+});

@@ -100,7 +100,7 @@
       .map(e => ({ ...e, id: reservar(), fromNode: novos.get(e.fromNode).id, toNode: novos.get(e.toNode).id }));
     return { canvas: { ...c, nodes: [...c.nodes, ...novos.values()], edges: [...c.edges, ...setas] }, ids: [...novos.values()].map(n => n.id) };
   }
-  const ehPdf = f => /\.pdf$/i.test(f ?? '');
+  const ehPdf = f => tipoDoArquivo(f) === 'pdf';
   // Cópia independente dos cartões (e das setas entre eles) para colar depois, em qualquer canvas.
   function copiarCartoes(c, ids) {
     const alvo = new Set(ids);
@@ -221,7 +221,52 @@
   // Só caminho relativo ao cofre vira <img>: nada de subir pastas nem começar na raiz do disco.
   const caminhoSeguro = f => str(f) && f.length > 0 && !/^[\\/]|^[a-z]:|(^|[\\/])\.\.([\\/]|$)/i.test(f);
   // As mesmas extensões que o domain.js trata como imagem nas notas.
-  const ehImagem = f => str(f) && /\.(png|jpe?g|gif|webp|avif|bmp)$/i.test(f.trim());
+  const ehImagem = f => str(f) && tipoDoArquivo(f.trim()) === 'imagem';
+  // Grupo do arquivo pela extensão; o que não é reconhecido abre como nota.
+  const EXTENSOES = { pdf: 'pdf', png: 'imagem', jpg: 'imagem', jpeg: 'imagem', gif: 'imagem', webp: 'imagem', avif: 'imagem', bmp: 'imagem', txt: 'texto', csv: 'tabela', mp3: 'audio', wav: 'audio', webm: 'audio', m4a: 'audio', mp4: 'video' };
+  const tipoDoArquivo = f => EXTENSOES[(/\.([^.\\/]+)$/.exec(String(f ?? '')) || [])[1]?.toLowerCase()] || 'nota';
+  // ID de 11 caracteres de um link do YouTube (watch, youtu.be, shorts, embed); qualquer outro endereço vira null.
+  function idDoYoutube(url) {
+    let u;
+    try { u = new URL(String(url).trim()); } catch { return null; }
+    if (!/^https?:$/.test(u.protocol)) return null;
+    const host = u.hostname.replace(/^(www|m)\./, '');
+    const id = host === 'youtu.be' ? u.pathname.slice(1)
+      : host === 'youtube.com' && u.pathname === '/watch' ? u.searchParams.get('v')
+      : (host === 'youtube.com' || host === 'youtube-nocookie.com') ? (/^\/(?:shorts|embed)\/([^/]+)\/?$/.exec(u.pathname) || [])[1]
+      : null;
+    return /^[A-Za-z0-9_-]{11}$/.test(id ?? '') ? id : null;
+  }
+  const ALTURA_RECOLHIDA = 40;
+  // Recolhe o cartão à barra de título guardando a altura; abrir devolve a altura guardada.
+  function alternarRecolhido(c, id) {
+    const n = c.nodes.find(x => x.id === id);
+    if (!n) return c;
+    return n.kiroRecolhido
+      ? editarCartao(c, id, { kiroRecolhido: undefined, kiroAlturaAberta: undefined, height: n.kiroAlturaAberta ?? tamanhoPadrao(n).height })
+      : editarCartao(c, id, { kiroRecolhido: true, kiroAlturaAberta: n.height, height: ALTURA_RECOLHIDA });
+  }
+  // CSV simples: separador (vírgula ou ponto e vírgula) pela primeira linha, aspas duplas, quebra de linha dentro de aspas.
+  function lerCsv(texto, { linhas: maxLinhas = 200, colunas: maxColunas = 30 } = {}) {
+    const t = String(texto ?? '').replace(/^﻿/, '');
+    const primeira = t.split(/\r?\n/, 1)[0];
+    const sep = primeira.split(';').length > primeira.split(',').length ? ';' : ',';
+    const linhas = [];
+    let linha = [], campo = '', aspas = false;
+    const fechaLinha = () => { linha.push(campo); linhas.push(linha); linha = []; campo = ''; };
+    for (let i = 0; i < t.length; i++) {
+      const ch = t[i];
+      if (aspas) {
+        if (ch !== '"') campo += ch;
+        else if (t[i + 1] === '"') { campo += '"'; i++; } else aspas = false;
+      } else if (ch === '"') aspas = true;
+      else if (ch === sep) { linha.push(campo); campo = ''; }
+      else if (ch === '\n' || ch === '\r') { if (ch === '\r' && t[i + 1] === '\n') i++; fechaLinha(); }
+      else campo += ch;
+    }
+    if (campo || linha.length) fechaLinha();
+    return { linhas: linhas.slice(0, maxLinhas).map(l => l.slice(0, maxColunas)), restantes: Math.max(0, linhas.length - maxLinhas) };
+  }
   // Cartões inteiramente dentro de um grupo (menos o próprio): andam com ele.
   const contidos = (nodes, g) => nodes.filter(n => n.id !== g.id && n.x >= g.x && n.y >= g.y && n.x + n.width <= g.x + g.width && n.y + n.height <= g.y + g.height).map(n => n.id);
   function caixaDe(nodes, margem = GRADE * 2) {
@@ -240,11 +285,11 @@
   const LARGURA_PADRAO = 280, ENTRE_COLUNAS = 80, ENTRE_IRMAOS = 20;
   const praCima = v => Math.ceil(v / GRADE) * GRADE;
   // Tamanho de um cartão que chega sem tamanho (da IA): o mesmo dos cartões criados na tela.
+  const TAMANHO_POR_TIPO = { pdf: { width: 480, height: 640 }, imagem: { width: 320, height: 240 }, texto: { width: 320, height: 240 }, tabela: { width: 480, height: 280 }, audio: { width: 320, height: 100 }, video: { width: 480, height: 300 }, nota: { width: 400, height: 280 } };
   function tamanhoPadrao(c) {
     if (c.type === 'text') return { width: LARGURA_PADRAO, height: praCima(alturaEstimada(c.text ?? '')) };
-    if (c.type === 'file' && ehPdf(c.file)) return { width: 480, height: 640 };
-    if (c.type === 'file') return ehImagem(c.file) ? { width: 320, height: 240 } : { width: 400, height: 280 };
-    if (c.type === 'link') return { width: 320, height: 100 };
+    if (c.type === 'file') return TAMANHO_POR_TIPO[tipoDoArquivo(c.file)];
+    if (c.type === 'link') return idDoYoutube(c.url) ? { width: 480, height: 300 } : { width: 320, height: 100 };
     return { width: 400, height: 300 };
   }
   // Raiz implícita: o primeiro cartão sem seta chegando de outro; se todos têm, o primeiro.
@@ -359,7 +404,7 @@
     return { dx, dy, linhas };
   }
 
-  const api = { TIPOS, LADOS, CORES, GRADE, ZOOM, OPOSTO, corValida, ler, serializar, adicionarCartao, moverCartoes, redimensionar, editarCartao, removerCartoes, duplicarCartoes, ligar, editarSeta, removerSetas, encaixar, historicoVazio, empilhar, desfazer, refazer, vistaValida, paraCanvas, zoomEm, enquadrar, pontoDoLado, ladoMaisProximo, ladosDaSeta, caminhoDaSeta, geometriaDaSeta, dentro, renomearArquivos, caminhoSeguro, ehImagem, contidos, caixaDe, alturaEstimada, tamanhoPadrao, raizDe, layout, inserirPerto, novoId, ehPdf, copiarCartoes, colarCartoes, textoDoTrecho, lugarLivre, guiasDeAlinhamento };
+  const api = { TIPOS, LADOS, CORES, GRADE, ZOOM, OPOSTO, corValida, ler, serializar, adicionarCartao, moverCartoes, redimensionar, editarCartao, removerCartoes, duplicarCartoes, ligar, editarSeta, removerSetas, encaixar, historicoVazio, empilhar, desfazer, refazer, vistaValida, paraCanvas, zoomEm, enquadrar, pontoDoLado, ladoMaisProximo, ladosDaSeta, caminhoDaSeta, geometriaDaSeta, dentro, renomearArquivos, caminhoSeguro, ehImagem, contidos, caixaDe, alturaEstimada, tamanhoPadrao, raizDe, layout, inserirPerto, novoId, ehPdf, copiarCartoes, colarCartoes, textoDoTrecho, lugarLivre, guiasDeAlinhamento, tipoDoArquivo, idDoYoutube, ALTURA_RECOLHIDA, alternarRecolhido, lerCsv };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.KiroFluxo = api;
 })(globalThis);
