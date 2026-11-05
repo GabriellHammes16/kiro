@@ -76,6 +76,11 @@ createServer(async (request, response) => {
       const pedido = await lerJson(request, 4096);
       return send(response, 200, await (request.url === '/api/history' ? vault.history(pedido) : request.url === '/api/history-read' ? vault.readHistory(pedido) : vault.restoreHistory(pedido)));
     }
+    if (['/api/trash-purge', '/api/trash-empty'].includes(request.url) && request.method === 'POST') {
+      const pedido = await lerJson(request, 4096);
+      await (request.url === '/api/trash-purge' ? vault.purgeTrash(pedido) : vault.emptyTrash());
+      return send(response, 200, { ok: true });
+    }
     if (request.url === '/api/restore' && request.method === 'POST') {
       if (request.headers['content-type']?.split(';')[0] !== 'application/json') return send(response, 415, { error: frase('Use JSON.') });
       let bruto = ''; for await (const parte of request) { bruto += parte; if (bruto.length > 4096) return send(response, 413, { error: frase('Pedido grande demais.') }); }
@@ -96,11 +101,11 @@ createServer(async (request, response) => {
       let bruto = ''; for await (const parte of request) { bruto += parte; if (bruto.length > 8192) return send(response, 413, { error: frase('Configuração grande demais.') }); }
       return send(response, 200, await agentConfig.save(JSON.parse(bruto)));
     }
-    if (request.url === '/api/state' && request.method === 'POST') {
+    if ((request.url === '/api/state' || request.url === '/api/state?parcial=1') && request.method === 'POST') {
       if (request.headers['content-type']?.split(';')[0] !== 'application/json') return send(response, 415, { error: frase('Use JSON.') });
       let size = 0; const chunks = [];
       for await (const chunk of request) { size += chunk.length; if (size > 20 * 1024 * 1024) return send(response, 413, { error: frase('Backup maior que 20 MB.') }); chunks.push(chunk); }
-      const salvo = await vault.save(JSON.parse(Buffer.concat(chunks).toString('utf8')));
+      const salvo = await vault.save(JSON.parse(Buffer.concat(chunks).toString('utf8')), { copiaParcial: request.url.endsWith('?parcial=1') });
       agendadorBackup.aoSalvar();
       return send(response, 200, salvo);
     }

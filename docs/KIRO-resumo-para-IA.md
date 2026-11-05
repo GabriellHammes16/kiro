@@ -117,7 +117,7 @@ updatedAt: 1789189555996
 - **Imagens:** colar (Ctrl+V) ou arrastar, redimensionar pela alça, clicar para tela cheia.
 - **Data de criação e de alteração**, mostradas nos cards.
 - **Menu do botão direito no texto:** formatar, inserir, parágrafo, salvar, mover para lixeira.
-- **Ctrl+O:** ir para nota pelo título. **Ctrl+N:** nova nota. **Ctrl+S:** salvar.
+- **Ctrl+O:** ir para nota pelo título. **Ctrl+N:** nova nota. **Ctrl+T:** nova nota em outra aba. **Ctrl+W:** fechar a aba. **Ctrl+S:** salvar agora (a nota também se salva sozinha 3 s depois de uma pausa e ao sair da janela). **Ctrl+1 a 5:** trocar de tela.
 
 ### Pastas (árvore do cofre)
 - Pastas aninhadas reais no disco, com **cor por pasta** (8 cores): fundo tingido, ícone colorido e cor nos cards e no grafo.

@@ -6,7 +6,7 @@ const tecla = (key, extra = {}) => ({ key, code: '', ctrlKey: false, metaKey: fa
 const PADRAO = Object.fromEntries(ATALHOS_EDITAVEIS.map(([id, , , padrao]) => [id, padrao]));
 
 test('padrões incluem o atalho da barra lateral', () => {
-  assert.deepEqual(PADRAO, { captura: 'Ctrl+Space', irPara: 'Ctrl+O', novaNota: 'Ctrl+N', salvar: 'Ctrl+S', lateral: 'Ctrl+\\', painelDireito: 'Ctrl+Shift+L', acoesRapidas: 'Ctrl+K' });
+  assert.deepEqual(PADRAO, { captura: 'Ctrl+Space', irPara: 'Ctrl+O', novaNota: 'Ctrl+N', salvar: 'Ctrl+S', lateral: 'Ctrl+\\', painelDireito: 'Ctrl+Shift+L', acoesRapidas: 'Ctrl+K', fecharAba: 'Ctrl+W', novaAba: 'Ctrl+T', imprimir: 'Ctrl+P', configuracoes: 'Ctrl+,' });
 });
 
 test('combinação sai do evento de teclado, com Cmd valendo Ctrl', () => {

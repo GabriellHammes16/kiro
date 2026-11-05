@@ -196,3 +196,12 @@ test('histórico por coluna (voltar/avançar) e vínculo entre colunas', () => {
   e = A.desvincularColuna(e, 0);
   assert.deepEqual(A.colunasVinculadas(e, 0), []);
 });
+
+test('limpar mantém o histórico e os vínculos, sem o que não existe mais', () => {
+  const e = { paineis: [{ abas: ['a'], ativa: 'a' }, { abas: ['b'], ativa: 'b' }], ativo: 0, larguras: [0.5, 0.5],
+    historico: [{ entradas: [{ id: 'x', scroll: 0 }, { id: 'a', scroll: 3 }], indice: 1 }, { entradas: [{ id: 'b', scroll: 0 }], indice: 0 }], vinculos: [[0, 1], [0, 9], 'lixo'] };
+  const limpo = A.limpar(e, ['a', 'b']);
+  assert.deepEqual(limpo.historico[0], { entradas: [{ id: 'a', scroll: 3 }], indice: 0 });
+  assert.deepEqual(limpo.vinculos, [[0, 1]]);
+  assert.equal(A.limpar({ ...e, historico: [null] }, ['a', 'b']).historico, undefined);
+});

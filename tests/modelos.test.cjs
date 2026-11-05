@@ -175,7 +175,7 @@ test('falha real de save bloqueia retry no título e preserva formulário e nota
   p.ctx.mensagemDoErro = () => 'Falha'; p.ctx.eventosDoCofre = () => {};
   p.ctx.mesclarComOCofre = async () => false;
   vm.runInContext(fonte.slice(fonte.indexOf('async function save('), fonte.indexOf('function escapeHtml')), p.ctx);
-  vm.runInContext(fonte.slice(fonte.indexOf('async function salvarNota(){'), fonte.indexOf('async function extraAction(')), p.ctx);
+  vm.runInContext(`var clearTimeout=()=>{};${fonte.slice(fonte.indexOf('const ESPERA_AUTOSAVE_NOTA'), fonte.indexOf('async function extraAction('))}`, p.ctx);
   vm.runInContext(fonte.match(/async function salvarAntesDeTrocar\(\)\{[^\n]+/)[0], p.ctx);
   p.ctx.uid = () => 'copia'; p.ctx.gravarAbas = () => {}; p.ctx.abas = { ativo: 'rascunho' };
   p.ctx.KiroAbas = { trocarId: v => v, RASCUNHO: 'rascunho' };
@@ -194,7 +194,7 @@ test('salvarNota real pode redesenhar sem perder o formulário e a cópia usa o 
     p.ctx.state.notes = [original]; p.ctx.editing = { ...original, body: 'Alterado {{title}}', tags: [...original.tags], links: [...original.links] };
     p.ctx.save = async () => sucesso;
     p.ctx.render = () => { assert.equal(p.no('#modelo-titulo').value, 'Nova'); assert.ok(p.no('#modal-root').firstChild); };
-    vm.runInContext(fonte.slice(fonte.indexOf('async function salvarNota(){'), fonte.indexOf('async function extraAction(')), p.ctx);
+    vm.runInContext(`var clearTimeout=()=>{};${fonte.slice(fonte.indexOf('const ESPERA_AUTOSAVE_NOTA'), fonte.indexOf('async function extraAction('))}`, p.ctx);
     vm.runInContext(fonte.match(/async function salvarAntesDeTrocar\(\)\{[^\n]+/)[0], p.ctx);
     p.selecionar(); await p.criar('Nova');
     if (sucesso) { assert.equal(p.ctx.editing.body, 'Alterado Nova'); assert.equal(p.ctx.editorDirty, true); }

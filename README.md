@@ -62,7 +62,8 @@ O servidor aceita conexões somente deste computador. O botão **Abrir pasta do 
 - Informe tags no campo de tags ou escreva `#estudos` no corpo.
 - A busca encontra títulos, conteúdo e tags. Use `#tag` para filtrar por tags.
 - Tarefas podem ser associadas a uma nota. A rotina considera o dia no fuso local.
-- Atalhos: **Ctrl+N** para criar uma nota, **Ctrl+S** para salvar o formulário de nota e **Esc** para fechar.
+- A nota se salva sozinha 3 segundos depois de uma pausa e ao sair da janela. Sem título, ela recebe a primeira linha do texto ao sair.
+- Atalhos: **Ctrl+N** para criar uma nota, **Ctrl+S** para salvar na hora, **Ctrl+1** a **Ctrl+5** para trocar de tela e **Esc** para fechar. A lista completa está em **Configurações → Atalhos**.
 - **Ações rápidas** abre com **Ctrl+K**, remapeável em **Configurações → Atalhos**, e também pelo botão na interface. Use as setas, **Enter** e **Esc** para navegar. A lista reúne comandos nativos e comandos de plugins ativos; eles também continuam em Configurações.
 - Se o cofre falhar ao criar uma nota por modelo, o formulário preserva os campos e orienta preservar/exportar e recuperar o cofre antes de tentar de novo. A falha mantém o bloqueio ativo.
 

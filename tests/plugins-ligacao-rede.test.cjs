@@ -30,7 +30,7 @@ async function servidor() {
     'desligado': { enabled: false, permissions: ['network'], network: ['api.exemplo.com'] },
     'sem-rede': { enabled: true, permissions: ['notes:read'], network: [] },
   }));
-  const porta = 4800 + Math.floor(Math.random() * 400);
+  const porta = 5200 + Math.floor(Math.random() * 400); // fora de 5060 e 5061, que o fetch recusa ("bad port")
   const filho = spawn(process.execPath, ['server.mjs'], {
     cwd: raiz,
     env: { ...process.env, PORT: String(porta), KIRO_VAULT: cofre, KIRO_REDE_FALSA: '1', KIRO_SEGREDOS_ARQUIVO: path.join(dir, 'plugin-secrets.json') },

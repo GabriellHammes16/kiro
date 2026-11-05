@@ -141,7 +141,7 @@ test('plugin ainda ativo executa uma vez; instância substituída não executa',
 test('fechamento real da paleta limpa o callback e restaura o foco sem descarte', () => {
   const p = paleta();
   p.ctx.document.querySelector = s => p.nos[s];
-  p.ctx.modalDirty = false;
+  p.ctx.modalDirty = false; p.ctx.focoAntesDoModal = null;
   p.ctx.confirm = () => { throw new Error('busca nao deve pedir descarte'); };
   Object.defineProperty(p.nos['#modal-root'], 'innerHTML', { set() { this.firstChild = null; } });
   vm.runInContext(fonte.slice(fonte.indexOf('function closeModal('), fonte.indexOf('function taskModal(')), p.ctx);
@@ -156,7 +156,7 @@ function tecladoGlobal(p) {
   p.doc.addEventListener = (tipo, fn, captura) => { if (tipo === 'keydown') listeners.push({ fn, captura: !!captura }); };
   p.doc.querySelector = s => p.nos[s] || null;
   p.ctx.atalhos = { acoesRapidas: 'Ctrl+Shift+K' };
-  p.ctx.currentView = 'studies'; p.ctx.editing = {};
+  p.ctx.currentView = 'studies'; p.ctx.editing = {}; p.ctx.sugestao = null;
   let aberturas = 0, efeitoEditor = 0;
   const abrir = p.ctx.abrirAcoesRapidas;
   p.ctx.abrirAcoesRapidas = () => { aberturas++; abrir(); };

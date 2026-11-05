@@ -642,5 +642,74 @@ class Vault {
     const result=await this.write(input,{entry,files,directories:entry.directories,map});
     await atomicWrite(await this.safePath(`.trash/${entryId}/restored`),'true');return result;
   });}
+  async entradasDaLixeira(){
+    let transacoes;
+    try{transacoes=await fs.readdir(await this.safePath('.trash'));}catch(e){if(e.code==='ENOENT')return [];throw e;}
+    const lista=[];
+    for(const transacao of transacoes)for(const id of await fs.readdir(await this.safePath(`.trash/${transacao}`))){
+      const entryId=`${transacao}/${id}`;
+      try{lista.push({entryId,entry:await this.readTrash(entryId),restaurada:Boolean(await optionalRead(await this.safePath(`.trash/${entryId}/restored`)))});}
+      catch{lista.push({entryId,entry:null,restaurada:false});} // ilegível: sai junto ao esvaziar, sem mexer no histórico
+    }
+    return lista;
+  }
+  // Cada gravação copia o cofre para .history: sem limpar lá, o texto "apagado" continuaria no disco.
+  // ponytail: lê cada nota de cada cópia, o que demora em cofres enormes; é uma ação rara e pedida de propósito.
+  async apagarDoHistorico(entradas,vivos){
+    const notas=new Set(),fluxos=new Set(),arquivos=new Set(),pastas=new Set();
+    for(const entry of entradas){
+      if(!entry||vivos.has(entry.id))continue;
+      for(const n of entry.notes||[])if(!vivos.has(n.id))notas.add(n.id);
+      for(const f of entry.fluxos||[])if(!vivos.has(f.id))fluxos.add(f.id);
+      for(const f of entry.files||[])if(!/\.md$/i.test(f))arquivos.add(f);
+      for(const d of entry.directories||[])pastas.add(d);
+    }
+    let copias;
+    try{copias=await fs.readdir(await this.safePath('.history'));}catch(e){if(e.code==='ENOENT')return;throw e;}
+    for(const copia of copias){
+      const raiz=`.history/${copia}`;
+      const percorrer=async(relativo='')=>{
+        for(const item of await fs.readdir(await this.safePath(relativo?`${raiz}/${relativo}`:raiz),{withFileTypes:true})){
+          const arquivo=relativo?`${relativo}/${item.name}`:item.name,alvo=await this.safePath(`${raiz}/${arquivo}`);
+          if(item.isDirectory()){await percorrer(arquivo);continue;}
+          if(!item.isFile())continue;
+          let apagar=arquivos.has(arquivo);
+          if(!apagar&&/\.md$/i.test(arquivo)){try{apagar=notas.has(parseMarkdown(await fs.readFile(alvo,'utf8'),arquivo,0).id);}catch{/* não é uma nota legível */}}
+          if(apagar)await fs.rm(alvo,{force:true});
+        }
+      };
+      await percorrer();
+      // Fluxos não guardam o id no arquivo: o registro do caderno.json da cópia diz onde cada um está.
+      const caderno=await optionalRead(await this.safePath(`${raiz}/caderno.json`));
+      if(caderno&&fluxos.size){
+        let dados=null;try{dados=JSON.parse(caderno);}catch{/* cópia antiga ilegível */}
+        if(Array.isArray(dados?.fluxos)){
+          for(const r of dados.fluxos)if(fluxos.has(r?.id)&&typeof r.path==='string')await fs.rm(await this.safePath(`${raiz}/${r.path}`),{force:true});
+          dados.fluxos=dados.fluxos.filter(r=>!fluxos.has(r?.id));
+          await atomicWrite(await this.safePath(`${raiz}/caderno.json`),JSON.stringify(dados));
+        }
+      }
+      for(const pasta of [...pastas].sort((a,b)=>b.length-a.length))await fs.rmdir(await this.safePath(`${raiz}/${pasta}`)).catch(()=>{}); // só sai se ficou vazia
+    }
+  }
+  async tirarDaLixeira(entryId){
+    await fs.rm(await this.safePath(`.trash/${entryId}`),{recursive:true,force:true});
+    await fs.rmdir(await this.safePath(`.trash/${entryId.split('/')[0]}`)).catch(()=>{});
+  }
+  idsVivos(state){return new Set([...state.notes,...state.folders,...(state.fluxos||[])].map(x=>x.id));}
+  purgeTrash({entryId}){return this.locked(async()=>{
+    const alvo=await this.readTrash(entryId),vivos=this.idsVivos((await this.read()).state);
+    if(vivos.has(alvo.id))throw new Error(frase('Este item já está no cofre.'));
+    const ids=new Set((alvo.notes||[]).map(n=>n.id));
+    // Versões anteriores do mesmo item saem junto, senão reapareceriam na lista.
+    const entradas=(await this.entradasDaLixeira()).filter(x=>x.entry&&(x.entry.id===alvo.id||(x.restaurada&&(x.entry.notes||[]).some(n=>ids.has(n.id)))));
+    await this.apagarDoHistorico(entradas.map(x=>x.entry),vivos);
+    for(const {entryId:id} of entradas)await this.tirarDaLixeira(id);
+  });}
+  emptyTrash(){return this.locked(async()=>{
+    const vivos=this.idsVivos((await this.read()).state),entradas=await this.entradasDaLixeira();
+    await this.apagarDoHistorico(entradas.map(x=>x.entry),vivos);
+    await fs.rm(await this.safePath('.trash'),{recursive:true,force:true});
+  });}
 }
 module.exports={Vault,parseMarkdown,markdown,atomicWrite,rewritePaths,attachmentRange,HISTORY_LIMIT,ATTACHMENT_LIMIT};

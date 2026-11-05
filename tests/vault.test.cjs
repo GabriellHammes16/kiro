@@ -161,6 +161,80 @@ test('salvamento concluído não deixa lixo em .staging', async t => {
   await assert.rejects(fs.access(path.join(vault.directory,'.staging')),'.staging deveria sumir após o commit');
 });
 
+// Procura o texto em todo arquivo do cofre, inclusive .trash e .history.
+async function cofreContem(directory, texto) {
+  for (const item of await fs.readdir(directory, { withFileTypes: true })) {
+    const alvo = path.join(directory, item.name);
+    if (item.isDirectory() ? await cofreContem(alvo, texto) : item.isFile() && (await fs.readFile(alvo, 'utf8')).includes(texto)) return true;
+  }
+  return false;
+}
+const SEGREDO = 'texto-que-deve-sumir-do-disco';
+
+test('apagar permanentemente tira a nota da lixeira e de todo o disco, e deixa as outras', async t => {
+  const vault = await setup(t);
+  let state = await seed(vault, [note({ body: SEGREDO }), note({ id: 'outra', title: 'Outra', body: 'Fica' })]);
+  state = await vault.save({ ...state, notes: state.notes.map(n => n.id === 'note-1' ? { ...n, body: SEGREDO + ' editado' } : n) });
+  state = await vault.save({ ...state, notes: state.notes.filter(n => n.id !== 'note-1') });
+  assert.ok(await cofreContem(vault.directory, SEGREDO), 'antes de apagar, o texto está no disco');
+  await vault.purgeTrash({ entryId: (await vault.trash())[0].entryId });
+  assert.equal((await vault.trash()).length, 0);
+  assert.equal(await cofreContem(vault.directory, SEGREDO), false);
+  const atual = await vault.load();
+  assert.deepEqual(atual.notes.map(n => n.body), ['Fica']);
+  assert.ok((await vault.history({ noteId: 'outra' })).length > 0, 'o histórico das outras notas continua');
+});
+
+test('apagar permanentemente leva as exclusões anteriores do mesmo item', async t => {
+  const vault = await setup(t);
+  let state = await seed(vault, [note({ body: SEGREDO })]);
+  state = await vault.save({ ...state, notes: [] });
+  state = await vault.restore({ entryId: (await vault.trash())[0].entryId, revision: state.revision });
+  state = await vault.save({ ...state, notes: [] });
+  await vault.purgeTrash({ entryId: (await vault.trash())[0].entryId });
+  assert.equal((await vault.trash()).length, 0);
+  assert.equal(await cofreContem(vault.directory, SEGREDO), false);
+});
+
+test('apagar pasta permanentemente leva as notas e os anexos de dentro dela', async t => {
+  const vault = await setup(t);
+  const pasta = { id: 'pasta-1', title: 'Secreta', description: '', parentId: '' };
+  let state = await seed(vault, []);
+  state = await vault.save({ ...state, folders: [pasta], notes: [note({ folderId: 'pasta-1', body: SEGREDO })] });
+  const dir = state.folders[0].diskPath || state.folders[0].path;
+  await fs.writeFile(path.join(vault.directory, dir, 'anexo.txt'), SEGREDO);
+  state = await vault.load();
+  state = await vault.save({ ...state, notes: state.notes.map(n => ({ ...n, updatedAt: n.updatedAt + 1, body: n.body + ' v2' })) });
+  state = await vault.save({ ...state, folders: [], notes: [] });
+  const entrada = (await vault.trash()).find(i => i.kind === 'folder');
+  assert.ok(entrada);
+  await vault.purgeTrash({ entryId: entrada.entryId });
+  assert.equal(await cofreContem(vault.directory, SEGREDO), false);
+  assert.equal((await vault.trash()).length, 0);
+});
+
+test('esvaziar a lixeira apaga tudo o que estava nela e não toca no que está no cofre', async t => {
+  const vault = await setup(t);
+  let state = await seed(vault, [note({ body: SEGREDO }), note({ id: 'b', title: 'B', body: SEGREDO + ' b' }), note({ id: 'viva', title: 'Viva', body: 'Continua' })]);
+  state = await vault.save({ ...state, notes: state.notes.filter(n => n.id === 'viva') });
+  assert.equal((await vault.trash()).length, 2);
+  await vault.emptyTrash();
+  assert.equal((await vault.trash()).length, 0);
+  assert.equal(await cofreContem(vault.directory, SEGREDO), false);
+  assert.deepEqual((await vault.load()).notes.map(n => n.body), ['Continua']);
+});
+
+test('apagar permanentemente recusa item que voltou ao cofre e caminho inválido', async t => {
+  const vault = await setup(t);
+  let state = await seed(vault);
+  state = await vault.save({ ...state, notes: [] });
+  const entrada = (await vault.trash())[0];
+  state = await vault.restore({ entryId: entrada.entryId, revision: state.revision });
+  await assert.rejects(vault.purgeTrash({ entryId: entrada.entryId }), /já está no cofre/);
+  await assert.rejects(vault.purgeTrash({ entryId: '../../caderno' }), /inválido/);
+  assert.equal((await vault.load()).notes.length, 1);
+});
+
 test('.history é podado ao passar do limite, sem tocar na lixeira', async t => {
   const directory=await fs.mkdtemp(path.join(os.tmpdir(),'kiro-hist-'));
   t.after(()=>fs.rm(directory,{recursive:true,force:true}));

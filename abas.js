@@ -207,7 +207,22 @@
     const ativo = Number.isInteger(e.ativo) && e.ativo >= 0 && e.ativo < paineis.length ? e.ativo : 0;
     // Formato antigo (até duas metades): `proporcao` era a largura da primeira.
     const antigas = Number.isFinite(e.proporcao) && paineis.length === 2 ? [e.proporcao, 1 - e.proporcao] : e.larguras;
-    return arrumar({ paineis, ativo, larguras: normalizar(antigas, paineis.length) });
+    const limpo = { paineis, ativo, larguras: normalizar(antigas, paineis.length) };
+    // Histórico e vínculos sobrevivem à limpeza: ela roda a cada desenho da tela de Pastas.
+    if (Array.isArray(e.historico) && e.historico.length === paineis.length) {
+      const vale = x => typeof x?.id === 'string' && (existe.has(x.id) || x.id === RASCUNHO);
+      limpo.historico = e.historico.map(h => {
+        const c = clonarHistPainel(h), entradas = c.entradas.filter(vale);
+        const antes = c.entradas.slice(0, c.indice + 1).filter(vale).length;
+        return { entradas, indice: entradas.length ? Math.max(0, antes - 1) : -1 };
+      });
+    }
+    if (Array.isArray(e.vinculos)) {
+      const noLimite = n => Number.isInteger(n) && n >= 0 && n < paineis.length;
+      const pares = e.vinculos.filter(p => Array.isArray(p) && noLimite(p[0]) && noLimite(p[1]) && p[0] !== p[1]);
+      if (pares.length) limpo.vinculos = pares;
+    }
+    return arrumar(limpo);
   }
 
   const larguras = (e, lista) => ({ ...copia(e), larguras: normalizar(lista, e.paineis.length) });

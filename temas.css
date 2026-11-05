@@ -46,7 +46,7 @@
 /* Liquid Glass: inspirado no vidro da Apple — vidro neutro, sem cor própria; quem dá a cor é o que está atrás. */
 .tema-liquid-glass {
   --bg:#1C1C1E; --panel:#2C2C2E; --panel-raised:#3A3A3C; --sidebar-bg:#232325; --content-bg:#1C1C1E; --campo:#262628;
-  --ink:#FFFFFF; --muted:#D1D1D6; --line:#545458;
+  --ink:#FFFFFF; --danger:#F0BEC1; --muted:#D1D1D6; --line:#545458;
   --acento:#F2F2F7; --acento-2:#C7C7CC; --acento-forte:#D4D4D8; --acento-escuro:#AEAEB2; --acento-texto:#000000; --primario-texto:#000000;
 }
 /* Personalizado: base do clássico; fundos e destaque vêm inline do app.js. */
@@ -57,7 +57,7 @@
 }
 .tema-escuro-azul {
   --bg:#082F40; --panel:#103F50; --panel-raised:#194E60; --sidebar-bg:#062837; --content-bg:#082F40; --campo:#0B3545;
-  --ink:#E8FAFF; --muted:#A6CAD6; --line:#376372;
+  --ink:#E8FAFF; --danger:#E7A8AD; --muted:#A6CAD6; --line:#376372;
   --acento:#73E1E2; --acento-2:#FFBF75; --acento-forte:#5DC6C8; --acento-escuro:#42AFB2; --acento-texto:#042A32; --primario-texto:#042A32;
 }
 .tema-escuro-verde {
@@ -82,7 +82,7 @@
 }
 .tema-floresta {
   --bg:#243A20; --panel:#304B2A; --panel-raised:#3D5B35; --sidebar-bg:#1B2D19; --content-bg:#243A20; --campo:#2A4225;
-  --ink:#F1F5DF; --muted:#C1D0AB; --line:#607A4C;
+  --ink:#F1F5DF; --danger:#EDBEB0; --muted:#C1D0AB; --line:#607A4C;
   --acento:#F2D878; --acento-2:#A7D697; --acento-forte:#DBC363; --acento-escuro:#C8AF51; --acento-texto:#252D12; --primario-texto:#252D12;
 }
 
@@ -114,7 +114,7 @@
 }
 .tema-sailor-moon {
   --bg:#422447; --panel:#55325B; --panel-raised:#68416D; --sidebar-bg:#321A37; --content-bg:#422447; --campo:#49294F;
-  --ink:#FFF0FD; --muted:#D8B7D5; --line:#8B6090;
+  --ink:#FFF0FD; --danger:#F7BAC2; --muted:#D8B7D5; --line:#8B6090;
   --acento:#FFACDA; --acento-2:#F5DE8E; --acento-forte:#EF97C9; --acento-escuro:#DD86B8; --acento-texto:#38172F; --primario-texto:#38172F;
 }
 .tema-violet-evergarden {
@@ -267,9 +267,13 @@ html.tema-liquid-glass.vidro-nativo { --vidro-desfoque:none; }
    (do tamanho da janela), que é recortado com cantos de 12px como os do Windows 11; o fundo do html
    não pode ficar vazio, senão o véu do body vaza para a tela inteira e escapa do recorte. */
 html.tema-liquid-glass.vidro-nativo { background:linear-gradient(transparent, transparent); overflow:hidden; }
-html.tema-liquid-glass.vidro-nativo body { height:100vh; box-sizing:border-box; overflow-y:auto; clip-path:inset(0 round 12px); }
+/* O will-change evita repintar a rolagem sobre fundo translúcido: cerca de 1/3 menos GPU, medido. No html daria o mesmo, mas perde os cantos. */
+html.tema-liquid-glass.vidro-nativo body { height:100vh; box-sizing:border-box; overflow-y:auto; will-change:scroll-position; clip-path:inset(0 round 12px); }
 /* Um fio claro marca a borda contra o desktop. */
 html.tema-liquid-glass.vidro-nativo body::after { content:""; position:fixed; inset:0; z-index:100; pointer-events:none; border:1px solid #FFFFFF2E; border-radius:12px; }
+/* Com o acrylic no Windows, a própria janela já tem cantos e borda do sistema (electron/main.cjs). */
+html.tema-liquid-glass.vidro-nativo.vidro-cantos-sistema body { clip-path:none; }
+html.tema-liquid-glass.vidro-nativo.vidro-cantos-sistema body::after { display:none; }
 html.tema-liquid-glass body { background:color-mix(in srgb, #0A0A0C calc(var(--vidro-opacidade, 65%) * .9), transparent); }
 html.tema-liquid-glass:not(.vidro-nativo) body { background:color-mix(in srgb, #0A0A0C calc(var(--vidro-opacidade, 65%) * .3), transparent); }
 /* Sem :is(): com o #id ele ganharia de todas as regras do app-shell, inclusive a do papel de parede. */
@@ -420,8 +424,8 @@ html.tema-liquid-glass :is(.resumo-item, .por-colunas .status-secao, .calendario
 }
 html.tema-liquid-glass .por-colunas .status-secao { border-radius:var(--raio-card); }
 html.tema-liquid-glass .por-colunas .status-item { border-color:var(--vidro-borda); background:#FFFFFF0D; }
-/* Colunas e calendário já têm superfície própria: o cartão que os embrulha não pode aparecer atrás deles. */
-html.tema-liquid-glass .tarefas-lista:is(.por-colunas, :has(> .calendario-layout)) { padding:0; background:transparent; border:0; box-shadow:none; -webkit-backdrop-filter:none; backdrop-filter:none; }
+/* Colunas já têm superfície própria: o cartão que as embrulha não pode aparecer atrás delas. */
+html.tema-liquid-glass .tarefas-lista.por-colunas { padding:0; background:transparent; border:0; box-shadow:none; -webkit-backdrop-filter:none; backdrop-filter:none; }
 /* Controle segmentado em cápsula: cantos concêntricos e sem as linhas diagonais do reflexo, que viravam uma ponta. */
 html.tema-liquid-glass .segmentos { box-shadow:inset 0 1px 0 #FFFFFF26; }
 html.tema-liquid-glass .segmento input:checked + span { background:#FFFFFF2E; box-shadow:inset 0 1px 0 #FFFFFF59, 0 1px 4px #00000040; }
@@ -432,6 +436,21 @@ html.tema-liquid-glass select::picker(select) {
   background:var(--vidro-realce), #1C1C1EF2; border-color:var(--vidro-borda); box-shadow:var(--vidro-reflexo), 0 18px 44px #00000066;
   -webkit-backdrop-filter:blur(24px) saturate(180%); backdrop-filter:blur(24px) saturate(180%);
 }
+/* Vidro claro (electron/main.cjs): sobre fundo claro, o vidro clareia e o texto escurece, como o da Apple. */
+html.tema-liquid-glass.vidro-nativo.vidro-claro:not(.vidro-escuro) {
+  --ink:#1C1C1E; --muted:#3C3C43; --line:#0000001F; --surface-hover:#0000000F; --surface-active:#0000001A;
+  --acento:#1C1C1E; --acento-forte:#1C1C1E; --acento-escuro:#3A3A3C; --acento-texto:#FFFFFF; --primario-texto:#FFFFFF; --acento-2:#3C3C43;
+  --danger:#A81E22; --panel:#FFFFFF40; --campo:#FFFFFF66; --panel-raised:#F2F2F7F5;
+  --vidro-borda:#FFFFFF8C; --vidro-reflexo:inset 0 1px 0 #FFFFFFB3, inset 1px 0 0 #FFFFFF33, inset 0 -1px 0 #00000012; --vidro-sombra:0 10px 34px #0000001F, 0 2px 6px #00000014;
+  --overlay:#FFFFFF66; --bg:#F2F2F7; --content-bg:#F2F2F7; --sidebar-bg:#EBEBF0;
+  color-scheme:light;
+}
+html.tema-liquid-glass.vidro-nativo.vidro-claro.vidro-desfocado:not(.vidro-escuro) body { background:color-mix(in srgb, #FFFFFF calc(16% + var(--vidro-opacidade, 65%) * .4), transparent); }
+html.tema-liquid-glass.vidro-claro:not(.vidro-escuro) :is(#save-status, #conflitos-sincronizacao, #aviso-atalho-global, .fluxo-barra, .grafo-painel, .hoje-opcoes, .modal, .ctx-menu) { background:var(--vidro-realce), #F2F2F7E6; box-shadow:var(--vidro-reflexo), 0 18px 44px #00000026; }
+html.tema-liquid-glass.vidro-claro:not(.vidro-escuro) .primary { background:var(--acento-forte); color:var(--primario-texto); border-color:transparent; box-shadow:0 4px 14px #00000026; }
+html.tema-liquid-glass.vidro-claro:not(.vidro-escuro) .check:not(.done) { background:#FFFFFF66; border-color:#0000004D; box-shadow:none; }
+html.tema-liquid-glass.vidro-claro:not(.vidro-escuro) .page-head :is(h1, p) { text-shadow:none; }
+html.tema-liquid-glass.vidro-claro:not(.grafo-solido) .grafo-tela { --graph-node:#000000CC; --graph-node-muted:#00000073; --graph-edge:#0000004D; }
 .cfg-vidro-controle { display:flex; justify-content:space-between; gap:16px; width:100%; }
 .cfg-vidro-controle output { color:var(--accent-text); font-variant-numeric:tabular-nums; }
 #cfg-transparencia { width:100%; accent-color:var(--acento); cursor:pointer; }

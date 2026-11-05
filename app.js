@@ -25,10 +25,11 @@ async function mesclarComOCofre(local) {
 async function save(origem = null, tentativa = 0, opcoes = {}) {
   if (busy || failed || !loaded) return false;
   const snapshot = structuredClone(state);
-  setBusy(true); status(t('Salvando…'));
+  const automatico = opcoes.automatico === true;
+  setBusy(true, automatico); if (!automatico) status(t('Salvando…'));
   try {
     Kiro.validateState(snapshot);
-    state = doCofre(window.cadernoDesktop ? await window.cadernoDesktop.saveState(snapshot) : await api('state', snapshot));
+    state = doCofre(window.cadernoDesktop ? await window.cadernoDesktop.saveState(snapshot, { copiaParcial: automatico }) : await api(automatico ? 'state?parcial=1' : 'state', snapshot));
     status(t('Salvo no cofre'));
     if (!opcoes.semRender || tentativa > 0) render(); else updateCount();
     eventosDoCofre(origem); return true;
@@ -95,13 +96,14 @@ function render() {
   if(gravacaoAudio?.contexto&&!contextoAudioValido(gravacaoAudio.contexto))gravacaoAudio.parar();
   if (!editing || currentView !== 'studies') { modoFoco = false; document.querySelector('.app-shell').classList.remove('modo-foco'); }
   const focoNoEditor = Boolean(editorDaNota?.editor.temFoco());
+  const focoAntes = lembrarFoco(document.querySelector('#app'));
   const rolagemDaNota = editorDaNota?.editor.dom.closest('.cofre-nota-corpo')?.scrollTop;   // o app.innerHTML abaixo refaz o elemento que rola
   KiroFluxoTela.desmontarTodos(); // grava o texto em edição no estado antes de a tela ser refeita
   if (currentView !== 'today') personalizandoHoje = false;
   if (currentView.startsWith('plugin:') && !pluginsAtivos.get(currentView.slice(7))?.manifesto?.page) currentView = 'today';
   // Recalculado depois da queda para 'today': senão a página "não está ativo" ainda desenharia.
   const paginaDoPlugin = currentView.startsWith('plugin:') ? currentView.slice(7) : null;
-  document.querySelectorAll(".nav-item").forEach(x => x.classList.toggle("active", x.dataset.view === currentView));
+  document.querySelectorAll(".nav-item").forEach(x => { const atual = x.dataset.view === currentView; x.classList.toggle("active", atual); if (atual) x.setAttribute('aria-current', 'page'); else x.removeAttribute('aria-current'); });
   const views = { today: renderToday, notes: renderNotes, tasks: renderTasks, studies: renderCofre, graph: renderGraph };
   document.querySelector(".app-shell").classList.toggle("cofre-aberto", currentView === "studies");
   document.querySelector(".app-shell").classList.toggle("lateral-recolhida", lateralRecolhida);
@@ -121,7 +123,9 @@ function render() {
   }
   // Animar só na troca de tela: um redesenho comum não deve piscar.
   if (renderedView !== currentView) { app.classList.remove("view-enter"); void app.offsetWidth; app.classList.add("view-enter"); renderedView = currentView; }
-  bindView(); updateCount();
+  else app.classList.remove("view-enter"); // com a classe, cada filho recriado refaria a animação de entrada
+  bindView(); updateCount(); prepararArvore();
+  if (mesmaTela && !focoNoEditor) devolverFoco(focoAntes, app);
   if (mesmaTela) {
     if (rolagemApp) app.scrollTop = rolagemApp;
     const cols = rolagemColunas && app.querySelector('.tarefas-lista.por-colunas');
@@ -132,6 +136,26 @@ function render() {
   // O editor da nota é o mesmo de antes do redesenho (montarEditorDaNota): devolve o foco a ele.
   if (focoNoEditor && editorDaNota && document.querySelector('#doc-corpo')?.contains(editorDaNota.editor.dom)) editorDaNota.editor.focar();
   if (editorDaNota && !document.querySelector('#doc-corpo')) { editorDaNota.editor.destruir(); editorDaNota = null; }
+}
+// O redesenho troca os elementos e o teclado voltaria ao começo da tela. O novo elemento é achado pelo id ou pelos data-*.
+function seletorDoFoco(el) {
+  if (!el || el === document.body) return null;
+  if (el.id) return `#${CSS.escape(el.id)}`;
+  const dados = [...el.attributes].filter(a => a.name.startsWith('data-')).map(a => `[${a.name}="${a.value.replace(/["\\]/g, '\\$&')}"]`).join('');
+  return dados ? el.tagName.toLowerCase() + dados : null;
+}
+function lembrarFoco(raiz) {
+  const el = document.activeElement;
+  if (!raiz?.contains(el) || el === raiz) return null;
+  const seletor = seletorDoFoco(el);
+  return seletor && { seletor, inicio: el.selectionStart ?? null, fim: el.selectionEnd ?? null };
+}
+function devolverFoco(guardado, raiz) {
+  if (!guardado || (document.activeElement && document.activeElement !== document.body)) return;
+  const el = raiz.querySelector(guardado.seletor);
+  if (!el) return;
+  el.focus({ preventScroll: true });
+  if (guardado.inicio !== null) try { el.setSelectionRange(guardado.inicio, guardado.fim); } catch { /* este tipo de campo não tem seleção */ }
 }
 function head(eyebrow, title, description, action="") { return `<header class="page-head"><div><p class="eyebrow">${eyebrow}</p><h1>${title}</h1><p class="subhead">${description}</p></div>${action}</header>`; }
 function check(done, action, id) { return `<button class="check ${done ? "done" : ""}" aria-label="${done ? t('Marcar como não concluído') : t('Marcar como concluído')}" data-action="${action}" data-id="${id}"></button>`; }
@@ -145,7 +169,7 @@ const rotuloDaRepeticao = r => ({ day: frase('Todo dia'), week: frase('Toda sema
 function taskRow(task, notas = state.notes) {
   const atrasada = !task.done && task.due < today(), st = Kiro.statusDaTarefa(task);
   const rotuloSt = t((typeof ROTULOS_DE_STATUS !== 'undefined' && ROTULOS_DE_STATUS[st]) || { 'nao-comecado': 'Não começado', andamento: 'Em andamento', pausado: 'Pausado', concluido: 'Concluído' }[st]);
-  return `<div class="task-item" data-id="${task.id}" data-status="${st}">${check(task.done,"toggle-task",task.id)}<div class="task-title"><span class="task-nome">${escapeHtml(task.title)}</span>${task.description ? `<div class="task-descricao">${escapeHtml(task.description)}</div>` : ''}<div class="task-info"><span class="task-data${atrasada ? ' atrasada' : ''}">${icone('calendario')}${dateLabel(task.due)}</span>${task.repeat ? ` <span class="task-repete" title="${t(rotuloDaRepeticao(task.repeat))}">${icone('recarregar')}</span>` : ''}${task.noteId && getNote(task.noteId) ? ` · ${linkDaNota(getNote(task.noteId))}` : ""}${citadaEm(task, notas)}</div></div><button type="button" class="task-status" data-status="${st}" data-status-tarefa="${task.id}" title="${t('Mudar estado')}: ${rotuloSt}" aria-label="${t('Estado')}: ${rotuloSt}"><span class="status-marca" aria-hidden="true"></span><span class="task-status-texto">${rotuloSt}</span></button>${task.priority === "Alta" ? `<span class="priority">${t('Alta')}</span>` : ""}<div class="task-actions"><button class="icon-button" data-action="edit-task" data-id="${task.id}" title="${t('Editar')}">${icone('renomear')}</button><button class="icon-button" data-action="delete-task" data-id="${task.id}" title="${t('Excluir')}">${icone('lixeira')}</button></div></div>`;
+  return `<div class="task-item" data-id="${task.id}" data-status="${st}">${check(task.done,"toggle-task",task.id)}<div class="task-title"><span class="task-nome">${escapeHtml(task.title)}</span>${task.description ? `<div class="task-descricao">${escapeHtml(task.description)}</div>` : ''}<div class="task-info"><span class="task-data${atrasada ? ' atrasada' : ''}">${icone('calendario')}${dateLabel(task.due)}</span>${task.repeat ? ` <span class="task-repete" title="${t(rotuloDaRepeticao(task.repeat))}">${icone('recarregar')}</span>` : ''}${task.noteId && getNote(task.noteId) ? ` · ${linkDaNota(getNote(task.noteId))}` : ""}${citadaEm(task, notas)}</div></div><button type="button" class="task-status" data-status="${st}" data-status-tarefa="${task.id}" title="${t('Mudar estado')}: ${rotuloSt}" aria-label="${t('Estado')}: ${rotuloSt}"><span class="status-marca" aria-hidden="true"></span><span class="task-status-texto">${rotuloSt}</span></button>${task.priority === "Alta" ? `<span class="priority">${t('Alta')}</span>` : '<span class="priority vazia" aria-hidden="true"></span>'}<div class="task-actions"><button class="icon-button" data-action="edit-task" data-id="${task.id}" title="${t('Editar')}">${icone('renomear')}</button><button class="icon-button" data-action="delete-task" data-id="${task.id}" title="${t('Excluir')}">${icone('lixeira')}</button></div></div>`;
 }
 function renderToday() {
   const catalogo = catalogoDaHoje(), l = layoutDaHoje(catalogo);
@@ -386,7 +410,7 @@ function textoPlano(md) {
     .replace(/^[ \t]*(?:#{1,6}|[-*+](?:[ \t]+\[[ xX]\])?|\d+\.)[ \t]+/gm, '')
     .replace(/\*\*|__|~~|`|==/g, '').replace(/\s+/g, ' ').trim();
 }
-function notesMarkup(notes) { return notes.length ? [...notes].sort((a,b)=>b.updatedAt-a.updatedAt).map(n=>{
+function notesMarkup(notes, buscando = false) { return notes.length ? [...notes].sort((a,b)=>b.updatedAt-a.updatedAt).map(n=>{
   const folder=state.folders.find(f=>f.id===n.folderId);
   const ligacoes=new Set(Kiro.wikiLinks(n.body).map(l=>Kiro.normalize(l.target))).size;
   const meta=[
@@ -398,8 +422,8 @@ function notesMarkup(notes) { return notes.length ? [...notes].sort((a,b)=>b.upd
       if(!n.createdAt)return [t('atualizado {data}', { data: dia(n.updatedAt) })];
       return [t('criada {data}', { data: dia(n.createdAt) }),new Date(n.createdAt).toDateString()!==new Date(n.updatedAt).toDateString()&&t('atualizada {data}', { data: dia(n.updatedAt) })];})()
   ].filter(Boolean).join(" · ");
-  return `<article class="note-card" data-action="edit-note" data-id="${n.id}"><h2>${escapeHtml(n.title || t("Sem título"))}</h2><p>${escapeHtml(textoPlano(n.body).slice(0,220) || t("Nota vazia"))}</p><div class="note-meta">${meta}</div></article>`;
-}).join("") : `<div class="empty">${t('Crie sua primeira nota para começar.')}</div>`; }
+  return `<article class="note-card" role="button" tabindex="0" data-action="edit-note" data-id="${n.id}"><h2>${escapeHtml(n.title || t("Sem título"))}</h2><p>${escapeHtml(textoPlano(n.body).slice(0,220) || t("Nota vazia"))}</p><div class="note-meta">${meta}</div></article>`;
+}).join("") : `<div class="empty">${buscando ? t('Nenhuma nota encontrada para essa busca.') : t('Crie sua primeira nota para começar.')}</div>`; }
 // Caixas "- [ ]" escritas dentro das notas, com a posição da linha para marcar sem abrir a nota.
 function tarefasDasNotas() {
   const achadas = [];
@@ -456,26 +480,43 @@ function renderCalendario(lista) {
   const dataCompleta = dia => textoDataCalendario(dia);
   const qtd = n => n === 1 ? t('1 tarefa') : t('{n} tarefas', { n });
   const nomeMes = textoDataCalendario(diaSelecionadoNoCalendario, { month: 'long', year: 'numeric' });
-  const tituloDia = dataCompleta(diaSelecionadoNoCalendario), tarefasDoDia = porData.get(diaSelecionadoNoCalendario) || [];
+  // Duas linhas fixas, sem o ano (já está no título do mês): a altura não muda de um dia para outro.
+  const tituloDia = `<small>${textoDataCalendario(diaSelecionadoNoCalendario, { weekday: 'long' })}</small> ${textoDataCalendario(diaSelecionadoNoCalendario, { day: 'numeric', month: 'long' })}`, tarefasDoDia = porData.get(diaSelecionadoNoCalendario) || [];
   const linha = (d, i) => {
     const n = porData.get(d.date)?.length || 0;
     return `<button type="button" role="gridcell" class="calendario-dia${d.inMonth ? '' : ' fora-do-mes'}${d.date === today() ? ' calendario-hoje' : ''}" data-calendario-dia="${d.date}" aria-label="${t('Selecionar dia {data}', { data: dataCompleta(d.date) })}, ${n ? qtd(n) : t('Sem tarefas')}" aria-selected="${d.date === diaSelecionadoNoCalendario}"${d.date === today() ? ' aria-current="date"' : ''} tabindex="${d.date === diaSelecionadoNoCalendario ? '0' : '-1'}"><span class="calendario-numero">${Number(d.date.slice(-2))}</span>${n ? `<span class="calendario-contagem" aria-hidden="true">${n}</span>` : ''}</button>`;
   };
   return `<div class="calendario-layout">
-    <section class="calendario-mes" aria-label="${t('Calendário mensal')}" >
+    <section class="card calendario-mes" aria-label="${t('Calendário mensal')}" >
       <div class="calendario-navegacao"><button type="button" class="secondary" data-calendario-mes="-1" aria-label="${t('Mês anterior')}">‹</button><h2 id="calendario-mes-titulo" aria-live="polite">${nomeMes}</h2><button type="button" class="secondary" data-calendario-mes="1" aria-label="${t('Próximo mês')}">›</button><button type="button" class="secondary" data-calendario-hoje>${t('Hoje')}</button></div>
       <div class="calendario-grade" role="grid" aria-labelledby="calendario-mes-titulo"><div class="calendario-semana" role="row">${diasSemana.map(d => `<span role="columnheader">${d}</span>`).join('')}</div>${semanas.map(semana => `<div class="calendario-semana" role="row">${semana.map(linha).join('')}</div>`).join('')}</div>
     </section>
-    <section class="calendario-selecionado" aria-labelledby="calendario-dia-titulo"><header class="calendario-dia-cabecalho"><h2 id="calendario-dia-titulo">${tituloDia}</h2><button type="button" class="primary" data-calendario-criar>${icone('mais')} ${t('Criar tarefa')}</button></header>${tarefasDoDia.map(tarefa => taskRow(tarefa)).join('') || `<p class="empty">${t('Nenhuma tarefa neste dia.')}</p>`}</section>
+    <section class="card calendario-selecionado" aria-labelledby="calendario-dia-titulo"><header class="calendario-dia-cabecalho"><h2 id="calendario-dia-titulo">${tituloDia}</h2><button type="button" class="primary" data-calendario-criar>${icone('mais')} ${t('Criar tarefa')}</button></header>${tarefasDoDia.map(tarefa => taskRow(tarefa)).join('') || `<p class="empty">${t('Nenhuma tarefa neste dia.')}</p>`}</section>
   </div>`;
+}
+// Trocar de dia não refaz a tela: só muda o miolo do painel do dia, e a grade só quando o mês muda.
+function selecionarDiaNoCalendario(dia) {
+  diaSelecionadoNoCalendario = dia;
+  const mes = $('.calendario-mes'), painel = $('.calendario-selecionado');
+  if (!mes || !painel) return render();
+  const novo = document.createElement('div');
+  novo.innerHTML = renderTasks();
+  painel.innerHTML = novo.querySelector('.calendario-selecionado').innerHTML;
+  if (!mes.querySelector(`[data-calendario-dia="${CSS.escape(dia)}"]:not(.fora-do-mes)`)) { mes.innerHTML = novo.querySelector('.calendario-mes').innerHTML; return; }
+  for (const celula of mes.querySelectorAll('[data-calendario-dia]')) {
+    const escolhida = celula.dataset.calendarioDia === dia;
+    celula.setAttribute('aria-selected', String(escolhida));
+    celula.tabIndex = escolhida ? 0 : -1;
+  }
 }
 function renderTasks() {
   const hoje = today();
   const abertas = state.tasks.filter(x => !x.done).sort((a, b) => a.due.localeCompare(b.due) || ordemDaPrioridade(a) - ordemDaPrioridade(b));
   const feitas = state.tasks.filter(x => x.done).sort((a, b) => b.due.localeCompare(a.due));
-  const dasNotas = tarefasDasNotas().filter(x => !x.feita);
+  const todasDasNotas = tarefasDasNotas(), dasNotas = todasDasNotas.filter(x => !x.feita), notasFeitas = todasDasNotas.filter(x => x.feita);
+  const emAberto = abertas.length + dasNotas.length, concluidas = feitas.length + notasFeitas.length;
   const atrasadas = abertas.filter(x => x.due < hoje), paraHoje = abertas.filter(x => x.due === hoje), proximas = abertas.filter(x => x.due > hoje);
-  const abas = [['todas', t('Todas'), abertas.length + dasNotas.length], ['hoje', t('Hoje'), atrasadas.length + paraHoje.length], ['proximas', t('Próximas'), proximas.length], ['notas', t('Nas notas'), dasNotas.length], ['feitas', t('Concluídas'), feitas.length]];
+  const abas = [['todas', t('Todas'), emAberto], ['hoje', t('Hoje'), atrasadas.length + paraHoje.length], ['proximas', t('Próximas'), proximas.length], ['notas', t('Nas notas'), dasNotas.length], ['feitas', t('Concluídas'), concluidas]];
   // Por data, ou por status em lista (seções empilhadas) ou em colunas (lado a lado, como um quadro).
   const visao = ['calendario', 'status', 'colunas'].includes(lerPreferencia('tarefasVisao')) ? lerPreferencia('tarefasVisao') : 'data', porStatusAtivo = ['status', 'colunas'].includes(visao);
   // Por status, "Nas notas" e "Concluídas" não são filtros (concluído é uma seção): vale "Todas".
@@ -491,27 +532,30 @@ function renderTasks() {
     const aberto = lerPreferencia('tarefasConcluidoAberto') === '1';
     return Kiro.STATUS_DA_TAREFA.map(st => {
       const itens = lista.filter(x => Kiro.statusDaTarefa(x) === st).sort((a, b) => st === 'concluido' ? b.due.localeCompare(a.due) : a.due.localeCompare(b.due) || ordemDaPrioridade(a) - ordemDaPrioridade(b));
+      // Caixinhas das notas não têm data nem estado próprio: aberta é "não começada", marcada é "concluída". Não se arrastam.
+      const dasNotasAqui = f !== 'todas' ? [] : st === 'nao-comecado' ? dasNotas : st === 'concluido' ? notasFeitas : [];
       const recolhida = visao === 'status' && st === 'concluido' && !aberto;   // em colunas, nada recolhe
-      return `<section class="status-secao${recolhida ? ' recolhida' : ''}" data-status="${st}"><h2>${st === 'concluido' && visao === 'status' ? `<button type="button" class="status-recolher" data-recolher-concluido aria-expanded="${!recolhida}">` : ''}<span class="status-marca" aria-hidden="true"></span>${t(ROTULOS_DE_STATUS[st])}<span class="task-group-conta">${itens.length}</span>${st === 'concluido' && visao === 'status' ? '</button>' : ''}</h2>
-        <div class="status-itens">${itens.map(x => `<div class="status-item" draggable="true" tabindex="0" data-tarefa="${x.id}" aria-label="${escapeHtml(x.title)}">${taskRow(x)}</div>`).join('') || `<p class="status-vazio">${t('Arraste uma tarefa para cá.')}</p>`}</div></section>`;
+      return `<section class="status-secao${recolhida ? ' recolhida' : ''}" data-status="${st}"><h2>${st === 'concluido' && visao === 'status' ? `<button type="button" class="status-recolher" data-recolher-concluido aria-expanded="${!recolhida}">` : ''}<span class="status-marca" aria-hidden="true"></span>${t(ROTULOS_DE_STATUS[st])}<span class="task-group-conta">${itens.length + dasNotasAqui.length}</span>${st === 'concluido' && visao === 'status' ? '</button>' : ''}</h2>
+        <div class="status-itens">${itens.map(x => `<div class="status-item" draggable="true" tabindex="0" data-tarefa="${x.id}" aria-label="${escapeHtml(x.title)}">${taskRow(x)}</div>`).join('')}${dasNotasAqui.map(x => `<div class="status-item">${linhaDaTarefaDaNota(x)}</div>`).join('')}${itens.length + dasNotasAqui.length ? '' : `<p class="status-vazio">${t('Arraste uma tarefa para cá.')}</p>`}</div></section>`;
     }).join('');
   };
   const tarefasDoCalendario = f === 'feitas' ? feitas : f === 'hoje' ? [...atrasadas, ...paraHoje] : f === 'proximas' ? proximas : abertas;
-  const corpo = visao === 'calendario' ? renderCalendario(tarefasDoCalendario)
+  const notasNoMes = f === 'todas' ? dasNotas : f === 'feitas' ? notasFeitas : [];
+  const corpo = visao === 'calendario' ? renderCalendario(tarefasDoCalendario) + (notasNoMes.length ? `<div class="card calendario-notas">${grupo(t('Nas notas'), notasNoMes, linhaDaTarefaDaNota)}</div>` : '')
     : porStatusAtivo ? porStatus()
-    : f === 'feitas' ? grupo(t('Concluídas'), feitas)
+    : f === 'feitas' ? grupo(t('Concluídas'), feitas) + grupo(t('Nas notas'), notasFeitas, linhaDaTarefaDaNota)
     : f === 'notas' ? grupo(t('Nas notas'), dasNotas, linhaDaTarefaDaNota)
     : f === 'hoje' ? porData([...atrasadas, ...paraHoje])
     : f === 'proximas' ? porData(proximas)
     : porData(abertas) + grupo(t('Nas notas'), dasNotas, linhaDaTarefaDaNota);
   const vazio = { todas: t('Tudo concluído por aqui.'), hoje: t('Nada para hoje.'), proximas: t('Nada agendado para os próximos dias.'), notas: t('Nenhuma caixinha aberta nas notas.'), feitas: t('As tarefas concluídas aparecerão aqui.') }[f];
-  const total = state.tasks.length, pct = total ? Math.round(feitas.length / total * 100) : 0;
+  const total = emAberto + concluidas, pct = total ? Math.round(concluidas / total * 100) : 0;
   const numero = (valor, rotulo, classe = '') => `<div class="resumo-item ${classe}"><b>${valor}</b><span>${rotulo}</span></div>`;
   return `${head(t("Organização"), t("Tarefas"), t("Concentre-se no que realmente importa hoje."), `<button class="primary" id="add-task">${icone('mais')} ${t('Nova tarefa')}</button>`)}
-  <div class="tarefas-resumo">${numero(abertas.length, t('Em aberto'))}${numero(atrasadas.length, t('Atrasadas'), atrasadas.length ? 'alerta' : '')}${numero(paraHoje.length, t('Para hoje'))}<div class="resumo-item resumo-progresso"><b>${pct}%</b><span>${t('{feitas} de {total} concluídas', { feitas: feitas.length, total })}</span><div class="progress"><div style="width:${pct}%"></div></div></div></div>
+  <div class="tarefas-resumo">${numero(emAberto, t('Em aberto'))}${numero(atrasadas.length, t('Atrasadas'), atrasadas.length ? 'alerta' : '')}${numero(paraHoje.length, t('Para hoje'))}<div class="resumo-item resumo-progresso"><b>${pct}%</b><span>${t('{feitas} de {total} concluídas', { feitas: concluidas, total })}</span><div class="progress"><div style="width:${pct}%"></div></div></div></div>
   <div class="tarefas-barra"><div class="segmentos-compactos tarefas-abas" role="group" aria-label="${t('Filtrar')}">${abasVisiveis.map(([id, rotulo, n]) => `<button type="button" class="segmento-botao" data-tarefas-aba="${id}" aria-pressed="${f === id}">${rotulo} <span class="segmento-contagem">${n}</span></button>`).join('')}</div>
   <div class="segmentos-compactos tarefas-visao" role="group" aria-label="${t('Organizar por')}">${[['data', 'calendario', t('Por data')], ['calendario', 'calendario', t('Mês')], ['status', 'lista-marcadores', t('Lista')], ['colunas', 'colunas', t('Colunas')]].map(([id, ic, r]) => `<button type="button" class="segmento-botao" data-tarefas-visao="${id}" aria-pressed="${visao === id}">${icone(ic)} ${r}</button>`).join('')}</div></div>
-  <section class="card tarefas-lista${porStatusAtivo ? ' por-status' : ''}${visao === 'colunas' ? ' por-colunas' : ''}">${corpo || `<div class="empty">${vazio}</div>`}</section>`;
+  <section class="${visao === 'calendario' ? 'por-mes' : 'card'} tarefas-lista${porStatusAtivo ? ' por-status' : ''}${visao === 'colunas' ? ' por-colunas' : ''}">${corpo || `<div class="empty">${vazio}</div>`}</section>`;
 }
 const ROTULOS_DE_STATUS = { 'nao-comecado': frase('Não começado'), andamento: frase('Em andamento'), pausado: frase('Pausado'), concluido: frase('Concluído') };
 const gravarPreferencia = (chave, valor) => { try { localStorage.setItem(`kiro.${chave}`, valor); } catch { /* janela privada: vale só nesta sessão */ } };
@@ -568,10 +612,10 @@ document.addEventListener('click', e => {
   const v = e.target.closest?.('[data-tarefas-visao]');
   if (v) { gravarPreferencia('tarefasVisao', v.dataset.tarefasVisao); render(); $(`[data-tarefas-visao="${v.dataset.tarefasVisao}"]`)?.focus(); return; }
   const dia = e.target.closest?.('[data-calendario-dia]');
-  if (dia) { diaSelecionadoNoCalendario = dia.dataset.calendarioDia; render(); $(`[data-calendario-dia="${CSS.escape(diaSelecionadoNoCalendario)}"]`)?.focus(); return; }
+  if (dia) { selecionarDiaNoCalendario(dia.dataset.calendarioDia); $(`[data-calendario-dia="${CSS.escape(diaSelecionadoNoCalendario)}"]`)?.focus(); return; }
   const mes = e.target.closest?.('[data-calendario-mes]');
-  if (mes) { diaSelecionadoNoCalendario = Kiro.somarMeses(diaSelecionadoNoCalendario || today(), Number(mes.dataset.calendarioMes)) || today(); render(); $(`[data-calendario-mes="${mes.dataset.calendarioMes}"]`)?.focus(); return; }
-  if (e.target.closest?.('[data-calendario-hoje]')) { diaSelecionadoNoCalendario = today(); render(); $('[data-calendario-hoje]')?.focus(); return; }
+  if (mes) { selecionarDiaNoCalendario(Kiro.somarMeses(diaSelecionadoNoCalendario || today(), Number(mes.dataset.calendarioMes)) || today()); $(`[data-calendario-mes="${mes.dataset.calendarioMes}"]`)?.focus(); return; }
+  if (e.target.closest?.('[data-calendario-hoje]')) { selecionarDiaNoCalendario(today()); $('[data-calendario-hoje]')?.focus(); return; }
   if (e.target.closest?.('[data-calendario-criar]')) {
     const prazo = diaSelecionadoNoCalendario || today();
     if (filtroDasTarefas === 'feitas' || filtroDasTarefas === 'notas' || (filtroDasTarefas === 'hoje' && prazo > today()) || (filtroDasTarefas === 'proximas' && prazo <= today())) filtroDasTarefas = 'todas';
@@ -598,7 +642,7 @@ document.addEventListener('keydown', e => {
     proximo = e.key === 'Home' ? segunda : somarDias(segunda, 6);
   } else if (e.key === 'PageUp' || e.key === 'PageDown') proximo = Kiro.somarMeses(atual, e.key === 'PageUp' ? -1 : 1);
   if (!proximo) return;
-  e.preventDefault(); diaSelecionadoNoCalendario = proximo; render();
+  e.preventDefault(); selecionarDiaNoCalendario(proximo);
   $(`[data-calendario-dia="${CSS.escape(proximo)}"]`)?.focus();
 });
 let tarefaArrastada = null;
@@ -1382,6 +1426,7 @@ function renderCofre() {
       </span>
       ${botaoLateral()}
     </header>
+    <nav class="cofre-telas" aria-label="${t('Telas')}">${[['today', 'hoje', t('Hoje'), 1], ['notes', 'notas', t('Notas'), 2], ['tasks', 'tarefas', t('Tarefas'), 3], ['graph', 'grafo', t('Grafo'), 5]].map(([tela, ic, nome, n]) => `<button type="button" class="icon-button" data-cofre-tela="${tela}" title="${nome} (Ctrl+${n})" aria-label="${nome}">${icone(ic)}</button>`).join('')}</nav>
     <div class="tree">${renderFavoritosMarkup()}${arvore}</div>
     <div class="cofre-divisor" role="separator" aria-orientation="vertical" aria-label="${t('Largura da árvore de pastas')}" tabindex="0" aria-valuemin="${LARGURA_ARVORE.min}" aria-valuemax="${LARGURA_ARVORE.max}" aria-valuenow="${larguraArvore}" title="${t('Arraste para ajustar a largura · dois cliques voltam ao padrão')}"></div>
     <footer class="cofre-rodape">${rodapeDaArvore()}</footer>
@@ -1619,11 +1664,12 @@ function bindView() {
   document.querySelector('#collapse-all')?.addEventListener('click',()=>abrirTodas(false));
   document.querySelector('#note-search')?.addEventListener('input',e=>{
     const q=Kiro.normalize(e.target.value);
-    document.querySelector('#notes-grid').innerHTML=notesMarkup(Kiro.filtrarNotasPorConsulta(state.notes, state.folders, e.target.value));
+    document.querySelector('#notes-grid').innerHTML=notesMarkup(Kiro.filtrarNotasPorConsulta(state.notes, state.folders, e.target.value),Boolean(e.target.value.trim()));
   });
   if(currentView==="graph"){bindGraph();return;}
   if(currentView==="studies"){
     document.querySelector('[data-cofre="casa"]')?.addEventListener('click',()=>irPara('today'));
+    document.querySelector('.cofre-telas')?.addEventListener('click',e=>{const tela=e.target.closest('[data-cofre-tela]')?.dataset.cofreTela;if(tela)irPara(tela);});
     // Delegado: a seta esconde ou mostra; com a barra recolhida, clicar na faixa também reabre.
     document.querySelector('.cofre-lateral')?.addEventListener('click',e=>{
       const remFav=e.target.closest('[data-remover-fav]');
@@ -1678,7 +1724,30 @@ function action(type,id,evento) {
     return;
   }
   if (busy || failed || !loaded) return;
-  if(type==="new-subfolder") folderModal({title:"",description:"",parentId:id}); if(type==="toggle-habit") marcarHabito(id); if(type==="toggle-habit-day"){const [habito,dia]=id.split("|");marcarHabito(habito,dia);} if(type==="toggle-task") alternarTarefa(id); if(type==="toggle-note-task") marcarTarefaDaNota(id); if(type==="edit-note") abrirPorId(id,{novaAba:Boolean(evento?.ctrlKey||evento?.metaKey)}); if(type==="abrir-fluxo") abrirPorId(id,{novaAba:Boolean(evento?.ctrlKey||evento?.metaKey)}); if(type==="new-note-folder") abrirNota(notaVazia({folderId:id})); if(type==="edit-task") taskModal(state.tasks.find(x=>x.id===id)); if(type==="edit-folder") folderModal(state.folders.find(x=>x.id===id)); if(type==="delete-task"){state.tasks=state.tasks.filter(x=>x.id!==id);render();save(null,0,{semRender:true});} if(type==="delete-folder") deleteFolder(id); }
+  if(type==="new-subfolder") folderModal({title:"",description:"",parentId:id}); if(type==="toggle-habit") marcarHabito(id); if(type==="toggle-habit-day"){const [habito,dia]=id.split("|");marcarHabito(habito,dia);} if(type==="toggle-task") alternarTarefa(id); if(type==="toggle-note-task") marcarTarefaDaNota(id); if(type==="edit-note") abrirPorId(id,{novaAba:Boolean(evento?.ctrlKey||evento?.metaKey)}); if(type==="abrir-fluxo") abrirPorId(id,{novaAba:Boolean(evento?.ctrlKey||evento?.metaKey)}); if(type==="new-note-folder") abrirNota(notaVazia({folderId:id})); if(type==="edit-task") taskModal(state.tasks.find(x=>x.id===id)); if(type==="edit-folder") folderModal(state.folders.find(x=>x.id===id)); if(type==="delete-task") excluirTarefa(id); if(type==="delete-folder") deleteFolder(id); }
+// A tarefa não tem lixeira: em vez de perguntar antes, dá para voltar atrás por alguns segundos.
+let timerDoDesfazer=null;
+function avisarComDesfazer(mensagem,aoDesfazer){
+  clearTimeout(timerDoDesfazer);$('#aviso-desfazer')?.remove();
+  const aviso=document.createElement('div');
+  aviso.id='aviso-desfazer';aviso.setAttribute('role','status');
+  aviso.innerHTML=`<span>${escapeHtml(mensagem)}</span><button type="button" class="secondary">${t('Desfazer')}</button>`;
+  aviso.querySelector('button').onclick=()=>{clearTimeout(timerDoDesfazer);aviso.remove();aoDesfazer();};
+  document.body.append(aviso);
+  timerDoDesfazer=setTimeout(()=>aviso.remove(),8000);
+}
+function excluirTarefa(id){
+  const posicao=state.tasks.findIndex(x=>x.id===id);
+  if(posicao<0)return;
+  const tarefa=state.tasks[posicao];
+  state.tasks=state.tasks.filter(x=>x.id!==id);render();save(null,0,{semRender:true});
+  avisarComDesfazer(t('Tarefa "{titulo}" excluída.',{titulo:tarefa.title}),async()=>{
+    for(let i=0;i<100&&busy;i++)await new Promise(r=>setTimeout(r,50));
+    if(state.tasks.some(x=>x.id===id))return;
+    state.tasks=[...state.tasks.slice(0,posicao),tarefa,...state.tasks.slice(posicao)];
+    render();save(null,0,{semRender:true});
+  });
+}
 // Excluir uma pasta leva junto suas subpastas; as notas continuam no cofre, na raiz.
 function deleteFolder(id) {
   const ids=Kiro.descendants(state.folders,id);
@@ -1821,8 +1890,31 @@ function menuDaArvore(linha) {
     { rotulo: t('Excluir pasta'), icone: icone('lixeira'), acao: () => deleteFolder(id) },
   ];
 }
-function modal(title, body) { modalDirty=false; document.querySelector("#modal-root").innerHTML=`<div class="modal-backdrop"><section class="modal" role="dialog" aria-modal="true"><header class="modal-head"><h2>${title}</h2><button class="icon-button" id="close-modal" title="${t('Fechar')}" aria-label="${t('Fechar')}">${icone('fechar')}</button></header>${body}</section></div>`; document.querySelector(".modal").addEventListener("input",()=>modalDirty=true); document.querySelector(".modal").addEventListener("change",()=>modalDirty=true); document.querySelector("#close-modal").onclick=()=>closeModal(); document.querySelector(".modal-backdrop").onclick=e=>{if(e.target===e.currentTarget)closeModal();}; }
-function closeModal(force=false){ if(!force && (busy || (modalDirty && !confirm(t('Descartar as alterações deste formulário?')))))return false; document.querySelector('#modal-root').innerHTML='';modalDirty=false;const aoFechar=aoFecharAcoesRapidas;aoFecharAcoesRapidas=null;aoFechar?.();return true; }
+let focoAntesDoModal=null;
+const focaveisDoModal=()=>[...document.querySelectorAll('.modal :is(a[href],button,input,select,textarea,[tabindex]):not(:disabled,[tabindex="-1"],[type="hidden"])')].filter(el=>el.getClientRects().length);
+// O Tab não sai da janela aberta. Quem já cuida do próprio Tab (Ações rápidas) marca o evento.
+document.addEventListener('keydown',e=>{
+  if(e.key!=='Tab'||e.defaultPrevented||!document.querySelector('.modal'))return;
+  const lista=focaveisDoModal();if(!lista.length)return;
+  const fora=!document.activeElement?.closest?.('.modal'), primeiro=lista[0], ultimo=lista.at(-1);
+  if(fora||(!e.shiftKey&&document.activeElement===ultimo)){e.preventDefault();primeiro.focus();}
+  else if(e.shiftKey&&document.activeElement===primeiro){e.preventDefault();ultimo.focus();}
+});
+function modal(title, body) { if(!$('#modal-root').firstChild){const el=document.activeElement;focoAntesDoModal=el&&el!==document.body?{el,seletor:seletorDoFoco(el)}:null;} modalDirty=false; document.querySelector("#modal-root").innerHTML=`<div class="modal-backdrop"><section class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-titulo"><header class="modal-head"><h2 id="modal-titulo">${title}</h2><button class="icon-button" id="close-modal" title="${t('Fechar')}" aria-label="${t('Fechar')}">${icone('fechar')}</button></header>${body}</section></div>`; document.querySelector(".modal").addEventListener("input",()=>modalDirty=true); document.querySelector(".modal").addEventListener("change",()=>modalDirty=true); document.querySelector("#close-modal").onclick=()=>closeModal(); document.querySelector(".modal-backdrop").onclick=e=>{if(e.target===e.currentTarget)closeModal();};
+  // Campo obrigatório só com espaços vale como vazio em todos os formulários. Em captura: vem antes do envio de cada um.
+  document.querySelector(".modal").addEventListener("submit",e=>{
+    for(const c of e.target.querySelectorAll('input[required]:not([type=date],[type=number])'))c.value=c.value.trim();
+    if(!e.target.checkValidity()){e.preventDefault();e.stopImmediatePropagation();e.target.reportValidity();}
+  },true);
+  (document.querySelector('.modal [autofocus]')||document.querySelector('.modal form :is(input:not([type=radio],[type=checkbox],[type=hidden]),textarea,select)')||document.querySelector('#close-modal')).focus();
+}
+function closeModal(force=false){ if(!force && (busy || (modalDirty && !confirm(t('Descartar as alterações deste formulário?')))))return false; document.querySelector('#modal-root').innerHTML='';modalDirty=false;const aoFechar=aoFecharAcoesRapidas;aoFecharAcoesRapidas=null;aoFechar?.();
+  const volta=focoAntesDoModal;focoAntesDoModal=null;
+  if(volta&&!document.querySelector('.modal')&&(document.activeElement===document.body||!document.activeElement)){
+    if(editorDaNota?.editor.dom.contains(volta.el)&&volta.el.isConnected)editorDaNota.editor.focar();
+    else (volta.el.isConnected?volta.el:volta.seletor&&document.querySelector(volta.seletor))?.focus({preventScroll:true});
+  }
+  return true; }
 function taskModal(task={title:"",due:today(),priority:"Média",noteId:""}) {
   const ATALHOS = [[0, frase('Hoje')], [1, frase('Amanhã')], [7, frase('Próxima semana')]];
   const stAtual = Kiro.statusDaTarefa(task);
@@ -1866,8 +1958,8 @@ function mudarFluxo(id,canvas){
   fluxoPendente=true;status(t('Alterações não salvas'));
   agendarFluxo();
 }
-// Cada salvamento de fluxo copia o cofre inteiro para .history (limite 30): uma espera maior
-// que a do editor de notas evita que digitar ou arrastar sem parar encha o histórico à toa.
+// Cada salvamento de fluxo copia o cofre inteiro para .history (limite 30): a espera evita
+// que digitar ou arrastar sem parar encha o histórico à toa.
 const ESPERA_AUTOSAVE_FLUXO=2000;
 function agendarFluxo(){
   clearTimeout(timerDoFluxo);
@@ -2095,9 +2187,11 @@ function avisoAtalhoGlobal(mostrar) {
   el.textContent = t('Atalho global indisponível: outro aplicativo pode estar usando a combinação.');
 }
 let focoAntesDoBusy=null, timerDoBusy=null;   // inert tira o foco de qualquer coisa focada; em gravações rápidas (<150 ms) evita piscar
-function setBusy(value){
-  if(value&&!busy)focoAntesDoBusy=document.activeElement;
+// `semBloqueio`: gravação automática. Quem está digitando continua digitando, e o foco fica onde a pessoa o deixar.
+function setBusy(value,semBloqueio=false){
+  if(value&&!busy&&!semBloqueio)focoAntesDoBusy=document.activeElement;
   busy=value;clearTimeout(timerDoBusy);
+  if(value&&semBloqueio)return;
   if(value){
     timerDoBusy=setTimeout(()=>{if(!busy)return;document.body.classList.add('saving');$('.app-shell').inert=true;$('#modal-root').inert=true;},150);
   }else{
@@ -2377,6 +2471,13 @@ async function sairDoEditor(destino){
   editing=null;currentView=destino;render();return true;
 }
 let modoFoco = false, metaFoco = 0;
+function alternarModoFoco() {
+  modoFoco = !modoFoco;
+  document.querySelector('.app-shell').classList.toggle('modo-foco', modoFoco);
+  const detalhes = $('#foco-detalhes'), botao = $('#doc-foco');
+  if (detalhes) detalhes.hidden = !modoFoco;
+  if (botao) botao.textContent = modoFoco ? t('Sair do modo foco') : t('Modo foco');
+}
 function atualizarFoco() {
   const saida = $('#foco-contagem');
   if (saida) saida.textContent = t('{n} palavras · meta: {meta}', { n: (editing?.body.trim().match(/\S+/g) || []).length, meta: metaFoco || '–' });
@@ -2503,7 +2604,7 @@ function bindBuscaNaNota() {
   });
   if (buscaNaNota.aberta) atualizarBuscaNaNota(false);
 }
-function estadoDoc(){ $('#doc-state')?.classList.toggle('sujo', editorDirty); }
+function estadoDoc(){ $('#doc-state')?.classList.toggle('sujo', editorDirty); if(editorDirty){versaoDoEditor++;agendarAutosaveNota();} }
 function desenharLinksDoc(){
   const caixa=$('#doc-links'); if(!caixa) return;
   caixa.innerHTML=editing.links.map((l,i)=>`<div class="link-row"><a href="${escapeHtml(Kiro.safeUrl(l)||'#')}" target="_blank" rel="noopener noreferrer">${escapeHtml(l)}</a><button class="icon-button" type="button" data-remove-link="${i}" title="${t('Remover link')}" aria-label="${t('Remover link')}">${icone('fechar')}</button></div>`).join('');
@@ -2512,7 +2613,7 @@ function desenharLinksDoc(){
 function bindEditor(){
   const titulo=$('#doc-title'), corpo=$('#doc-corpo');
   document.querySelector('.app-shell').classList.toggle('modo-foco', modoFoco);
-  $('#doc-foco').onclick = () => { modoFoco = !modoFoco; document.querySelector('.app-shell').classList.toggle('modo-foco', modoFoco); $('#foco-detalhes').hidden = !modoFoco; $('#doc-foco').textContent = modoFoco ? t('Sair do modo foco') : t('Modo foco'); };
+  $('#doc-foco').onclick = alternarModoFoco;
   $('#foco-meta').oninput = e => { metaFoco = Math.max(0, Number(e.target.value) || 0); atualizarFoco(); };
   atualizarFoco();
   const sujar=()=>{editorDirty=true;estadoDoc();};
@@ -3030,12 +3131,12 @@ function bindGraph() {
     const alvo = evento.target.closest('.graph-node');
     arrastando = alvo ? nos.find(no => no.el === alvo) : null;
     if (arrastando) { arrastando.vx = 0; arrastando.vy = 0; destacar(arrastando.id); comecar(); }
-    svg.setPointerCapture(evento.pointerId);
   });
   svg.addEventListener('pointermove', evento => {
     if (!ultimo) return;
     const dx = evento.clientX - ultimo.x, dy = evento.clientY - ultimo.y;
-    if (Math.abs(dx) > 2 || Math.abs(dy) > 2) arrastou = true;
+    // Capturar só ao arrastar: capturado desde o aperto, o clique iria para o svg, e não para o nó.
+    if (!arrastou && (Math.abs(dx) > 2 || Math.abs(dy) > 2)) { arrastou = true; svg.setPointerCapture(evento.pointerId); }
     ultimo = { x: evento.clientX, y: evento.clientY };
     const proporcao = largura / (svg.clientWidth || largura);
     if (arrastando) {
@@ -3860,10 +3961,39 @@ const aoClicarFora = e => {
 };
 // A barra de abas rola sozinha para mostrar o botão que recebeu foco ao abrir o menu: isso não conta.
 const aoRolarFora = e => { if (!menuAberto?.contains(e.target) && !e.target.classList?.contains('abas-barra')) fecharMenuContexto(); };
-const aoTeclarNoMenu = e => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); fecharMenuContexto(); } };
+const itensDoNivel = nivel => [...nivel.querySelectorAll(':scope > .ctx-item:not(:disabled)')];
+function marcarNoMenu(nivel, item) {
+  for (const x of nivel.querySelectorAll(':scope > .ctx-item.ctx-ativo')) x.classList.remove('ctx-ativo');
+  if (item) { item.classList.add('ctx-ativo'); item.scrollIntoView({ block: 'nearest' }); }
+}
+const aoTeclarNoMenu = e => {
+  if (e.key === 'Tab') return void fecharMenuContexto();
+  const conhecidas = ['Escape', 'ArrowDown', 'ArrowUp', 'ArrowRight', 'ArrowLeft', 'Home', 'End', 'Enter', ' '];
+  if (!conhecidas.includes(e.key)) return;
+  e.preventDefault(); e.stopPropagation();
+  if (e.key === 'Escape') return void fecharMenuContexto();
+  const nivel = menuAberto._nivel || menuAberto, itens = itensDoNivel(nivel), atual = nivel.querySelector(':scope > .ctx-item.ctx-ativo'), i = itens.indexOf(atual);
+  const abrirFilhos = () => {
+    const sub = atual?.querySelector(':scope > .ctx-sub');
+    if (!sub) return false;
+    atual.classList.add('ctx-aberto'); atual.dispatchEvent(new Event('mouseenter'));
+    menuAberto._nivel = sub; marcarNoMenu(sub, itensDoNivel(sub)[0]);
+    return true;
+  };
+  if (e.key === 'ArrowDown') marcarNoMenu(nivel, itens[(i + 1) % itens.length]);
+  else if (e.key === 'ArrowUp') marcarNoMenu(nivel, itens[(i - 1 + itens.length) % itens.length] || itens.at(-1));
+  else if (e.key === 'Home') marcarNoMenu(nivel, itens[0]);
+  else if (e.key === 'End') marcarNoMenu(nivel, itens.at(-1));
+  else if (e.key === 'ArrowRight') abrirFilhos();
+  else if (e.key === 'ArrowLeft' && nivel !== menuAberto) {
+    const mae = nivel.parentElement; mae.classList.remove('ctx-aberto'); marcarNoMenu(nivel, null);
+    menuAberto._nivel = mae.closest('.ctx-sub') || menuAberto;
+  } else if (e.key === 'Enter' || e.key === ' ') { if (atual && !abrirFilhos()) atual.click(); }
+};
 function montarNivel(itens, area) {
   const nivel = document.createElement('div');
   nivel.className = 'ctx-menu';
+  nivel.setAttribute('role', 'menu');
   // O menu não toma o foco: a ação precisa encontrar o editor com o foco.
   nivel.addEventListener('mousedown', e => e.preventDefault());
   for (const item of itens) {
@@ -3872,6 +4002,8 @@ function montarNivel(itens, area) {
     const linha = document.createElement('button');
     linha.type = 'button';
     linha.className = 'ctx-item' + (item.filhos ? ' tem-filhos' : '');
+    linha.setAttribute('role', 'menuitem');
+    if (item.filhos) linha.setAttribute('aria-haspopup', 'menu');
     linha.disabled = !habilitado;
     const desenho = item.icone && item.icone.startsWith('<svg') ? item.icone : escapeHtml(item.icone || '');
     linha.innerHTML = '<span class="ctx-icone">' + desenho + '</span><span class="ctx-rotulo">' + escapeHtml(item.rotulo) + '</span>' + (item.filhos ? '<span class="ctx-seta">›</span>' : '');
@@ -3952,20 +4084,50 @@ async function acaoEditor(tipo){
     editing=null;editorDirty=false;currentView='studies';await save();render();
   }
 }
-async function salvarNota(){
-  if(busy||failed||!loaded)return false;
-  if(!editing.title.trim()){status(t('Dê um título à nota antes de salvar.'),true);$('#doc-title')?.focus();return false;}
-  const eraNova=!editing.id;
-  const salva={...editing,id:editing.id||uid(),title:editing.title.trim(),createdAt:editing.createdAt||Date.now(),updatedAt:Date.now()};
+// Salvamento automático: depois de uma pausa, ou ao sair da janela. Copia para o histórico só o que mudou,
+// numa fila própria, então escrever muito não expulsa as cópias completas.
+const ESPERA_AUTOSAVE_NOTA=3000;
+let timerDoAutosave=null, autosaveEmCurso=null, versaoDoEditor=0;
+function agendarAutosaveNota(){clearTimeout(timerDoAutosave);timerDoAutosave=setTimeout(autosalvarNota,ESPERA_AUTOSAVE_NOTA);}
+function autosalvarNota(){
+  clearTimeout(timerDoAutosave);
+  if(!editing||!editorDirty||failed||!loaded||!editing.title.trim())return; // sem título: recebe um ao sair da nota
+  // No campo do título a pessoa ainda está decidindo o nome: renomear a cada pausa trocaria o arquivo e os links à toa.
+  if(busy||(document.hasFocus()&&document.activeElement?.id==='doc-title'))return agendarAutosaveNota();
+  autosaveEmCurso=salvarNota({auto:true}).finally(()=>{autosaveEmCurso=null;});
+  return autosaveEmCurso;
+}
+async function salvarNota({auto=false}={}){
+  if(!auto&&autosaveEmCurso){await autosaveEmCurso;if(!editorDirty)return true;}
+  if(busy||failed||!loaded||!editing)return false;
+  clearTimeout(timerDoAutosave);
+  // Nunca prende a pessoa na nota: sem título, volta o anterior, o rascunho vazio some e o escrito ganha a primeira linha como título.
+  if(!editing.title.trim()){
+    const salvaAntes=editing.id&&getNote(editing.id);
+    if(salvaAntes)editing.title=salvaAntes.title;
+    else if(!editing.body.trim()&&!editing.tags.length&&!editing.links.length){editorDirty=false;estadoDoc();return true;}
+    else editing.title=tituloDoTexto(editing.body.trim()).trim()||t('Sem título');
+  }
+  const eraNova=!editing.id, versao=versaoDoEditor;
+  const salva={...editing,tags:[...editing.tags],links:[...editing.links],id:editing.id||uid(),title:editing.title.trim(),createdAt:editing.createdAt||Date.now(),updatedAt:Date.now()};
   const antes=editing.id?getNote(editing.id):null;
   state.notes=editing.id?state.notes.map(n=>n.id===editing.id?salva:n):[salva,...state.notes];
-  if(antes&&antes.title!==salva.title)state=Kiro.aplicarRenomeacaoDeLinks(state,salva.id,antes.title,salva.title).state;
-  editing=getNote(salva.id)||salva;
+  const renomeou=Boolean(antes&&antes.title!==salva.title);
+  if(renomeou)state=Kiro.aplicarRenomeacaoDeLinks(state,salva.id,antes.title,salva.title).state;
+  // O automático mantém o objeto: o que for digitado durante a gravação entra nele, e nada é redesenhado sem necessidade.
+  if(auto)Object.assign(editing,{id:salva.id,createdAt:salva.createdAt,title:salva.title});else editing=getNote(salva.id)||salva;
   if(eraNova){abas=KiroAbas.trocarId(abas,KiroAbas.RASCUNHO,salva.id);gravarAbas();}
   // O rascunho virou nota com id: o mesmo editor continua (cursor e desfazer intactos).
   if(eraNova&&editorDaNota?.chave==='rascunho')editorDaNota.chave=chaveDaNota(salva);
-  if(!await save())return false;
+  if(!await save(null,0,auto?{automatico:true,semRender:true}:{}))return false;
   const atual=getNote(salva.id);
+  if(auto){
+    const redesenhar=eraNova||renomeou;
+    if(versao===versaoDoEditor){if(atual)Object.assign(editing,atual,{tags:[...(atual.tags||[])],links:[...(atual.links||[])]});editorDirty=false;estadoDoc();}
+    else if(atual)Object.assign(editing,{file:atual.file,updatedAt:atual.updatedAt}); // digitou enquanto gravava: continua pendente
+    if(redesenhar)render();
+    return true;
+  }
   if(atual)editing={...atual,tags:[...(atual.tags||[])],links:[...(atual.links||[])]};
   editorDirty=false;render();return true;
 }
@@ -4028,7 +4190,28 @@ async function showTrash(){
     const detalhe=i=>i.kind==='folder'
       ? `${t('pasta')} · ${i.noteCount===1?t('1 nota'):t('{n} notas',{n:i.noteCount})}${i.folderCount>1?` · ${i.folderCount===2?t('1 subpasta'):t('{n} subpastas',{n:i.folderCount-1})}`:''}`
       : i.kind==='fluxo'?t('fluxo'):t('nota');
-    modal(t('Lixeira'), itens.length ? itens.map(i=>`<div class="routine-item"><span class="brand-mark">${icone(i.kind==='folder'?'pastas':i.kind==='fluxo'?'fluxo':'nota')}</span><span class="routine-title">${escapeHtml(i.title)}<div class="task-info">${detalhe(i)} · ${t('removido em {quando}',{quando:quando(i.deletedAt)})}</div></span><button class="secondary" data-restore="${escapeHtml(i.entryId)}">${t('Restaurar')}</button></div>`).join('') : `<p>${t('A lixeira está vazia.')}</p>`);
+    const nomeDoIcone=i=>i.kind==='folder'?'pastas':i.kind==='fluxo'?'fluxo':'nota';
+    const qtd=itens.length===1?t('1 item'):t('{n} itens',{n:itens.length});
+    modal(t('Lixeira'), itens.length ? `<div class="lixeira-topo"><span class="small-muted">${qtd}</span><button type="button" class="secondary perigo lixeira-esvaziar" id="esvaziar-lixeira">${icone('lixeira')} ${t('Esvaziar lixeira')}</button></div><div class="lixeira-lista">${itens.map(i=>`<div class="routine-item lixeira-item"><span class="brand-mark">${icone(nomeDoIcone(i))}</span><span class="routine-title">${escapeHtml(i.title)}<div class="task-info">${detalhe(i)} · ${t('removido em {quando}',{quando:quando(i.deletedAt)})}</div></span><span class="lixeira-acoes"><button class="secondary" data-restore="${escapeHtml(i.entryId)}">${t('Restaurar')}</button><button type="button" class="icon-button perigo" data-apagar="${escapeHtml(i.entryId)}" title="${t('Apagar permanentemente')}" aria-label="${t('Apagar {titulo} permanentemente',{titulo:escapeHtml(i.title)})}">${icone('lixeira')}</button></span></div>`).join('')}</div>` : `<div class="empty lixeira-vazia">${t('A lixeira está vazia.')}</div>`);
+    // Pergunta antes, porque não há volta; cancelar devolve à lista.
+    const confirmarApagar=(texto,rotulo,acao)=>{
+      modal(t('Apagar permanentemente'),`<p class="confirmar-texto">${texto}</p><p class="small-muted">${t('Backups feitos antes continuam existindo.')}</p><div class="form-actions"><button type="button" class="secondary" id="cancel">${t('Cancelar')}</button><button type="button" class="primary perigo-cheio" id="confirmar-apagar">${rotulo}</button></div>`);
+      $('#cancel').onclick=()=>{closeModal(true);showTrash();};
+      $('#cancel').focus();
+      $('#confirmar-apagar').onclick=async()=>{
+        if(busy||failed)return;
+        setBusy(true);status(t('Apagando…'));
+        try{await acao();status(t('Apagado permanentemente'));}
+        catch(erro){status(t('Não foi possível apagar: {erro}',{erro:mensagemDoErro(erro)}),true);}
+        finally{setBusy(false);closeModal(true);showTrash();}
+      };
+    };
+    $('#esvaziar-lixeira')?.addEventListener('click',()=>confirmarApagar(t('Apagar {qtd} da lixeira para sempre? Isso também os remove do histórico de versões e não pode ser desfeito.',{qtd:`<strong>${qtd}</strong>`}),t('Esvaziar lixeira'),()=>window.cadernoDesktop?window.cadernoDesktop.emptyTrash():api('trash-empty',{})));
+    document.querySelectorAll('[data-apagar]').forEach(b=>b.onclick=()=>{
+      const i=itens.find(x=>x.entryId===b.dataset.apagar);
+      const conteudo=i.kind==='folder'?` (${detalhe(i)})`:'';
+      confirmarApagar(t('Apagar {titulo} para sempre? Isso também o remove do histórico de versões e não pode ser desfeito.',{titulo:`<strong>${escapeHtml(i.title)}</strong>${conteudo}`}),t('Apagar permanentemente'),()=>{const pedido={entryId:i.entryId};return window.cadernoDesktop?window.cadernoDesktop.purgeTrash(pedido):api('trash-purge',pedido);});
+    });
     document.querySelectorAll('[data-restore]').forEach(b=>b.onclick=async()=>{
       if(busy||failed)return;
       // Uma mudança de fluxo ainda não salva não pode ser descartada pela restauração.
@@ -4965,7 +5148,7 @@ function aplicarAparencia(valores) {
   html.classList.add(...Kiro.classesDaAparencia(a));
   raiz.setProperty('--vidro-opacidade', `${100 - a.transparencia}%`);
   const vidro = a.tema === 'liquid-glass';
-  if (!vidro) html.classList.remove('vidro-nativo');
+  if (!vidro) html.classList.remove('vidro-nativo', 'vidro-claro');
   const escuro = lerPreferencia('vidroEstilo') === 'escuro';
   html.classList.toggle('vidro-escuro', vidro && escuro);
   // Com "efeitos de transparência" desligados no sistema, o acrylic vira cor chapada: fica o desktop nítido.
@@ -4973,11 +5156,13 @@ function aplicarAparencia(valores) {
   const pedido = `${vidro}|${comDesfoque}`;
   if (pedido !== vidroPedido && window.cadernoDesktop?.definirVidro) {
     vidroPedido = pedido;
-    window.cadernoDesktop.definirVidro(vidro, comDesfoque).then(({ ativo, desfoque }) => {
+    window.cadernoDesktop.definirVidro(vidro, comDesfoque).then(({ ativo, desfoque, cantos }) => {
       html.classList.toggle('vidro-nativo', ativo && html.classList.contains('tema-liquid-glass'));
       html.classList.toggle('vidro-desfocado', desfoque);
+      html.classList.toggle('vidro-cantos-sistema', cantos === true);
+      window.cadernoDesktop.adaptarVidro?.(cantos === true && lerPreferencia('vidroAdaptativo') !== '0');
       coresDaJanela();
-    }).catch(() => html.classList.remove('vidro-nativo', 'vidro-desfocado'));
+    }).catch(() => html.classList.remove('vidro-nativo', 'vidro-desfocado', 'vidro-cantos-sistema'));
   }
   // Tema pronto traz as próprias variáveis (temas.css); o Personalizado põe fundos e acento inline,
   // e o destaque escolhido vale por cima de qualquer tema.
@@ -4993,6 +5178,10 @@ function aplicarAparencia(valores) {
   return a;
 }
 // Botões da janela (app desktop) com as cores do tema: fundo da faixa e cor do texto.
+window.cadernoDesktop?.aoTomDoVidro?.(tom => {
+  document.documentElement.classList.toggle('vidro-claro', tom === 'claro' && document.documentElement.classList.contains('vidro-cantos-sistema'));
+  coresDaJanela();
+});
 function coresDaJanela() {
   if (!window.cadernoDesktop?.janelaPropria) return;
   const estilo = getComputedStyle(document.documentElement);
@@ -5502,9 +5691,15 @@ const ABAS_CFG = [['personalizacao', frase('Aparência'), 'realce'], ['papel', f
 let abaDasConfiguracoes = 'personalizacao';
 // Fixos: fazem parte do editor e dos menus, não dá para trocar.
 const ATALHOS_FIXOS = [
+  ['Ctrl + 1 … 5', frase('Ir para outra tela'), frase('Hoje, Notas, Tarefas, Pastas e Grafo.')],
+  ['Ctrl + B', frase('Negrito'), ''],
+  ['Ctrl + I', frase('Itálico'), ''],
+  ['Ctrl + F', frase('Localizar na nota'), ''],
+  ['Ctrl + H', frase('Substituir na nota'), ''],
+  ['Ctrl + + / -', frase('Aumentar ou diminuir a interface'), frase('Ctrl + 0 volta ao tamanho normal.')],
   ['[[', frase('Ligar a outra nota'), frase('Mostra sugestões de títulos enquanto você digita.')],
   [frase('Botão direito'), frase('Menus rápidos'), frase('Na árvore de pastas, nas notas, nos hábitos e dentro do texto.')],
-  ['Esc', frase('Fechar janela ou menu'), ''],
+  ['Esc', frase('Fechar janela ou menu'), frase('Também sai do modo foco.')],
 ];
 const atalhosNoPadrao = () => Kiro.ATALHOS_EDITAVEIS.every(([id, , , padrao]) => atalhos[id] === padrao);
 function linhasDeAtalhos(texto) {
@@ -5593,6 +5788,8 @@ async function showSettings(aba = abaDasConfiguracoes) {
       <div class="cfg-linha cfg-linha-coluna" id="cfg-vidro" ${cores.tema === 'liquid-glass' ? '' : 'hidden'}>
         <span class="rotulo-campo" id="cfg-vidro-estilo">${t('Estilo do vidro')}</span>
         <div class="segmentos" role="radiogroup" aria-labelledby="cfg-vidro-estilo">${[['original', t('Original')], ['escuro', t('Escuro')]].map(([v, r]) => `<label class="segmento"><input type="radio" name="vidro-estilo" value="${v}" ${(lerPreferencia('vidroEstilo') === 'escuro' ? 'escuro' : 'original') === v ? 'checked' : ''} /><span>${r}</span></label>`).join('')}</div>
+        <label class="cfg-chave cfg-vidro-controle"><span>${t('Adaptar o vidro ao fundo')}</span><input type="checkbox" id="cfg-vidro-adaptativo" ${lerPreferencia('vidroAdaptativo') === '0' ? '' : 'checked'} /><span class="interruptor" aria-hidden="true"></span></label>
+        <p class="small-muted">${t('No estilo Original, no Windows: com o Kiro em foco, lê o brilho da tela a cada 5 segundos para clarear o vidro sobre fundos claros. A imagem é descartada na hora e nada é guardado.')}</p>
         <label class="cfg-vidro-controle" for="cfg-transparencia"><span>${t('Transparência do fundo')}</span><output id="cfg-transparencia-valor" for="cfg-transparencia">${cores.transparencia}%</output></label>
         <input type="range" id="cfg-transparencia" min="0" max="80" step="1" value="${cores.transparencia}" aria-describedby="cfg-vidro-detalhe" />
         <p class="small-muted" id="cfg-vidro-detalhe">${t('Mais transparência revela a área de trabalho, sem apagar o texto. No navegador, o tema usa um fundo interno.')}</p>
@@ -5710,6 +5907,10 @@ async function showSettings(aba = abaDasConfiguracoes) {
     aplicarAparencia();
     coresDaJanela();
   }));
+  $('#cfg-vidro-adaptativo')?.addEventListener('change', e => {
+    gravarPreferencia('vidroAdaptativo', e.target.checked ? '1' : '0');
+    window.cadernoDesktop?.adaptarVidro?.(e.target.checked && document.documentElement.classList.contains('vidro-cantos-sistema'));
+  });
   $('#cfg-notas-solidas')?.addEventListener('change', e => {
     e.stopPropagation(); modalDirty = false;
     gravarPreferencia('vidroNotasSolidas', e.target.checked ? '1' : '0');
@@ -5933,6 +6134,39 @@ document.addEventListener('contextmenu',e=>{
 });
 // Seleção na árvore. Ctrl+clique alterna um item, Shift+clique marca do último clicado até este (só o
 // que está visível, sem entrar em pasta fechada). Clique comum desfaz a seleção e abre o item.
+// Árvore: um só ponto de parada do Tab; dentro dela, as setas andam, abrem e fecham, e Enter ou Espaço abrem.
+function prepararArvore(){
+  for(const arvore of document.querySelectorAll('.cofre-lateral .tree')){
+    arvore.setAttribute('role','tree');
+    arvore.querySelectorAll('.tree-children').forEach(g=>g.setAttribute('role','group'));
+    arvore.querySelectorAll('.tree-node').forEach(n=>n.setAttribute('role','none'));
+    const linhas=[...arvore.querySelectorAll('.tree-row')];
+    for(const l of linhas){
+      l.setAttribute('role','treeitem');l.tabIndex=-1;
+      if(l.classList.contains('tree-folder'))l.setAttribute('aria-expanded',String(l.closest('.tree-node')?.classList.contains('open')));
+      if(l.classList.contains('ativa'))l.setAttribute('aria-selected','true');else l.removeAttribute('aria-selected');
+    }
+    const visivel=l=>!l.closest('.tree-node:not(.open) > .tree-children');
+    (linhas.find(l=>l.classList.contains('ativa')&&visivel(l))||linhas.find(visivel))?.setAttribute('tabindex','0');
+  }
+}
+function moverNaArvore(atual,destino){if(!destino)return;atual.tabIndex=-1;destino.tabIndex=0;destino.focus();}
+document.addEventListener('click',e=>{if(e.target.closest?.('.cofre-lateral .tree-row'))setTimeout(()=>{const f=document.activeElement;prepararArvore();if(f?.classList?.contains('tree-row'))f.tabIndex=0;});});
+document.addEventListener('keydown',e=>{
+  if(e.defaultPrevented||e.ctrlKey||e.altKey||e.metaKey)return;
+  const confirma=e.key==='Enter'||e.key===' ';
+  if(confirma&&e.target.classList?.contains('note-card')){e.preventDefault();e.target.click();return;}
+  const linha=e.target.classList?.contains('tree-row')&&e.target.closest('.cofre-lateral .tree')?e.target:null;
+  if(!linha)return;
+  const arvore=linha.closest('.tree'), visiveis=[...arvore.querySelectorAll('.tree-row')].filter(l=>!l.closest('.tree-node:not(.open) > .tree-children'));
+  const i=visiveis.indexOf(linha), pasta=linha.classList.contains('tree-folder'), aberta=pasta&&linha.closest('.tree-node')?.classList.contains('open');
+  const mae=()=>linha.closest('.tree-children')?.parentElement?.querySelector(':scope > .tree-folder');
+  const passos={ArrowDown:()=>moverNaArvore(linha,visiveis[i+1]),ArrowUp:()=>moverNaArvore(linha,visiveis[i-1]),Home:()=>moverNaArvore(linha,visiveis[0]),End:()=>moverNaArvore(linha,visiveis.at(-1)),
+    ArrowRight:()=>{if(pasta&&!aberta)linha.click();else if(pasta)moverNaArvore(linha,visiveis[i+1]);},
+    ArrowLeft:()=>{if(pasta&&aberta)linha.click();else moverNaArvore(linha,mae());},
+    Enter:()=>linha.click(),' ':()=>linha.click()};
+  if(passos[e.key]){e.preventDefault();passos[e.key]();}
+});
 const linhasVisiveisDaArvore=()=>[...document.querySelectorAll('.cofre-lateral .tree .tree-note, .cofre-lateral .tree .tree-fluxo')].filter(l=>!l.closest('.tree-node:not(.open) > .tree-children'));
 document.addEventListener('click',e=>{
   const linha=e.target.closest?.('.cofre-lateral .tree-note, .cofre-lateral .tree-fluxo');
@@ -6228,14 +6462,28 @@ const ACOES_DOS_ATALHOS={
   salvar:()=>salvarNota(),
   lateral:()=>alternarLateralCompacta(),
   painelDireito:()=>alternarPainelDireito(),
+  fecharAba:()=>{if(currentView==='studies'&&editing&&!$('#modal-root').firstChild)fecharAba(abas.ativo,idDaAba(editing));},
+  novaAba:()=>{if(loaded&&!failed&&!busy&&!$('#modal-root').firstChild)abrirNota(notaVazia(),{novaAba:true});},
+  imprimir:()=>{if(currentView==='studies'&&editing?.id&&!$('#modal-root').firstChild)imprimirNota();},
+  configuracoes:()=>{if(!$('#modal-root').firstChild)$('#settings')?.click();},
 };
+let sugestaoNoEsc=false;
+document.addEventListener('keydown',e=>{if(e.key==='Escape')sugestaoNoEsc=Boolean(sugestao);},true);
+const TELAS_DOS_ATALHOS={'Ctrl+1':'today','Ctrl+2':'notes','Ctrl+3':'tasks','Ctrl+4':'studies','Ctrl+5':'graph'};
+const TAMANHOS_DA_INTERFACE=[100,115,130,150];
+function mudarTamanhoDaInterface(passo){
+  const atual=TAMANHOS_DA_INTERFACE.indexOf(aplicarTamanhoDaInterface());
+  const novo=passo===0?100:TAMANHOS_DA_INTERFACE[Math.max(0,Math.min(TAMANHOS_DA_INTERFACE.length-1,atual+passo))];
+  gravarPreferencia('tamanhoInterface',String(novo));aplicarTamanhoDaInterface(novo);
+  status(t('Tamanho da interface: {n}%',{n:novo}));
+}
 // O editor também usa Ctrl+K e Ctrl+Shift+K; interceptar a combinação configurada antes dele.
 document.addEventListener('keydown',e=>{
   if(e.isComposing||gravandoAtalho||aguardandoCofre||Kiro.combinacaoDoEvento(e)!==atalhos.acoesRapidas)return;
   e.preventDefault();e.stopPropagation();ACOES_DOS_ATALHOS.acoesRapidas();
 },true);
 document.addEventListener('keydown',e=>{
-  if(e.key==='Escape') { if (document.querySelector(':popover-open')) return; /* Esc fecha primeiro o popover (ex.: Opções da Hoje); um segundo Esc fecha o modal */ closeModal(); }
+  if(e.key==='Escape') { if (document.querySelector(':popover-open')) return; /* Esc fecha primeiro o popover (ex.: Opções da Hoje); um segundo Esc fecha o modal */ const haviaModal=Boolean($('#modal-root').firstChild); closeModal(); if(!haviaModal&&modoFoco&&!sugestaoNoEsc&&!e.target.closest?.('.barra-busca-nota'))alternarModoFoco(); }
   if(gravandoAtalho||aguardandoCofre)return;
   const combinacao=Kiro.combinacaoDoEvento(e);
   if ((combinacao === 'Ctrl+F' || combinacao === 'Ctrl+H') && currentView === 'studies' && editing && !$('#modal-root').firstChild) {
@@ -6244,11 +6492,25 @@ document.addEventListener('keydown',e=>{
     return;
   }
   const acao=Object.keys(atalhos).find(id=>atalhos[id]===combinacao);
+  if(!acao&&TELAS_DOS_ATALHOS[combinacao]&&!$('#modal-root').firstChild){e.preventDefault();irPara(TELAS_DOS_ATALHOS[combinacao]);return;}
+  if(!acao&&e.ctrlKey&&!e.altKey&&['=','+','-','0'].includes(e.key)){e.preventDefault();mudarTamanhoDaInterface(e.key==='0'?0:e.key==='-'?-1:1);return;}
+  if(!acao&&(combinacao==='Ctrl+B'||combinacao==='Ctrl+I')&&editorDaNota?.editor.temFoco()){e.preventDefault();envolver(editorDaNota.editor.area(),combinacao==='Ctrl+B'?'**':'*');return;}
+  if(acao==='fecharAba'&&e.target.closest?.('.abas-barra'))return; // a própria barra de abas já fechou a aba em foco
   if(acao==='acoesRapidas')return;
   if(acao==='salvar'&&!editing)return;
   if(acao){e.preventDefault();ACOES_DOS_ATALHOS[acao]();}
 });
 window.addEventListener('beforeunload',e=>{if(busy||failed||modalDirty||editorDirty||fluxoPendente||KiroFluxoTela.ocupado()){e.preventDefault();e.returnValue='';}});
+window.addEventListener('blur',autosalvarNota);
+window.cadernoDesktop?.aoPedirFechar?.(async()=>{
+  let ok=false;
+  try{
+    for(let i=0;i<100&&busy;i++)await new Promise(r=>setTimeout(r,50));
+    if(autosaveEmCurso)await autosaveEmCurso;
+    ok=!failed&&!modalDirty&&!KiroFluxoTela.ocupado()&&await salvarAntesDeTrocar()&&await gravarFluxoPendente();
+  }catch{/* não gravou: quem decide é a pessoa */}
+  window.cadernoDesktop.responderFechar(ok);
+});
 window.addEventListener('focus',()=>reload());
 // ---- Lembretes: aviso-resumo das tarefas do dia e dos hábitos de hoje, uma vez por dia cada ----
 const lembretesLigados = () => lerPreferencia('lembretes') === '1';

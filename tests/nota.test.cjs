@@ -147,7 +147,7 @@ test('seletor do editor usa o catálogo compartilhado e passa a identidade do mo
   const ctx = { $: s => nos[s] ||= { value: '', focus() {}, addEventListener() {} },
     editing: { title: 'Atual', body: 'Corpo', tags: [], links: [], folderId: '' },
     document: { querySelectorAll: () => [], querySelector: () => ({ classList: { toggle() {} } }) }, editorDirty: false, estadoDoc() {},
-    modoFoco: false, metaFoco: 0, atualizarFoco() {}, t: s => s,
+    modoFoco: false, metaFoco: 0, atualizarFoco() {}, alternarModoFoco() {}, t: s => s,
     aplicarModeloNaNota: chave => chamadas.push(chave),
     montarEditorDaNota: async () => null, bindBuscaNaNota() {}, desenharLinksDoc() {},
   };

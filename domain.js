@@ -512,9 +512,13 @@
     ['lateral', frase('Recolher a barra lateral'), frase('Alterna entre a barra completa e só os ícones.'), 'Ctrl+\\'],
     ['painelDireito', frase('Painel da direita'), frase('Links, sumário e etiquetas da nota, na tela de Pastas.'), 'Ctrl+Shift+L'],
     ['acoesRapidas', frase('Ações rápidas'), '', 'Ctrl+K'],
+    ['fecharAba', frase('Fechar a aba'), '', 'Ctrl+W'],
+    ['novaAba', frase('Nova nota em outra aba'), '', 'Ctrl+T'],
+    ['imprimir', frase('Imprimir a nota aberta'), '', 'Ctrl+P'],
+    ['configuracoes', frase('Configurações'), '', 'Ctrl+,'],
   ];
   // Teclas que o sistema e o editor já usam: trocá-las quebraria copiar, colar, desfazer…
-  const RESERVADOS = new Set(['Ctrl+C', 'Ctrl+V', 'Ctrl+X', 'Ctrl+Z', 'Ctrl+Y', 'Ctrl+A', 'Ctrl+Shift+Z', 'Ctrl+W', 'Ctrl+T', 'Ctrl+R', 'Ctrl+P', 'Ctrl+F', 'Alt+F4']);
+  const RESERVADOS = new Set(['Ctrl+C', 'Ctrl+V', 'Ctrl+X', 'Ctrl+Z', 'Ctrl+Y', 'Ctrl+A', 'Ctrl+Shift+Z', 'Ctrl+R', 'Ctrl+F', 'Ctrl+H', 'Ctrl+B', 'Ctrl+I', 'Ctrl+1', 'Ctrl+2', 'Ctrl+3', 'Ctrl+4', 'Ctrl+5', 'Ctrl+=', 'Ctrl+-', 'Ctrl+0', 'Alt+F4']);
   const MODIFICADORES = new Set(['Control', 'Shift', 'Alt', 'Meta', 'AltGraph', 'CapsLock']);
   function combinacaoDoEvento(e) {
     if (!e || MODIFICADORES.has(e.key) || !e.key) return null;

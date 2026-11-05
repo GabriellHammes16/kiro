@@ -17,7 +17,8 @@ const variaveis = trecho => Object.fromEntries([...trecho.matchAll(/--([\w-]+)\s
 // Junta todos os blocos cujo seletor contém `.tema-<id>` (ex.: `.tema-x,.tema-y{...}`).
 function blocoDoTema(css, id) {
   const re = new RegExp(`([^{}]*\\.tema-${id}(?![\\w-])[^{}]*)\\{([^}]*)\\}`, 'g');
-  return Object.assign({}, ...[...css.matchAll(re)].map(m => variaveis(m[2])));
+  // .vidro-claro é um estado passageiro do Liquid Glass, não a paleta do tema.
+  return Object.assign({}, ...[...css.matchAll(re)].filter(m => !m[1].includes('.vidro-claro')).map(m => variaveis(m[2])));
 }
 
 // Calcula as derivadas como o navegador: var(--x) ou color-mix(in srgb, var(--a) N%, var(--b)).
@@ -271,10 +272,26 @@ test('padrão de tema: as quatro variáveis obrigatórias bastam, no escuro e no
   assert.deepEqual(falhas, []);
 });
 
+test('--danger tem 4.5:1 sobre todas as superfícies, em todo tema', () => {
+  const mistura = ler('styles.css').match(/--danger:color-mix\(in srgb, (#[0-9A-Fa-f]{6}) (\d+)%, var\(--ink\)\)/);
+  assert.ok(mistura, '--danger deve misturar o vermelho com --ink');
+  const [vermelho, parte] = [canais(mistura[1]), Number(mistura[2]) / 100];
+  const css = ler('temas.css'), regras = derivacao(css), falhas = [];
+  for (const [id] of TEMAS) {
+    const t = completar(blocoDoTema(css, id), regras);
+    const perigo = t.danger ?? paraHex(vermelho.map((n, i) => n * parte + canais(t.ink)[i] * (1 - parte)));
+    for (const fundo of ['bg', 'content-bg', 'panel', 'panel-raised', 'sidebar-bg', 'campo']) {
+      const valor = contraste(perigo, t[fundo]);
+      if (valor < 4.5) falhas.push(`${id}: --danger ${perigo} sobre --${fundo} ${t[fundo]} = ${valor.toFixed(2)}`);
+    }
+  }
+  assert.deepEqual(falhas, []);
+});
+
 test('padrão de tema: fundo claro declara color-scheme:light', () => {
   const css = ler('temas.css');
   const regras = derivacao(css);
-  const claros = [...css.matchAll(/([^{}]*)\{[^}]*color-scheme\s*:\s*light[^}]*\}/g)].map(m => m[1]).join(' ');
+  const claros = [...css.matchAll(/([^{}]*)\{[^}]*color-scheme\s*:\s*light[^}]*\}/g)].map(m => m[1]).filter(s => !s.includes('.vidro-claro')).join(' ');
   const falhas = TEMAS.map(([id]) => id).filter(id => {
     const { bg } = completar(blocoDoTema(css, id), regras);
     const fundoClaro = contraste(bg, '#000000') > contraste(bg, '#FFFFFF');

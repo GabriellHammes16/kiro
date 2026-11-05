@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, Menu, shell, dialog, protocol, safeStorage, globalShortcut } = require('electron');
+const { app, BrowserWindow, ipcMain, Menu, shell, dialog, protocol, safeStorage, globalShortcut, desktopCapturer, nativeTheme, screen } = require('electron');
 const ligacaoRede = require('../ligacao-rede-plugins.cjs');
 const { criarGuardaDeSegredos } = require('../segredos-plugins.cjs');
 const { criarAgendadorDeBackup } = require('../agendador-backup.cjs');
@@ -55,12 +55,19 @@ function ligarDesfoque(janela) {
   else janela.setBackgroundMaterial('acrylic');
 }
 const janelasDeVidro = new WeakSet();
+// O acrylic pinta a janela inteira: numa janela `transparent`, que é quadrada, ele sobra nas pontas do recorte
+// por CSS. Sem `transparent`, o Windows arredonda a janela e o acrylic juntos. Sem acrylic, segue o recorte.
+const CANTOS_DO_SISTEMA = process.platform === 'win32' && DESFOQUE_NATIVO;
+const janelasComCantos = new WeakSet();
 const arquivoDoVidro = () => join(app.getPath('userData'), 'janela.json');
-function vidroSalvo() {
-  try { return JSON.parse(readFileSync(arquivoDoVidro(), 'utf8')).vidro === true; } catch { return false; }
+function janelaSalva() {
+  try { return JSON.parse(readFileSync(arquivoDoVidro(), 'utf8')) || {}; } catch { return {}; }
 }
-function opcoesDoVidro(vidro) {
-  return vidro && VIDRO_NATIVO ? { transparent: true, backgroundColor: '#00000000' } : { backgroundColor: '#0a0a0a' };
+const vidroSalvo = () => janelaSalva().vidro === true;
+const cantosSalvos = () => janelaSalva().cantos === true;
+function opcoesDoVidro(vidro, cantos = false) {
+  if (!vidro || !VIDRO_NATIVO) return { backgroundColor: '#0a0a0a' };
+  return cantos ? { backgroundColor: '#00000000' } : { transparent: true, backgroundColor: '#00000000' };
 }
 // Dicionários embutidos (dicionarios/*.bdic) vão para a pasta onde o Chromium os procura, então
 // ele não baixa nada. Sem a pasta (corretor do sistema), só ativa os idiomas.
@@ -75,17 +82,108 @@ async function prepararCorretor(sessao) {
   const idiomas = IDIOMAS_DO_CORRETOR.filter(i => sessao.availableSpellCheckerLanguages.includes(i));
   if (idiomas.length) sessao.setSpellCheckerLanguages(idiomas); // vazio: fica o padrão do sistema
 }
-function createWindow(vidro = vidroSalvo(), limites = {}) {
-  const window = new BrowserWindow({ width: 1280, height: 820, ...limites, minWidth: 900, minHeight: 620, ...opcoesDoVidro(vidro), title: 'Kiro',
+// Vidro adaptativo (Windows): como o da Apple, o vidro segue o que está atrás dele. Fundo claro pede vidro claro
+// com texto escuro, sem escurecer o vidro. A janela não enxerga atrás de si, então o brilho vem de uma miniatura da
+// tela, lida só com ela em foco e descartada na hora. Os limites são medidos: o vidro claro brilha mais sobre qualquer fundo.
+// Cada leitura trava o processo principal por ~250 ms, em qualquer tamanho de miniatura: o custo é abrir a captura.
+// Por isso a leitura é rara; ao ver uma mudança, confirma logo depois, em vez de esperar o intervalo inteiro.
+const BRILHO_PARA_CLAREAR = 85, BRILHO_PARA_ESCURECER = 218, INTERVALO_DO_VIDRO = 15000, CONFIRMAR_O_VIDRO = 1500;
+function tomDoVidro(atual, brilho) {
+  if (atual === 'claro') return brilho < BRILHO_PARA_ESCURECER ? 'escuro' : 'claro';
+  return brilho > BRILHO_PARA_CLAREAR ? 'claro' : 'escuro';
+}
+async function brilhoDaJanela(janela) {
+  const b = janela.getBounds(), tela = screen.getDisplayMatching(b);
+  const fontes = await desktopCapturer.getSources({ types: ['screen'], thumbnailSize: { width: 240, height: 240 } });
+  const miniatura = fontes.find(f => f.display_id === String(tela.id))?.thumbnail;
+  if (!miniatura || miniatura.isEmpty()) return null;
+  const { width, height } = miniatura.getSize(), k = width / tela.bounds.width, pontos = miniatura.toBitmap(), valores = [];
+  const limitar = (v, max) => Math.max(0, Math.min(max, Math.round(v)));
+  const [x0, x1] = [limitar((b.x - tela.bounds.x) * k, width), limitar((b.x - tela.bounds.x + b.width) * k, width)];
+  const [y0, y1] = [limitar((b.y - tela.bounds.y) * k, height), limitar((b.y - tela.bounds.y + b.height) * k, height)];
+  for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) { const i = (y * width + x) * 4; valores.push((pontos[i] + pontos[i + 1] + pontos[i + 2]) / 3); }
+  return valores.length ? valores.sort((p, q) => p - q)[valores.length >> 1] : null;
+}
+const vidrosAdaptativos = new WeakMap();
+function adaptarVidro(janela, ligado) {
+  vidrosAdaptativos.get(janela)?.();
+  vidrosAdaptativos.delete(janela);
+  const enviar = tom => { if (!janela.isDestroyed()) janela.webContents.send('vidro:tom', tom); };
+  if (!ligado) { nativeTheme.themeSource = 'system'; enviar('escuro'); return; }
+  let tom = 'escuro', seguidas = 0, lendo = false, confirmacao = null;
+  const pintar = () => { nativeTheme.themeSource = tom === 'claro' ? 'light' : 'dark'; janela.setBackgroundMaterial('acrylic'); enviar(tom); };
+  const ler = async () => {
+    if (lendo || janela.isDestroyed() || !janela.isFocused() || janela.isMinimized()) return;
+    lendo = true;
+    try {
+      const brilho = await brilhoDaJanela(janela);
+      if (brilho === null || janela.isDestroyed()) return;
+      if (tomDoVidro(tom, brilho) === tom) { seguidas = 0; return; }
+      if (++seguidas < 2) { clearTimeout(confirmacao); confirmacao = setTimeout(ler, CONFIRMAR_O_VIDRO); return; } // uma janela clara passando não troca o vidro
+      tom = tom === 'claro' ? 'escuro' : 'claro'; seguidas = 0;
+      pintar();
+    } catch { /* sem leitura da tela: o vidro fica como está */ } finally { lendo = false; }
+  };
+  const relogio = setInterval(ler, INTERVALO_DO_VIDRO);
+  janela.on('focus', ler); janela.on('moved', ler);
+  const parar = () => { clearInterval(relogio); clearTimeout(confirmacao); if (!janela.isDestroyed()) { janela.off('focus', ler); janela.off('moved', ler); } };
+  janela.once('closed', parar);
+  vidrosAdaptativos.set(janela, parar);
+  pintar(); ler();
+}
+// Fechar com algo não salvo: a página tenta gravar e, se conseguir, a janela fecha sem perguntar nada.
+// Só quando não dá para gravar (erro, formulário aberto) a pessoa decide. Vale só para fechar: 'close' vem antes do beforeunload.
+const respostasDoFechar = new WeakMap();
+ipcMain.on('janela:resposta-fechar', (evento, ok) => respostasDoFechar.get(evento.sender)?.(ok === true));
+function gravacaoAoFechar(janela) {
+  const conteudo = janela.webContents;
+  return new Promise(resolver => {
+    const limite = setTimeout(() => resolver(false), 8000);
+    respostasDoFechar.set(conteudo, ok => { clearTimeout(limite); respostasDoFechar.delete(conteudo); resolver(ok); });
+    conteudo.send('janela:salvar-e-fechar');
+  });
+}
+function fecharSemPerderNada(janela) {
+  let querFechar = false, tratando = false;
+  janela.on('close', () => { querFechar = true; });
+  janela.webContents.on('will-prevent-unload', async () => {
+    if (!querFechar || tratando) return;
+    querFechar = false; tratando = true;
+    try {
+      const gravou = await gravacaoAoFechar(janela);
+      if (janela.isDestroyed()) return;
+      if (gravou) { tratando = false; return void janela.close(); }
+      const { response } = await dialog.showMessageBox(janela, { type: 'warning', title: 'Kiro', message: t('Há alterações que não puderam ser salvas.'), detail: t('Se fechar agora, elas serão perdidas.'), buttons: [t('Continuar editando'), t('Fechar sem salvar')], defaultId: 0, cancelId: 0, noLink: true });
+      if (response === 1 && !janela.isDestroyed()) janela.destroy();
+    } finally { tratando = false; }
+  });
+}
+const WM_SYSCOMMAND = 0x0112, SC_MAXIMIZE = 0xF030;
+function createWindow(vidro = vidroSalvo(), limites = {}, cantos = vidro && CANTOS_DO_SISTEMA && cantosSalvos()) {
+  const window = new BrowserWindow({ width: 1280, height: 820, ...limites, minWidth: 900, minHeight: 620, ...opcoesDoVidro(vidro, cantos), title: 'Kiro',
     ...(JANELA_PROPRIA ? { titleBarStyle: 'hidden', titleBarOverlay: { color: vidro && VIDRO_NATIVO ? '#00000000' : '#111111', symbolColor: '#EDEDED', height: ALTURA_DA_BARRA } } : {}), icon: join(__dirname, '..', 'kiro-logo.png'), webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true, preload: join(__dirname, 'preload.cjs') } });
   if (vidro && VIDRO_NATIVO) janelasDeVidro.add(window);
+  if (cantos) {
+    janelasComCantos.add(window);
+    ligarDesfoque(window); // sem transparent, nasceria preta até a página pedir
+    // Sem foco, o Windows troca o acrylic por uma cor lisa; reaplicar mantém o vidro, sem piscar (passar por "none" pisca).
+    window.on('blur', () => { if (!window.isDestroyed()) window.setBackgroundMaterial('acrylic'); });
+  } else if (vidro && process.platform === 'win32') {
+    // Janela transparente: o Windows ignora o duplo clique na barra, mas maximize() funciona.
+    window.hookWindowMessage(WM_SYSCOMMAND, parametro => {
+      if ((parametro.readUInt32LE(0) & 0xFFF0) === SC_MAXIMIZE) window.isMaximized() ? window.unmaximize() : window.maximize();
+    });
+  }
   window.loadFile(join(__dirname, '..', 'index.html'));
-  // Depois da página, para não atrasar a abertura.
-  window.webContents.once('did-finish-load', () => prepararCorretor(window.webContents.session).catch(() => { /* sem corretor, o app segue */ }));
+  // Depois da página, para não atrasar a abertura. A sessão vem de antes: a página pode pedir outro tipo de
+  // janela enquanto carrega, e esta já estaria destruída quando o evento chegasse.
+  const sessao = window.webContents.session;
+  window.webContents.once('did-finish-load', () => prepararCorretor(sessao).catch(() => { /* sem corretor, o app segue */ }));
   // Botão direito num campo de texto: a página abre o próprio menu com a palavra e as sugestões.
   window.webContents.on('context-menu', (_evento, p) => {
     if (p.isEditable) window.webContents.send('corretor:menu', { palavra: p.misspelledWord || '', sugestoes: (p.dictionarySuggestions || []).slice(0, 5) });
   });
+  fecharSemPerderNada(window);
   window.webContents.on('will-navigate', event => event.preventDefault());
   window.webContents.setWindowOpenHandler(({ url }) => { if (/^https?:/i.test(url)) shell.openExternal(url); return { action: 'deny' }; });
   return window;
@@ -163,7 +261,7 @@ else app.whenReady().then(async () => {
     if (!vault) throw new Error(frase('Escolha onde ficam suas notas para começar.'));
     return vault.load();
   });
-  ipcMain.handle('vault:save', async (_event, state) => { const salvo = await vault.save(state); agendadorBackup.aoSalvar(); return salvo; });
+  ipcMain.handle('vault:save', async (_event, state, opcoes) => { const salvo = await vault.save(state, { copiaParcial: opcoes?.copiaParcial === true }); agendadorBackup.aoSalvar(); return salvo; });
   ipcMain.handle('vault:conflicts', () => vault ? vault.conflictCopies() : []);
   ipcMain.handle('captura-global', (_event, ligado) => {
     const tecla = 'CommandOrControl+Shift+Space';
@@ -191,6 +289,8 @@ else app.whenReady().then(async () => {
   });
   ipcMain.handle('vault:trash', () => vault.trash());
   ipcMain.handle('vault:restore', (_event, pedido) => vault.restore(pedido));
+  ipcMain.handle('vault:trash-purge', (_event, pedido) => vault.purgeTrash(pedido));
+  ipcMain.handle('vault:trash-empty', () => vault.emptyTrash());
   ipcMain.handle('vault:history', (_event, pedido) => vault.history(pedido));
   ipcMain.handle('vault:history-read', (_event, pedido) => vault.readHistory(pedido));
   ipcMain.handle('vault:history-restore', (_event, pedido) => vault.restoreHistory(pedido));
@@ -217,7 +317,7 @@ else app.whenReady().then(async () => {
     } catch { return new Response('Imagem não encontrada.', { status: 404 }); }
   });
   // kiro-plugin://kiro.app/plugin-worker.js (e o plugins.js que ele importa) é o worker do Kiro;
-  // qualquer outro host é o id do plug-in: kiro-plugin://word-count/index.js. Sem cabeçalho,
+  // qualquer outro host é o id do plug-in: kiro-plugin://flashcards/index.js. Sem cabeçalho,
   // um worker file:// herdaria a CSP do index.html; servido daqui, vale a CSP da resposta.
   protocol.handle('kiro-plugin', async request => {
     try {
@@ -250,13 +350,18 @@ else app.whenReady().then(async () => {
     const janela = BrowserWindow.fromWebContents(event.sender);
     const vidro = ligado === true && VIDRO_NATIVO;
     const desfoque = vidro && comDesfoque === true && DESFOQUE_NATIVO;
-    if (vidro !== vidroSalvo()) await atomicWrite(arquivoDoVidro(), JSON.stringify({ vidro }));
-    if (janela && (janelasDeVidro.has(janela) !== vidro || (janelasDesfocadas.has(janela) && !desfoque))) {
-      const nova = createWindow(vidro, janela.getNormalBounds());
+    const cantos = desfoque && CANTOS_DO_SISTEMA;
+    if (vidro !== vidroSalvo() || cantos !== cantosSalvos()) await atomicWrite(arquivoDoVidro(), JSON.stringify({ vidro, cantos }));
+    if (janela && (janelasDeVidro.has(janela) !== vidro || janelasComCantos.has(janela) !== cantos || (janelasDesfocadas.has(janela) && !desfoque))) {
+      const nova = createWindow(vidro, janela.getNormalBounds(), cantos);
       if (janela.isMaximized()) nova.maximize();
       janela.destroy();
     } else if (janela && desfoque && !janelasDesfocadas.has(janela)) ligarDesfoque(janela); // recriada: a página nova pede de novo
-    return { ativo: vidro, desfoque };
+    return { ativo: vidro, desfoque, cantos };
+  });
+  ipcMain.on('janela:adaptar', (event, ligado) => {
+    const janela = BrowserWindow.fromWebContents(event.sender);
+    if (janela) adaptarVidro(janela, ligado === true && janelasComCantos.has(janela));
   });
   // Cores dos botões da janela: só as duas cores, validadas, para a janela que pediu.
   ipcMain.on('janela:cores', (event, cores) => {

@@ -32,6 +32,23 @@ test('lista e calendário renderizam tarefas citadas sem tratar índice como not
   }
 });
 
+test('redesenho na mesma tela não repete a animação de entrada', () => {
+  assert.match(fonte, /renderedView = currentView; \}\s*else app\.classList\.remove\("view-enter"\);/);
+});
+
+test('trocar de dia no calendário não refaz a tela inteira', () => {
+  const corpo = fonte.slice(fonte.indexOf('function selecionarDiaNoCalendario('), fonte.indexOf('function renderTasks('));
+  assert.match(corpo, /painel\.innerHTML = /);
+  assert.doesNotMatch(fonte, /diaSelecionadoNoCalendario = [^;]+; render\(\)/);
+});
+
+test('a entrada de tela não passa por opacidade: apagar a tela é o que piscava', () => {
+  const css = require('node:fs').readFileSync(require('node:path').join(__dirname, '../styles.css'), 'utf8');
+  const quadros = css.match(/@keyframes viewEnter \{.*\}/)?.[0];
+  assert.ok(quadros, 'a animação deve existir');
+  assert.doesNotMatch(quadros, /opacity/);
+});
+
 test('troca de estado desenha uma única vez de forma otimista sem segundo redesenho no save', async () => {
   const task = { id: 't1', title: 'Estudar', due: '2026-10-26', priority: 'Média', done: false };
   let renders = 0, opcoesSave = null;

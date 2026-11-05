@@ -71,6 +71,8 @@ nav { margin-top:20px; display:grid; gap:2px; }
 
 #save-status { position:fixed; bottom:0; left:252px; right:0; padding:8px 18px; background:var(--panel); border-top:1px solid var(--line); color:var(--muted); font-size:12px; z-index:6; }
 #save-status.error { color:var(--danger); border-top-color:var(--danger); }
+#aviso-desfazer { position:fixed; left:50%; bottom:calc(var(--esp-7) + var(--esp-2)); transform:translateX(-50%); z-index:7; display:flex; align-items:center; gap:var(--esp-3); max-width:min(560px, calc(100vw - 32px)); padding:var(--esp-2) var(--esp-2) var(--esp-2) var(--esp-4); background:var(--panel-raised); border:1px solid var(--line); border-radius:var(--raio-controle); box-shadow:var(--shadow-md); color:var(--ink); }
+#aviso-desfazer span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 
 body.saving { cursor:progress; }
 .content { padding-bottom:65px; }
@@ -111,7 +113,7 @@ body.saving { cursor:progress; }
   --switch-knob:#FFFFFF;
 
   /* Semânticas: o tom puxa para o --ink, então clareia no escuro e escurece no claro (4.5:1 nos dois). */
-  --danger:color-mix(in srgb, #E5484D 72%, var(--ink));
+  --danger:color-mix(in srgb, #E5484D 60%, var(--ink));
   --danger-solid:#C62A2F;
   --warning:color-mix(in srgb, #F59E0B 55%, var(--ink));
   --success:color-mix(in srgb, #30A46C 70%, var(--ink));
@@ -224,11 +226,15 @@ button:focus-visible, a:focus-visible, input:focus-visible,
 select:focus-visible, textarea:focus-visible, .tree-row:focus-visible {
   outline: 2px solid var(--focus-ring); outline-offset: 2px;
 }
+.note-card:focus-visible { outline:2px solid var(--focus-ring); outline-offset:2px; }
+/* Os botões do formulário ficam à vista em janelas que rolam. */
+.modal > .form > .form-actions { position:sticky; bottom:-22px; z-index:1; margin:0 -22px -22px; padding:var(--esp-3) 22px 22px; background:var(--panel-raised); border-top:1px solid var(--line); }
 /* Escrever não precisa de moldura: o cursor já mostra onde o foco está. */
 .doc-title:focus, .doc-title:focus-visible { outline: none; }
 
 /* Entrada da tela, só quando a view muda de fato. */
-@keyframes viewEnter { from { opacity:0; transform:translateY(4px); } to { opacity:1; transform:none; } }
+/* Sem opacidade: partir de 0 apagava a tela por um instante, e isso era a piscada ao trocar de tela. */
+@keyframes viewEnter { from { transform:translateY(4px); } to { transform:none; } }
 #app.view-enter > * { animation: viewEnter var(--medio) var(--curva) both; }
 
 /* Modal. */
@@ -284,7 +290,8 @@ select:focus-visible, textarea:focus-visible, .tree-row:focus-visible {
 .ctx-item { display:flex; align-items:center; gap:10px; width:100%; position:relative;
   padding:6px 9px; border:0; border-radius:6px; background:transparent; color:var(--ink);
   font-size:13px; font-weight:400; text-align:left; }
-.ctx-item:hover:not(:disabled), .ctx-item:focus-visible:not(:disabled) { background:var(--surface-active); color:var(--ink); }
+.ctx-item:hover:not(:disabled), .ctx-item:focus-visible:not(:disabled), .ctx-item.ctx-ativo:not(:disabled) { background:var(--surface-active); color:var(--ink); }
+.ctx-item.tem-filhos.ctx-aberto > .ctx-sub { display:flex; }
 .ctx-item:disabled { color:var(--text-disabled); cursor:default; }
 .ctx-icone { width:17px; flex:0 0 auto; text-align:center; color:var(--muted); font-size:12px; }
 .ctx-item:hover:not(:disabled) .ctx-icone { color:var(--ink); }
@@ -340,7 +347,9 @@ select:focus-visible, textarea:focus-visible, .tree-row:focus-visible {
 /* Recolhida: sobra uma faixa estreita com a casinha. Clicar na faixa ou na seta reabre. */
 .app-shell.lateral-recolhida .cofre-lateral { flex-basis:48px; cursor:pointer; }
 .app-shell.lateral-recolhida .cofre-topo { flex-direction:column; padding:12px 0 8px; }
-.app-shell.lateral-recolhida :is(.cofre-nome, .cofre-acoes, .cofre-rodape), .app-shell.lateral-recolhida .cofre-lateral .tree { display:none; }
+.app-shell.lateral-recolhida :is(.cofre-nome, .cofre-acoes, .cofre-rodape, .cofre-telas), .app-shell.lateral-recolhida .cofre-lateral .tree { display:none; }
+.cofre-telas { display:flex; gap:var(--esp-1); padding:0 10px var(--esp-2); }
+.cofre-telas .icon-button { flex:1 1 0; }
 .app-shell.cofre-aberto.lateral-recolhida ~ #save-status { left:48px; }
 .cofre-lateral .tree { flex:1; overflow-y:auto; padding:2px 6px 8px; }
 .cofre-lateral .tree-row { font-size:13px; padding-top:4px; padding-bottom:4px; color:var(--muted); }
@@ -508,10 +517,11 @@ body.com-imagem-inteira { overflow:hidden; }
 /* Cartões entram em cascata — só na troca de tela, não a cada tecla da busca. */
 
 /* ---- Acabamento ---- */
-* { scrollbar-width:thin; scrollbar-color:var(--scrollbar) transparent; }
-::-webkit-scrollbar { width:11px; height:11px; }
-::-webkit-scrollbar-track { background:transparent; }
-::-webkit-scrollbar-thumb { background:var(--scrollbar); border:3px solid transparent; background-clip:content-box; border-radius:var(--raio-controle); }
+/* Só onde não há ::-webkit-scrollbar: no Chromium, scrollbar-width ou -color anula essas regras e volta a barra nativa, com setas. */
+@supports not selector(::-webkit-scrollbar) { * { scrollbar-width:thin; scrollbar-color:var(--scrollbar) transparent; } }
+::-webkit-scrollbar { width:8px; height:8px; }
+::-webkit-scrollbar-track, ::-webkit-scrollbar-corner { background:transparent; }
+::-webkit-scrollbar-thumb { background:var(--scrollbar); border:2px solid transparent; background-clip:content-box; border-radius:var(--raio-pilula); }
 ::-webkit-scrollbar-thumb:hover { background:var(--scrollbar-hover); background-clip:content-box; }
 ::selection { background:color-mix(in srgb, var(--acento-forte) 34%, transparent); color:color-mix(in srgb, var(--acento) 14%, var(--ink)); }
 .doc-title { caret-color:var(--acento); }
@@ -705,7 +715,7 @@ body, button, input, textarea, select { font-family:var(--fonte-interface); }
 .task-group + .task-group { margin-top:var(--esp-5); }
 
 /* Botões em três tamanhos, mesma letra e peso. */
-.primary, .secondary { min-height:var(--alt-m); padding:0 var(--esp-4); font-size:var(--fs-interface); font-weight:500; border-radius:var(--raio-controle); justify-content:center; }
+.primary, .secondary { min-height:var(--alt-m); padding:0 var(--esp-4); font-size:var(--fs-interface); font-weight:500; border-radius:var(--raio-controle); justify-content:center; white-space:nowrap; flex-shrink:0; }
 .new-note { min-height:var(--alt-g); padding:0 var(--esp-4); font-size:var(--fs-interface); border-radius:var(--raio-controle); }
 .icon-button { min-width:var(--alt-p); min-height:var(--alt-p); padding:0 6px; border-radius:var(--raio-controle); }
 .caixa-entrada .routine-item .secondary, .grafo-painel .secondary, .form-actions .secondary.pequeno { min-height:var(--alt-p); padding:0 10px; font-size:var(--fs-legenda); }
@@ -728,6 +738,7 @@ body, button, input, textarea, select { font-family:var(--fonte-interface); }
 .modo-foco .sidebar, .modo-foco .cofre-lateral, .modo-foco .abas-barra, .modo-foco .doc-bar, .modo-foco .doc-details, .modo-foco .painel-direito, .modo-foco .metades-divisor { display:none !important; }
 .modo-foco .cofre-metades { display:flex; }
 .modo-foco .cofre-metade:not(.ativa) { display:none; }
+.modo-foco .cofre-metade.ativa { flex-grow:1 !important; } /* a largura guardada é uma fração: sozinha, a coluna ocuparia só essa parte */
 .modo-foco .cofre-nota-corpo { max-width:850px; margin:auto; }
 .foco-controles { display:flex; gap:8px; align-items:center; flex-wrap:wrap; padding:0; margin-bottom:var(--esp-2); }
 #foco-detalhes { display:inline-flex; align-items:center; gap:8px; font-size:var(--fs-secundario); color:var(--muted); }
@@ -868,15 +879,30 @@ body, button, input, textarea, select { font-family:var(--fonte-interface); }
 /* Tarefas: estado clicável, prioridade e ações alinhados sem sobrepor o botão de estado. */
 .task-item { position:relative; flex-wrap:wrap; }
 /* Em cartão estreito o estado desce para a linha de baixo, em vez de espremer o título. */
-.task-item > .task-title { flex:1 1 60%; min-width:0; overflow-wrap:anywhere; }
+.task-item > .task-title { flex:1 1 min(320px, calc(100% - 34px)); min-width:0; overflow-wrap:anywhere; }
+.task-info { display:flex; flex-wrap:wrap; align-items:center; column-gap:4px; }
 .task-status { display:inline-flex; align-items:center; gap:6px; margin-left:auto; padding:3px 9px; border-radius:var(--raio-pilula); border:1px solid var(--line); background:var(--surface-subtle); color:var(--muted); font-size:var(--fs-legenda); font-weight:500; line-height:1.2; white-space:nowrap; cursor:pointer; flex:0 0 auto; transition:background-color var(--rapido) var(--curva), border-color var(--rapido) var(--curva), color var(--rapido) var(--curva); }
-.task-status::after { content:"▾"; font-size:10px; opacity:.65; margin-left:1px; }
+.task-status::after { content:"▾"; font-size:10px; opacity:.65; margin-left:auto; }
 .task-status:hover { background:var(--surface-hover); border-color:var(--border-strong); color:var(--ink); }
 .task-status:focus-visible { outline:2px solid var(--focus-ring); outline-offset:1px; }
 .task-status[data-status="andamento"] { border-color:color-mix(in srgb, var(--acento) 45%, var(--line)); background:var(--accent-soft); color:var(--accent-text); }
 .task-status[data-status="pausado"] { border-color:color-mix(in srgb, var(--warning) 48%, var(--line)); background:color-mix(in srgb, var(--warning) 14%, transparent); color:var(--warning); }
 .task-status[data-status="concluido"] { border-color:color-mix(in srgb, var(--ok, var(--acento)) 42%, var(--line)); background:color-mix(in srgb, var(--ok, var(--acento)) 13%, transparent); color:var(--ink); }
-.task-item .priority { margin-left:0; flex:0 0 auto; }
+.task-item .priority { margin-left:0; flex:0 0 auto; padding:4px 8px; font-size:var(--fs-legenda); line-height:1.2; text-align:center; }
+.task-item .priority.vazia { display:none; }
+/* Nas listas largas, estado e prioridade têm largura fixa: as colunas alinham em todas as linhas, com ou sem prioridade. */
+:is(.task-group, .por-status:not(.por-colunas)) .task-status { min-width:11.5em; }
+:is(.task-group, .por-status:not(.por-colunas)) .task-item .priority { min-width:4.5em; }
+:is(.task-group, .por-status:not(.por-colunas)) .task-item .priority.vazia { display:block; visibility:hidden; }
+/* Sem largura para as colunas: título numa linha; estado, prioridade e ações na de baixo, alinhados com o título. */
+.tarefas-lista { container-type:inline-size; }
+@container (max-width:680px) {
+  :is(.task-group, .por-status:not(.por-colunas)) .task-item > .task-title { flex-basis:calc(100% - 34px); }
+  :is(.task-group, .por-status:not(.por-colunas)) .task-status { min-width:0; margin-left:31px; }
+  :is(.task-group, .por-status:not(.por-colunas)) .task-item .priority { min-width:0; }
+  :is(.task-group, .por-status:not(.por-colunas)) .task-item .priority.vazia { display:none; }
+  :is(.task-group, .por-status:not(.por-colunas)) .task-item .task-actions { margin-left:auto; }
+}
 .task-item .task-actions { flex:0 0 auto; opacity:0; pointer-events:none; transition:opacity var(--rapido) var(--curva); }
 .task-item:hover .task-actions, .task-item:focus-within .task-actions { opacity:1; pointer-events:auto; }
 .segmento > span { display:flex; align-items:center; justify-content:center; gap:6px; }
@@ -1050,6 +1076,16 @@ body, button, input, textarea, select { font-family:var(--fonte-interface); }
 .acoes-rapidas .new-note { flex:1; width:auto; min-width:0; min-height:40px; justify-content:flex-start; padding:0 9px; gap:8px; white-space:nowrap; }
 .acoes-rapidas :is(.nota-diaria, .acao-icone) { display:inline-flex; flex:0 0 40px; width:40px; min-height:40px; align-items:center; justify-content:center; padding:0; border:0; border-radius:var(--raio-controle); background:transparent; color:var(--muted); cursor:pointer; transition:color var(--rapido, .15s) ease, background-color var(--rapido, .15s) ease; }
 .acoes-rapidas :is(.nota-diaria, .acao-icone):hover { background:var(--surface-hover); color:var(--ink); }
+/* Lixeira. */
+.lixeira-topo { display:flex; align-items:center; justify-content:space-between; gap:var(--esp-3); margin-bottom:var(--esp-2); }
+.secondary.perigo.lixeira-esvaziar { display:inline-flex; align-items:center; gap:6px; margin-right:0; white-space:nowrap; }
+.lixeira-lista { max-height:min(60vh, 520px); overflow-y:auto; }
+.lixeira-item { flex-wrap:wrap; }
+.lixeira-item .routine-title { flex:1 1 200px; min-width:0; overflow-wrap:anywhere; }
+.lixeira-acoes { display:flex; align-items:center; gap:var(--esp-1); margin-left:auto; }
+.icon-button.perigo { color:var(--danger); }
+.icon-button.perigo:hover { background:color-mix(in srgb, var(--danger) 12%, transparent); color:var(--danger); }
+.lixeira-vazia { padding:var(--esp-6) 0; text-align:center; }
 /* Rodapé da barra lateral: Lixeira e Configurações lado a lado, só com ícone. */
 .sidebar-bottom { display:flex; flex-wrap:wrap; align-items:center; gap:4px; }
 .cofre-seletor { position:relative; flex:1; min-width:0; display:flex; align-items:center; gap:7px; min-height:36px; margin-right:4px; padding:0 10px 0 8px; border:0; border-radius:var(--raio-controle); background:var(--surface-hover); color:var(--ink); font-size:13px; font-weight:500; cursor:pointer; transition:background var(--rapido, .15s) ease; }
@@ -1510,7 +1546,7 @@ div.fluxo-editor { overflow:auto; }
 .segmentos-compactos { display:flex; flex-wrap:wrap; gap:4px; margin:0 0 var(--esp-2); }
 .segmento-botao { display:inline-flex; align-items:center; gap:6px; min-height:28px; padding:0 10px; border:1px solid transparent; border-radius:var(--raio-controle); background:transparent; color:var(--muted); font-size:var(--fs-secundario); cursor:pointer; transition:background var(--rapido) var(--curva), color var(--rapido) var(--curva); }
 .segmento-botao:hover { background:var(--surface-hover); color:var(--ink); }
-.segmento-botao[aria-pressed="true"] { background:var(--surface-active); border-color:var(--line); color:var(--ink); font-weight:500; }
+.segmento-botao[aria-pressed="true"] { background:var(--surface-active); border-color:var(--line); color:var(--ink); }
 .segmento-botao:focus-visible { outline:2px solid var(--focus-ring); outline-offset:1px; }
 .segmento-contagem { min-width:18px; padding:0 5px; border-radius:var(--raio-pilula); background:var(--surface-active); font-size:11px; line-height:16px; text-align:center; font-variant-numeric:tabular-nums; }
 .para-revisar:not([data-filtro="todas"]) .revisar-grupo:not([data-grupo]) { display:none; }
@@ -1604,24 +1640,35 @@ html:not(.papel-em-video) .papel-so-video { display:none; }
 .tarefas-barra { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:var(--esp-2); margin:0 0 var(--esp-3); }
 .tarefas-barra .tarefas-abas, .tarefas-barra .tarefas-visao { margin:0; }
 .tarefas-visao .segmento-botao .icone { width:14px; height:14px; }
+/* Só no mês: os dois painéis internos já são cartões, então o de fora não leva caixa. */
+.tarefas-lista.por-mes { padding:0; }
+.calendario-notas { margin-top:var(--esp-4); }
 .calendario-layout { display:grid; grid-template-columns:minmax(0, 1.2fr) minmax(280px, .8fr); gap:var(--esp-5); align-items:start; }
-.calendario-mes, .calendario-selecionado { min-width:0; padding:var(--esp-4); border:1px solid var(--line); border-radius:var(--raio-card); background:var(--panel); }
+.calendario-mes, .calendario-selecionado { min-width:0; padding:var(--esp-4); }
 .calendario-navegacao, .calendario-dia-cabecalho { display:flex; align-items:center; justify-content:space-between; gap:var(--esp-2); margin-bottom:var(--esp-3); }
 .calendario-navegacao h2, .calendario-dia-cabecalho h2 { margin:0; font-size:var(--fs-titulo); }
-.calendario-navegacao h2 { flex:1; text-align:center; text-transform:capitalize; }
+.calendario-navegacao h2 { flex:1; text-align:center; }
+.calendario-navegacao h2::first-letter, .calendario-dia-cabecalho small::first-letter { text-transform:uppercase; }
+.calendario-dia-cabecalho h2 { flex:1; min-width:0; }
+.calendario-dia-cabecalho small { display:block; color:var(--muted); font-size:var(--fs-legenda); font-weight:400; }
+/* Em cartão estreito o estado desce e alinha com o título, sem ficar solto à direita. */
+:is(.calendario-selecionado, .hoje-faixas) .task-status { margin-left:31px; }
+:is(.calendario-selecionado, .hoje-faixas) .task-item .task-actions { margin-left:auto; }
 .calendario-grade { display:grid; gap:2px; }
 .calendario-semana { display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); gap:2px; }
 .calendario-semana > [role="columnheader"] { padding:6px 2px; color:var(--muted); font-size:var(--fs-legenda); text-align:center; }
-.calendario-dia { min-width:0; min-height:56px; display:flex; flex-direction:column; align-items:center; justify-content:flex-start; gap:3px; padding:6px 2px; border:1px solid transparent; border-radius:var(--raio-controle); background:transparent; color:var(--ink); font:inherit; cursor:pointer; }
+.calendario-dia { position:relative; min-width:0; min-height:4.3em; display:flex; flex-direction:column; align-items:center; justify-content:flex-start; gap:3px; padding:6px 2px; border:1px solid transparent; border-radius:var(--raio-controle); background:transparent; color:var(--ink); font:inherit; cursor:pointer; }
 .calendario-dia:hover { background:var(--surface-hover); }
-.calendario-dia:focus-visible { outline:2px solid var(--focus-ring); outline-offset:1px; }
+.calendario-dia:focus-visible { z-index:1; outline:2px solid var(--focus-ring); outline-offset:2px; }
 .calendario-dia[aria-selected="true"] { border-color:var(--acento); background:var(--accent-soft); }
-.calendario-dia.fora-do-mes { color:var(--muted); opacity:.55; }
-.calendario-dia.calendario-hoje .calendario-numero { color:var(--accent-text); font-weight:700; }
-.calendario-contagem { min-width:18px; padding:0 5px; border-radius:var(--raio-pilula); background:var(--surface-active); color:var(--muted); font-size:10px; line-height:16px; text-align:center; font-variant-numeric:tabular-nums; }
+.calendario-dia.fora-do-mes { color:var(--muted); }
+.calendario-numero { display:inline-flex; align-items:center; justify-content:center; min-width:1.85em; height:1.85em; border-radius:var(--raio-pilula); }
+.calendario-dia.calendario-hoje .calendario-numero { background:var(--acento); color:var(--acento-texto); font-weight:700; }
+.calendario-contagem { min-width:18px; padding:0 5px; border-radius:var(--raio-pilula); background:var(--surface-active); color:var(--ink); font-size:var(--fs-legenda); line-height:1.4; text-align:center; font-variant-numeric:tabular-nums; }
+.calendario-dia[aria-selected="true"] .calendario-contagem { background:var(--panel-raised); }
 .calendario-selecionado .empty { padding:var(--esp-5) 0; }
 @media (max-width:900px) { .calendario-layout { grid-template-columns:1fr; } }
-@media (max-width:480px) { .calendario-mes, .calendario-selecionado { padding:var(--esp-3); }.calendario-dia { min-height:46px; } }
+@media (max-width:480px) { .calendario-mes, .calendario-selecionado { padding:var(--esp-3); } }
 .tarefas-lista.por-status { padding-top:var(--esp-3); }
 .status-secao { margin:0 0 var(--esp-3); padding:var(--esp-1) var(--esp-2) var(--esp-2); border:1px solid transparent; border-radius:var(--raio-controle); transition:background var(--rapido) var(--curva), border-color var(--rapido) var(--curva); }
 .status-secao.alvo { background:var(--accent-soft); border-color:var(--focus-ring); border-style:dashed; }
@@ -1635,7 +1682,7 @@ html:not(.papel-em-video) .papel-so-video { display:none; }
 .status-item.arrastando { opacity:.4; }
 .status-item .task-item { padding-left:var(--esp-2); padding-right:var(--esp-2); }
 .status-item:last-child .task-item { border-bottom:0; }
-.status-vazio { margin:0; padding:var(--esp-2); color:var(--text-disabled); font-size:var(--fs-secundario); }
+.status-vazio { margin:0; padding:var(--esp-2); color:var(--muted); font-size:var(--fs-secundario); }
 /* Marca do status: a forma diz o status, não só a cor. */
 .status-marca { position:relative; width:12px; height:12px; flex:0 0 auto; border-radius:50%; border:1.5px solid var(--border-strong); }
 [data-status="andamento"] .status-marca { border-color:var(--acento); background:linear-gradient(90deg, var(--acento) 50%, transparent 50%); }
@@ -1656,9 +1703,10 @@ html:not(.papel-em-video) .papel-so-video { display:none; }
 .por-colunas .status-item .task-item { border-bottom:0; flex-wrap:wrap; align-items:flex-start; row-gap:6px; min-height:0; padding:var(--esp-2); }
 .por-colunas .task-item > .check { margin-top:2px; }
 .por-colunas .task-title { flex:1 1 calc(100% - 34px); min-width:0; overflow-wrap:anywhere; }
-.por-colunas .task-status { margin-left:28px; padding:2px 7px; font-size:11px; }
+.por-colunas .task-status { margin-left:0; padding:2px 7px; font-size:11px; }
 .por-colunas .task-item .priority { margin-left:0; }
-.por-colunas .task-item .task-actions { margin-left:auto; }
+/* Sobre o cartão, só com o ponteiro em cima: escondidas, não reservam uma linha vazia. */
+.por-colunas .task-item .task-actions { position:absolute; top:4px; right:4px; background:var(--panel-raised); border-radius:var(--raio-controle); }
 @keyframes kiroFlashLinha { 0% { background: color-mix(in srgb, var(--acento) 28%, transparent); } 100% { background: transparent; } }
 .linha-destaque-flash { animation: kiroFlashLinha 1.2s ease-out; border-radius: var(--raio-p, 4px); }
 
