@@ -7,6 +7,14 @@
   const t = (frase, valores) => root.KiroIdiomas.t(frase, valores);
   const sessoes = new Map();       // id do fluxo → { vista, selecao, paginasDoPdf (id do cartão → página), seta, historico, grade, mouseNaTela, ultimaColagem, ultimaSeta }
   const montados = new Set();
+  // Mover um <iframe> ou <video> com replaceWith/append recarrega ou para a mídia; moveBefore move mantendo o estado.
+  // Os corpos reaproveitáveis esperam aqui, conectados ao documento, enquanto o desenho (ou a tela inteira) é refeito.
+  let guardaDeCorpos = null;
+  function guarda() {
+    if (!guardaDeCorpos?.isConnected) { guardaDeCorpos = document.createElement('div'); guardaDeCorpos.id = 'fluxo-guarda'; guardaDeCorpos.hidden = true; document.body.appendChild(guardaDeCorpos); }
+    return guardaDeCorpos;
+  }
+  const guardarCorpo = el => { if (el.isConnected && el.parentNode !== guardaDeCorpos && guarda().moveBefore) guarda().moveBefore(el, null); };
   // Último trecho copiado no Fluxo, para colar em outro fluxo. Só vale se o texto da área de
   // transferência ainda for o mesmo que gravamos junto. Vale até o Kiro fechar.
   let areaDoFluxo = null;      // { trecho, texto }
@@ -153,7 +161,7 @@
       // Os corpos vivem na sessão (`s.corpos`), não só neste DOM: o autosave remonta a tela inteira (outra instância de `montar`),
       // e movidos no mesmo instante da troca o <audio> e o <video> não chegam a pausar.
       const antigos = new Map(s.corpos);
-      for (const el of cartoes.querySelectorAll('[data-reusar]')) antigos.set(el.dataset.reusar, el);
+      for (const el of cartoes.querySelectorAll('[data-reusar]')) { antigos.set(el.dataset.reusar, el); guardarCorpo(el); }   // sai do DOM sem recarregar
       // Grupos primeiro: ficam atrás dos cartões.
       const ordem = c => (c.type === 'group' ? 0 : 1);
       cartoes.innerHTML = [...canvas.nodes].sort((a, b) => ordem(a) - ordem(b)).map(cartaoHtml).join('');
@@ -161,11 +169,12 @@
       for (const novo of cartoes.querySelectorAll('[data-reusar]')) {
         const chave = novo.dataset.reusar, velho = antigos.get(chave);
         if (velho) {
-          novo.replaceWith(velho);
+          if (velho.parentNode === guardaDeCorpos && novo.parentNode.moveBefore) { novo.parentNode.moveBefore(velho, novo); novo.remove(); } else novo.replaceWith(velho);
           for (const x of velho.querySelectorAll('.md-pdf-paginas, .fluxo-texto, .fluxo-tabela')) { const [topo, esquerda] = s.rolagens.get(x) || [0, 0]; x.scrollTop = topo; x.scrollLeft = esquerda; }
         }
         s.corpos.set(chave, velho || novo);
       }
+      for (const el of antigos.values()) if (el.parentNode === guardaDeCorpos && s.corpos.get(el.dataset.reusar) !== el) el.remove();   // ninguém pegou de volta: não acumula
       lerCorpos();
       desenharSetas();
       dica.hidden = canvas.nodes.length > 0;
@@ -870,6 +879,7 @@
     function desmontar() {
       if (!montados.has(inst)) return;
       terminarEdicao();
+      for (const el of s.corpos.values()) guardarCorpo(el);   // a tela é refeita (autosave): a próxima instância traz de volta
       montados.delete(inst);
       document.removeEventListener('pointerdown', foraDoFluxo);
       document.removeEventListener('dragend', tirarSoltando);

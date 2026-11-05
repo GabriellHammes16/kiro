@@ -102,3 +102,10 @@ test('a CSP libera so o embed e a miniatura do YouTube, e o main manda o Referer
   const main = fs.readFileSync(path.join(__dirname, '../electron/main.cjs'), 'utf8');
   assert.ok(main.includes("'https://www.youtube-nocookie.com/*'") && main.includes('Referer'));
 });
+
+test('corpos reaproveitados mudam de lugar com moveBefore e esperam numa guarda ao desmontar', () => {
+  assert.match(fonte, /\.moveBefore\(velho, novo\)/);
+  const i = fonte.indexOf('function desmontar()');
+  assert.match(fonte.slice(i, i + 400), /guardarCorpo\(el\)/);
+  assert.match(fonte, /id = 'fluxo-guarda'/);
+});
