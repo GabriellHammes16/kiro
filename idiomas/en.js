@@ -830,6 +830,7 @@
     'Refazer': 'Redo',
     'Encaixar na grade': 'Snap to grid',
     'Duplicar': 'Duplicate',
+    'Recortar': 'Cut',
     'Editar texto': 'Edit text',
     'Transformar em nota': 'Convert to note',
     'Renomear grupo': 'Rename group',

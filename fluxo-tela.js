@@ -7,6 +7,9 @@
   const t = (frase, valores) => root.KiroIdiomas.t(frase, valores);
   const sessoes = new Map();       // id do fluxo → { vista, selecao, seta, historico, grade }
   const montados = new Set();
+  // Último trecho copiado no Fluxo, para colar em outro fluxo. Só vale se o texto da área de
+  // transferência ainda for o mesmo que gravamos junto. Vale até o Kiro fechar.
+  let areaDoFluxo = null;      // { trecho, texto }
   let contador = 0;                // ids únicos de <marker> quando dois fluxos estão abertos
   const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   // Cor predefinida vira atributo (o CSS dá o tom de cada tema); hex vira variável CSS.
@@ -27,6 +30,7 @@
     // qualquer cofre, então sem a chave do cofre o Ctrl+Z (e a vista) de um vazariam para o outro.
     const { id } = opcoes, s = sessao(opcoes.chaveDaVista + '\n' + id), n = ++contador;
     let canvas = opcoes.canvas, gesto = null, editor = null, espaco = false, timerVista = null;
+    let mouseNaTela = null, ultimaColagem = null, ultimaSeta = 0;   // ponto do mouse, colagem anterior, hora da última seta
     host.innerHTML = `<div class="fluxo" tabindex="0" role="application" aria-label="${esc(t('Fluxo {titulo}', { titulo: opcoes.titulo }))}">
   <div class="fluxo-mundo">
     <svg class="fluxo-setas" aria-hidden="true"><defs><marker id="fluxo-ponta-${n}" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0 10 5 0 10z" fill="context-stroke"/></marker></defs><g class="fluxo-caminhos"></g><path class="fluxo-seta-previa" d=""/></svg>
@@ -123,6 +127,7 @@
     // ---- Mudanças ----
     function mudar(novo) {
       if (novo === canvas) return;
+      ultimaSeta = 0;
       s.historico = F.empilhar(s.historico, canvas);
       canvas = novo;
       desenhar();
@@ -131,6 +136,7 @@
     function voltar(fn) {
       const r = fn(s.historico, canvas);
       if (!r) return;
+      ultimaSeta = 0;
       terminarEdicao();
       s.historico = r.historico; canvas = r.canvas;
       desenhar(); opcoes.aoMudar(canvas);
@@ -329,7 +335,7 @@
         { separador: true },
         { rotulo: t('Desfazer'), icone: opcoes.icone('desfazer'), ativo: () => s.historico.antes.length > 0, acao: desfazer },
         { rotulo: t('Refazer'), icone: opcoes.icone('refazer'), ativo: () => s.historico.depois.length > 0, acao: refazer },
-        { rotulo: t('Colar'), icone: opcoes.icone('colar'), acao: () => navigator.clipboard.readText().then(texto => colarTexto(texto, p), () => opcoes.aviso(t('Não foi possível ler a área de transferência.'), true)) },
+        { rotulo: t('Colar'), icone: opcoes.icone('colar'), acao: () => navigator.clipboard.readText().then(texto => (areaDoFluxo?.texto === texto ? colarTrecho(areaDoFluxo.trecho, p) : colarTexto(texto, p)), () => opcoes.aviso(t('Não foi possível ler a área de transferência.'), true)) },
         { separador: true },
         { rotulo: t('Encaixar na grade'), icone: s.grade ? opcoes.icone('marcado') : '', acao: () => { s.grade = !s.grade; } },
         { rotulo: t('Enquadrar tudo'), icone: opcoes.icone('expandir'), acao: enquadrarTudo },
@@ -340,7 +346,9 @@
       const ids = [...s.selecao];
       return [
         { rotulo: t('Cor'), icone: bolinha(no(idNo)?.color), filhos: itensDaCor(cor => mudar(ids.reduce((c, x) => F.editarCartao(c, x, { color: cor }), canvas))) },
-        { rotulo: t('Duplicar'), icone: opcoes.icone('copiar'), acao: () => { const r = F.duplicarCartoes(canvas, ids); s.selecao = new Set(r.ids); mudar(r.canvas); } },
+        { rotulo: t('Copiar'), icone: opcoes.icone('copiar'), acao: () => { raiz.focus({ preventScroll: true }); document.execCommand('copy'); } },
+        { rotulo: t('Recortar'), icone: opcoes.icone('cortar'), acao: () => { raiz.focus({ preventScroll: true }); document.execCommand('cut'); } },
+        { rotulo: t('Duplicar'), icone: opcoes.icone('copiar'), acao: duplicarSelecao },
         ...(ids.length === 1 && no(idNo)?.type === 'text' ? [{ rotulo: t('Editar texto'), icone: opcoes.icone('renomear'), acao: () => editar(idNo) }] : []),
         ...(ids.length === 1 && no(idNo)?.type === 'text' && no(idNo).text.trim() ? [{ rotulo: t('Transformar em nota'), icone: opcoes.icone('nota'), acao: () => transformarEmNota(idNo) }] : []),
         ...(ids.length === 1 && no(idNo)?.type === 'group' ? [{ rotulo: t('Renomear grupo'), icone: opcoes.icone('renomear'), acao: () => editarGrupo(idNo) }] : []),
@@ -477,7 +485,7 @@
       const g = escolherGesto(e);
       if (g) iniciar(e, g);
     });
-    raiz.addEventListener('pointermove', e => { if (gesto) GESTOS[gesto.tipo].mover(gesto, e); });
+    raiz.addEventListener('pointermove', e => { mouseNaTela = pontoDaTela(e); if (gesto) GESTOS[gesto.tipo].mover(gesto, e); });
     raiz.addEventListener('pointerup', e => { if (!gesto) return; const g = gesto; gesto = null; GESTOS[g.tipo].soltar(g, e); });
     raiz.addEventListener('pointercancel', () => { if (!gesto) return; gesto = null; previa.classList.remove('ativa'); marca.hidden = true; desenhar(); aplicarVista(); });
     // Roda: rola (Shift = na horizontal); Ctrl+roda: zoom no cursor. Conteúdo longo de um
@@ -529,12 +537,15 @@
       if ((e.key === 'Delete' || e.key === 'Backspace') && s.selecao.size) { e.preventDefault(); e.stopPropagation(); mudar(F.removerCartoes(canvas, [...s.selecao])); }
       else if (e.key === 'Enter' && s.selecao.size === 1) { e.preventDefault(); editar([...s.selecao][0]); }
       else if (e.key === 'Escape') selecionar([]);
+      else if (e.key.startsWith('Arrow') && s.selecao.size) { e.preventDefault(); moverComSetas(e); }
     });
     raiz.addEventListener('keydown', e => {
       if (e.target !== raiz || !(e.ctrlKey || e.metaKey)) return;
       const tecla = e.key.toLowerCase();
       if (tecla === 'z' && !e.shiftKey) { e.preventDefault(); e.stopPropagation(); desfazer(); }
       else if (tecla === 'y' || (tecla === 'z' && e.shiftKey)) { e.preventDefault(); e.stopPropagation(); refazer(); }
+      else if (tecla === 'a') { e.preventDefault(); selecionar(canvas.nodes.map(x => x.id)); }
+      else if (tecla === 'd' && s.selecao.size) { e.preventDefault(); duplicarSelecao(); }
     });
     raiz.addEventListener('click', e => { if (e.target.closest('.fluxo-conteudo a')) e.preventDefault(); });
     raiz.querySelector('.fluxo-barra').addEventListener('click', e => {
@@ -573,8 +584,49 @@
         if (caminho) adicionarNo({ type: 'file', file: caminho, width: 320, height: 240 }, { x: p.x + i * F.GRADE * 2, y: p.y + i * F.GRADE * 2 });
       }
     }
+    // Copiar e recortar: o trecho vai para `areaDoFluxo` e o texto dos cartões para a área de
+    // transferência (colar fora do Kiro dá texto). Recortar é copiar e remover num passo só.
+    function copiarSelecao(e) {
+      const ids = comConteudo([...s.selecao]), trecho = F.copiarCartoes(canvas, ids), texto = F.textoDoTrecho(trecho);
+      e.preventDefault();
+      e.clipboardData.setData('text/plain', texto);
+      areaDoFluxo = { trecho, texto };
+      return ids;
+    }
+    raiz.addEventListener('copy', e => { if (editor || e.target !== raiz || !s.selecao.size) return; copiarSelecao(e); });
+    raiz.addEventListener('cut', e => { if (editor || e.target !== raiz || !s.selecao.size) return; mudar(F.removerCartoes(canvas, copiarSelecao(e))); });
+    function duplicarSelecao() {
+      const r = F.duplicarCartoes(canvas, comConteudo([...s.selecao]));
+      selecionar(r.ids);
+      mudar(r.canvas);
+    }
+    // Cola o trecho com o centro em p (encaixado na grade). Colar de novo no mesmo ponto desce
+    // um degrau na diagonal a cada vez, para o novo conjunto não cair em cima do anterior.
+    function colarTrecho(trecho, p) {
+      if (!trecho.nodes.length) return;
+      const repete = ultimaColagem && ultimaColagem.x === p.x && ultimaColagem.y === p.y;
+      ultimaColagem = { x: p.x, y: p.y, n: repete ? ultimaColagem.n + 1 : 0 };
+      const caixa = F.caixaDe(trecho.nodes, 0), passo = ultimaColagem.n * F.GRADE * 2;
+      const r = F.colarCartoes(canvas, trecho, encaixar(p.x - caixa.width / 2) + passo, encaixar(p.y - caixa.height / 2) + passo);
+      selecionar(r.ids);
+      mudar(r.canvas);
+    }
+    // Setas movem a seleção; as seguidas (menos de 500 ms) valem um só passo de desfazer.
+    function moverComSetas(e) {
+      const passo = F.GRADE * (e.shiftKey ? 5 : 1);
+      const dx = { ArrowLeft: -passo, ArrowRight: passo }[e.key] || 0, dy = { ArrowUp: -passo, ArrowDown: passo }[e.key] || 0;
+      const novo = F.moverCartoes(canvas, comConteudo([...s.selecao]), dx, dy), agora = Date.now();
+      if (agora - ultimaSeta < 500) { canvas = novo; desenhar(); opcoes.aoMudar(canvas); }
+      else mudar(novo);
+      ultimaSeta = agora;
+    }
     raiz.addEventListener('paste', e => {
       if (editor || e.target !== raiz || !e.clipboardData) return;
+      const copiado = e.clipboardData.getData('text/plain');
+      if (copiado && areaDoFluxo?.texto === copiado) {
+        e.preventDefault();
+        return void colarTrecho(areaDoFluxo.trecho, mouseNaTela ? F.paraCanvas(s.vista, mouseNaTela.x, mouseNaTela.y) : centroDaVista());
+      }
       const imagens = opcoes.imagensColadas(e.clipboardData);   // mesmo filtro do editor de notas (M5)
       if (imagens.length) { e.preventDefault(); return void colarImagens(imagens, centroDaVista()); }
       const texto = e.clipboardData.getData('text/plain');
