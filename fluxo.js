@@ -249,7 +249,7 @@
     const n = c.nodes.find(x => x.id === id);
     if (!n) return c;
     return n.kiroRecolhido
-      ? editarCartao(c, id, { kiroRecolhido: undefined, kiroAlturaAberta: undefined, height: n.kiroAlturaAberta ?? tamanhoPadrao(n).height })
+      ? editarCartao(c, id, { kiroRecolhido: undefined, kiroAlturaAberta: undefined, height: typeof n.kiroAlturaAberta === 'number' && n.kiroAlturaAberta > 0 ? n.kiroAlturaAberta : tamanhoPadrao(n).height })
       : editarCartao(c, id, { kiroRecolhido: true, kiroAlturaAberta: n.height, height: ALTURA_RECOLHIDA });
   }
   // CSV simples: separador (vírgula ou ponto e vírgula) pela primeira linha, aspas duplas, quebra de linha dentro de aspas.
@@ -294,7 +294,7 @@
   const TAMANHO_POR_TIPO = { pdf: { width: 480, height: 640 }, imagem: { width: 320, height: 240 }, texto: { width: 320, height: 240 }, tabela: { width: 480, height: 280 }, audio: { width: 320, height: 100 }, video: { width: 480, height: 300 }, nota: { width: 400, height: 280 } };
   function tamanhoPadrao(c) {
     if (c.type === 'text') return { width: LARGURA_PADRAO, height: praCima(alturaEstimada(c.text ?? '')) };
-    if (c.type === 'file') return TAMANHO_POR_TIPO[tipoDoArquivo(c.file)];
+    if (c.type === 'file') return { ...TAMANHO_POR_TIPO[tipoDoArquivo(c.file)] };   // cópia: quem mexer no resultado não muda a tabela
     if (c.type === 'link') return idDoYoutube(c.url) ? { width: 480, height: 300 } : { width: 320, height: 100 };
     return { width: 400, height: 300 };
   }

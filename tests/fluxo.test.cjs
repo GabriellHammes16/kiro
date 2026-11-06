@@ -485,6 +485,16 @@ test('recolher guarda a altura e abrir devolve a mesma', () => {
   assert.ok(!('kiroRecolhido' in aberto.nodes[0]) && !('kiroAlturaAberta' in aberto.nodes[0]));
 });
 
+test('abrir com kiroAlturaAberta inválida volta à altura padrão, e tamanhoPadrao devolve uma cópia', () => {
+  for (const ruim of ['300', 0, -5, null]) {
+    const c = canvas([cartao('a', { type: 'file', file: 'x.pdf', height: F.ALTURA_RECOLHIDA, kiroRecolhido: true, kiroAlturaAberta: ruim })]);
+    assert.equal(F.alternarRecolhido(c, 'a').nodes[0].height, 640, String(ruim));
+  }
+  const t = F.tamanhoPadrao({ type: 'file', file: 'a.pdf' });
+  t.height = 1;
+  assert.equal(F.tamanhoPadrao({ type: 'file', file: 'a.pdf' }).height, 640);
+});
+
 test('lerCsv entende aspas, ponto e vírgula e limita as linhas', () => {
   assert.deepEqual(F.lerCsv('a;b\n"x;y";"di""z"').linhas, [['a', 'b'], ['x;y', 'di"z']]);
   const grande = F.lerCsv(Array.from({ length: 250 }, (_, i) => `${i},${i}`).join('\n'));
