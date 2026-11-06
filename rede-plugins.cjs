@@ -77,13 +77,15 @@ function conferirDestino(endereco, hostsConcedidos, prefixo, qualquerHost = fals
   return url;
 }
 
-function lerCorpo(resposta, limite) {
+// `cortar`: ao chegar no limite, fica com o que já leu (o começo) em vez de recusar a resposta.
+function lerCorpo(resposta, limite, cortar = false) {
   return new Promise((resolve, reject) => {
     const excedeu = () => { resposta.destroy(); reject(erroProprio(`A resposta passou do limite de tamanho (${limite} bytes).`)); };
-    if (Number(resposta.headers['content-length']) > limite) return excedeu();
+    if (!cortar && Number(resposta.headers['content-length']) > limite) return excedeu();
     const partes = [];
     let total = 0;
     resposta.on('data', parte => {
+      if (total + parte.length > limite && cortar) { partes.push(parte.subarray(0, limite - total)); resposta.destroy(); return resolve(Buffer.concat(partes)); }
       total += parte.length;
       if (total > limite) return excedeu();
       partes.push(parte);
@@ -93,7 +95,7 @@ function lerCorpo(resposta, limite) {
   });
 }
 
-async function executarPedido(pedido, { hostsConcedidos = [], cabecalhoDoSegredo, hostDoSegredo, lookup = dns.lookup, requisitar = https.request, limites, qualquerHost = false, binario = false, agente = 'Kiro-Plugins' } = {}) {
+async function executarPedido(pedido, { hostsConcedidos = [], cabecalhoDoSegredo, hostDoSegredo, lookup = dns.lookup, requisitar = https.request, limites, qualquerHost = false, binario = false, cortar = false, agente = 'Kiro-Plugins' } = {}) {
   const lim = { ...LIMITES, ...limites };
   const concedidos = hostsConcedidos.map(h => String(h).toLowerCase());
   const lookupSeguro = lookupProtegido(lookup);
@@ -130,7 +132,7 @@ async function executarPedido(pedido, { hostsConcedidos = [], cabecalhoDoSegredo
 
       const location = resposta.headers.location;
       if (!REDIRECIONAMENTOS.has(resposta.statusCode) || !location) {
-        const buffer = await lerCorpo(resposta, lim.resposta);
+        const buffer = await lerCorpo(resposta, lim.resposta, cortar);
         const devolvidos = {};
         for (const nome of CABECALHOS_DE_RESPOSTA) if (typeof resposta.headers[nome] === 'string') devolvidos[nome] = resposta.headers[nome];
         const corpo = binario ? { buffer } : { text: buffer.toString('utf8') };

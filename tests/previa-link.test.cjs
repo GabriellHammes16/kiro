@@ -134,3 +134,27 @@ test('rota /api/previa: só a própria página; falha de rede volta como null', 
     assert.equal((await fetch(`${base}/previa-link.js`)).status, 200);
   } finally { filho.kill(); await fs.rm(dir, { recursive: true, force: true }); }
 });
+
+test('buscarPrevia: página maior que o limite é cortada, e o título do começo vale', async () => {
+  const grande = Buffer.concat([Buffer.from('<meta property="og:title" content="Vídeo grande">'), Buffer.alloc(1.5 * 1024 * 1024, 0x61)]);
+  const t = transporte([{ status: 200, corpo: grande, headers: { 'content-type': 'text/html', 'content-length': String(grande.length) } }]);
+  assert.deepEqual(await buscarPrevia({ vault: vaultFalso(), url: 'https://site.com/', requisitar: t.requisitar, lookup }), { titulo: 'Vídeo grande', descricao: null, imagem: null });
+});
+
+test('buscarPrevia: content-type de imagem com corpo de PDF não é gravado', async () => {
+  const t = transporte([
+    { status: 200, text: pagina, headers: { 'content-type': 'text/html' } },
+    { status: 200, corpo: Buffer.from('%PDF-1.7\n'), headers: { 'content-type': 'image/png' } },
+  ]);
+  const vault = vaultFalso();
+  assert.deepEqual(await buscarPrevia({ vault, url: 'https://site.com/p', requisitar: t.requisitar, lookup }), { titulo: 'Olá', descricao: null, imagem: null });
+  assert.equal(vault.gravados.length, 0);
+});
+
+test('buscarPrevia: no YouTube só o título, sem baixar a imagem', async () => {
+  const t = transporte([{ status: 200, text: pagina, headers: { 'content-type': 'text/html' } }]);
+  const vault = vaultFalso();
+  assert.deepEqual(await buscarPrevia({ vault, url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ', requisitar: t.requisitar, lookup }), { titulo: 'Olá', descricao: null, imagem: null });
+  assert.equal(t.pedidos.length, 1);
+  assert.equal(vault.gravados.length, 0);
+});
