@@ -23,3 +23,15 @@ graphify-out/
 
 # Exportações avulsas do cofre
 kuroi-*.json
+
+# Ferramentas e anotações pessoais de quem desenvolve (ficam só no computador)
+AGENTS.md
+CLAUDE.md
+.graphifyignore
+.claude/
+.superpowers/
+docs/superpowers/
+docs/KIRO-resumo-para-IA.md
+docs/pesquisa-usuarios-simulada.md
+docs/plano-pedidos-usuarios.md
+docs/teste-10-perfis.md

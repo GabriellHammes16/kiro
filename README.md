@@ -127,6 +127,10 @@ npm start
 
 In the browser version, install a plug-in by copying its folder into `<vault>/.kiro/plugins/`, restarting Kiro and enabling it in Settings. On Linux, each start is logged in `~/.config/kiro/kiro.log`.
 
+### Themes, skins and plug-ins
+
+Colours and shapes always come from CSS variables, never fixed values, so new screens and plug-ins work in every theme. Before creating a theme or skin, read [docs/temas.md](docs/temas.md) and check with `node --test tests/temas.test.cjs`. For plug-ins, read [docs/plugins.md](docs/plugins.md), start from `examples/plugins/` and check with `node --test tests/plugins.test.cjs`.
+
 ### Code map
 
 - `vault.cjs`: reading Markdown, saving, snapshots, trash and attachments.
