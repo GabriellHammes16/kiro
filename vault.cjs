@@ -509,7 +509,7 @@ class Vault {
       if(!info.isFile()||info.size>ATTACHMENT_LIMIT)throw new Error(frase('Imagem inválida.'));
       const ler=async(start,length)=>{const b=Buffer.alloc(length);const {bytesRead}=await handle.read(b,0,length,start);return b.subarray(0,bytesRead);};
       // Texto (até 5 MB) e arquivo pequeno não ganham nada com o trecho: lidos inteiros, com a mesma conferência de readAttachment.
-      if(type.startsWith('text/')||info.size<=ATTACHMENT_HEAD)return {type,...attachmentRange(await ler(0,info.size),header)};
+      if(type.startsWith('text/')||info.size<=ATTACHMENT_HEAD){const data=await ler(0,info.size);checkAttachment(data,type,extension);return {type,...attachmentRange(data,header)};}
       checkAttachment(await ler(0,ATTACHMENT_HEAD),type,extension,true);
       const r=rangeOf(info.size,header);
       return {type,status:r.status,headers:r.headers,data:r.status===416?Buffer.alloc(0):await ler(r.start,r.end-r.start+1)};

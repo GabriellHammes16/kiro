@@ -189,3 +189,13 @@ test('WebM grande passa pela assinatura lendo só o começo', async t => {
   const parte = await vault.readAttachmentRange(caminho, 'bytes=100000-100009');
   assert.deepEqual([parte.status, parte.type, parte.data], [206, 'audio/webm', webm.subarray(100000, 100010)]);
 });
+
+test('com Range, texto e mídia pequena continuam conferidos pelo conteúdo', async t => {
+  const vault = await cofre(t);
+  const txt = (await vault.saveAttachment({ name: 'notas.txt', data: Buffer.from('olá') })).path;
+  const mp4 = (await vault.saveAttachment({ name: 'filme', data: Buffer.concat([Buffer.alloc(4), Buffer.from('ftypisom'), Buffer.alloc(8)]) })).path;
+  await fs.writeFile(path.join(vault.directory, txt), Buffer.from([0x61, 0x00, 0x62]));
+  await fs.writeFile(path.join(vault.directory, mp4), Buffer.from('nada'));
+  await assert.rejects(vault.readAttachmentRange(txt, 'bytes=0-1'), /inválido/);
+  await assert.rejects(vault.readAttachmentRange(mp4, 'bytes=0-1'), /inválido/);
+});
