@@ -8,7 +8,7 @@ const { lerPrevia } = require('./previa-link.js');
 const { imageSignature } = require('./vault.cjs');
 const { idDoYoutube } = require('./fluxo.js');
 
-// Página: só o começo, o mesmo que lerPrevia lê (a do YouTube passa de 1 MB, e o título vem no topo).
+// Página: só o começo, o mesmo que lerPrevia lê (as metas ficam no <head>).
 const PAGINA = { tempo: 8000, resposta: 512 * 1024 };
 const IMAGEM = { tempo: 8000, resposta: 5 * 1024 * 1024 };
 const EXTENSAO_DE_IMAGEM = /\.(png|jpe?g|gif|webp)$/i;
@@ -28,16 +28,29 @@ async function guardarImagem({ vault, endereco, requisitar, lookup }) {
   } catch { return null; }
 }
 
+const OEMBED = { tempo: 8000, resposta: 64 * 1024 };
+
+// YouTube: a página passa de 1 MB e o og:title fica longe do começo; o oEmbed dá o título num JSON pequeno.
+async function tituloDoYoutube({ url, requisitar, lookup }) {
+  const r = await executarPedido(
+    { url: `https://www.youtube.com/oembed?url=${encodeURIComponent(url)}&format=json`, method: 'GET', headers: { accept: 'application/json' }, body: null },
+    { qualquerHost: true, agente: 'Kiro', limites: OEMBED, requisitar, lookup });
+  if (r.status !== 200 || !/^application\/json\b/i.test(r.headers['content-type'] || '')) return null;
+  const { title } = JSON.parse(r.text) || {};
+  const titulo = typeof title === 'string' ? title.trim().slice(0, 200) : '';
+  return titulo ? { titulo, descricao: null, imagem: null } : null;
+}
+
 async function buscarPrevia({ vault, url, requisitar, lookup }) {
   try {
+    if (idDoYoutube(String(url))) return await tituloDoYoutube({ url: String(url), requisitar, lookup });
     const r = await executarPedido(
       { url: String(url), method: 'GET', headers: { accept: 'text/html' }, body: null },
       { qualquerHost: true, cortar: true, agente: 'Kiro', limites: PAGINA, requisitar, lookup });
     if (r.status !== 200 || !/^text\/html\b/i.test(r.headers['content-type'] || '')) return null;
     // ponytail: a base é o endereço pedido, não o do último redirecionamento; og:image relativa após troca de host erra.
     const previa = lerPrevia(r.text, String(url));
-    // YouTube: o cartão guarda só o título, a miniatura vem do próprio vídeo.
-    const imagem = previa.imagem && !idDoYoutube(String(url)) ? await guardarImagem({ vault, endereco: previa.imagem, requisitar, lookup }) : null;
+    const imagem = previa.imagem ? await guardarImagem({ vault, endereco: previa.imagem, requisitar, lookup }) : null;
     return previa.titulo || previa.descricao || imagem ? { ...previa, imagem } : null;
   } catch { return null; }
 }

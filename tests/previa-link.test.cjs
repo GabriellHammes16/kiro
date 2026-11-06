@@ -151,10 +151,26 @@ test('buscarPrevia: content-type de imagem com corpo de PDF não é gravado', as
   assert.equal(vault.gravados.length, 0);
 });
 
-test('buscarPrevia: no YouTube só o título, sem baixar a imagem', async () => {
-  const t = transporte([{ status: 200, text: pagina, headers: { 'content-type': 'text/html' } }]);
+test('buscarPrevia: no YouTube pede o oEmbed e lê o título do JSON', async () => {
+  const video = 'https://www.youtube.com/watch?v=dQw4w9WgXcQ';
+  const t = transporte([{ status: 200, text: JSON.stringify({ title: 'Never Gonna', thumbnail_url: 'https://i.ytimg.com/x.jpg' }), headers: { 'content-type': 'application/json' } }]);
   const vault = vaultFalso();
-  assert.deepEqual(await buscarPrevia({ vault, url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ', requisitar: t.requisitar, lookup }), { titulo: 'Olá', descricao: null, imagem: null });
+  assert.deepEqual(await buscarPrevia({ vault, url: video, requisitar: t.requisitar, lookup }), { titulo: 'Never Gonna', descricao: null, imagem: null });
   assert.equal(t.pedidos.length, 1);
+  assert.equal(t.pedidos[0].hostname, 'www.youtube.com');
+  assert.equal(t.pedidos[0].path, `/oembed?url=${encodeURIComponent(video)}&format=json`);
   assert.equal(vault.gravados.length, 0);
+});
+
+test('buscarPrevia: oEmbed do YouTube que falha ou não é JSON devolve null', async () => {
+  const video = 'https://youtu.be/dQw4w9WgXcQ';
+  for (const passo of [
+    { status: 404, text: 'Not Found', headers: { 'content-type': 'text/html' } },
+    { status: 200, text: 'não é json', headers: { 'content-type': 'application/json' } },
+    { status: 200, text: '{"title":"x"}', headers: { 'content-type': 'text/html' } },
+    { status: 200, text: '{"author_name":"y"}', headers: { 'content-type': 'application/json' } },
+  ]) {
+    const t = transporte([passo]);
+    assert.equal(await buscarPrevia({ vault: vaultFalso(), url: video, requisitar: t.requisitar, lookup }), null, passo.text);
+  }
 });
