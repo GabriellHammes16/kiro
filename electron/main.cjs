@@ -263,11 +263,14 @@ else app.whenReady().then(async () => {
   protocol.handle('kiro-anexo', async request => {
     try {
       const relativo = new URL(request.url).pathname.slice(1).split('/').map(decodeURIComponent).join('/');
-      const { data, type } = await vault.readAttachment(relativo);
+      // Com Range (o <video> pede trechos) só o trecho sai do disco; sem ele, o arquivo inteiro.
+      const range = request.headers.get('range');
+      let parte;
+      if (range) parte = await vault.readAttachmentRange(relativo, range);
+      else { const { data, type } = await vault.readAttachment(relativo); parte = { type, ...require('../vault.cjs').attachmentRange(data, null) }; }
       // CORS porque o PDF.js faz fetch do documento e a página é file:// (esquema cruzado);
       // o esquema serve só anexos do cofre, como o kiro-plugin já faz.
-      const parte = require('../vault.cjs').attachmentRange(data, request.headers.get('range'));
-      return new Response(parte.data, { status: parte.status, headers: { 'Content-Type': type, 'X-Content-Type-Options': 'nosniff', 'Access-Control-Allow-Origin': '*', ...parte.headers } });
+      return new Response(parte.data, { status: parte.status, headers: { 'Content-Type': parte.type, 'X-Content-Type-Options': 'nosniff', 'Access-Control-Allow-Origin': '*', ...parte.headers } });
     } catch { return new Response('Imagem não encontrada.', { status: 404 }); }
   });
   // kiro-plugin://kiro.app/plugin-worker.js (e o plugins.js que ele importa) é o worker do Kiro;

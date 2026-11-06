@@ -81,28 +81,45 @@ const PLUGIN_FILE_LIMIT = 2 * 1024 * 1024;
 const PLUGIN_DATA_LIMIT = 1024 * 1024;
 const IMAGE_TYPES = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp', avif: 'image/avif', bmp: 'image/bmp', pdf: 'application/pdf', wav:'audio/wav', mp3:'audio/mpeg', webm:'audio/webm', m4a:'audio/mp4', mp4:'video/mp4', txt:'text/plain; charset=utf-8', csv:'text/csv; charset=utf-8' };
 const TEXT_LIMIT = 5 * 1024 * 1024;
-function audioSignature(data){
+// `partial`: `data` é só o começo do arquivo; o elemento cortado no fim termina onde os bytes acabam.
+function audioSignature(data,partial=false){
   if(data.length>=12&&data.toString('ascii',0,4)==='RIFF'&&data.toString('ascii',8,12)==='WAVE')return 'wav';
   if(data.length>=4&&(data.toString('ascii',0,3)==='ID3'||(data[0]===0xff&&(data[1]&0xe0)===0xe0&&(data[1]&0x18)!==0x08&&(data[1]&0x06)!==0)))return 'mp3';
   if(data.length<12||data.readUInt32BE(0)!==0x1a45dfa3)return null;
-  const read=(start,end)=>{const out=[];let p=start;while(p<end){const first=data[p];if(!first)throw Error();let n=1,mask=0x80;while(n<=4&&!(first&mask)){n++;mask>>=1;}if(n>4||p+n>=end)throw Error();let id=0;for(let i=0;i<n;i++)id=id*256+data[p++];const f=data[p];if(!f)throw Error();let s=1,m=0x80;while(s<=8&&!(f&m)){s++;m>>=1;}if(s>8||p+s>end)throw Error();let size=f&(m-1);for(let i=1;i<s;i++)size=size*256+data[p+i];const unknown=size===2**(7*s)-1;p+=s;const stop=unknown?end:p+size;if(stop>end||!Number.isSafeInteger(stop))throw Error();out.push({id,start:p,end:stop});p=stop;}return out;};
+  const read=(start,end)=>{const out=[];let p=start;while(p<end){const first=data[p];if(!first)throw Error();let n=1,mask=0x80;while(n<=4&&!(first&mask)){n++;mask>>=1;}if(n>4)throw Error();if(p+n>=end){if(partial)break;throw Error();}let id=0;for(let i=0;i<n;i++)id=id*256+data[p++];const f=data[p];if(!f)throw Error();let s=1,m=0x80;while(s<=8&&!(f&m)){s++;m>>=1;}if(s>8)throw Error();if(p+s>end){if(partial)break;throw Error();}let size=f&(m-1);for(let i=1;i<s;i++)size=size*256+data[p+i];const unknown=size===2**(7*s)-1;p+=s;let stop=unknown?end:p+size;if(!Number.isSafeInteger(stop))throw Error();if(stop>end){if(!partial)throw Error();stop=end;}out.push({id,start:p,end:stop});p=stop;}return out;};
   try{const top=read(0,data.length),header=top.find(x=>x.id===0x1a45dfa3),segment=top.find(x=>x.id===0x18538067);if(!header||!segment||!read(header.start,header.end).some(x=>x.id===0x4282&&data.toString('ascii',x.start,x.end)==='webm'))return null;
     const tracks=read(segment.start,segment.end).find(x=>x.id===0x1654ae6b);if(!tracks)return null;
     const types=read(tracks.start,tracks.end).filter(x=>x.id===0xae).map(x=>read(x.start,x.end).find(y=>y.id===0x83)).map(x=>x&&x.end-x.start===1?data[x.start]:0);
     return types.length&&types.every(x=>x===2)?'webm':null;
   }catch{return null;}
 }
+// Trecho de um arquivo de `size` bytes pedido no cabeçalho Range: status, cabeçalhos e, fora o 416, o primeiro e o último byte.
+function rangeOf(size,header){
+  if(!header)return {start:0,end:size-1,status:200,headers:{'Accept-Ranges':'bytes','Content-Length':String(size)}};
+  const m=/^bytes=(\d*)-(\d*)$/.exec(header);if(!m||(!m[1]&&!m[2]))return {status:416,headers:{'Content-Range':`bytes */${size}`}};
+  const start=m[1]?Number(m[1]):Math.max(0,size-Number(m[2])),end=m[1]?(m[2]?Math.min(Number(m[2]),size-1):size-1):size-1;
+  if(!Number.isSafeInteger(start)||!Number.isSafeInteger(end)||start>end||start>=size)return {status:416,headers:{'Content-Range':`bytes */${size}`}};
+  return {start,end,status:206,headers:{'Accept-Ranges':'bytes','Content-Range':`bytes ${start}-${end}/${size}`,'Content-Length':String(end-start+1)}};
+}
 function attachmentRange(data,header){
-  if(!header)return {data,status:200,headers:{'Accept-Ranges':'bytes','Content-Length':String(data.length)}};
-  const m=/^bytes=(\d*)-(\d*)$/.exec(header);if(!m||(!m[1]&&!m[2]))return {data:Buffer.alloc(0),status:416,headers:{'Content-Range':`bytes */${data.length}`}};
-  const start=m[1]?Number(m[1]):Math.max(0,data.length-Number(m[2])),end=m[1]?(m[2]?Math.min(Number(m[2]),data.length-1):data.length-1):data.length-1;
-  if(!Number.isSafeInteger(start)||!Number.isSafeInteger(end)||start>end||start>=data.length)return {data:Buffer.alloc(0),status:416,headers:{'Content-Range':`bytes */${data.length}`}};
-  return {data:data.subarray(start,end+1),status:206,headers:{'Accept-Ranges':'bytes','Content-Range':`bytes ${start}-${end}/${data.length}`,'Content-Length':String(end-start+1)}};
+  const r=rangeOf(data.length,header);
+  return {data:r.status===416?Buffer.alloc(0):data.subarray(r.start,r.end+1),status:r.status,headers:r.headers};
+}
+// Primeiros bytes lidos para conferir a assinatura de áudio e vídeo num pedido de trecho.
+const ATTACHMENT_HEAD=64*1024;
+// Na leitura, áudio, vídeo e texto são conferidos de novo pelo conteúdo. `partial`: `data` é só o começo do arquivo.
+function checkAttachment(data,type,extension,partial=false){
+  if(/^(audio|video)\//.test(type)&&(audioSignature(data,partial)||mp4Signature(data))!==extension)throw new Error(frase('Áudio ou vídeo inválido.'));
+  if(type.startsWith('text/')&&textSignature(data,extension)!==extension)throw new Error(frase('Texto inválido.'));
 }
 // Caixa "ftyp" nos bytes 4 a 8; a marca nos bytes 8 a 12 separa áudio M4A de vídeo MP4.
+// HEIC e AVIF usam a mesma caixa: essas marcas não são vídeo, e caem na recusa.
+const FTYP_IMAGE_BRANDS=new Set(['avif','avis','heic','heix','mif1','msf1']);
 function mp4Signature(data){
   if(data.length<12||data.toString('latin1',4,8)!=='ftyp')return null;
-  return data.toString('latin1',8,12)==='M4A '?'m4a':'mp4';
+  const brand=data.toString('latin1',8,12);
+  if(FTYP_IMAGE_BRANDS.has(brand))return null;
+  return brand==='M4A '?'m4a':'mp4';
 }
 // Texto não tem assinatura: vale pela extensão (.md vira .txt), por UTF-8 válido e por não ter byte nulo.
 function textSignature(data,extension){
@@ -476,16 +493,33 @@ class Vault {
   }
   /** Lê uma imagem do cofre para exibir. Só extensões de imagem e nada oculto. */
   async readAttachment(relative){
-    const type=typeof relative==='string'&&relative.includes('.')&&!relative.split('/').some(part=>part.startsWith('.'))&&IMAGE_TYPES[relative.split('.').pop().toLowerCase()];
-    if(!type)throw new Error(frase('Imagem inválida.'));
-    const file=await this.safePath(relative);
+    const {file,type,extension}=await this.attachmentFile(relative);
     const info=await fs.stat(file);
     if(!info.isFile()||info.size>ATTACHMENT_LIMIT)throw new Error(frase('Imagem inválida.'));
     const data=await fs.readFile(file);
-    const extension=relative.split('.').pop().toLowerCase();
-    if(/^(audio|video)\//.test(type)&&(audioSignature(data)||mp4Signature(data))!==extension)throw new Error(frase('Áudio ou vídeo inválido.'));
-    if(type.startsWith('text/')&&textSignature(data,extension)!==extension)throw new Error(frase('Texto inválido.'));
+    checkAttachment(data,type,extension);
     return {data,type};
+  }
+  /** Pedido com Range (o <video> pede trechos): lê do disco só o trecho pedido, e a assinatura de áudio e vídeo pelo começo do arquivo. Devolve o mesmo que attachmentRange, mais o tipo. */
+  async readAttachmentRange(relative,header){
+    const {file,type,extension}=await this.attachmentFile(relative);
+    const handle=await fs.open(file,'r');
+    try{
+      const info=await handle.stat();
+      if(!info.isFile()||info.size>ATTACHMENT_LIMIT)throw new Error(frase('Imagem inválida.'));
+      const ler=async(start,length)=>{const b=Buffer.alloc(length);const {bytesRead}=await handle.read(b,0,length,start);return b.subarray(0,bytesRead);};
+      // Texto (até 5 MB) e arquivo pequeno não ganham nada com o trecho: lidos inteiros, com a mesma conferência de readAttachment.
+      if(type.startsWith('text/')||info.size<=ATTACHMENT_HEAD)return {type,...attachmentRange(await ler(0,info.size),header)};
+      checkAttachment(await ler(0,ATTACHMENT_HEAD),type,extension,true);
+      const r=rangeOf(info.size,header);
+      return {type,status:r.status,headers:r.headers,data:r.status===416?Buffer.alloc(0):await ler(r.start,r.end-r.start+1)};
+    }finally{await handle.close();}
+  }
+  // Extensão servida, nada oculto e caminho dentro do cofre: o que as duas leituras conferem antes de abrir o arquivo.
+  async attachmentFile(relative){
+    const type=typeof relative==='string'&&relative.includes('.')&&!relative.split('/').some(part=>part.startsWith('.'))&&IMAGE_TYPES[relative.split('.').pop().toLowerCase()];
+    if(!type)throw new Error(frase('Imagem inválida.'));
+    return {file:await this.safePath(relative),type,extension:relative.split('.').pop().toLowerCase()};
   }
   /** Plug-ins ficam em <cofre>/.kiro/plugins/<id>/. Só o que está nessa pasta é servido. */
   async pluginPath(id,arquivo=''){
@@ -726,4 +760,4 @@ class Vault {
     await fs.rm(await this.safePath('.trash'),{recursive:true,force:true});
   });}
 }
-module.exports={Vault,parseMarkdown,markdown,atomicWrite,rewritePaths,attachmentRange,HISTORY_LIMIT,ATTACHMENT_LIMIT};
+module.exports={Vault,parseMarkdown,markdown,atomicWrite,rewritePaths,attachmentRange,imageSignature,HISTORY_LIMIT,ATTACHMENT_LIMIT};

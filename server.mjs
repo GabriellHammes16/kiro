@@ -127,10 +127,13 @@ createServer(async (request, response) => {
     const rota = new URL(request.url, 'http://localhost').pathname;
     if (request.method === 'GET' && rota.startsWith('/anexo/')) {
       try {
-        const { data, type } = await vault.readAttachment(rota.slice('/anexo/'.length).split('/').map(decodeURIComponent).join('/'));
-        const cspAnexo = type === 'application/pdf' ? "default-src 'none'; object-src 'self'; style-src 'unsafe-inline'" : "default-src 'none'";
-        const parte=vaultModule.attachmentRange(data,request.headers.range);
-        response.writeHead(parte.status, { 'Content-Type': type, 'Cache-Control': 'no-cache', 'Content-Security-Policy': cspAnexo,...parte.headers });
+        // Com Range (o <video> pede trechos) só o trecho sai do disco; sem ele, o arquivo inteiro.
+        const relativo = rota.slice('/anexo/'.length).split('/').map(decodeURIComponent).join('/'), range = request.headers.range;
+        let parte;
+        if (range) parte = await vault.readAttachmentRange(relativo, range);
+        else { const { data, type } = await vault.readAttachment(relativo); parte = { type, ...vaultModule.attachmentRange(data, null) }; }
+        const cspAnexo = parte.type === 'application/pdf' ? "default-src 'none'; object-src 'self'; style-src 'unsafe-inline'" : "default-src 'none'";
+        response.writeHead(parte.status, { 'Content-Type': parte.type, 'Cache-Control': 'no-cache', 'Content-Security-Policy': cspAnexo,...parte.headers });
         return response.end(parte.data);
       } catch { return send(response, 404, { error: frase('Imagem não encontrada.') }); }
     }

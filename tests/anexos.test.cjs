@@ -110,6 +110,9 @@ test('servidor recebe imagem colada e só devolve imagens de dentro do cofre', a
   assert.equal(imagem.status, 200);
   assert.equal(imagem.headers.get('content-type'), 'image/png');
   assert.deepEqual(Buffer.from(await imagem.arrayBuffer()), PNG);
+  const trecho = await fetch(base + '/anexo/' + caminho.split('/').map(encodeURIComponent).join('/'), { headers: { Range: 'bytes=0-9' } });
+  assert.deepEqual([trecho.status, trecho.headers.get('content-type'), trecho.headers.get('content-range')], [206, 'image/png', `bytes 0-9/${PNG.length}`]);
+  assert.deepEqual(Buffer.from(await trecho.arrayBuffer()), PNG.subarray(0, 10));
   for (const ruim of ['/anexo/..%2Fcaderno.json', '/anexo/caderno.json', '/anexo/%2E%2E/x.png', '/anexo/.history/x.png'])
     assert.equal((await fetch(base + ruim)).status, 404, ruim);
 });
@@ -142,4 +145,47 @@ test('texto, tabela, M4A e MP4 são conferidos pelo conteúdo', async t => {
   await assert.rejects(vault.readAttachment(mp4));
   await fs.writeFile(path.join(vault.directory, txt), Buffer.from([0x00, 0x01]));
   await assert.rejects(vault.readAttachment(txt));
+});
+
+test('HEIC e AVIF não viram .mp4: são recusados', async t => {
+  const vault = await cofre(t);
+  const caixa = marca => Buffer.concat([Buffer.alloc(4), Buffer.from('ftyp' + marca), Buffer.alloc(8)]);
+  for (const marca of ['avif', 'heic', 'avis', 'heix', 'mif1', 'msf1'])
+    await assert.rejects(vault.saveAttachment({ name: `foto.${marca}`, data: caixa(marca) }), /não é uma imagem/, marca);
+});
+
+test('pedido com Range num arquivo grande lê só o trecho, com os cabeçalhos de sempre', async t => {
+  const vault = await cofre(t);
+  const grande = Buffer.concat([Buffer.alloc(4), Buffer.from('ftypisom'), Buffer.alloc(8), Buffer.alloc(3 * 1024 * 1024, 7)]);
+  const mp4 = (await vault.saveAttachment({ name: 'filme', data: grande })).path;
+  const lerArquivo = fs.readFile;
+  t.after(() => { require('node:fs/promises').readFile = lerArquivo; });
+  require('node:fs/promises').readFile = () => { throw new Error('leu o arquivo inteiro'); };
+  const parte = await vault.readAttachmentRange(mp4, 'bytes=0-99');
+  assert.equal(parte.status, 206);
+  assert.equal(parte.type, 'video/mp4');
+  assert.deepEqual(parte.data, grande.subarray(0, 100));
+  assert.deepEqual(parte.headers, { 'Accept-Ranges': 'bytes', 'Content-Range': `bytes 0-99/${grande.length}`, 'Content-Length': '100' });
+  const fim = await vault.readAttachmentRange(mp4, 'bytes=-10');
+  assert.deepEqual(fim.data, grande.subarray(-10));
+  assert.equal((await vault.readAttachmentRange(mp4, `bytes=${grande.length}-`)).status, 416);
+  // A assinatura continua conferida, agora pelo começo do arquivo.
+  await fs.writeFile(path.join(vault.directory, mp4), Buffer.concat([Buffer.from('nada'), Buffer.alloc(100 * 1024)]));
+  await assert.rejects(vault.readAttachmentRange(mp4, 'bytes=0-99'), /inválido/);
+});
+
+test('WebM grande passa pela assinatura lendo só o começo', async t => {
+  const vault = await cofre(t);
+  const tamanho = n => { const b = Buffer.alloc(8); b[0] = 1; b.writeUIntBE(n, 2, 6); return b; };
+  const el = (id, ...partes) => { const dados = Buffer.concat(partes); return Buffer.concat([Buffer.from(id, 'hex'), tamanho(dados.length), dados]); };
+  const webm = Buffer.concat([
+    el('1a45dfa3', el('4282', Buffer.from('webm'))),
+    Buffer.from('18538067', 'hex'), Buffer.from('01ffffffffffffff', 'hex'),   // Segment de tamanho desconhecido
+    el('1654ae6b', el('ae', el('83', Buffer.from([2])))),
+    el('1f43b675', Buffer.alloc(200 * 1024, 1)),
+  ]);
+  const caminho = (await vault.saveAttachment({ name: 'voz.webm', data: webm })).path;
+  assert.match(caminho, /\.webm$/);
+  const parte = await vault.readAttachmentRange(caminho, 'bytes=100000-100009');
+  assert.deepEqual([parte.status, parte.type, parte.data], [206, 'audio/webm', webm.subarray(100000, 100010)]);
 });
