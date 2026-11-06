@@ -1,194 +1,143 @@
-# Kiro — segundo cérebro local
+# Kiro — your second brain, on your own computer
 
-Notas em Markdown, conexões entre ideias, estudos, tarefas e rotina. Funciona offline e mantém os dados em uma pasta escolhida por você.
+Kiro is a free note-taking app for Windows and Linux. Write notes in Markdown, link ideas together, plan tasks and habits, and draw idea maps. It works offline, and everything stays in a folder you choose.
 
-## Abrir
+## Download
 
-- Desktop: `npm run desktop`.
-- Navegador: `npm start`, depois abra http://localhost:4173.
-- Testes: `npm test`.
-- Instalador Windows: `npm run build:win`.
-- Linux (`.AppImage` e `.deb`): `npm run build:linux`, rodado dentro de um Linux. No Windows, pelo WSL: copie o projeto para dentro do Ubuntu (sem `node_modules`), rode `npm ci` e depois `npm run build:linux`. No Linux, o registro de cada abertura fica em `~/.config/kiro/kiro.log`.
+Get the latest version from [Releases](https://github.com/GabriellHammes16/kiro/releases):
 
-## Desenvolver pela versão web
+- **Windows:** `Kiro-Setup-X.Y.Z.exe`
+- **Linux:** `Kiro-X.Y.Z.deb` (Ubuntu, Debian) or `Kiro-X.Y.Z.AppImage` (any distribution)
 
-O navegador e o desktop rodam o mesmo `index.html`, `app.js` e `styles.css`. Por isso a interface pode ser ajustada no navegador e só compilada quando estiver pronta.
+Windows releases are not signed yet (see [Code signing policy](#code-signing-policy)), so Windows may show a warning or, with Smart App Control on, block the installer.
 
-1. `npm run dev` e abra http://localhost:4180.
-2. Edite. `styles.css` troca na hora, sem recarregar a página; `app.js`, `index.html` e `domain.js` recarregam a página, salvando antes a nota que estiver aberta. Mudanças em `server.mjs`, `vault.cjs` ou `agent/` reiniciam o servidor, e a página recarrega sozinha.
-3. `npm test`.
-4. `npm run desktop:dev` para conferir na janela do Electron, com o mesmo cofre de exemplo.
-5. `npm run build:win` gera o instalador.
+## What you can do
 
-O modo de desenvolvimento usa `dev-vault/`, um cofre de exemplo com pastas aninhadas, links que existem e que não existem, blocos de código, destaques e tarefas. Ele nunca abre o cofre pessoal. `npm run dev:reset` apaga e recria esse cofre. Para testar com outra pasta, defina `KIRO_VAULT`; nesse caso nada de exemplo é criado nela.
+### Write and connect
 
-A recarga ao vivo só existe com `--dev`: o `npm start` não a oferece, e `dev/` e `dev-vault/` ficam fora do instalador.
+- Write in Markdown. Link notes with `[[Note name]]`, or `[[Note name|other text]]` to show a different label.
+- See which notes point to the one you are reading (backlinks), and explore everything in the **Graph**.
+- Add tags in the tags field or with `#study` in the text. Search finds titles, text and tags; `#tag` filters by tag.
+- Notes save by themselves 3 seconds after you stop typing, and when you leave the window. A note without a title gets its first line as the title.
+- **Quick capture** on the Today page creates a note tagged `inbox`.
+- **Daily note** opens (or creates) the note for today's date.
+- **Templates:** ready-made ones (meeting notes, lesson plan, session log, legal brief outline, script, building site diary, study and daily) and your own. To make your own, open **Quick actions → Create personal template** and save it with the `modelo` tag. In a template, `{{date}}` becomes today's date (`YYYY-MM-DD`) and `{{title}}` the note title.
+- **Focus mode** hides the navigation and shows a word goal.
+- **History:** open a saved note's history, preview an older version and restore it. The current version is kept too.
+- **Print or export to PDF** with the buttons in the editor. Only the note is printed, on a white background.
 
-O que só existe no desktop: **Escolher outro cofre** e abrir a pasta do cofre no Explorador de Arquivos.
+### Plan your time
 
-No desktop, o cofre padrão fica em `Documentos/Kiro/vault`. **Escolher outro cofre** abre uma pasta existente ou vazia e lembra a escolha. Essa ação troca o cofre aberto; não transfere os arquivos do anterior. Para transferir, copie a pasta inteira com o aplicativo fechado.
+- Tasks can repeat every day, week, month or every few days. Finishing one creates the next.
+- Reminders can notify you (turn them on in Settings; Kiro must be open).
+- **Month** view in Tasks: pick a day to see its tasks or add one.
+- Habits and a Today page with cards you can rearrange.
 
-No navegador, o padrão é `vault/` neste projeto. Para abrir outra pasta no PowerShell:
+### Images, PDFs and equations
+
+- Paste a screenshot with **Ctrl+V** or drag an image into a note. It is saved in your vault, in `Anexos/`, as `![[Anexos/name.png]]` — the same format as Obsidian. Drag the corner dot to resize it.
+- PNG, JPEG, GIF, WebP and PDF up to 250 MB. SVG is not accepted, because it can carry code.
+- A PDF in a note, `![[Anexos/book.pdf]]`, shows its pages right inside the note. `#page=12` opens at page 12, and `|700` sets the height. The PDF is drawn by [PDF.js](https://mozilla.github.io/pdf.js/), bundled with Kiro, so nothing is downloaded.
+- Equations: `$x^2$` inside a line, or a block between two `$$` lines, drawn by the bundled [KaTeX](https://katex.org). `R$ 5` stays as money: only text right next to the `$` becomes a formula.
+
+### Flow: idea maps
+
+A canvas for mind maps and idea boards. Each flow is a `.canvas` file in the open [JSON Canvas](https://jsoncanvas.org) format, so it also opens in Obsidian. Create one by right-clicking a folder (**New flow here**) or with the flow button above the folder tree.
+
+- **Cards:** Markdown text (with code and formulas), notes from your vault, images, PDFs, text files, tables (`.csv`), audio, video, links and groups.
+- Every file card has 3 states: just the title, open inside the card, or full screen with **Open**.
+- **Keyboard:** double-click the background to add a card; **Ctrl+Enter** adds the next card and **Ctrl+Shift+Enter** a linked one (you can change these in Settings → Shortcuts); **Ctrl+C / X / V / D / A** copy, cut, paste, duplicate and select all; arrow keys move cards; **Delete** removes; **Ctrl+Z / Ctrl+Y** undo and redo.
+- **Mouse:** drag from a card's dot to link it (drop on empty space for a new linked card); **Ctrl+wheel** zooms; **Space+drag** moves the view; **Shift+1** fits everything.
+- Cards grow with their text until you resize them by hand, and guide lines help you line them up.
+- Paste text, a link or a file to add it. Drag a note from the tree into the flow.
+- Link previews and YouTube videos playing in the card are **off by default**: turn them on in Settings → System → Internet in Flow.
+
+### Look and feel
+
+- Many themes, from classic light and dark to Liquid Glass and colourful anime-inspired ones, and skins that change shapes and corners.
+- Your own wallpaper, image or video.
+- Interface text from 100% to 150%; the graph also has a text list of its links.
+
+### Plug-ins
+
+Four plug-ins come with the desktop app, in **Settings → Plug-ins**. None is turned on until you check its permissions and enable it.
+
+| Plug-in | What it does |
+|---|---|
+| Focus / Pomodoro | Pick a task or free focus, run 25-minute cycles with 5-minute breaks (adjustable), and see reports by folder and tag. |
+| Flashcards | Write `Question :: Answer` in your notes and review them one at a time. |
+| Weekly review | See recent notes and open tasks, write your thoughts and save them as a new note. |
+| Slides | Turn a note's headings and separators into slides. Arrow keys or Space move; Esc goes back. |
+
+Plug-ins work offline and follow the app's theme. To write your own, see [docs/plugins.md](docs/plugins.md).
+
+### AI assistants (optional)
+
+Kiro has a controlled way for AI assistants to read and write your vault, through an MCP server (`npm run mcp`, over stdio, with no network port). An AI can create and edit notes, tasks and flows — for example, "turn note X into a mind map", including files and attachments. You decide what it may do in **Settings → AI and integrations** (deleting is off by default), and every change is logged in `.kiro/audit.log` inside your vault. Kiro works the same without any AI connected. Details: [docs/agent-api.md](docs/agent-api.md) and [docs/mcp.md](docs/mcp.md).
+
+## Your vault is the source of truth
+
+Your notes are plain `.md` files in a folder you own, so you can open them in any editor, back them up or sync them however you like.
+
+- The default vault on the desktop is `Documents/Kiro/vault`. **Choose another vault** opens another folder (empty or existing) and remembers it. It does not move your files: to move them, copy the whole folder while Kiro is closed.
+- Every `.md` file in the folder and its subfolders is loaded. Hidden folders and symbolic links are ignored. Notes created by Kiro go to `Notas/`, with YAML metadata and a permanent ID.
+- `caderno.json` keeps only tasks, habits and study folders, never copies of your notes. Your own YAML fields are kept when you edit a note.
+- Files changed in another editor show up when you come back to Kiro, or within 5 seconds. If a note changes outside Kiro while you edit it, Kiro does not overwrite the other version: export your data before reloading the vault.
+- Internal links are found by title or file path, ignoring case and accents. If two notes share a title, the first one wins, so prefer distinct titles.
+
+### Safety: history, trash and recovery
+
+- Before each save that changes files, Kiro copies the previous vault into `.history/`. It keeps the 30 most recent saves.
+- Changes made by AI assistants keep their own copies, and Kiro saves any human-written text before an AI changes it.
+- **Move to trash** sends a note to `.trash/`, and **Trash → Restore** brings it back with the same ID. The trash is never emptied automatically.
+- Every file is written atomically. If a save is interrupted, Kiro will not open the vault with half-written data. With Kiro closed, keep a copy of the folder and restore the snapshot named in `.transaction.json` into an empty folder. If `.kiro.lock` is left behind, delete it only after checking nothing else is using the vault.
+- Attachments in `Anexos/` are not copied to the history or the trash: deleting a file from that folder cannot be undone.
+- None of this replaces a copy on another disk. The exported JSON backup has your active notes and data, but not the history and trash, so copy the whole folder to keep everything.
+
+## Fonts
+
+Kiro bundles its own fonts, so it looks the same on every computer, online or not: **IBM Plex Sans** for the interface, **Literata** for reading notes and **IBM Plex Mono** for code. All three are under the SIL Open Font License, in `fonts/`.
+
+## For developers
+
+```bash
+npm ci              # install
+npm run desktop     # desktop app
+npm start           # browser version at http://localhost:4173
+npm test            # tests
+npm run test:vivo   # Flow tests in the real app (opens a window)
+npm run build:win   # Windows installer
+npm run build:linux # .AppImage and .deb (run inside Linux or WSL)
+```
+
+### Working in the browser
+
+The browser and the desktop app run the same `index.html`, `app.js` and `styles.css`, so you can work on the interface in the browser and build only when it is ready.
+
+1. Run `npm run dev` and open http://localhost:4180.
+2. Edit. `styles.css` updates without reloading; `app.js`, `index.html` and `domain.js` reload the page (saving the open note first); changes to `server.mjs`, `vault.cjs` or `agent/` restart the server.
+3. Run `npm test`, then `npm run desktop:dev` to check in the Electron window with the same sample vault.
+
+Development mode uses `dev-vault/`, a sample vault that never touches your personal one. `npm run dev:reset` recreates it. To use another folder, set `KIRO_VAULT`. The local server only accepts connections from your own computer.
 
 ```powershell
-$env:KIRO_VAULT = 'C:\MeuCofre'
+$env:KIRO_VAULT = 'C:\MyVault'
 npm start
 ```
 
-O servidor aceita conexões somente deste computador. O botão **Abrir pasta do cofre** mostra o caminho no navegador; no desktop, abre o Explorador de Arquivos.
+In the browser version, install a plug-in by copying its folder into `<vault>/.kiro/plugins/`, restarting Kiro and enabling it in Settings. On Linux, each start is logged in `~/.config/kiro/kiro.log`.
 
-## Escrever e conectar
+### Code map
 
-- **Imprimir / exportar PDF:** use os botões no editor. A saída contém apenas a nota, com fundo branco, incluindo o rascunho atual sem salvar o cofre. No navegador, escolha salvar como PDF no diálogo de impressão. PDFs anexados aparecem como referências; blocos de plug-ins saem como código.
-- **Modelos por área:** o catálogo inclui ata de reunião, plano de aula, registro de sessão, estrutura de peça jurídica, roteiro e diário de obra, além de estudo, reunião e diária. Os modelos pessoais continuam sendo notas com a tag `modelo`.
-- **Recorrência e lembretes:** tarefas podem repetir por dia, semana, mês ou intervalo de dias. Concluir cria uma próxima ocorrência; reabrir e reconcluir a anterior não duplica a seguinte. Ative os lembretes nas configurações; eles precisam de permissão para notificar e do Kiro aberto. A recorrência mensal parte do prazo anterior, ajustando ao último dia do mês quando necessário.
-- **Calendário mensal:** em Tarefas, escolha **Mês**. Selecione um dia para ver suas tarefas ou criar uma com esse prazo. Setas, Home/End e PageUp/PageDown navegam pela grade; Hoje volta à data atual. A grade mostra ocorrências já existentes.
-- **Acessibilidade:** em Configurações, ajuste o texto da interface entre 100% e 150%; o corpo das notas mantém seu tamanho. O grafo tem uma lista de ligações em texto acompanhando os filtros. Tarefas e hábitos anunciam as mudanças depois de salvar, e os painéis do Glass mantêm proteção de contraste sobre fundos claros.
-- **Primeiros passos:** reabra o roteiro e o glossário em Configurações ou Ações rápidas.
-- **Escrita em foco:** no editor, ative Modo foco para esconder a navegação e mostrar uma meta de palavras. O botão de saída permanece disponível; o texto não é reescrito ao alternar.
-- **Pastas na Hoje:** nas opções da Hoje, oculte uma pasta e suas subpastas dos cartões nativos, incluindo tarefas ligadas às notas. A preferência fica no cofre. Os arquivos continuam disponíveis e os plugins têm visões próprias.
-- **Histórico:** na nota salva, abra Histórico, selecione uma versão e confira a prévia antes de Restaurar conteúdo. O título e a pasta atuais são mantidos; a gravação preserva também uma cópia do conteúdo substituído. A disponibilidade depende dos snapshots ainda existentes em `.history`.
-
-- **Captura rápida**, na página Hoje, cria uma nota com a tag `inbox`.
-- **Nota diária** abre ou prepara uma nota com a data local, sem duplicar uma nota com o mesmo título.
-- **Modelos** predefinidos e pessoais ficam disponíveis no seletor do editor e em **Ações rápidas** (`Ctrl+K`).
-- Para criar um modelo pessoal, abra **Ações rápidas → Criar modelo pessoal** e salve o rascunho com a tag de controle `modelo` no campo de tags. Hashtag `#modelo` no corpo não identifica um modelo.
-- Para criar uma nota, abra **Ações rápidas → Criar nota por modelo**, escolha um modelo e informe o título. `{{date}}` vira a data local (`AAAA-MM-DD`) e `{{title}}` o título escolhido; tokens desconhecidos ficam literais.
-- Ao criar uma nota por modelo, tags e links são copiados; a tag de controle `modelo` é removida. Metadados personalizados, ID, arquivo e datas não são copiados. Anexos não são copiados e caminhos relativos não são ajustados; o modelo original permanece intacto.
-- Aplicar um modelo pelo seletor do editor substitui o corpo. Em uma nota preenchida, pede confirmação e pode ser desfeito com **Ctrl+Z**.
-- Use `[[Nome da nota]]` para ligar ideias. A seção **Links nesta nota** abre a nota ou permite criar o destino.
-- `[[Nome da nota|Texto do link]]` permite um rótulo diferente.
-- **Notas que apontam para cá** mostra os backlinks.
-- Informe tags no campo de tags ou escreva `#estudos` no corpo.
-- A busca encontra títulos, conteúdo e tags. Use `#tag` para filtrar por tags.
-- Tarefas podem ser associadas a uma nota. A rotina considera o dia no fuso local.
-- A nota se salva sozinha 3 segundos depois de uma pausa e ao sair da janela. Sem título, ela recebe a primeira linha do texto ao sair.
-- Atalhos: **Ctrl+N** para criar uma nota, **Ctrl+S** para salvar na hora, **Ctrl+1** a **Ctrl+5** para trocar de tela e **Esc** para fechar. A lista completa está em **Configurações → Atalhos**.
-- **Ações rápidas** abre com **Ctrl+K**, remapeável em **Configurações → Atalhos**, e também pelo botão na interface. Use as setas, **Enter** e **Esc** para navegar. A lista reúne comandos nativos e comandos de plugins ativos; eles também continuam em Configurações.
-- Se o cofre falhar ao criar uma nota por modelo, o formulário preserva os campos e orienta preservar/exportar e recuperar o cofre antes de tentar de novo. A falha mantém o bloqueio ativo.
-
-Links internos são resolvidos pelo título ou caminho do arquivo, sem diferenciar maiúsculas e acentos. Títulos duplicados resolvem para a primeira correspondência; prefira títulos distintos ou caminhos. Ao renomear um título, atualize os links que usam esse título.
-
-## O cofre é a fonte dos dados
-
-Todos os arquivos `.md` da pasta e de suas subpastas são carregados. Pastas ocultas e links simbólicos são ignorados. Notas criadas pelo aplicativo ficam em `Notas/`, com metadados YAML, um identificador persistente e o corpo Markdown.
-
-`caderno.json` guarda somente tarefas, rotina e pastas de estudo. Não guarda cópias do corpo das notas. Metadados YAML personalizados são preservados ao editar uma nota; sua formatação pode ser normalizada.
-
-Arquivos criados, editados ou removidos em outro editor aparecem ao voltar para o aplicativo ou na verificação a cada cinco segundos. Essa atualização fica suspensa enquanto um formulário está aberto, há um salvamento em andamento ou uma falha pendente. Arquivos externos sem identificador recebem um ID baseado no caminho até serem editados pelo Kiro.
-
-Se o cofre mudar enquanto você edita, o salvamento é recusado, preservando a versão externa. Sua versão permanece na janela: **Exporte os dados** antes de **Recarregar cofre**. Texto ainda não submetido no formulário deve ser copiado separadamente.
-
-Pastas de estudo são a organização do Kiro. Arquivos externos são encontrados em qualquer subpasta, mas sua hierarquia não cria automaticamente pastas de estudo na interface.
-
-## Migração, lixeira e recuperação
-
-O cofre antigo é reconhecido automaticamente. O Markdown existente prevalece sobre o corpo antigo no JSON; notas que só existem no JSON são migradas no próximo salvamento. Os IDs existentes são preservados, mantendo as associações das tarefas.
-
-Antes de cada salvamento que altera arquivos, uma cópia do cofre anterior é criada em `.history/<data-id>/`. No primeiro salvamento, essa cópia inclui o JSON legado. Os testes usam cofres temporários, sem editar o cofre pessoal.
-
-Escritas de agentes de IA copiam só o que mudaram, em fila própria (`<data-id>-parcial`), e não expulsam as cópias completas. Antes de um agente alterar um texto que não foi escrito por agente, o Kiro guarda essa versão em `<data-id>-preservada`, fora das filas: ela aparece no histórico da nota, com até 3 cópias por nota.
-
-**Mover para lixeira** remove a nota da pasta ativa e a guarda em `.trash/`. **Lixeira → Restaurar** recupera seu conteúdo e ID. Movimentar uma nota ou renomear sua pasta remove o arquivo antigo da área ativa, mantendo a cópia de recuperação.
-
-Cada arquivo é gravado por substituição atômica. Um registro `.transaction.json` identifica salvamentos interrompidos entre arquivos: nesse caso o aplicativo bloqueia a abertura para não aceitar dados parciais. Com o aplicativo fechado, preserve uma cópia da pasta e restaure o snapshot indicado em `backup` nesse registro em uma pasta vazia; abra essa pasta como outro cofre. Uma interrupção abrupta também pode deixar `.kiro.lock`; só remova esse arquivo depois de confirmar que nenhum processo está usando o cofre.
-
-O histórico guarda os 30 salvamentos mais recentes; os mais antigos são apagados ao final de cada gravação. A lixeira não é apagada automaticamente. Nenhum dos dois substitui uma cópia em outro disco. O backup JSON exportado inclui as notas ativas e os dados auxiliares, mas não o histórico e a lixeira; copie a pasta inteira para preservar tudo.
-
-Importações são validadas antes de alterar o estado. Elas substituem os dados ativos; notas removidas vão para a lixeira e o cofre anterior fica no histórico. A API do navegador aceita até 20 MB por salvamento.
-
-## Imagens
-
-Cole um print com **Ctrl+V** ou arraste uma imagem para dentro da nota. A imagem é gravada no cofre, na pasta `Anexos/`, e a nota recebe `![[Anexos/nome.png]]`, o mesmo formato do Obsidian. Passe o mouse sobre a imagem e arraste a bolinha do canto para mudar o tamanho; a largura fica no texto, como `![[Anexos/nome.png|320]]`.
-
-Aceita PNG, JPEG, GIF, WebP e PDF de até 250 MB. SVG não é aceito, porque pode carregar código.
-
-Um PDF na nota, `![[Anexos/livro.pdf]]`, aparece como as páginas do próprio PDF dentro dela: o Kiro desenha cada página com o [PDF.js](https://mozilla.github.io/pdf.js/) e elas rolam na moldura, pedidas só quando chegam perto da vista — o visor nativo do sistema não é usado e os bytes do PDF nunca chegam à página. `![[Anexos/livro.pdf#page=12]]` abre já na página 12; `![[Anexos/livro.pdf|700]]` dá a altura da moldura em pixels. O botão **Abrir** no topo abre o arquivo no leitor do sistema. Como o KaTeX, o PDF.js é embarcado em `vendor/pdfjs/` (Apache-2.0, licença em `vendor/pdfjs/LICENSE.txt`); nada é buscado na internet.
-
-`Anexos/` tem um arquivo `.kiro-anexos` que a identifica. Com ele, a pasta não aparece na árvore, colar uma imagem não entra em conflito com a nota aberta e as imagens não são copiadas para `.history` a cada salvamento. Em troca, o histórico e a lixeira não guardam imagens: apagar o `![[...]]` da nota não apaga o arquivo, e uma imagem apagada da pasta não volta. Se o cofre já tiver uma pasta `Anexos` sua, as imagens vão para `Anexos do Kiro`.
-
-## Equações
-
-`$x^2$` desenha a fórmula na linha; `$$` numa linha sozinha abre um bloco de equação, fechado por outro `$$`. É a mesma notação do Obsidian, e os dois estão no menu do botão direito, em **Formatar** e **Inserir**.
-
-Quem desenha é o [KaTeX](https://katex.org), embarcado em `vendor/katex/` (cerca de 600 KB, licença MIT, em `vendor/katex/LICENSE.txt`). Nada é buscado na internet. Uma fórmula com erro aparece em laranja, com o texto original visível — nunca some da nota.
-
-Texto colado aos cifrões é o que vira fórmula, então `R$ 5 e R$ 10` continua sendo dinheiro.
-
-## Fluxo
-
-Canvas de ideias para mapas mentais: cartões de texto em Markdown (com código e fórmulas),
-setas com rótulo e cor, pan, zoom e desfazer. Cada fluxo é um arquivo `.canvas` no formato
-aberto [JSON Canvas](https://jsoncanvas.org), compatível com o Obsidian. Crie um pelo botão
-direito numa pasta ("Novo fluxo aqui") ou pelo botão de fluxo no topo da árvore.
-
-Atalhos dentro do fluxo: dois cliques no fundo criam um cartão; arraste de uma alça para ligar
-(soltar no vazio cria um cartão já ligado); Ctrl+roda dá zoom; espaço+arrastar move a vista;
-Shift+1 enquadra tudo; Delete apaga; Ctrl+Z/Ctrl+Y desfazem e refazem.
-
-Cartões podem ser notas do cofre (com prévia; dois cliques abrem a nota ao lado), imagens,
-links e grupos. Arraste uma nota da árvore para dentro do fluxo, ou cole: texto vira cartão,
-um endereço vira link e uma imagem vai para os anexos. Um cartão de texto pode virar nota
-("Transformar em nota"), e quando uma nota muda de pasta o cartão acompanha. Excluir um fluxo
-manda o arquivo para a lixeira, de onde ele pode ser restaurado. No painel da direita de uma
-nota, "Aparece nos fluxos" lista os fluxos que a citam.
-
-Uma IA conectada pelo MCP também cria e edita fluxos (`kiro_create_fluxo`, `kiro_update_fluxo`):
-peça "transforma a nota X num mapa mental" e ela manda os cartões e as ligações; o Kiro organiza
-tudo numa árvore da esquerda para a direita e, nas edições, encaixa os cartões novos sem mexer
-nos que já estavam.
-
-## Fontes
-
-O aplicativo embarca as próprias fontes, em `fonts/`, e nunca busca fonte na internet: a aparência é a mesma em qualquer máquina, com ou sem rede.
-
-- **IBM Plex Sans** na interface — feita para telas e tamanhos pequenos.
-- **Literata** no texto das notas — desenhada para leitura longa em tela.
-- **IBM Plex Mono** nos blocos de código.
-
-São arquivos `woff2` só com os caracteres latinos, cerca de 450 KB no total. As três estão sob a SIL Open Font License, que permite redistribuí-las junto do aplicativo; as licenças ficam em `fonts/LICENSE-ibm-plex.txt` e `fonts/LICENSE-literata.txt`.
-
-## Plugins de produtividade
-
-Três plugins locais estão disponíveis em `examples/plugins/`:
-
-| Plugin | Uso |
-|---|---|
-| `focus-pomodoro` — Foco / Pomodoro | Escolha uma tarefa ou foco livre, inicie um ciclo e acompanhe suas sessões. Relatório por pasta e tag em hoje, 7 e 30 dias. Foco de 25 minutos e pausa de 5 minutos, ajustáveis nas configurações do plugin. |
-| `flashcards` — Flashcards | Escreva `Pergunta :: Resposta` nas notas e revise uma pergunta por vez, revelando a resposta antes de avaliar. |
-| `weekly-review` — Revisão semanal | Veja notas recentes e tarefas pendentes, escreva suas reflexões e salve uma nova nota de revisão. |
-| `slides` — Apresentação | Transforme títulos e separadores da nota em slides. Navegue com setas ou espaço; Esc retorna à lista. |
-
-No desktop, a partir da versão **0.23.0**, os três plugins vêm no instalador e ficam disponíveis em **Configurações → Plug-ins** no cofre escolhido. Pastas de plugins existentes são preservadas; nenhum plugin é ativado automaticamente. Confira as permissões e ative os que quiser. Cada um ganha uma página na barra lateral e um cartão que pode ser adicionado ao **Hoje**. A revisão semanal também tem um comando em **Ações rápidas**.
-
-Nesta retomada, Apresentação também foi incluída nos recursos para os próximos builds. Ela tem uma página própria e pede somente leitura de notas. O relatório do Foco usa as últimas 200 sessões e a classificação atual das notas ligadas às tarefas; sessões antigas não guardam suas pastas/tags históricas. Tags podem se sobrepor, por isso a soma delas pode superar o total. Plugins existentes não são substituídos automaticamente: para atualizá-los manualmente, feche o Kiro, preserve `data.json` e copie somente os arquivos de código da versão desejada.
-
-Na versão web, copie a pasta de cada plugin para `<cofre>/.kiro/plugins/`, reinicie o Kiro e ative-o nas configurações.
-
-Os três funcionam offline e acompanham o tema do app. Foco e Flashcards devem ser usados em uma janela por vez. O cronômetro guarda o prazo ao sair da página e retoma ao voltar; avisos só aparecem com a página aberta. O histórico conserva as últimas 200 sessões concluídas. Flashcards e Revisão semanal consideram até 500 notas recentes; blocos de código não viram cartões. A revisão semanal cria uma nota nova, preservando as notas e tarefas de origem.
-
-## Agentes de IA (opcional)
-
-O Kiro expõe uma camada controlada para agentes de IA lerem e escreverem no cofre,
-desligável e sem enviar nada para a nuvem por conta própria. O aplicativo funciona
-normalmente sem nenhuma IA conectada.
-
-- Servidor MCP por stdio: `npm run mcp`. Não abre porta de rede.
-- Permissões na barra lateral, em **Configurações › IA e integrações**. Excluir vem desligado.
-- Registro de alterações em `.kiro/audit.log`, dentro do cofre.
-
-Detalhes em [docs/agent-api.md](docs/agent-api.md) e [docs/mcp.md](docs/mcp.md).
-
-## Estrutura do código
-
-- `vault.cjs`: leitura Markdown, migração, revisão de arquivos, salvamento, snapshots e lixeira.
-- `domain.js`: validação compartilhada, datas locais, tags e links.
-- `server.mjs`: API local e lista explícita de arquivos públicos.
-- `electron/`: janela desktop, ponte IPC e seleção do cofre.
-- `app.js`: navegação, edição e sincronização da interface.
-- `agent/`: Kiro Agent API, validação, permissões, auditoria e eventos.
-- `mcp/`: servidor MCP, adaptador fino sobre a Agent API.
-- `tests/`: testes de persistência, API, agentes e MCP em pastas temporárias.
+- `vault.cjs`: reading Markdown, saving, snapshots, trash and attachments.
+- `domain.js`: shared validation, local dates, tags and links.
+- `server.mjs`: local API for the browser version.
+- `electron/`: desktop window, IPC bridge and vault choice.
+- `app.js`: navigation, editing and the interface.
+- `fluxo.js` and `fluxo-tela.js`: the Flow canvas (model and screen).
+- `agent/`: Kiro Agent API, validation, permissions, audit and events.
+- `mcp/`: MCP server, a thin layer over the Agent API.
+- `tests/`: tests in temporary folders; `tests/vivo/`: tests in the real app.
 
 ## Privacy
 
