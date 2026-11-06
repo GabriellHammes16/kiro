@@ -16,7 +16,7 @@
 - API pública do plug-in em inglês; código interno, comentários e interface em português do Brasil.
 - Nunca operação genérica de arquivo, processo ou rede: só `kiro.fetch` com as regras da spec.
 - O valor de um segredo nunca vai para a página, para o worker, para log, para o audit.log nem para mensagem de erro.
-- Testes só em pasta temporária (`fs.mkdtemp`); nunca `C:\Projetos\Meu segundo cerebro\vault` nem `C:\Users\bielg\Documents\KUROI\vault`. Testes não fazem requisição real à internet: usam transporte e `lookup` falsos injetados.
+- Testes só em pasta temporária (`fs.mkdtemp`); nunca `C:\Projetos\Meu segundo cerebro\vault` nem `%USERPROFILE%\Documents\KUROI\vault`. Testes não fazem requisição real à internet: usam transporte e `lookup` falsos injetados.
 - Nada de `confirm()` ou `alert()` nativos.
 - Limites: 10 s por pedido, 1 MB de corpo enviado, 5 MB de resposta, 3 redirecionamentos.
 - Arquivos com CRLF: Edit/Write, nunca heredoc do Bash. Commit por tarefa, sem push.

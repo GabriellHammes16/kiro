@@ -189,3 +189,20 @@ Detalhes em [docs/agent-api.md](docs/agent-api.md) e [docs/mcp.md](docs/mcp.md).
 - `agent/`: Kiro Agent API, validação, permissões, auditoria e eventos.
 - `mcp/`: servidor MCP, adaptador fino sobre a Agent API.
 - `tests/`: testes de persistência, API, agentes e MCP em pastas temporárias.
+
+## Privacidade
+
+O Kiro guarda tudo no seu computador, no cofre (uma pasta de arquivos Markdown). Ele não tem telemetria, não cria conta e não manda nada para servidores do Kiro.
+
+This program will not transfer any information to other networked systems unless specifically requested by the user or the person installing or operating it.
+
+Ele só se conecta à internet quando você pede:
+
+- **Backup no Google Drive:** só se você conectar sua conta nas Configurações. O backup vai para o seu Drive, pelas regras de privacidade do Google.
+- **Prévia de links e vídeos do YouTube no Fluxo:** vem desligado. Ligado em Configurações → Sistema, o Kiro busca o título e a imagem do site que você colou, e o YouTube recebe o pedido quando você toca um vídeo.
+- **Plug-ins com acesso à rede:** cada plug-in só fala com os endereços que você autoriza ao ativá-lo.
+
+## Licença
+
+O Kiro é software livre, sob a [GNU General Public License v3.0 ou posterior](LICENSE). Os componentes de terceiros em `vendor/` e `fonts/` mantêm as próprias licenças, ao lado de cada um.
+

@@ -781,7 +781,7 @@ Run: `npm test` — nenhum `fail`. Testes antigos que inspecionam o editor de bl
 
 - [ ] **Step 5: Verificação no navegador**
 
-`npm run dev` + navegador automatizado (`node "C:/Users/bielg/.claude/skills/browser-automation/browser.mjs" http://127.0.0.1:4180/ --script <arquivo>`; globais do app com `page.evaluate(fn, null, undefined, false)`; scripts no rascunho de quem coordena: `C:\Users\bielg\AppData\Local\Temp\claude\C--Projetos-Meu-segundo-cerebro\84cf50e9-e103-4c8d-a0c6-8d906973ae4b\scratchpad`):
+`npm run dev` + navegador automatizado (`node "~/.claude/skills/browser-automation/browser.mjs" http://127.0.0.1:4180/ --script <arquivo>`; globais do app com `page.evaluate(fn, null, undefined, false)`; scripts no rascunho de quem coordena: `%USERPROFILE%\AppData\Local\Temp\claude\C--Projetos-Meu-segundo-cerebro\84cf50e9-e103-4c8d-a0c6-8d906973ae4b\scratchpad`):
 - abrir a nota "Bem-vindo ao modo de desenvolvimento": `#doc-corpo .cm-content` existe, `contenteditable="true"`; títulos com `.ed-h1/.ed-h2`; `**` escondidos fora do cursor;
 - digitar no editor (`page.keyboard.type`) muda `editing.body` e marca a nota como alterada; Ctrl+S salva; depois de salvar o cursor continua no mesmo lugar (`editorDaNota.editor.area().selectionStart` igual antes/depois) e o foco no editor;
 - digitar `[[Pla` abre a lista de sugestões; Enter completa `[[Plano de estudos]]`;

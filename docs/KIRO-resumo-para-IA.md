@@ -220,7 +220,7 @@ Fluxo usado no projeto:
 
 ## 6. Regras e preferências do dono (respeite ao sugerir mudanças)
 
-1. **Nunca tocar nos cofres reais** em testes: `C:\Projetos\Meu segundo cerebro\vault` e `C:\Users\bielg\Documents\Kiro\vault`. Testes usam pastas temporárias, e o desenvolvimento usa `dev-vault/`.
+1. **Nunca tocar nos cofres reais** em testes: `C:\Projetos\Meu segundo cerebro\vault` e `%USERPROFILE%\Documents\Kiro\vault`. Testes usam pastas temporárias, e o desenvolvimento usa `dev-vault/`.
 2. **Não transformar em SaaS** e não tornar serviços externos obrigatórios.
 3. **Nada do cofre é enviado automaticamente** para fora. Nenhuma chave de API embutida no código.
 4. **Sem operações genéricas** na API de agentes (`read_any_file`, `run_shell` etc.).

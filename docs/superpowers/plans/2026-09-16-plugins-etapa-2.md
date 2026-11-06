@@ -15,7 +15,7 @@
 - Sem framework, sem TypeScript, sem build, sem dependência nova.
 - API pública do plug-in em inglês; código interno, comentários e interface em português do Brasil.
 - Nunca operação genérica de arquivo ou processo. Plug-in continua sem DOM, sem disco e sem rede.
-- Testes só em cofre temporário (`fs.mkdtemp`); nunca `C:\Projetos\Meu segundo cerebro\vault` nem `C:\Users\bielg\Documents\KUROI\vault`. O cofre de exemplo `dev-vault` pode ser usado e recriado.
+- Testes só em cofre temporário (`fs.mkdtemp`); nunca `C:\Projetos\Meu segundo cerebro\vault` nem `%USERPROFILE%\Documents\KUROI\vault`. O cofre de exemplo `dev-vault` pode ser usado e recriado.
 - Nada de `confirm()` ou `alert()` nativos.
 - Protocolo de mensagens da etapa 1 (cabeçalho de `plugin-worker.js`) não muda de forma incompatível: só ganha tipos novos de `registro`.
 - Limites: chamada 5 s; evento 5 s; bloco 5 s; HTML de bloco até 200 KB antes da limpeza.

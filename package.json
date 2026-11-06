@@ -2,6 +2,7 @@
   "name": "kiro",
   "version": "0.28.0",
   "description": "Segundo cérebro local-first: notas, tarefas, hábitos e fluxos.",
+  "license": "GPL-3.0-or-later",
   "author": {
     "name": "Gabriel",
     "email": "164125568+GabriellHammes16@users.noreply.github.com"

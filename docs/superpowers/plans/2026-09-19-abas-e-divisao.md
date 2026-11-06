@@ -15,7 +15,7 @@
 - Sem framework, sem TypeScript, sem build, sem dependência nova.
 - Código, comentários, interface e commits em português do Brasil.
 - Não usar `confirm()`/`alert()` nativos em código novo.
-- Testes só em pastas temporárias; nunca tocar `C:\Projetos\Meu segundo cerebro\vault` nem `C:\Users\bielg\Documents\KUROI\vault`. Verificação no navegador só com o cofre de exemplo (`dev-vault/`, servidor `kiro-dev` na porta 4180).
+- Testes só em pastas temporárias; nunca tocar `C:\Projetos\Meu segundo cerebro\vault` nem `%USERPROFILE%\Documents\KUROI\vault`. Verificação no navegador só com o cofre de exemplo (`dev-vault/`, servidor `kiro-dev` na porta 4180).
 - Não versionar `kuroi-2026-09-12.json`. Não fazer push.
 - Commits terminam com uma linha em branco e `Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>`.
 - Suíte: `node --test` na raiz (hoje 170 testes: 169 passam, 1 pulado).

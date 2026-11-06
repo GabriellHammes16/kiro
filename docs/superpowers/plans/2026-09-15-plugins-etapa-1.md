@@ -15,7 +15,7 @@
 - Sem framework, sem TypeScript, sem etapa de build, sem dependência nova.
 - API pública do plug-in em inglês; código interno, comentários e interface do Kiro em português do Brasil.
 - Nunca criar operação genérica: nada de ler arquivo por caminho livre, escrever arquivo por caminho livre ou executar comando.
-- Testes só em cofre temporário (`fs.mkdtemp`); nunca tocar `C:\Projetos\Meu segundo cerebro\vault` nem `C:\Users\bielg\Documents\KUROI\vault`.
+- Testes só em cofre temporário (`fs.mkdtemp`); nunca tocar `C:\Projetos\Meu segundo cerebro\vault` nem `%USERPROFILE%\Documents\KUROI\vault`.
 - Nada de `confirm()` ou `alert()` nativos: confirmação é modal do próprio app.
 - Permissões válidas, exatamente estas: `notes:read`, `notes:write`, `tasks:read`, `tasks:write`, `habits:read`, `habits:write`, `folders:write`, `network`.
 - Pasta dos plug-ins: `.kiro/plugins/<id>/`, com `manifest.json` e `index.js`. Escolhas do usuário em `.kiro/plugins.json`.

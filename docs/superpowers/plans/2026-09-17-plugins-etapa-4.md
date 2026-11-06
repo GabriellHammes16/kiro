@@ -16,7 +16,7 @@
 - API pública do plug-in em inglês; código interno, comentários, commits e interface em português do Brasil.
 - Nunca operação genérica de arquivo, processo ou rede. A tela não ganha nada além das permissões já concedidas ao plug-in.
 - Não usar `confirm()`/`alert()` nativos.
-- Testes só em cofre temporário (`fs.mkdtemp`). Nunca tocar em `C:\Projetos\Meu segundo cerebro\vault` nem em `C:\Users\bielg\Documents\KUROI\vault`.
+- Testes só em cofre temporário (`fs.mkdtemp`). Nunca tocar em `C:\Projetos\Meu segundo cerebro\vault` nem em `%USERPROFILE%\Documents\KUROI\vault`.
 - Não versionar `kuroi-2026-09-12.json`. Não fazer push.
 - Valor de chave (segredo) nunca vai para a página, a moldura, o worker ou logs.
 - Commits terminam com `Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>`.
