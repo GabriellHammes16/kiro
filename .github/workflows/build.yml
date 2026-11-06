@@ -1,0 +1,55 @@
+# Compila o Kiro a partir do código do repositório, para cada versão (tag vX.Y.Z) ou quando
+# alguém roda à mão. O instalador do Windows sai daqui, num build verificável: é este artefato
+# que a SignPath assina, depois de aprovado manualmente.
+name: Build
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - name: Instalador do Windows (sem assinatura)
+        run: npx electron-builder --win nsis --publish never
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: kiro-windows
+          path: |
+            dist/Kiro-Setup-*.exe
+            dist/win-unpacked/Kiro.exe
+          if-no-files-found: error
+
+  linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - name: Pacotes do Linux
+        run: npx electron-builder --linux AppImage deb --publish never
+      - uses: actions/upload-artifact@v4
+        with:
+          name: kiro-linux
+          path: |
+            dist/Kiro-*.AppImage
+            dist/Kiro-*.deb
+          if-no-files-found: error
