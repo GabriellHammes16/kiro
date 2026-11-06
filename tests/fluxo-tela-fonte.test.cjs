@@ -81,7 +81,7 @@ test('os corpos reaproveitaveis ficam na sessao, para o autosave nao parar a mid
   assert.match(fonte, /corpos: new Map\(\)/);
   const i = fonte.indexOf('function desenhar()');
   const corpo = fonte.slice(i, fonte.indexOf('function alturaDoTexto', i));
-  assert.match(corpo, /s\.corpos = new Map\(\)/);
+  assert.match(corpo, /s\.corpos = new Map\(deOutrasColunas\)/);   // a outra coluna do mesmo fluxo guarda os seus corpos
   assert.match(corpo, /new Map\(s\.corpos\)/);
 });
 
@@ -148,4 +148,10 @@ test('a roda só fica com texto, tabela ou páginas quando há o que rolar', () 
   const corpo = fonte.slice(i, fonte.indexOf('}, { passive: false })', i));
   assert.doesNotMatch(corpo, /fluxo-tabela'\)\)\) return/);
   assert.match(corpo, /caixa\.scrollHeight > caixa\.clientHeight/);
+});
+
+test('sem a internet ligada, o Fluxo não busca prévia nem mostra o player do YouTube', () => {
+  const app = fs.readFileSync(path.join(__dirname, '../app.js'), 'utf8');
+  for (const trecho of ['previaDeLink: internetNoFluxo ?', 'abrirVideo: internetNoFluxo ?', "internetNoFluxo = lerPreferencia('internetNoFluxo') === '1'"]) assert.ok(app.includes(trecho), trecho);
+  assert.ok(fonte.includes('const idVideo = opcoes.abrirVideo && F.idDoYoutube(c.url)'));
 });

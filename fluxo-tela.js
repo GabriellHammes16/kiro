@@ -66,6 +66,8 @@
     const dica = raiz.querySelector('.fluxo-dica');
     const ponta = `url(#fluxo-ponta-${n})`;
     const no = idNo => canvas.nodes.find(x => x.id === idNo);
+    const prefixoDaColuna = `${String(opcoes.coluna ?? '')}#`;
+    const reusar = (idNo, fonte) => esc(`${prefixoDaColuna}${idNo}|${fonte}`);
     const elDoCartao = idNo => cartoes.querySelector(`[data-no="${CSS.escape(idNo)}"]`);
     const tamanho = () => { const r = raiz.getBoundingClientRect(); return [r.width, r.height]; };
     const pontoDaTela = e => { const r = raiz.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
@@ -91,7 +93,8 @@
     }
     // Cartão de link: o endereço primeiro; a prévia (título, descrição, imagem do cofre) entra quando chega.
     function linkHtml(c) {
-      const idVideo = F.idDoYoutube(c.url);
+      // Sem a internet ligada nas Configurações (opcoes.abrirVideo ausente), o YouTube vira link comum: nada carrega do Google.
+      const idVideo = opcoes.abrirVideo && F.idDoYoutube(c.url);
       if (idVideo) return videoHtml(c, idVideo);
       const previa = c.kiroPrevia || {}, endereco = c.url.replace(/^[a-z][a-z0-9+.-]*:\/\//i, '').replace(/\/$/, '');
       const topo = topoHtml(c, previa.titulo || endereco);
@@ -106,9 +109,14 @@
     function videoHtml(c, id) {
       const topo = topoHtml(c, c.kiroPrevia?.titulo || t('Vídeo do YouTube'));
       if (c.kiroRecolhido) return topo;
-      const miniatura = `<img class="fluxo-video-miniatura" src="https://i.ytimg.com/vi/${encodeURIComponent(id)}/hqdefault.jpg" alt="" draggable="false">`;
-      const tocar = `<button type="button" class="fluxo-video-tocar" aria-label="${t('Tocar')}" title="${t('Tocar')}">${opcoes.icone('tocar')}</button>`;
-      return `${topo}<div class="fluxo-arquivo-corpo fluxo-video-corpo" data-reusar="${esc(c.id)}|${esc(id)}" data-video="${esc(id)}">${miniatura}${tocar}</div>`;
+      return `${topo}<div class="fluxo-arquivo-corpo fluxo-video-corpo" data-reusar="${reusar(c.id, id)}" data-video="${esc(id)}">${miniaturaHtml(id)}</div>`;
+    }
+    const miniaturaHtml = id => `<img class="fluxo-video-miniatura" src="https://i.ytimg.com/vi/${encodeURIComponent(id)}/hqdefault.jpg" alt="" draggable="false"><button type="button" class="fluxo-video-tocar" aria-label="${t('Tocar')}" title="${t('Tocar')}">${opcoes.icone('tocar')}</button>`;
+    // Abrir em tela inteira com o vídeo tocando no cartão: o do cartão volta à miniatura, senão tocariam os dois.
+    function abrirVideo(cartao, id) {
+      const corpo = cartao.querySelector('.fluxo-video-corpo');
+      if (corpo?.querySelector('iframe')) corpo.innerHTML = miniaturaHtml(id);
+      opcoes.abrirVideo(id, raiz);
     }
     // Cartão de arquivo: topo (seta que recolhe, nome, Abrir) e corpo. Recolhido, o corpo nem é
     // desenhado. Só caminho relativo ao cofre vira mídia: um .canvas de fora não aponta para ../ nem para o disco.
@@ -126,7 +134,7 @@
         audio: `<audio controls preload="metadata" src="${url}"></audio>`,
         video: `<video controls preload="metadata" src="${url}"></video>`,
       };
-      return `${topo}<div class="fluxo-arquivo-corpo" data-tipo-arquivo="${tipo}" data-reusar="${esc(c.id)}|${esc(c.file)}">${corpos[tipo]}</div>`;
+      return `${topo}<div class="fluxo-arquivo-corpo" data-tipo-arquivo="${tipo}" data-reusar="${reusar(c.id, c.file)}">${corpos[tipo]}</div>`;
     }
     // Texto e tabela são lidos depois do desenho, só os que ainda não foram: o corpo reaproveitado já está pronto.
     function lerCorpos() {
@@ -162,13 +170,15 @@
       // e movidos no mesmo instante da troca o <audio> e o <video> não chegam a pausar.
       // O mesmo fluxo em duas colunas divide a sessão: um corpo que está na outra coluna não é tomado dela
       // (as duas ficariam se roubando a cada desenho). Só vale o que está na guarda ou nesta tela.
+      // A chave leva a coluna: o mesmo fluxo em duas colunas guarda e recupera cada uma os seus corpos.
+      const deOutrasColunas = [...s.corpos].filter(([chave]) => !chave.startsWith(prefixoDaColuna));
       const antigos = new Map(s.corpos), daqui = new Set();
       for (const el of cartoes.querySelectorAll('[data-reusar]')) { antigos.set(el.dataset.reusar, el); daqui.add(el); guardarCorpo(el); }   // sai do DOM sem recarregar
       for (const [chave, el] of antigos) if (el.parentNode !== guardaDeCorpos && !daqui.has(el)) antigos.delete(chave);
       // Grupos primeiro: ficam atrás dos cartões.
       const ordem = c => (c.type === 'group' ? 0 : 1);
       cartoes.innerHTML = [...canvas.nodes].sort((a, b) => ordem(a) - ordem(b)).map(cartaoHtml).join('');
-      s.corpos = new Map();   // só ficam os que ainda existem
+      s.corpos = new Map(deOutrasColunas);   // desta coluna, só ficam os que ainda existem
       for (const novo of cartoes.querySelectorAll('[data-reusar]')) {
         const chave = novo.dataset.reusar, velho = antigos.get(chave);
         if (velho) {
@@ -177,7 +187,7 @@
         }
         s.corpos.set(chave, velho || novo);
       }
-      for (const el of antigos.values()) if (el.parentNode === guardaDeCorpos && s.corpos.get(el.dataset.reusar) !== el) el.remove();   // ninguém pegou de volta: não acumula
+      for (const el of antigos.values()) if (el.dataset.reusar.startsWith(prefixoDaColuna) && el.parentNode === guardaDeCorpos && s.corpos.get(el.dataset.reusar) !== el) el.remove();   // ninguém pegou de volta: não acumula
       lerCorpos();
       desenharSetas();
       dica.hidden = canvas.nodes.length > 0;
@@ -291,7 +301,7 @@
     // Link novo: nasce com o endereço e a prévia (título, descrição, imagem) entra quando chega, fora do desfazer.
     // YouTube também: guarda só o título. Qualquer falha da busca deixa o cartão como está.
     function novoLink(url, p) {
-      const base = { type: 'link', url, ...F.tamanhoPadrao({ type: 'link', url }) };   // YouTube nasce 480 × 300
+      const base = { type: 'link', url, ...(opcoes.abrirVideo ? F.tamanhoPadrao({ type: 'link', url }) : { width: 320, height: 100 }) };   // YouTube nasce 480 × 300; sem internet, é link comum
       adicionarNo(base, p, !opcoes.previaDeLink ? undefined : idNo => {
         Promise.resolve(opcoes.previaDeLink(url)).then(previa => receberPrevia(idNo, previa), () => {});
       });
@@ -778,7 +788,7 @@
       if (tocar) { const corpo = tocar.closest('.fluxo-video-corpo'); corpo.innerHTML = videoIframeHtml(corpo.dataset.video); return; }
       const cartao = e.target.closest('.fluxo-arquivo-topo')?.closest('.fluxo-cartao');
       if (!cartao) return;
-      if (e.target.closest('.fluxo-abrir')) { const c = no(cartao.dataset.no); if (c?.type === 'link') { const idVideo = F.idDoYoutube(c.url); if (idVideo && opcoes.abrirVideo) opcoes.abrirVideo(idVideo, raiz); else opcoes.abrirLink(c.url); } else abrirArquivo(cartao.dataset.no); }
+      if (e.target.closest('.fluxo-abrir')) { const c = no(cartao.dataset.no); if (c?.type === 'link') { const idVideo = F.idDoYoutube(c.url); if (idVideo && opcoes.abrirVideo) abrirVideo(cartao, idVideo); else opcoes.abrirLink(c.url); } else abrirArquivo(cartao.dataset.no); }
       else if (e.target.closest('.fluxo-seta-recolher')) mudar(F.alternarRecolhido(canvas, cartao.dataset.no));
     });
     // Página do PDF que está no topo, guardada na sessão: o scroll não borbulha, daí a captura.

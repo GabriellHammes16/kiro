@@ -867,6 +867,8 @@ function aplicarTamanhoDaInterface(valor = lerPreferencia('tamanhoInterface')) {
 // ganha spellcheck="false" (vale para todos os campos, no app e no navegador) e, no app,
 // os dicionários saem da memória.
 let corretorLigado = lerPreferencia('corretor') !== '0';
+// Prévia de links e vídeos do YouTube no Fluxo: desligado, o Fluxo não se conecta a nenhum site. Vem desligado.
+let internetNoFluxo = lerPreferencia('internetNoFluxo') === '1';
 function aplicarCorretor() {
   if (corretorLigado) document.documentElement.removeAttribute('spellcheck');
   else document.documentElement.setAttribute('spellcheck', 'false');
@@ -1228,6 +1230,7 @@ function montarFluxos() {
     const fluxo = getFluxo(host.dataset.fluxo);
     if (!fluxo?.canvas) continue;
     KiroFluxoTela.montar(host, {
+      coluna: host.dataset.painel,
       id: fluxo.id, titulo: fluxo.title, canvas: fluxo.canvas,
       atalho: id => atalhos[id],
       markdown: renderizarMarkdown, icone,
@@ -1242,7 +1245,7 @@ function montarFluxos() {
       escolherNota: () => irParaNota({ escolher: true }),
       escolherImagem: escolherImagemDoSistema,
       pedirLink: pedirLinkDoFluxo,
-      previaDeLink: url => (window.cadernoDesktop ? window.cadernoDesktop.previaDeLink(url) : api('previa', { url })),
+      previaDeLink: internetNoFluxo ? url => (window.cadernoDesktop ? window.cadernoDesktop.previaDeLink(url) : api('previa', { url })) : undefined,
       canvasAtual: () => getFluxo(fluxo.id)?.canvas,
       // Um salvamento em andamento troca `state`: adicionarNo espera acabar para não perder o
       // cartão que um paste/seletor assíncrono estava prestes a gravar (F1).
@@ -1251,7 +1254,7 @@ function montarFluxos() {
       arquivosDoEvento: arquivosDoFluxo,
       lerTexto: lerTextoDoAnexo,
       abrirArquivo: abrirArquivoDoFluxo,
-      abrirVideo: abrirVideoDoFluxo,
+      abrirVideo: internetNoFluxo ? abrirVideoDoFluxo : undefined,
       arquivoDaNota: id => getNote(id)?.file || null,
       guardarImagem: guardarImagemDoFluxo,
       abrirPdfNoSistema: window.cadernoDesktop ? arquivo => window.cadernoDesktop.openAttachment(arquivo).catch(() => { /* sem leitor padrão: fica quieto */ }) : null,
@@ -5891,6 +5894,10 @@ async function showSettings(aba = abaDasConfiguracoes) {
       <div class="cfg-linha"><label for="cfg-hora-habitos">${texto(t('Horário do aviso dos hábitos'))}</label><input type="time" id="cfg-hora-habitos" value="${horaDoLembrete('habitos')}" /></div>
     </section><div id="cfg-hoje">${conteudoDaAbaHoje()}</div>`)}
     ${painel('sistema', `<section class="cfg-grupo">
+      <header class="cfg-grupo-topo">${texto(t('Internet no Fluxo'), t('O resto do Kiro funciona sem internet.'))}</header>
+      <label class="cfg-linha cfg-chave">${texto(t('Prévia de links e vídeos do YouTube'), t('Busca o título e a imagem dos sites e toca vídeos do YouTube nos cartões. Desligado, o Fluxo não se conecta a nenhum site e o link fica só com o endereço.'))}<input type="checkbox" id="cfg-internet-fluxo" ${internetNoFluxo ? 'checked' : ''} /><span class="interruptor" aria-hidden="true"></span></label>
+    </section>
+    <section class="cfg-grupo">
       <header class="cfg-grupo-topo">${texto(t('Idioma'), t('Idioma dos menus, botões e avisos. Suas notas não mudam.'))}</header>
       <div class="cfg-linha">${texto(t('Idioma da interface'), '', 'cfg-idioma-rotulo')}<div class="segmentos cfg-idioma" id="cfg-idioma" role="radiogroup" aria-labelledby="cfg-idioma-rotulo">${KiroIdiomas.IDIOMAS.map(i => `<label class="segmento"><input type="radio" name="cfg-idioma" value="${i.codigo}" ${i.codigo === KiroIdiomas.idioma() ? 'checked' : ''} /><span>${escapeHtml(i.nome)}</span></label>`).join('')}</div></div>
       ${window.cadernoDesktop ? `<label class="cfg-linha cfg-chave">${texto(t('Captura global'), t('Abrir o Kiro e capturar com Ctrl+Shift+Espaço (⌘+Shift+Espaço no Mac).'))}<input type="checkbox" id="cfg-captura-global" ${lerPreferencia('capturaGlobal') === '1' ? 'checked' : ''} /><span class="interruptor" aria-hidden="true"></span></label>` : ''}
@@ -6007,6 +6014,13 @@ async function showSettings(aba = abaDasConfiguracoes) {
     await trocarIdioma(e.target.value);
     closeModal(true);
     showSettings('sistema');   // a janela reabre já no idioma novo
+  });
+  $('#cfg-internet-fluxo')?.addEventListener('change', e => {
+    e.stopPropagation();
+    modalDirty = false;
+    internetNoFluxo = e.target.checked;
+    try { localStorage.setItem('kiro.internetNoFluxo', internetNoFluxo ? '1' : '0'); } catch { /* janela privada: vale só nesta sessão */ }
+    if (currentView === 'studies') render();
   });
   $('#cfg-corretor')?.addEventListener('change', e => {
     e.stopPropagation();
