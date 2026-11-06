@@ -127,7 +127,7 @@ test('servidor MCP publica as ferramentas e opera o cofre por stdio', async t =>
   for (const esperada of ['kiro_create_note', 'kiro_read_note', 'kiro_update_note', 'kiro_delete_note',
     'kiro_search_notes', 'kiro_list_notes', 'kiro_create_folder', 'kiro_list_folders', 'kiro_move_note',
     'kiro_get_backlinks', 'kiro_get_outgoing_links', 'kiro_get_recent_notes',
-    'kiro_list_fluxos', 'kiro_read_fluxo', 'kiro_create_fluxo', 'kiro_update_fluxo',
+    'kiro_list_fluxos', 'kiro_read_fluxo', 'kiro_create_fluxo', 'kiro_update_fluxo', 'kiro_list_attachments', 'kiro_add_attachment',
     'kiro_list_tasks', 'kiro_create_task', 'kiro_update_task', 'kiro_set_task_status', 'kiro_delete_task']) {
     assert.ok(nomes.includes(esperada), `faltou a tool ${esperada}`);
   }
@@ -138,6 +138,15 @@ test('servidor MCP publica as ferramentas e opera o cofre por stdio', async t =>
   assert.equal(leitura.annotations.readOnlyHint, true);
   assert.equal(tools.find(f => f.name === 'kiro_delete_note').annotations.destructiveHint, true);
   assert.equal(leitura.inputSchema.type, 'object');
+  assert.equal(tools.find(f => f.name === 'kiro_list_attachments').annotations.readOnlyHint, true);
+
+  // anexo por conteúdo, listado e posto num fluxo como cartão de arquivo recolhido
+  const pdf = json(await cliente.callTool({ name: 'kiro_add_attachment', arguments: { name: 'livro.pdf', data_base64: Buffer.from('%PDF-1.4\n%%EOF\n').toString('base64') } }));
+  assert.equal(pdf.type, 'pdf');
+  assert.deepEqual(json(await cliente.callTool({ name: 'kiro_list_attachments', arguments: { type: 'pdf' } })).attachments.map(a => a.path), [pdf.path]);
+  const mapa = json(await cliente.callTool({ name: 'kiro_create_fluxo', arguments: { title: 'Leitura', nodes: [{ id: 'p', type: 'file', file: pdf.path }] } }));
+  const cartoes = json(await cliente.callTool({ name: 'kiro_read_fluxo', arguments: { id: mapa.fluxo.id } })).nodes;
+  assert.deepEqual(cartoes, [{ id: mapa.ids.p, type: 'file', file: pdf.path, collapsed: true }]);
 
   // fluxo completo: criar, buscar, acrescentar e ler
   const criada = json(await cliente.callTool({

@@ -9,7 +9,7 @@
  *
  * Nomes sem prefixo. A camada MCP publica os mesmos com "kiro_" na frente.
  */
-const { AgentError, MAX_NOTE_CONTENT } = require('./security.cjs');
+const { AgentError, MAX_NOTE_CONTENT, MAX_ANEXO_BASE64 } = require('./security.cjs');
 const { validate } = require('./schema.cjs');
 
 // Teto de escritas, para um agente em loop não encher o disco. Leitura não conta: não grava nada.
@@ -284,7 +284,7 @@ const FERRAMENTAS = [
     name: 'read_fluxo',
     risk: 'read',
     permission: 'read',
-    description: 'Lê um fluxo pelo id ou pelo caminho. Devolve os cartões ({ id, type, text | note | url | label | file, color }) e as ligações ({ id, from, to, label }). Em cartões "note", o campo note é o caminho da nota do cofre que o cartão mostra (leia com read_note). Com positions: true, inclui x, y, width e height de cada cartão.',
+    description: 'Lê um fluxo pelo id ou pelo caminho. Devolve os cartões ({ id, type, text | note | url | label | file, color, collapsed, preview }) e as ligações ({ id, from, to, label }). Em cartões "note", o campo note é o caminho da nota do cofre que o cartão mostra (leia com read_note). Cartões "file" mostram um anexo do cofre (PDF, imagem, .txt, .csv, áudio ou .mp4) pelo caminho. Cartões file e link recolhidos à barra de título trazem collapsed: true; links com prévia trazem preview: { title, description }. Com positions: true, inclui x, y, width e height de cada cartão.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -299,7 +299,7 @@ const FERRAMENTAS = [
     name: 'create_fluxo',
     risk: 'write',
     permission: 'create',
-    description: 'Cria um fluxo (mapa mental ou canvas de ideias, arquivo .canvas compatível com o Obsidian). Você manda a estrutura e o Kiro posiciona: cartões sem x/y viram uma árvore da esquerda para a direita a partir de "root" (ou do primeiro cartão sem ligação chegando). Cada cartão tem um "id" que é um apelido seu; as ligações usam esses apelidos e a resposta traz os ids reais em "ids". Tipos: text (Markdown, com código e fórmulas), note (uma nota do cofre, por caminho ou título), link (URL http/https) e group (moldura com rótulo). Receita para transformar uma nota em mapa mental: leia a nota com read_note; faça um cartão por ideia, com texto curto; o título da nota vira a raiz, cada título (##) vira um ramo ligado à raiz e o que está sob ele vira filhos do ramo; cada bloco de código vira um cartão próprio; passe a nota em sourceNote, para o mapa ficar ligado a ela e ser gravado na mesma pasta. Até 300 cartões e 5.000 caracteres por campo de texto (text, label). Recusa um segundo fluxo com o mesmo título na mesma pasta.',
+    description: 'Cria um fluxo (mapa mental ou canvas de ideias, arquivo .canvas compatível com o Obsidian). Você manda a estrutura e o Kiro posiciona: cartões sem x/y viram uma árvore da esquerda para a direita a partir de "root" (ou do primeiro cartão sem ligação chegando). Cada cartão tem um "id" que é um apelido seu; as ligações usam esses apelidos e a resposta traz os ids reais em "ids". Tipos: text (Markdown, com código e fórmulas), note (uma nota do cofre, por caminho ou título), file (um anexo do cofre: PDF, imagem, .txt, .csv, áudio ou .mp4, pelo caminho de list_attachments; envie arquivos novos com add_attachment), link (URL http/https) e group (moldura com rótulo). Cartões file e link aceitam collapsed: true para ficar recolhidos à barra de título; PDF entra recolhido se collapsed não vier, os outros abertos. Receita para transformar uma nota em mapa mental: leia a nota com read_note; faça um cartão por ideia, com texto curto; o título da nota vira a raiz, cada título (##) vira um ramo ligado à raiz e o que está sob ele vira filhos do ramo; cada bloco de código vira um cartão próprio; passe a nota em sourceNote, para o mapa ficar ligado a ela e ser gravado na mesma pasta. Até 300 cartões e 5.000 caracteres por campo de texto (text, label). Recusa um segundo fluxo com o mesmo título na mesma pasta.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -307,7 +307,7 @@ const FERRAMENTAS = [
         folder: { type: 'string', description: 'Pasta de destino relativa ao cofre. Sem isso, usa a pasta de sourceNote ou a raiz do cofre.' },
         nodes: {
           type: 'array', maxItems: 300, items: { type: 'object' },
-          description: 'Cartões: { id, type: "text" | "note" | "link" | "group", text | note | url | label, color?, x?, y?, width?, height? }. color: "1" a "6" (vermelho, laranja, amarelo, verde, ciano, roxo) ou #rrggbb.',
+          description: 'Cartões: { id, type: "text" | "note" | "file" | "link" | "group", text | note | file | url | label, collapsed? (só file e link), color?, x?, y?, width?, height? }. file é o caminho relativo ao cofre de um anexo que já existe. color: "1" a "6" (vermelho, laranja, amarelo, verde, ciano, roxo) ou #rrggbb.',
         },
         edges: { type: 'array', maxItems: 600, items: { type: 'object' }, description: 'Ligações: { from, to, label?, color? }, com from/to sendo ids (apelidos) de "nodes".' },
         root: { type: 'string', description: 'Id (apelido) do cartão raiz da árvore.' },
@@ -327,15 +327,46 @@ const FERRAMENTAS = [
       type: 'object',
       properties: {
         ...alvoFluxo,
-        add_nodes: { type: 'array', maxItems: 300, items: { type: 'object' }, description: 'Cartões novos, no formato de create_fluxo: { id (apelido seu), type, text | note | url | label, color?, x?, y?, width?, height? }.' },
+        add_nodes: { type: 'array', maxItems: 300, items: { type: 'object' }, description: 'Cartões novos, no formato de create_fluxo: { id (apelido seu), type, text | note | file | url | label, collapsed? (só file e link), color?, x?, y?, width?, height? }.' },
         add_edges: { type: 'array', maxItems: 600, items: { type: 'object' }, description: 'Ligações novas { from, to, label?, color? }; from/to são ids de cartões do fluxo ou apelidos de add_nodes.' },
-        update_nodes: { type: 'array', maxItems: 300, items: { type: 'object' }, description: '{ id, text | note | url | label, color?, x?, y?, width?, height? }. Muda só o que vier; color "" tira a cor. O tipo do cartão não muda.' },
+        update_nodes: { type: 'array', maxItems: 300, items: { type: 'object' }, description: '{ id, text | note | url | label, collapsed?, color?, x?, y?, width?, height? }. Muda só o que vier; color "" tira a cor; collapsed true ou false recolhe ou abre um cartão file ou link, guardando a altura de aberto. O tipo do cartão não muda.' },
         remove_nodes: { type: 'array', maxItems: 300, items: { type: 'string' }, description: 'Ids de cartões a remover.' },
         remove_edges: { type: 'array', maxItems: 600, items: { type: 'string' }, description: 'Ids de ligações a remover.' },
       },
     },
     run: (api, args, ctx) => api.updateFluxo(args, ctx),
     target: (args, resultado) => resultado?.fluxo?.path || args.path || args.id,
+  },
+  {
+    name: 'list_attachments',
+    risk: 'read',
+    permission: 'read',
+    description: 'Lista os anexos do cofre (arquivos da pasta de anexos do Kiro), do mais novo para o mais antigo: { path, name, type, size }. type é pdf, imagem, texto, tabela, audio ou video. Use o path em cartões { type: "file", file } de create_fluxo e update_fluxo.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        type: { type: 'string', enum: ['pdf', 'imagem', 'texto', 'tabela', 'audio', 'video'], description: 'Só anexos deste tipo.' },
+        limit: { type: 'integer', minimum: 1, maximum: 1000, default: 200 },
+      },
+    },
+    run: (api, args, ctx) => api.listAttachments(args, ctx),
+    target: () => 'attachments',
+  },
+  {
+    name: 'add_attachment',
+    risk: 'write',
+    permission: 'create',
+    description: 'Guarda um arquivo na pasta de anexos do cofre e devolve { path, type, size }, para usar num cartão "file" de um fluxo. Mande o conteúdo em base64 (até 25 MB); caminho do disco e URL não são aceitos. O tipo é conferido pelo conteúdo: PNG, JPEG, GIF, WebP, PDF, áudio WAV, MP3, WebM ou M4A, vídeo MP4, texto .txt ou tabela .csv (texto até 5 MB). Outro conteúdo é recusado.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        name: { type: 'string', maxLength: 200, description: 'Nome do arquivo, como "relatorio.pdf". Para texto e tabela, a extensão (.txt ou .csv) decide o tipo.' },
+        data_base64: { type: 'string', maxLength: MAX_ANEXO_BASE64, description: 'Conteúdo do arquivo em base64, sem prefixo "data:".' },
+      },
+      required: ['name', 'data_base64'],
+    },
+    run: (api, args, ctx) => api.addAttachment(args, ctx),
+    target: (args, resultado) => resultado?.path || args.name,
   },
   {
     name: 'list_tasks',

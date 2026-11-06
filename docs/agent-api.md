@@ -112,14 +112,24 @@ A IA manda a estrutura (cartões e ligações) e o Kiro posiciona.
 | Ferramenta | Risco | Permissão | O que faz |
 |---|---|---|---|
 | `list_fluxos` | read | read | Lista id, caminho, título, pasta e quantidade de cartões e ligações. Fluxo corrompido vem com `error`. |
-| `read_fluxo` | read | read | Lê por `id` ou `path`: cartões `{ id, type, text \| note \| url \| label \| file, color }` e ligações `{ id, from, to, label }`. `positions: true` inclui `x`, `y`, `width`, `height`. |
+| `read_fluxo` | read | read | Lê por `id` ou `path`: cartões `{ id, type, text \| note \| url \| label \| file, color, collapsed, preview }` e ligações `{ id, from, to, label }`. `positions: true` inclui `x`, `y`, `width`, `height`. |
 | `create_fluxo` | write | create | Cria a partir de `{ title, folder?, nodes, edges?, root?, sourceNote? }`. Cartões sem posição viram uma árvore da esquerda para a direita. |
 | `update_fluxo` | write | update | `add_nodes`, `add_edges`, `update_nodes`, `remove_nodes`, `remove_edges`. Cartões novos sem posição entram perto do pai, sem mexer nos existentes. |
+| `list_attachments` | read | read | Lista os anexos do cofre, do mais novo para o mais antigo: `{ path, name, type, size }`, com `type` pdf, imagem, texto, tabela, audio ou video. Filtro `type`; `limit` padrão 200, máximo 1000. |
+| `add_attachment` | write | create | Guarda `{ name, data_base64 }` (até 25 MB) na pasta de anexos e devolve `{ path, type, size }`. O tipo é conferido pelo conteúdo; caminho do disco e URL não são aceitos. |
 
 - O `id` de cada cartão em `create_fluxo` e `add_nodes` é um apelido; as ligações usam os
   apelidos e a resposta devolve `ids: { apelido: idReal }`.
 - `note` aceita caminho (`"Estudos/Python.md"`) ou título. Nota que não existe recusa a
   chamada inteira (`NOTE_NOT_FOUND`, com `details.missing`).
+- Cartão `file`: `{ type: "file", file: "Anexos/livro.pdf" }`, caminho relativo ao cofre de um
+  anexo que existe (PDF, imagem, `.txt`, `.csv`, áudio ou `.mp4`). Arquivo que falta entra na
+  mesma lista `missing`; nota `.md` continua sendo `note`.
+- `collapsed: true | false` em cartões `file` e `link` (em `nodes`, `add_nodes` e
+  `update_nodes`) recolhe o cartão à barra de título, guardando a altura de aberto. PDF entra
+  recolhido se `collapsed` não vier. Em outro tipo de cartão, `INVALID_INPUT`.
+- `read_fluxo` devolve `collapsed: true` nos cartões recolhidos e, nos links com prévia,
+  `preview: { title, description }` (sem a imagem).
 - Limites: 300 cartões por lista, 600 ligações e 5.000 caracteres por campo de texto (`text`, `label`).
 - Tudo-ou-nada: qualquer erro vira `AgentError` e nada é gravado. Fluxo com o arquivo
   corrompido devolve `FLUXO_INVALID` e não é tocado.
@@ -269,7 +279,7 @@ alterações legível.
 
 `agent/events.cjs` emite `note.created`, `note.updated`, `note.deleted`,
 `note.moved`, `note.restored`, `folder.created`, `fluxo.created`, `fluxo.updated`,
-`task.created`, `task.updated` e `task.deleted`, com `source` e `clientId`.
+`task.created`, `task.updated`, `task.deleted` e `attachment.created`, com `source` e `clientId`.
 
 ```js
 const { events } = createKiroAgent({ vaultDirectory });

@@ -491,6 +491,20 @@ class Vault {
       return {path:file};
     });
   }
+  /** Anexos das pastas marcadas, do mais novo para o mais antigo: só extensões servidas, nada oculto nem a marca. */
+  async listAttachments(){
+    const lista=[];
+    for(const name of ATTACHMENT_FOLDERS){
+      const directory=await this.safePath(name);
+      if(!await pathExists(directory)||!await temMarcaDeAnexos(directory))continue;
+      for(const entry of await fs.readdir(directory,{withFileTypes:true})){
+        if(!entry.isFile()||entry.name.startsWith('.')||!entry.name.includes('.')||!IMAGE_TYPES[entry.name.split('.').pop().toLowerCase()])continue;
+        const info=await fs.stat(path.join(directory,entry.name));
+        lista.push({path:`${name}/${entry.name}`,name:entry.name,size:info.size,mtime:info.mtimeMs});
+      }
+    }
+    return lista.sort((a,b)=>b.mtime-a.mtime).map(({mtime,...a})=>a);
+  }
   /** Lê uma imagem do cofre para exibir. Só extensões de imagem e nada oculto. */
   async readAttachment(relative){
     const {file,type,extension}=await this.attachmentFile(relative);
@@ -508,6 +522,8 @@ class Vault {
       const info=await handle.stat();
       if(!info.isFile()||info.size>ATTACHMENT_LIMIT)throw new Error(frase('Imagem inválida.'));
       const ler=async(start,length)=>{const b=Buffer.alloc(length);const {bytesRead}=await handle.read(b,0,length,start);return b.subarray(0,bytesRead);};
+      // Texto acima de 5 MB nem é lido: não passaria na conferência e custaria ler o arquivo inteiro.
+      if(type.startsWith('text/')&&info.size>TEXT_LIMIT)throw new Error(frase('Texto inválido.'));
       // Texto (até 5 MB) e arquivo pequeno não ganham nada com o trecho: lidos inteiros, com a mesma conferência de readAttachment.
       if(type.startsWith('text/')||info.size<=ATTACHMENT_HEAD){const data=await ler(0,info.size);checkAttachment(data,type,extension);return {type,...attachmentRange(data,header)};}
       checkAttachment(await ler(0,ATTACHMENT_HEAD),type,extension,true);

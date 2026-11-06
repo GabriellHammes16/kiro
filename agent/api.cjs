@@ -16,7 +16,7 @@ const domain = require('../domain.js');
 const KiroFluxo = require('../fluxo.js');
 const { atomicWrite } = require('../vault.cjs');
 const { pastaInterna } = require('./config.cjs');
-const { AgentError, vaultRelativePath, folderSegments, noteTitle, tagList, MAX_NOTE_CONTENT } = require('./security.cjs');
+const { AgentError, vaultRelativePath, folderSegments, noteTitle, tagList, MAX_NOTE_CONTENT, MAX_ANEXO, MAX_ANEXO_BASE64 } = require('./security.cjs');
 const { KiroEvents } = require('./events.cjs');
 
 const { pathKey, normalize, wikiLinks, findLinkedNote, localDate, habitStats, tags: tagsDaNota, validFolderName, safeUrl } = domain;
@@ -57,6 +57,8 @@ function recortar(corpo, consulta) {
   return `${inicio > 0 ? '…' : ''}${corpo.slice(inicio, fim).replace(/\s+/g, ' ').trim()}${fim < corpo.length ? '…' : ''}`;
 }
 
+// Texto da prévia vem do site: só string, e curto.
+const textoDaPrevia = (valor, maximo) => (typeof valor === 'string' ? valor.slice(0, maximo) : null);
 // Cartão do canvas no formato que a IA lê. Cartão de arquivo .md é "note" com o caminho da
 // nota; imagem e outros arquivos ficam "file".
 function cartaoParaIA(n, posicoes) {
@@ -65,6 +67,9 @@ function cartaoParaIA(n, posicoes) {
   else if (n.type === 'file') Object.assign(saida, /\.md$/i.test(n.file) ? { type: 'note', note: n.file } : { type: 'file', file: n.file });
   else if (n.type === 'link') Object.assign(saida, { type: 'link', url: n.url });
   else Object.assign(saida, { type: 'group' }, n.label !== undefined ? { label: n.label } : {});
+  if ((saida.type === 'file' || saida.type === 'link') && n.kiroRecolhido) saida.collapsed = true;
+  // Prévia do link: só título e descrição; o caminho da imagem guardada fica de fora.
+  if (n.type === 'link' && n.kiroPrevia && typeof n.kiroPrevia === 'object') saida.preview = { title: textoDaPrevia(n.kiroPrevia.titulo, 200), description: textoDaPrevia(n.kiroPrevia.descricao, 300) };
   if (n.color) saida.color = n.color;
   if (posicoes) Object.assign(saida, { x: n.x, y: n.y, width: n.width, height: n.height });
   return saida;
@@ -74,7 +79,11 @@ const setaParaIA = e => ({ id: e.id, from: e.fromNode, to: e.toNode, ...(e.label
 // ---- Entrada da IA para fluxos. O schema só confere o topo; cada cartão é validado aqui.
 const MAX_TEXTO_CARTAO = 5000;
 const MAX_CARTOES_DO_FLUXO = 2000;
-const CAMPOS_DO_CARTAO = ['id', 'type', 'text', 'note', 'url', 'label', 'color', 'x', 'y', 'width', 'height'];
+const CAMPOS_DO_CARTAO = ['id', 'type', 'text', 'note', 'file', 'url', 'label', 'color', 'collapsed', 'x', 'y', 'width', 'height'];
+const TIPOS_DE_ANEXO = ['pdf', 'imagem', 'texto', 'tabela', 'audio', 'video'];
+const MAX_LISTA_DE_ANEXOS = 1000;
+// Mensagens de Vault.saveAttachment que recusam o conteúdo, não o disco.
+const RECUSA_DO_CONTEUDO = /^(Imagem vazia|Imagem maior que|O arquivo não é uma imagem)/;
 
 function objeto(valor, onde) {
   if (!valor || typeof valor !== 'object' || Array.isArray(valor)) throw new AgentError('INVALID_INPUT', `${onde} deve ser um objeto.`);
@@ -103,6 +112,22 @@ function geometria(e, onde) {
 function corDoCartao(valor, onde) {
   if (valor === undefined || valor === null) return undefined;
   if (!KiroFluxo.corValida(valor)) throw new AgentError('INVALID_INPUT', `${onde}: "color" deve ser "1" a "6" (vermelho, laranja, amarelo, verde, ciano, roxo) ou #rrggbb.`);
+  return valor;
+}
+// Cartão de arquivo: caminho relativo ao cofre de um tipo que o Fluxo mostra. Nota .md é "note".
+function caminhoDoArquivo(valor, onde) {
+  const bruto = textoDoCartao(valor, 'file', onde);
+  if (!KiroFluxo.caminhoSeguro(bruto)) throw new AgentError('INVALID_INPUT', `${onde}: "file" deve ser um caminho relativo ao cofre, sem ".." nem unidade de disco.`);
+  const relativo = vaultRelativePath(bruto, { campo: 'file' });
+  if (KiroFluxo.tipoDoArquivo(relativo) === 'nota') {
+    throw new AgentError('INVALID_INPUT', `${onde}: o Fluxo não mostra "${relativo}" como arquivo. Aceitos: PDF, imagem, .txt, .csv, áudio e .mp4. Para uma nota .md, use type "note".`);
+  }
+  return relativo;
+}
+const naoEncontrados = faltando => new AgentError('NOTE_NOT_FOUND',
+  `Notas ou arquivos não encontrados: ${faltando.join(', ')}. Confira os caminhos com search_notes, list_notes ou list_attachments.`, { missing: faltando });
+function recolhidoDoCartao(valor, onde) {
+  if (typeof valor !== 'boolean') throw new AgentError('INVALID_INPUT', `${onde}: "collapsed" deve ser true ou false.`);
   return valor;
 }
 function apelido(e, onde, vistos) {
@@ -768,14 +793,31 @@ class KiroAgentApi {
     return alvo ? findLinkedNote(state.notes, alvo) : undefined;
   }
 
-  // Cartão pedido pela IA → cartão do canvas, sem id; x/y só se vierem. Nota que não existe
-  // entra em `faltando`: a chamada inteira é recusada depois, com a lista toda.
-  #cartaoDaIA(state, e, onde, faltando) {
+  // Arquivos dos cartões "file" pedidos que existem e abrem. Feito antes do ciclo de gravação,
+  // que é síncrono; o caminho inválido fica de fora e é recusado depois, em #cartaoDaIA.
+  async #anexosLegiveis(pedidos) {
+    const legiveis = new Set();
+    for (const e of Array.isArray(pedidos) ? pedidos : []) {
+      if (!e || e.type !== 'file') continue;
+      let relativo;
+      try { relativo = caminhoDoArquivo(e.file, ''); } catch { continue; }
+      if (legiveis.has(relativo)) continue;
+      // Só o primeiro byte: confere caminho, tipo e assinatura sem ler o arquivo inteiro.
+      try { await this.vault.readAttachmentRange(relativo, 'bytes=0-0'); legiveis.add(relativo); } catch { /* não existe ou não abre: vai para `faltando` */ }
+    }
+    return legiveis;
+  }
+
+  // Cartão pedido pela IA → cartão do canvas, sem id; x/y só se vierem. Nota ou arquivo que não
+  // existe entra em `faltando`: a chamada inteira é recusada depois, com a lista toda.
+  #cartaoDaIA(state, e, onde, faltando, anexos) {
     objeto(e, onde);
     const extras = Object.keys(e).filter(k => !CAMPOS_DO_CARTAO.includes(k));
     if (extras.length) throw new AgentError('INVALID_INPUT', `${onde}: campo desconhecido "${extras[0]}".`);
     const temX = e.x !== undefined && e.x !== null, temY = e.y !== undefined && e.y !== null;
     if (temX !== temY) throw new AgentError('INVALID_INPUT', `${onde}: "x" e "y" vêm juntos.`);
+    const temRecolhido = e.collapsed !== undefined && e.collapsed !== null;
+    if (temRecolhido && e.type !== 'file' && e.type !== 'link') throw new AgentError('INVALID_INPUT', `${onde}: "collapsed" só vale para cartões file e link.`);
     let cartao;
     if (e.type === 'text') cartao = { type: 'text', text: textoDoCartao(e.text ?? '', 'text', onde) };
     else if (e.type === 'note') {
@@ -783,15 +825,24 @@ class KiroAgentApi {
       const nota = this.#notaPorReferencia(state, ref);
       if (!nota) faltando.push(ref);
       cartao = { type: 'file', file: nota?.file || ref };
+    } else if (e.type === 'file') {
+      const relativo = caminhoDoArquivo(e.file, onde);
+      if (!anexos.has(relativo)) faltando.push(relativo);
+      cartao = { type: 'file', file: relativo };
     } else if (e.type === 'link') {
       const url = safeUrl(textoDoCartao(e.url, 'url', onde));
       if (!url) throw new AgentError('INVALID_INPUT', `${onde}: "url" precisa começar com http:// ou https://.`);
       cartao = { type: 'link', url };
     } else if (e.type === 'group') {
       cartao = { type: 'group', ...(e.label !== undefined && e.label !== null ? { label: textoDoCartao(e.label, 'label', onde) } : {}) };
-    } else throw new AgentError('INVALID_INPUT', `${onde}: "type" deve ser text, note, link ou group.`);
+    } else throw new AgentError('INVALID_INPUT', `${onde}: "type" deve ser text, note, file, link ou group.`);
     const cor = corDoCartao(e.color, onde);
-    return { ...cartao, ...(cor ? { color: cor } : {}), ...KiroFluxo.tamanhoPadrao(cartao), ...geometria(e, onde) };
+    const novo = { ...cartao, ...(cor ? { color: cor } : {}), ...KiroFluxo.tamanhoPadrao(cartao), ...geometria(e, onde) };
+    // Como na tela: PDF entra recolhido, o resto aberto, a menos que a IA peça outro estado.
+    const recolher = temRecolhido ? recolhidoDoCartao(e.collapsed, onde) : e.type === 'file' && KiroFluxo.ehPdf(novo.file);
+    if (!recolher) return novo;
+    const { id: _, ...recolhido } =KiroFluxo.alternarRecolhido({ nodes: [{ ...novo, id: '_' }] }, '_').nodes[0];
+    return recolhido;
   }
 
   async createFluxo(args = {}, contexto = {}) {
@@ -799,17 +850,16 @@ class KiroAgentApi {
     const temPasta = args.folder !== undefined && args.folder !== null;
     const segmentos = temPasta ? folderSegments(args.folder) : [];
     if (!Array.isArray(args.nodes) || !args.nodes.length) throw new AgentError('INVALID_INPUT', 'Informe ao menos um cartão em "nodes".');
+    const anexos = await this.#anexosLegiveis(args.nodes);
 
     const id = randomUUID();
     const { antes, depois, resultado } = await this.#mutate(state => {
       const faltando = [], vistos = new Set();
-      const pedidos = args.nodes.map((e, i) => ({ apelido: apelido(e, `nodes[${i}]`, vistos), cartao: this.#cartaoDaIA(state, e, `nodes[${i}]`, faltando) }));
+      const pedidos = args.nodes.map((e, i) => ({ apelido: apelido(e, `nodes[${i}]`, vistos), cartao: this.#cartaoDaIA(state, e, `nodes[${i}]`, faltando, anexos) }));
       const temOrigem = args.sourceNote !== undefined && args.sourceNote !== null;
       const origem = temOrigem ? this.#notaPorReferencia(state, textoDoCartao(args.sourceNote, 'sourceNote', 'sourceNote')) : null;
       if (temOrigem && !origem) faltando.push(args.sourceNote);
-      if (faltando.length) {
-        throw new AgentError('NOTE_NOT_FOUND', `Notas não encontradas: ${faltando.join(', ')}. Confira os caminhos com search_notes ou list_notes.`, { missing: faltando });
-      }
+      if (faltando.length) throw naoEncontrados(faltando);
       const temRaiz = args.root !== undefined && args.root !== null;
       if (temRaiz && !vistos.has(args.root)) throw new AgentError('INVALID_INPUT', '"root" deve ser o id de um dos cartões de "nodes".');
 
@@ -851,14 +901,18 @@ class KiroAgentApi {
     return { success: true, fluxo: this.#resumoFluxo(depois, criado), ids: resultado.ids, revisionBefore: antes.revision, revision: depois.revision };
   }
 
-  // update_nodes: muda conteúdo, cor, posição ou tamanho. O tipo do cartão não muda.
+  // update_nodes: muda conteúdo, cor, posição, tamanho ou, em file e link, se está recolhido. O tipo do cartão não muda.
   #editarCartaoDaIA(state, c, e, onde, faltando, vivos) {
     objeto(e, onde);
     if (typeof e.id !== 'string' || !vivos.has(e.id)) throw new AgentError('INVALID_INPUT', `${onde}: nenhum cartão com o id "${e.id}" neste fluxo.`);
     const atual = c.nodes.find(n => n.id === e.id);
     const tipo = cartaoParaIA(atual, false).type;
+    const recolhivel = tipo === 'file' || tipo === 'link';
+    if (e.collapsed !== undefined && e.collapsed !== null && !recolhivel) {
+      throw new AgentError('INVALID_INPUT', `${onde}: "collapsed" só vale para cartões file e link; este é do tipo ${tipo}.`);
+    }
     const conteudo = { text: 'text', note: 'note', link: 'url', group: 'label' }[tipo];
-    const extras = Object.keys(e).filter(k => !['id', 'color', 'x', 'y', 'width', 'height', conteudo].includes(k));
+    const extras = Object.keys(e).filter(k => !['id', 'color', 'x', 'y', 'width', 'height', 'collapsed', conteudo].includes(k));
     if (extras.length) {
       throw new AgentError('INVALID_INPUT', `${onde}: "${extras[0]}" não se aplica a um cartão do tipo ${tipo}. O tipo não muda; para trocar, remova o cartão e crie outro.`);
     }
@@ -880,7 +934,16 @@ class KiroAgentApi {
       // A nota mudou: um subpath (âncora para um trecho da nota antiga) do Obsidian ficaria errado.
       if (nota) { campos.file = nota.file; campos.subpath = undefined; } else faltando.push(valor);
     }
-    return KiroFluxo.editarCartao(c, e.id, campos);
+    // A altura entra depois do estado: só alterna se o pedido for outro (recolher guarda a altura
+    // aberta, abrir a devolve), e num cartão que fica recolhido ela vira a altura de quando abrir.
+    const { height: altura, ...semAltura } = campos;
+    let editado = KiroFluxo.editarCartao(c, e.id, semAltura);
+    const noFim = () => editado.nodes.find(n => n.id === e.id);
+    if (e.collapsed !== undefined && e.collapsed !== null && !!noFim().kiroRecolhido !== recolhidoDoCartao(e.collapsed, onde)) {
+      editado = KiroFluxo.alternarRecolhido(editado, e.id);
+    }
+    if (altura !== undefined) editado = KiroFluxo.editarCartao(editado, e.id, noFim().kiroRecolhido ? { kiroAlturaAberta: altura } : { height: altura });
+    return editado;
   }
 
   async updateFluxo(args = {}, contexto = {}) {
@@ -888,6 +951,7 @@ class KiroAgentApi {
     if (!listas.some(k => Array.isArray(args[k]) && args[k].length)) {
       throw new AgentError('INVALID_INPUT', `Nada para alterar: informe ${listas.join(', ')}.`);
     }
+    const anexos = await this.#anexosLegiveis(args.add_nodes);
     const { antes, depois, resultado } = await this.#mutate(state => {
       const fluxo = this.#fluxoLegivel(state, args);
       let c = fluxo.canvas;
@@ -907,14 +971,12 @@ class KiroAgentApi {
       const novos = (args.add_nodes || []).map((e, i) => {
         const onde = `add_nodes[${i}]`, a = apelido(e, onde, vistos);
         if (existentes.has(a)) throw new AgentError('INVALID_INPUT', `${onde}: o id "${a}" já é de um cartão deste fluxo; escolha outro apelido.`);
-        const cartao = this.#cartaoDaIA(state, e, onde, faltando);
+        const cartao = this.#cartaoDaIA(state, e, onde, faltando, anexos);
         const idReal = reservar();
         real.set(a, idReal);
         return { id: idReal, ...cartao };
       });
-      if (faltando.length) {
-        throw new AgentError('NOTE_NOT_FOUND', `Notas não encontradas: ${faltando.join(', ')}. Confira os caminhos com search_notes ou list_notes.`, { missing: faltando });
-      }
+      if (faltando.length) throw naoEncontrados(faltando);
       const resolver = ref => real.get(ref) || (vivos.has(ref) ? ref : undefined);
       const setas = (args.add_edges || []).map((e, i) => ({ id: reservar(), ...setaDaIA(e, `add_edges[${i}]`, resolver, 'ids de cartões deste fluxo (de read_fluxo) ou apelidos de add_nodes') }));
 
@@ -932,6 +994,40 @@ class KiroAgentApi {
     const atual = (depois.fluxos || []).find(f => f.id === resultado.id);
     this.events.emitVaultEvent('fluxo.updated', { id: resultado.id, path: atual?.file, source: 'agent', clientId: contexto.clientId });
     return { success: true, fluxo: this.#resumoFluxo(depois, atual), ids: resultado.ids, revisionBefore: antes.revision, revision: depois.revision };
+  }
+
+  // ---------------------------------------------------------------- anexos
+  // Arquivos guardados na pasta de anexos do cofre, os mesmos que a tela põe no Fluxo.
+
+  async listAttachments(args = {}) {
+    if (args.type !== undefined && args.type !== null && !TIPOS_DE_ANEXO.includes(args.type)) {
+      throw new AgentError('INVALID_INPUT', `"type" deve ser um de: ${TIPOS_DE_ANEXO.join(', ')}.`);
+    }
+    const limite = Math.min(Math.max(Number.parseInt(args.limit, 10) || MAX_LIMITE, 1), MAX_LISTA_DE_ANEXOS);
+    const todos = (await this.vault.listAttachments())
+      .map(a => ({ ...a, type: KiroFluxo.tipoDoArquivo(a.name) }))
+      .filter(a => a.type !== 'nota' && (!args.type || a.type === args.type));
+    return { total: todos.length, attachments: todos.slice(0, limite).map(({ path: p, name, type, size }) => ({ path: p, name, type, size })) };
+  }
+
+  // Só o conteúdo, em base64: nada de caminho do disco nem URL. O Vault confere o tipo pelos bytes.
+  async addAttachment(args = {}, contexto = {}) {
+    const nome = noteTitle(args.name, { campo: 'name' });
+    if (/[\\/:]/.test(nome)) throw new AgentError('INVALID_NAME', '"name" é só o nome do arquivo, como "foto.png", sem pastas nem unidade de disco.');
+    const dados = args.data_base64;
+    if (typeof dados !== 'string' || !dados) throw new AgentError('INVALID_INPUT', '"data_base64" deve ser o conteúdo do arquivo em base64.');
+    if (dados.length > MAX_ANEXO_BASE64) throw new AgentError('INVALID_INPUT', `O anexo passa de ${MAX_ANEXO / 1024 / 1024} MB.`);
+    const limpo = dados.replace(/\s+/g, '');
+    if (!/^[A-Za-z0-9+/]+={0,2}$/.test(limpo) || limpo.length % 4 === 1) {
+      throw new AgentError('INVALID_INPUT', '"data_base64" deve ser só o conteúdo em base64, sem "data:", URL nem caminho de arquivo.');
+    }
+    const data = Buffer.from(limpo, 'base64');
+    let salvo;
+    try { salvo = await this.vault.saveAttachment({ name: nome, data }); }
+    // Só a recusa do conteúdo (tipo ou tamanho) é erro de entrada; disco cheio, permissão e pasta ocupada seguem como vieram.
+    catch (erro) { throw RECUSA_DO_CONTEUDO.test(erro.message) ? new AgentError('INVALID_INPUT', erro.message) : erro; }
+    this.events.emitVaultEvent('attachment.created', { path: salvo.path, source: 'agent', clientId: contexto.clientId });
+    return { success: true, path: salvo.path, type: KiroFluxo.tipoDoArquivo(salvo.path), size: data.length };
   }
 
   // ---------------------------------------------------------------- tarefas

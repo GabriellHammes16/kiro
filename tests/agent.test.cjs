@@ -940,6 +940,162 @@ test('update_fluxo respeita a permissão de alterar e emite fluxo.updated', asyn
   await assert.rejects(toolkit.call('update_fluxo', { id: base.fluxo.id, update_nodes: [{ id: base.ids.a, text: 'y' }] }, cliente), codigo('PERMISSION_DENIED'));
 });
 
+// ---- Arquivos no Fluxo e anexos ----
+const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
+const PDF = Buffer.from('%PDF-1.4\n1 0 obj\n<<>>\nendobj\ntrailer\n<<>>\n%%EOF\n');
+const anexar = (toolkit, name, data) => toolkit.call('add_attachment', { name, data_base64: data.toString('base64') }, cliente);
+
+test('add_attachment grava pelo conteúdo, recusa tipo não aceito, base64 grande e campo extra', async t => {
+  const { toolkit, directory, events } = await montar(t);
+  const vistos = [];
+  events.on('attachment.created', c => vistos.push(c));
+  const png = await anexar(toolkit, 'foto.png', PNG);
+  assert.match(png.path, /^Anexos\/foto-[0-9a-f]{6}\.png$/);
+  assert.equal(png.type, 'imagem');
+  assert.equal(png.size, PNG.length);
+  assert.deepEqual(await fs.readFile(path.join(directory, png.path)), PNG);
+  assert.equal(vistos.length, 1);
+  assert.equal(vistos[0].path, png.path);
+
+  await assert.rejects(anexar(toolkit, 'x.exe', Buffer.from('MZ\0\0binario')), codigo('INVALID_INPUT'));
+  await assert.rejects(toolkit.call('add_attachment', { name: 'x.png', data_base64: 'data:image/png;base64,AAAA' }, cliente), codigo('INVALID_INPUT'));
+  await assert.rejects(toolkit.call('add_attachment', { name: 'C:/Users/x.png', data_base64: PNG.toString('base64') }, cliente), codigo('INVALID_NAME'));
+  await assert.rejects(toolkit.call('add_attachment', { name: 'x.png', data_base64: PNG.toString('base64'), path: 'C:/x.png' }, cliente), codigo('INVALID_INPUT'));
+  // Acima de 25 MB pelo tamanho da string: recusa sem decodificar.
+  const decodificar = Buffer.from;
+  let decodificou = false;
+  Buffer.from = (...a) => { if (a[1] === 'base64') decodificou = true; return decodificar.apply(Buffer, a); };
+  try {
+    await assert.rejects(toolkit.call('add_attachment', { name: 'g.png', data_base64: 'A'.repeat(36 * 1024 * 1024) }, cliente), codigo('INVALID_INPUT'));
+    await assert.rejects(toolkit.api.addAttachment({ name: 'g.png', data_base64: 'A'.repeat(36 * 1024 * 1024) }), codigo('INVALID_INPUT'));
+  } finally { Buffer.from = decodificar; }
+  assert.equal(decodificou, false);
+});
+
+test('list_attachments lista os anexos com tipo, filtra por tipo e esconde a marca e o oculto', async t => {
+  const { toolkit, directory } = await montar(t);
+  const png = await anexar(toolkit, 'foto.png', PNG);
+  const pdf = await anexar(toolkit, 'livro.pdf', PDF);
+  await fs.writeFile(path.join(directory, 'Anexos', '.oculto.png'), PNG);
+  const { attachments } = await toolkit.call('list_attachments', {}, cliente);
+  assert.deepEqual(attachments.map(a => a.path).sort(), [png.path, pdf.path].sort());
+  assert.deepEqual(attachments.find(a => a.path === pdf.path), { path: pdf.path, name: pdf.path.split('/')[1], type: 'pdf', size: PDF.length });
+  assert.deepEqual((await toolkit.call('list_attachments', { type: 'imagem' }, cliente)).attachments.map(a => a.path), [png.path]);
+  assert.equal((await toolkit.call('list_attachments', { limit: 1 }, cliente)).attachments.length, 1);
+  await assert.rejects(toolkit.call('list_attachments', { type: 'exe' }, cliente), codigo('INVALID_INPUT'));
+  await assert.rejects(toolkit.call('list_attachments', { limit: 1001 }, cliente), codigo('INVALID_INPUT'));
+});
+
+test('create_fluxo com cartão file: PDF entra recolhido, collapsed false abre, e arquivo que falta ou caminho inseguro é recusado', async t => {
+  const { toolkit } = await montar(t);
+  const pdf = await anexar(toolkit, 'livro.pdf', PDF);
+  const png = await anexar(toolkit, 'foto.png', PNG);
+  const criado = await toolkit.call('create_fluxo', { title: 'Leituras', nodes: [
+    { id: 'pdf', type: 'file', file: pdf.path },
+    { id: 'aberto', type: 'file', file: pdf.path, collapsed: false },
+    { id: 'foto', type: 'file', file: png.path },
+    { id: 'site', type: 'link', url: 'https://exemplo.com', collapsed: true },
+  ] }, cliente);
+  const { nodes } = await lerFluxo(toolkit, { id: criado.fluxo.id });
+  const no = a => nodes.find(n => n.id === criado.ids[a]);
+  assert.equal(no('pdf').type, 'file');
+  assert.equal(no('pdf').file, pdf.path);
+  assert.equal(no('pdf').collapsed, true);
+  assert.equal(no('pdf').height, 40);
+  assert.equal(no('aberto').collapsed, undefined);
+  assert.equal(no('aberto').height, 640);
+  assert.equal(no('foto').collapsed, undefined);
+  assert.equal(no('foto').width, 320);
+  assert.equal(no('site').collapsed, true);
+
+  await assert.rejects(toolkit.call('create_fluxo', { title: 'Falta', nodes: [{ id: 'a', type: 'file', file: 'Anexos/sumiu.pdf' }] }, cliente),
+    erro => erro.code === 'NOTE_NOT_FOUND' && /Anexos\/sumiu\.pdf/.test(erro.message) && erro.details.missing.includes('Anexos/sumiu.pdf'));
+  for (const file of ['../x.pdf', 'C:/x.pdf', '/x.pdf']) {
+    await assert.rejects(toolkit.call('create_fluxo', { title: 'Inseguro', nodes: [{ id: 'a', type: 'file', file }] }, cliente), codigo('INVALID_INPUT', 'INVALID_PATH'), file);
+  }
+  // Nota .md continua sendo "note"; collapsed não vale para text.
+  await assert.rejects(toolkit.call('create_fluxo', { title: 'Md', nodes: [{ id: 'a', type: 'file', file: 'Notas/x.md' }] }, cliente), codigo('INVALID_INPUT'));
+  await assert.rejects(toolkit.call('create_fluxo', { title: 'Txt', nodes: [{ id: 'a', type: 'text', text: 'x', collapsed: true }] }, cliente), codigo('INVALID_INPUT'));
+  assert.equal((await toolkit.call('list_fluxos', {}, cliente)).fluxos.length, 1);
+});
+
+test('update_fluxo: add_nodes com file, update_nodes com collapsed alterna e guarda a altura aberta', async t => {
+  const { toolkit } = await montar(t);
+  const png = await anexar(toolkit, 'foto.png', PNG);
+  const base = await fluxoBase(toolkit);
+  const r = await toolkit.call('update_fluxo', { id: base.fluxo.id, add_nodes: [{ id: 'f', type: 'file', file: png.path, height: 300 }] }, cliente);
+  const id = r.ids.f;
+  const altura = async () => (await lerFluxo(toolkit, { id: base.fluxo.id })).nodes.find(n => n.id === id);
+  assert.equal((await altura()).height, 300);
+
+  await toolkit.call('update_fluxo', { id: base.fluxo.id, update_nodes: [{ id, collapsed: true }] }, cliente);
+  assert.deepEqual([(await altura()).collapsed, (await altura()).height], [true, 40]);
+  // Pedir o mesmo estado não alterna de novo.
+  await toolkit.call('update_fluxo', { id: base.fluxo.id, update_nodes: [{ id, collapsed: true }] }, cliente);
+  assert.equal((await altura()).height, 40);
+  await toolkit.call('update_fluxo', { id: base.fluxo.id, update_nodes: [{ id, collapsed: false }] }, cliente);
+  assert.deepEqual([(await altura()).collapsed, (await altura()).height], [undefined, 300]);
+
+  await assert.rejects(toolkit.call('update_fluxo', { id: base.fluxo.id, update_nodes: [{ id: base.ids.a, collapsed: true }] }, cliente), codigo('INVALID_INPUT'));
+  await assert.rejects(toolkit.call('update_fluxo', { id: base.fluxo.id, update_nodes: [{ id, collapsed: 'sim' }] }, cliente), codigo('INVALID_INPUT'));
+  await assert.rejects(toolkit.call('update_fluxo', { id: base.fluxo.id, add_nodes: [{ id: 'g', type: 'file', file: 'Anexos/nao.png' }] }, cliente), codigo('NOTE_NOT_FOUND'));
+});
+
+test('update_nodes: height entra depois de abrir; em cartão recolhido vira a altura de quando abrir', async t => {
+  const { toolkit } = await montar(t);
+  const pdf = await anexar(toolkit, 'livro.pdf', PDF);
+  const base = await fluxoBase(toolkit);
+  const id = (await toolkit.call('update_fluxo', { id: base.fluxo.id, add_nodes: [{ id: 'p', type: 'file', file: pdf.path }] }, cliente)).ids.p;
+  const cartao = async () => (await lerFluxo(toolkit, { id: base.fluxo.id })).nodes.find(n => n.id === id);
+  const editar = pedido => toolkit.call('update_fluxo', { id: base.fluxo.id, update_nodes: [{ id, ...pedido }] }, cliente);
+  assert.equal((await cartao()).height, 40);
+  await editar({ height: 200 });
+  assert.deepEqual([(await cartao()).collapsed, (await cartao()).height], [true, 40]);
+  await editar({ collapsed: false });
+  assert.equal((await cartao()).height, 200);
+  await editar({ collapsed: true });
+  await editar({ collapsed: false, height: 500 });
+  assert.deepEqual([(await cartao()).collapsed, (await cartao()).height], [undefined, 500]);
+});
+
+test('texto acima de 5 MB não é lido para conferir um cartão, e falha de disco no anexo não vira erro de entrada', async t => {
+  const { toolkit, vault, directory } = await montar(t);
+  await anexar(toolkit, 'nota.txt', Buffer.from('oi'));
+  await fs.writeFile(path.join(directory, 'Anexos', 'grande.txt'), Buffer.alloc(5 * 1024 * 1024 + 1, 'a'));
+  // Espia as leituras do Vault: o texto grande é recusado pelo tamanho, sem ler nenhum byte.
+  const abrir = fs.open;
+  const abertos = [];
+  fs.open = async (...a) => { const h = await abrir(...a); const read = h.read.bind(h); h.read = (b, o, n, p) => { abertos.push(n); return read(b, o, n, p); }; return h; };
+  try { await assert.rejects(vault.readAttachmentRange('Anexos/grande.txt', 'bytes=0-0'), /Texto inválido/); }
+  finally { fs.open = abrir; }
+  assert.deepEqual(abertos, [], 'o texto grande não pode ser lido');
+  await assert.rejects(toolkit.call('create_fluxo', { title: 'G', nodes: [{ id: 'a', type: 'file', file: 'Anexos/grande.txt' }] }, cliente), codigo('NOTE_NOT_FOUND'));
+
+  vault.saveAttachment = async () => { const e = new Error('EACCES: permissão negada'); e.code = 'EACCES'; throw e; };
+  await assert.rejects(anexar(toolkit, 'foto.png', PNG), erro => erro.code === 'EACCES');
+});
+
+test('read_fluxo mostra collapsed e a prévia do link, sem o caminho da imagem', async t => {
+  const { toolkit, directory } = await montar(t);
+  await gravarCanvas(directory, 'Previa.canvas', {
+    nodes: [
+      { id: 'l', type: 'link', url: 'https://exemplo.com', x: 0, y: 0, width: 320, height: 40, kiroRecolhido: true, kiroAlturaAberta: 240, kiroPrevia: { titulo: 'Exemplo', descricao: 'Um site', imagem: 'Anexos/previa.png' } },
+      { id: 'f', type: 'file', file: 'Anexos/a.pdf', x: 400, y: 0, width: 480, height: 40, kiroRecolhido: true, kiroAlturaAberta: 640 },
+      { id: 't', type: 'text', text: 'oi', x: 0, y: 300, width: 280, height: 60 },
+      { id: 'l2', type: 'link', url: 'https://b.com', x: 0, y: 400, width: 320, height: 150, kiroPrevia: { titulo: 'T'.repeat(250), descricao: { html: 1 } } },
+    ],
+    edges: [],
+  });
+  const { fluxos } = await toolkit.call('list_fluxos', {}, cliente);
+  const lido = await toolkit.call('read_fluxo', { id: fluxos[0].id }, cliente);
+  assert.deepEqual(lido.nodes, [
+    { id: 'l', type: 'link', url: 'https://exemplo.com', collapsed: true, preview: { title: 'Exemplo', description: 'Um site' } },
+    { id: 'f', type: 'file', file: 'Anexos/a.pdf', collapsed: true },
+    { id: 't', type: 'text', text: 'oi' },
+    { id: 'l2', type: 'link', url: 'https://b.com', preview: { title: 'T'.repeat(200), description: null } },
+  ]);
+});
+
 test('tarefas: criar, listar, editar, mudar status e excluir pela API de agentes', async t => {
   const { toolkit, config, events } = await montar(t);
   const vistos = [];

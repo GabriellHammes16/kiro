@@ -20,6 +20,9 @@ const MAX_TITLE = 200;
 // 1 milhão de caracteres dá umas 500 páginas. Cada gravação copia o cofre para .history,
 // então notas gigantes pesam várias vezes no disco.
 const MAX_NOTE_CONTENT = 1_000_000;
+// Anexo enviado por agente: até 25 MB. O base64 é conferido pelo tamanho da string, antes de decodificar.
+const MAX_ANEXO = 25 * 1024 * 1024;
+const MAX_ANEXO_BASE64 = Math.ceil(MAX_ANEXO / 3) * 4;
 
 // Nome curto do Windows (KIRO~1, HISTOR~1, CADERN~1.JSO): abre a pasta real com outro nome
 // e passaria pela checagem de nomes ocultos. Até 8 caracteres antes da extensão, como no 8.3.
@@ -94,4 +97,4 @@ function tagList(entrada, { campo = 'tags' } = {}) {
 
 const mesmoCaminho = (a, b) => pathKey(String(a || '')) === pathKey(String(b || ''));
 
-module.exports = { AgentError, vaultRelativePath, folderSegments, noteTitle, tagList, mesmoCaminho, RESERVED, MAX_NOTE_CONTENT };
+module.exports = { AgentError, vaultRelativePath, folderSegments, noteTitle, tagList, mesmoCaminho, RESERVED, MAX_NOTE_CONTENT, MAX_ANEXO, MAX_ANEXO_BASE64 };

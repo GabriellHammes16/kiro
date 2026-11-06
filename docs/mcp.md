@@ -118,10 +118,17 @@ quem fez o quê.
 `kiro_create_note_link`, `kiro_get_recent_notes`, `kiro_get_daily_note`, `kiro_get_habits`,
 `kiro_add_tag`, `kiro_remove_tag`, `kiro_search_by_tag`,
 `kiro_get_vault_info`, `kiro_list_fluxos`, `kiro_read_fluxo`, `kiro_create_fluxo`,
-`kiro_update_fluxo`, `kiro_list_tasks`, `kiro_create_task`, `kiro_update_task`,
+`kiro_update_fluxo`, `kiro_list_attachments`, `kiro_add_attachment`, `kiro_list_tasks`, `kiro_create_task`, `kiro_update_task`,
 `kiro_set_task_status`, `kiro_delete_task`.
 
 Schemas e níveis de risco estão em [agent-api.md](./agent-api.md).
+
+Para montar um Fluxo com arquivos, a IA envia o arquivo com `kiro_add_attachment`
+(o conteúdo em base64, até 25 MB; caminho do disco e URL não são aceitos), acha os
+que já existem com `kiro_list_attachments` e usa o `path` num cartão
+`{ "type": "file", "file": "Anexos/….pdf" }`. Cartões `file` e `link` aceitam
+`collapsed`; `kiro_read_fluxo` devolve `collapsed: true` e, nos links com prévia,
+`preview: { title, description }`.
 
 Cada ferramenta vai com *annotations* padrão do MCP — `readOnlyHint`,
 `destructiveHint`, `idempotentHint`, `openWorldHint` — e com `kiro/risk` e
