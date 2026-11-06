@@ -190,19 +190,29 @@ Detalhes em [docs/agent-api.md](docs/agent-api.md) e [docs/mcp.md](docs/mcp.md).
 - `mcp/`: servidor MCP, adaptador fino sobre a Agent API.
 - `tests/`: testes de persistência, API, agentes e MCP em pastas temporárias.
 
-## Privacidade
+## Privacy
 
-O Kiro guarda tudo no seu computador, no cofre (uma pasta de arquivos Markdown). Ele não tem telemetria, não cria conta e não manda nada para servidores do Kiro.
+Kiro keeps everything on your own computer, in your vault: a normal folder of Markdown files. There is no account, no tracking and no telemetry. Kiro never sends your notes to us.
 
 This program will not transfer any information to other networked systems unless specifically requested by the user or the person installing or operating it.
 
-Ele só se conecta à internet quando você pede:
+Kiro only goes online when you ask it to:
 
-- **Backup no Google Drive:** só se você conectar sua conta nas Configurações. O backup vai para o seu Drive, pelas regras de privacidade do Google.
-- **Prévia de links e vídeos do YouTube no Fluxo:** vem desligado. Ligado em Configurações → Sistema, o Kiro busca o título e a imagem do site que você colou, e o YouTube recebe o pedido quando você toca um vídeo.
-- **Plug-ins com acesso à rede:** cada plug-in só fala com os endereços que você autoriza ao ativá-lo.
+- **Google Drive backup:** only if you connect your Google account in Settings. Your backup goes to your own Drive, under Google's privacy policy.
+- **Link previews and YouTube videos in Flow:** off by default. If you turn it on (Settings → System → Internet in Flow), Kiro fetches the title and image of a link you paste, and YouTube is contacted when you play a video.
+- **Plug-ins that use the network:** each plug-in can only reach the addresses you allow when you turn it on.
 
-## Licença
+## Code signing policy
 
-O Kiro é software livre, sob a [GNU General Public License v3.0 ou posterior](LICENSE). Os componentes de terceiros em `vendor/` e `fonts/` mantêm as próprias licenças, ao lado de cada um.
+Windows releases are signed so that Windows can confirm they really come from this project and were not changed.
 
+- Free code signing provided by [SignPath.io](https://about.signpath.io/), certificate by [SignPath Foundation](https://signpath.org/). *(Application submitted; releases are unsigned until it is approved.)*
+- Every signed file is built automatically from this repository by [GitHub Actions](.github/workflows/build.yml), and each release is approved by hand before it is signed.
+- Team roles:
+  - Committers and reviewers: [GabriellHammes16](https://github.com/GabriellHammes16)
+  - Approvers: [GabriellHammes16](https://github.com/GabriellHammes16)
+- Privacy: see [Privacy](#privacy) above.
+
+## License
+
+Kiro is free and open source software under the [GNU General Public License v3.0 or later](LICENSE). Third-party parts in `vendor/` and `fonts/` keep their own licenses, which are included next to them.
