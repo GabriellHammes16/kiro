@@ -75,7 +75,7 @@ Formato usado pela maioria dos clientes MCP:
   "mcpServers": {
     "kiro": {
       "command": "node",
-      "args": ["C:/Projetos/Meu segundo cerebro/mcp/server.mjs"],
+      "args": ["C:/caminho/para/kiro/mcp/server.mjs"],
       "env": { "KIRO_VAULT": "C:/Users/voce/Documents/Kiro/vault" }
     }
   }
@@ -95,7 +95,7 @@ import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
 const cliente = new Client({ name: 'meu-agente', version: '1.0.0' }, { capabilities: {} });
 await cliente.connect(new StdioClientTransport({
   command: 'node',
-  args: ['C:/Projetos/Meu segundo cerebro/mcp/server.mjs'],
+  args: ['C:/caminho/para/kiro/mcp/server.mjs'],
 }));
 
 const { tools } = await cliente.listTools();
