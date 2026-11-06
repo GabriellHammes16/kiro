@@ -160,8 +160,11 @@
       // Corpo já aberto (PDF, texto, vídeo tocando…) volta no lugar do novo, com a rolagem: recarregar piscaria, e o vídeo pararia.
       // Os corpos vivem na sessão (`s.corpos`), não só neste DOM: o autosave remonta a tela inteira (outra instância de `montar`),
       // e movidos no mesmo instante da troca o <audio> e o <video> não chegam a pausar.
-      const antigos = new Map(s.corpos);
-      for (const el of cartoes.querySelectorAll('[data-reusar]')) { antigos.set(el.dataset.reusar, el); guardarCorpo(el); }   // sai do DOM sem recarregar
+      // O mesmo fluxo em duas colunas divide a sessão: um corpo que está na outra coluna não é tomado dela
+      // (as duas ficariam se roubando a cada desenho). Só vale o que está na guarda ou nesta tela.
+      const antigos = new Map(s.corpos), daqui = new Set();
+      for (const el of cartoes.querySelectorAll('[data-reusar]')) { antigos.set(el.dataset.reusar, el); daqui.add(el); guardarCorpo(el); }   // sai do DOM sem recarregar
+      for (const [chave, el] of antigos) if (el.parentNode !== guardaDeCorpos && !daqui.has(el)) antigos.delete(chave);
       // Grupos primeiro: ficam atrás dos cartões.
       const ordem = c => (c.type === 'group' ? 0 : 1);
       cartoes.innerHTML = [...canvas.nodes].sort((a, b) => ordem(a) - ordem(b)).map(cartaoHtml).join('');
@@ -251,12 +254,13 @@
     const centroDaVista = () => { const [w, h] = tamanho(); return F.paraCanvas(s.vista, w / 2, h / 2); };
     // Novo cartão centrado em p. Depois de um await (modal, gravação de imagem) o app pode ter
     // redesenhado a tela e este editor já não ser o montado: aí vale o canvas que está no estado.
-    function adicionarNo(base, p, aoCriar) {
+    // `livre`: desce até não cobrir outro cartão (arquivos colados ou soltos em sequência).
+    function adicionarNo(base, p, aoCriar, livre = false) {
       // Um salvamento em andamento troca `state` por baixo dos nós: gravar agora cairia no
       // `state` antigo e `render()` (fim do save) reconstruiria a tela sem este cartão. Esperar
       // a folga: depois a chamada de novo cai na instância viva ou no ramo morto com
       // canvasAtual + redesenhar (F1).
-      if (opcoes.salvando?.()) return void setTimeout(() => adicionarNo(base, p, aoCriar), 150);
+      if (opcoes.salvando?.()) return void setTimeout(() => adicionarNo(base, p, aoCriar, livre), 150);
       if (!montados.has(inst)) {
         // Instância morta: gravar direto no canvas mais recente do estado (não no `canvas` desta
         // closure, que ficou parado no momento em que a tela redesenhou) e pedir um redesenho.
@@ -264,7 +268,7 @@
         // depois apagaria este cartão; redesenhar agora a recria já com ele.
         const atual = opcoes.canvasAtual();
         if (!atual) return;   // o fluxo foi excluído enquanto isto estava pendente (M2)
-        const r = F.adicionarCartao(atual, { ...base, x: encaixar(p.x - base.width / 2), y: encaixar(p.y - base.height / 2) });
+        const r = F.adicionarCartao(atual, { ...base, ...cantoEm(atual, base, p, livre) });
         s.historico = F.empilhar(s.historico, atual);
         s.selecao = new Set([r.id]);
         opcoes.aoMudar(r.canvas);
@@ -273,16 +277,21 @@
         return r.id;
       }
       terminarEdicao();   // um upload que termina enquanto se digita comita o texto, não o redesenha por baixo (M1)
-      const r = F.adicionarCartao(canvas, { ...base, x: encaixar(p.x - base.width / 2), y: encaixar(p.y - base.height / 2) });
+      const r = F.adicionarCartao(canvas, { ...base, ...cantoEm(canvas, base, p, livre) });
       s.selecao = new Set([r.id]);
       mudar(r.canvas);
       aoCriar?.(r.id);
       return r.id;
     }
+    // Canto do cartão `base` centrado em p, na grade; `livre`: o primeiro lugar abaixo que não cobre outro cartão.
+    function cantoEm(c, base, p, livre) {
+      const caixa = { x: encaixar(p.x - base.width / 2), y: encaixar(p.y - base.height / 2), width: base.width, height: base.height };
+      return livre ? F.lugarLivre(c, caixa) : { x: caixa.x, y: caixa.y };
+    }
     // Link novo: nasce com o endereço e a prévia (título, descrição, imagem) entra quando chega, fora do desfazer.
     // YouTube também: guarda só o título. Qualquer falha da busca deixa o cartão como está.
     function novoLink(url, p) {
-      const base = { type: 'link', url, width: 320, height: 100 };
+      const base = { type: 'link', url, ...F.tamanhoPadrao({ type: 'link', url }) };   // YouTube nasce 480 × 300
       adicionarNo(base, p, !opcoes.previaDeLink ? undefined : idNo => {
         Promise.resolve(opcoes.previaDeLink(url)).then(previa => receberPrevia(idNo, previa), () => {});
       });
@@ -291,8 +300,9 @@
     // a busca corria): grava no canvas mais recente do estado e redesenha. Sem desfazer em nenhum dos dois.
     function receberPrevia(idNo, previa) {
       if (!previa || typeof previa !== 'object') return;
-      // Espera salvamento, arraste/redimensionamento (o soltar gravaria um canvas calculado sem a prévia) e edição aberta.
-      if (opcoes.salvando?.() || (montados.has(inst) && (gesto || editor))) return void setTimeout(() => receberPrevia(idNo, previa), 150);
+      // Espera salvamento, arraste/redimensionamento (o soltar gravaria um canvas calculado sem a prévia) e edição aberta,
+      // em qualquer tela montada: a instância morta redesenha tudo, e levaria junto o gesto ou a edição de outra.
+      if (opcoes.salvando?.() || ocupado()) return void setTimeout(() => receberPrevia(idNo, previa), 150);
       const vivo = montados.has(inst), base = vivo ? canvas : opcoes.canvasAtual();
       const n = base?.nodes.find(x => x.id === idNo);
       if (!n || n.type !== 'link') return;   // o cartão foi apagado nesse meio tempo
@@ -688,12 +698,14 @@
     raiz.addEventListener('pointermove', e => { s.mouseNaTela = pontoDaTela(e); if (gesto) GESTOS[gesto.tipo].mover(gesto, e); });
     raiz.addEventListener('pointerup', e => { if (!gesto) return; const g = gesto; gesto = null; GESTOS[g.tipo].soltar(g, e); });
     raiz.addEventListener('pointercancel', () => { if (!gesto) return; gesto = null; previa.classList.remove('ativa'); marca.hidden = true; limparGuias(); desenhar(); aplicarVista(); });
-    // Roda: rola (Shift = na horizontal); Ctrl+roda: zoom no cursor. Conteúdo longo de um
-    // cartão rola dentro dele.
+    // Roda: rola (Shift = na horizontal); Ctrl+roda: zoom no cursor. Páginas, texto, tabela e
+    // conteúdo longo de um cartão rolam dentro dele; curtos, sem o que rolar, deixam a roda com o
+    // Fluxo. Na horizontal (Shift ou trackpad), a tabela larga continua rolando para o lado.
     raiz.addEventListener('wheel', e => {
-      if (e.target.closest('.fluxo-editor') || (!e.ctrlKey && e.target.closest('.md-pdf-paginas, .fluxo-texto, .fluxo-tabela'))) return;   // páginas, texto e tabela rolam sozinhos
-      const caixa = !e.ctrlKey && e.target.closest('.fluxo-conteudo');
-      if (caixa && caixa.scrollHeight > caixa.clientHeight) return;
+      if (e.target.closest('.fluxo-editor')) return;
+      const deLado = e.shiftKey || e.deltaX;
+      for (const caixa of e.ctrlKey ? [] : [e.target.closest('.md-pdf-paginas, .fluxo-texto, .fluxo-tabela'), e.target.closest('.fluxo-conteudo')])
+        if (caixa && (caixa.scrollHeight > caixa.clientHeight || (deLado && caixa.scrollWidth > caixa.clientWidth))) return;
       e.preventDefault();
       if (e.ctrlKey || e.metaKey) { const p = pontoDaTela(e); s.vista = F.zoomEm(s.vista, Math.exp(-e.deltaY * 0.002), p.x, p.y); }
       else { const dx = e.shiftKey ? e.deltaY : e.deltaX, dy = e.shiftKey ? 0 : e.deltaY; s.vista = { ...s.vista, x: s.vista.x - dx, y: s.vista.y - dy }; }
@@ -812,9 +824,9 @@
     // Colar com o fluxo em foco (fora da edição de um cartão): imagem → anexo → cartão de imagem;
     // URL sozinha → link; texto → cartão de texto. Tudo no centro da vista.
     async function colarArquivos(arquivos, p) {
-      for (const [i, arquivo] of arquivos.entries()) {
+      for (const arquivo of arquivos) {
         const caminho = await opcoes.guardarImagem(arquivo);
-        if (caminho) adicionarNo(cartaoDeArquivo(caminho), { x: p.x + i * F.GRADE * 2, y: p.y + i * F.GRADE * 2 });
+        if (caminho) adicionarNo(cartaoDeArquivo(caminho), p, undefined, true);   // um embaixo do outro, sem empilhar
       }
     }
     // Copiar e recortar: o trecho vai para `areaDoFluxo` e o texto dos cartões para a área de
@@ -879,7 +891,8 @@
     function desmontar() {
       if (!montados.has(inst)) return;
       terminarEdicao();
-      for (const el of s.corpos.values()) guardarCorpo(el);   // a tela é refeita (autosave): a próxima instância traz de volta
+      // A tela é refeita (autosave): a próxima instância traz de volta. Só os corpos desta tela: os da outra coluna com o mesmo fluxo ficam nela.
+      for (const el of cartoes.querySelectorAll('[data-reusar]')) guardarCorpo(el);
       montados.delete(inst);
       document.removeEventListener('pointerdown', foraDoFluxo);
       document.removeEventListener('dragend', tirarSoltando);

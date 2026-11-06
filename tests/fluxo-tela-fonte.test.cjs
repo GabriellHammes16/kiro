@@ -74,7 +74,7 @@ test('as notas continuam so com imagem e PDF: imagensDoEvento filtra por TIPOS_D
   const i = app.indexOf('function imagensDoEvento');
   assert.ok(i > 0);
   assert.match(app.slice(i, i + 400), /TIPOS_DE_IMAGEM\.includes/);
-  assert.doesNotMatch(app.slice(i, app.indexOf('async function guardarImagem(', i)), /tipoDoArquivo|TIPOS_DO_FLUXO/);
+  assert.doesNotMatch(app.slice(i, app.indexOf('async function guardarImagem(', i)), /tipoDoArquivo|EXTENSOES_DO_FLUXO|aceitoNoFluxo/);
 });
 
 test('os corpos reaproveitaveis ficam na sessao, para o autosave nao parar a midia', () => {
@@ -116,4 +116,36 @@ test('render() esvazia a guarda no fim, para a midia de um fluxo que saiu da tel
   const corpo = app.slice(i, app.indexOf('\n}\n', i));
   assert.ok(corpo.indexOf('KiroFluxoTela.esvaziarGuarda()') > corpo.indexOf('bindView()'));
   assert.match(fonte, /function esvaziarGuarda\(\)[\s\S]*sessao\.corpos\.delete[\s\S]*guardaDeCorpos\.replaceChildren\(\)/);
+});
+
+test('o mesmo fluxo em duas colunas: cada tela fica com os seus corpos', () => {
+  const i = fonte.indexOf('function desenhar()');
+  const corpo = fonte.slice(i, fonte.indexOf('function alturaDoTexto', i));
+  assert.match(corpo, /el\.parentNode !== guardaDeCorpos && !daqui\.has\(el\)/);
+  const d = fonte.indexOf('function desmontar()');
+  assert.match(fonte.slice(d, d + 400), /cartoes\.querySelectorAll\('\[data-reusar\]'\)\) guardarCorpo\(el\)/);
+  assert.doesNotMatch(fonte.slice(d, d + 400), /s\.corpos\.values\(\)/);
+});
+
+test('a prévia espera gesto e edição de qualquer tela montada, também na instância morta', () => {
+  const i = fonte.indexOf('function receberPrevia(');
+  assert.match(fonte.slice(i, i + 600), /opcoes\.salvando\?\.\(\) \|\| ocupado\(\)\) return void setTimeout/);
+});
+
+test('link novo nasce com o tamanho do tipo (YouTube 480 × 300)', () => {
+  const i = fonte.indexOf('function novoLink(');
+  assert.match(fonte.slice(i, i + 200), /F\.tamanhoPadrao\(\{ type: 'link', url \}\)/);
+});
+
+test('arquivos colados ou soltos procuram lugar livre a partir do ponto', () => {
+  assert.match(fonte, /livre \? F\.lugarLivre\(c, caixa\)/);
+  const i = fonte.indexOf('async function colarArquivos(');
+  assert.match(fonte.slice(i, i + 300), /adicionarNo\(cartaoDeArquivo\(caminho\), p, undefined, true\)/);
+});
+
+test('a roda só fica com texto, tabela ou páginas quando há o que rolar', () => {
+  const i = fonte.indexOf("raiz.addEventListener('wheel'");
+  const corpo = fonte.slice(i, fonte.indexOf('}, { passive: false })', i));
+  assert.doesNotMatch(corpo, /fluxo-tabela'\)\)\) return/);
+  assert.match(corpo, /caixa\.scrollHeight > caixa\.clientHeight/);
 });
