@@ -63,15 +63,15 @@
       grafo: '<circle cx="5.5" cy="6.5" r="2"/><circle cx="18.5" cy="6.5" r="2"/><circle cx="12" cy="18.5" r="2"/><path d="M7.5 6.5h3l-1 1.5h4.5M6.7 8.3l2.3 3.5h-1.5l3 4.8M17.3 8.3 15 11.8h1.5l-3 4.8"/>',
       fluxo: '<rect x="3" y="15" width="6.5" height="5" rx="1"/><path d="M6.2 15C6.2 9 11 5 18 5"/><path d="M15.5 2.8 18 5l-2.5 2.5"/>',
     }),
-    // Ghibli: folha, nuvem, vento, árvore.
-    'studio-ghibli': conjunto(MOTIVO.folha, {
+    // Floresta encantada: folha, nuvem, vento, árvore.
+    'enchanted-forest': conjunto(MOTIVO.folha, {
       hoje: '<circle cx="9" cy="8.5" r="3.5"/><path d="M9 2.5V4M3 8.5h1.5M4.8 4.3l1 1M13.2 4.3l-1 1"/><path d="M8 19.5h9.5a3.5 3.5 0 0 0 .3-7 5 5 0 0 0-9.6 1A3 3 0 0 0 8 19.5z"/>',
       grafo: '<path d="M12 21v-9"/><path d="M12 12 7.5 8.5M12 12l4.5-3.5M12 15.5l-3.5-1.5"/><circle cx="12" cy="6.5" r="2.4"/><circle cx="6" cy="7.5" r="2"/><circle cx="18" cy="7.5" r="2"/>',
       nota: '<path d="M7 10.5h10a5 5 0 0 1-5 9 5 5 0 0 1-5-9z"/><path d="M6 10.5a6 4 0 0 1 12 0"/><path d="M12 6.5V4.5"/>',
       fluxo: '<rect x="3" y="4" width="6" height="4.5" rx="1"/><path d="M3.5 17.5c4 0 5-5 9-5s5 3 8 3"/><path d="M14 4.5c0 3 2 5 5 5 0-3-2-5-5-5z"/>',
     }),
-    // Evangelion: hexágono, faixas de alerta, mira, cruz de luz.
-    evangelion: conjunto(MOTIVO.hexagono, {
+    // Mecha: hexágono, faixas de alerta, mira, cruz de luz.
+    purple-mecha: conjunto(MOTIVO.hexagono, {
       'nota-diaria': '<rect x="3.5" y="5.5" width="17" height="14.5" rx="1"/><path d="M8 3.5v4M16 3.5v4M3.5 10.5h17"/><path d="m7 20 4-4M11 20l4-4M15 20l4-4"/>',
       'ir-para-nota': '<circle cx="12" cy="12" r="6.5"/><path d="M12 2.5v5M12 16.5v5M2.5 12h5M16.5 12h5"/><circle cx="12" cy="12" r=".9" fill="currentColor"/>',
       hoje: '<path d="M12 2.5v19M7 8h10"/><path d="M9.5 21.5h5"/><path d="M5.5 5.5 7 7M18.5 5.5 17 7"/>',
@@ -79,7 +79,7 @@
       fluxo: em(MOTIVO.hexagono, 0, 0.5, 0.4) + em(MOTIVO.hexagono, 12.5, 12, 0.4) + '<path d="M9.5 5.5h3a2 2 0 0 1 2 2v5"/>',
     }),
     // Garota mágica: lua crescente, estrelas, coração, varinha.
-    'sailor-moon': conjunto(MOTIVO.lua, {
+    'moon-guardian': conjunto(MOTIVO.lua, {
       'ir-para-nota': '<path d="m4 20 9.5-9.5"/><path d="M16 3.5l1.2 2.6 2.8.3-2.1 1.9.6 2.8-2.5-1.4-2.5 1.4.6-2.8-2.1-1.9 2.8-.3z"/>',
       hoje: '<path d="M13 4a8 8 0 1 0 6.5 11.5A6.5 6.5 0 0 1 13 4z"/><path d="M19 3.5l.6 1.4 1.4.6-1.4.6-.6 1.4-.6-1.4-1.4-.6 1.4-.6z"/>',
       notas: DOC + '<path d="M12 18s-3-1.9-3-4.2a1.7 1.7 0 0 1 3-1.1 1.7 1.7 0 0 1 3 1.1c0 2.3-3 4.2-3 4.2z"/>',
@@ -88,7 +88,7 @@
       fluxo: em(MOTIVO.lua, 1, 1, 0.4) + em(MOTIVO.estrela, 12.5, 12.5, 0.4) + '<path d="M9.5 6.5c4 .5 7 3 7.5 6"/>',
     }),
     // Cartas: envelope, pena, relógio de bolso, máquina de escrever, lacre.
-    'violet-evergarden': conjunto(MOTIVO.carta, {
+    'lavender-letters': conjunto(MOTIVO.carta, {
       'nova-nota': '<path d="M11 3 6 11l5 10 5-10z"/><path d="M11 11v4"/><circle cx="11" cy="10" r="1"/>' + MAIS,
       'nota-diaria': '<rect x="3.5" y="6.5" width="17" height="13" rx="1.5"/><path d="m4 7.5 8 6 8-6"/><path d="M8 3.5v3M16 3.5v3"/>',
       hoje: '<circle cx="12" cy="13" r="7"/><path d="M12 13V9.5M12 13l2.5 1.5"/><path d="M10.5 3.5h3M12 3.5V6"/>',
@@ -108,7 +108,7 @@
       fluxo: '<rect x="3" y="4" width="6" height="5" rx="1"/><rect x="15" y="15" width="6" height="5" rx="1"/><path d="M6 9c0 5 4 8.5 9 8.5"/><path d="m12.5 15.5 2.5 2-2.5 2"/>',
     }),
     // Rede e fios: monitor de tubo, postes, sinal.
-    'cyber-lain': conjunto(MOTIVO.monitor, {
+    'wired-dreams': conjunto(MOTIVO.monitor, {
       'ir-para-nota': '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="m7 9.5 3 2.5-3 2.5"/><path d="M12 15h5"/>',
       hoje: '<path d="M12 3v18"/><path d="M6.5 6h11M8 9.5h8"/><path d="M3 7.5c3 2 5.5 2 9 0M12 7.5c3.5 2 6 2 9 0"/>',
       notas: '<rect x="3.5" y="4" width="17" height="12.5" rx="2"/><path d="M9 20h6M12 16.5V20"/><path d="M7 8h7M7 11.5h10"/>',
@@ -118,14 +118,14 @@
       fluxo: '<rect x="3" y="4" width="6" height="5"/><rect x="15" y="15" width="6" height="5"/><path d="M9 6.5c6 0 0 11 6 11"/>',
     }),
     // Céu e chuva: cometa, gota, nuvem, estrelas.
-    'makoto-shinkai': conjunto(MOTIVO.cometa, {
+    'summer-sky': conjunto(MOTIVO.cometa, {
       'nova-nota': '<path d="M10 3.5c2.8 3.6 4.5 6.4 4.5 8.7a4.5 4.5 0 0 1-9 0c0-2.3 1.7-5.1 4.5-8.7z"/>' + MAIS,
       hoje: '<path d="M6 15.5h11a3.5 3.5 0 0 0 0-7 5 5 0 0 0-9.4 1.5A3 3 0 0 0 6 15.5z"/><path d="m8 18.5-1 2.5M12 18.5l-1 2.5M16 18.5l-1 2.5"/>',
       grafo: '<circle cx="18" cy="6" r="2.2"/><path d="M16.3 7.4 4 16M15.8 5.2 5.5 5.5M17.2 8.1 11.5 20"/><circle cx="4" cy="16" r="1.4"/><circle cx="11.5" cy="20" r="1.4"/>',
       fluxo: '<rect x="3" y="15" width="6" height="5" rx="1"/><rect x="15" y="4" width="6" height="5" rx="1"/><path d="M7 15c1-5 4-8 8-8.5"/><path d="M4.5 10.5h.01M8 6h.01M11 3.5h.01"/>',
     }),
     // Estrela, seta e o "ゴゴゴ" de mangá.
-    'jojo-stand': conjunto(MOTIVO.estrela, {
+    'bizarre-aura': conjunto(MOTIVO.estrela, {
       'ir-para-nota': '<path d="M4 20 17 7"/><path d="M12 5.5h6.5V12"/><path d="m6.5 15.5 2 2M8.5 13.5l2 2"/>',
       hoje: '<path d="M12 3l2 5 5-2-2 5 5 2-5 2 2 5-5-2-2 5-2-5-5 2 2-5-5-2 5-2-2-5 5 2z"/>',
       notas: '<rect x="4" y="3.5" width="16" height="17" rx="1"/><path d="M4 10h16M12 3.5V10M9.5 10 7.5 20.5"/>',

@@ -382,9 +382,9 @@
     ['liquid-glass', 'Liquid Glass', 'classicos'],
     ['kiro', 'Kiro', 'classicos'], ['grafite', frase('Areia'), 'classicos'], ['claro', frase('Claro'), 'classicos'], ['escuro-azul', frase('Oceano'), 'classicos'], ['escuro-verde', frase('Jade'), 'classicos'],
     ['escuro-ambar', frase('Café'), 'classicos'], ['alto-contraste', frase('Alto Contraste'), 'classicos'], ['meia-noite', frase('Meia-noite'), 'classicos'], ['floresta', frase('Floresta'), 'classicos'],
-    ['neon-tokyo', 'Neon Tokyo', 'anime'], ['sakura-night', 'Sakura Blossom', 'anime'], ['shonen-fire', 'Shonen Fire', 'anime'], ['studio-ghibli', 'Studio Ghibli', 'anime'],
-    ['evangelion', 'Evangelion', 'anime'], ['sailor-moon', 'Sailor Moon', 'anime'], ['violet-evergarden', 'Violet Evergarden', 'anime'], ['demon-blood', 'Demon Blood', 'anime'],
-    ['cyber-lain', 'Cyber Lain', 'anime'], ['makoto-shinkai', 'Makoto Shinkai', 'anime'], ['jojo-stand', 'JoJo Stand', 'anime'],
+    ['neon-tokyo', 'Neon Tokyo', 'anime'], ['sakura-night', 'Sakura Blossom', 'anime'], ['shonen-fire', 'Shonen Fire', 'anime'], ['enchanted-forest', 'Enchanted Forest', 'anime'],
+    ['purple-mecha', 'Purple Mecha', 'anime'], ['moon-guardian', 'Moon Guardian', 'anime'], ['lavender-letters', 'Lavender Letters', 'anime'], ['demon-blood', 'Demon Blood', 'anime'],
+    ['wired-dreams', 'Wired Dreams', 'anime'], ['summer-sky', 'Summer Sky', 'anime'], ['bizarre-aura', 'Bizarre Aura', 'anime'],
   ];
   const SKINS = [
     ['padrao', frase('Padrão'), frase('O visual de sempre.')], ['minimal', 'Minimal', frase('Menos bordas, mais respiro.')], ['compacto', frase('Compacto'), frase('Mais coisa na tela.')],
@@ -402,7 +402,7 @@
   const contraste = (a, b) => { const [x, y] = [luminancia(a), luminancia(b)].sort((m, n) => n - m); return (x + 0.05) / (y + 0.05); };
   // Sempre devolve um objeto completo; o que vier estranho do localStorage vira padrão.
   function aparenciaValida(salvo) {
-    const s = salvo && typeof salvo === 'object' && !Array.isArray(salvo) ? salvo : {};
+    let s = salvo && typeof salvo === 'object' && !Array.isArray(salvo) ? salvo : {};
     // Fundos de versões anteriores (inclusive de quando o aplicativo se chamava KUROI)
     // contam como padrão: quem nunca escolheu cor recebe a identidade atual.
     const ANTIGAS = { sidebar: ['#0e0e0e', '#1a1a20'], content: ['#0a0a0a', '#141418'], acento: ['#c77dff'] };
@@ -414,6 +414,9 @@
     // Salvo de antes dos temas: cor própria vira "personalizado"; quem nunca mexeu fica no clássico.
     // 'escuro-classico' era o id do tema padrão antes da identidade Kiro.
     if (s.tema === 'escuro-classico') s = { ...s, tema: 'kiro' };
+    // Temas renomeados para nomes genéricos (sem marcas): a escolha salva com o id antigo continua valendo.
+    const RENOMEADOS = {'studio-ghibli': 'enchanted-forest', 'evangelion': 'purple-mecha', 'sailor-moon': 'moon-guardian', 'violet-evergarden': 'lavender-letters', 'cyber-lain': 'wired-dreams', 'makoto-shinkai': 'summer-sky', 'jojo-stand': 'bizarre-aura'};
+    if (Object.hasOwn(RENOMEADOS, s.tema)) s = { ...s, tema: RENOMEADOS[s.tema] };
     const tema = s.tema === 'personalizado' || TEMAS.some(([id]) => id === s.tema) ? s.tema
       : s.tema === undefined && ['sidebar', 'content', 'acento'].some(k => cores[k].toLowerCase() !== APARENCIA_PADRAO[k].toLowerCase()) ? 'personalizado'
       : APARENCIA_PADRAO.tema;

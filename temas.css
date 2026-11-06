@@ -102,22 +102,22 @@
   --ink:#F8F0EA; --muted:#B8A89D; --line:#3E3027;
   --acento:#FF6B2C; --acento-2:#FFC83D; --acento-forte:#F05A1A; --acento-escuro:#D94E12; --acento-texto:#1A0A02; --primario-texto:#1A0A02;
 }
-.tema-studio-ghibli {
+.tema-enchanted-forest {
   --bg:#F0F3DB; --panel:#FAFCEB; --panel-raised:#FFFFFF; --sidebar-bg:#DDE5BA; --content-bg:#F0F3DB; --campo:#FEFFF4;
   --ink:#283D23; --muted:#586B48; --line:#B3C18F;
   --acento:#45651F; --acento-2:#8F5728; --acento-forte:#3B581B; --acento-escuro:#304A15; --acento-texto:#FFFFFF; --primario-texto:#FFFFFF;
 }
-.tema-evangelion {
+.tema-purple-mecha {
   --bg:#261B3C; --panel:#35254F; --panel-raised:#453365; --sidebar-bg:#1D142F; --content-bg:#261B3C; --campo:#2C2043;
   --ink:#F5F1FF; --muted:#C2AED8; --line:#665082;
   --acento:#B4EF4A; --acento-2:#B68CFF; --acento-forte:#A0D73D; --acento-escuro:#8FC232; --acento-texto:#1F2411; --primario-texto:#1F2411;
 }
-.tema-sailor-moon {
+.tema-moon-guardian {
   --bg:#422447; --panel:#55325B; --panel-raised:#68416D; --sidebar-bg:#321A37; --content-bg:#422447; --campo:#49294F;
   --ink:#FFF0FD; --danger:#F7BAC2; --muted:#D8B7D5; --line:#8B6090;
   --acento:#FFACDA; --acento-2:#F5DE8E; --acento-forte:#EF97C9; --acento-escuro:#DD86B8; --acento-texto:#38172F; --primario-texto:#38172F;
 }
-.tema-violet-evergarden {
+.tema-lavender-letters {
   --bg:#EEEFE9; --panel:#FAFBF6; --panel-raised:#FFFFFF; --sidebar-bg:#D9DFD8; --content-bg:#EEEFE9; --campo:#FFFFFF;
   --ink:#263B43; --muted:#53676D; --line:#AEBDBD;
   --acento:#365F78; --acento-2:#78663A; --acento-forte:#2E536B; --acento-escuro:#26475C; --acento-texto:#FFFFFF; --primario-texto:#FFFFFF;
@@ -127,24 +127,24 @@
   --ink:#F7EDED; --muted:#B8A5A5; --line:#3A2626;
   --acento:#E8395A; --acento-2:#F2A541; --acento-forte:#C41E3A; --acento-escuro:#9E1830; --acento-texto:#1A0006; --primario-texto:#FFFFFF;
 }
-.tema-cyber-lain {
+.tema-wired-dreams {
   --bg:#000000; --panel:#0A0F0C; --panel-raised:#111814; --sidebar-bg:#060906; --content-bg:#000000; --campo:#050805;
   --ink:#E6FFF3; --muted:#8FB3A2; --line:#1F2E26;
   --acento:#00FF9F; --acento-2:#B388FF; --acento-forte:#00D988; --acento-escuro:#00B872; --acento-texto:#001A0F; --primario-texto:#001A0F;
 }
-.tema-makoto-shinkai {
+.tema-summer-sky {
   --bg:#E4F2FF; --panel:#F5FAFF; --panel-raised:#FFFFFF; --sidebar-bg:#C6DFF4; --content-bg:#E4F2FF; --campo:#FFFFFF;
   --ink:#183F5C; --muted:#4A6982; --line:#A1C0D8;
   --acento:#A44016; --acento-2:#205E95; --acento-forte:#913811; --acento-escuro:#7D2F0D; --acento-texto:#FFFFFF; --primario-texto:#FFFFFF;
 }
-.tema-jojo-stand {
+.tema-bizarre-aura {
   --bg:#150B1F; --panel:#21142E; --panel-raised:#2A1B39; --sidebar-bg:#1B1027; --content-bg:#150B1F; --campo:#180D23;
   --ink:#FBF3FF; --muted:#B9A8C8; --line:#3F2C52;
   --acento:#FFC93C; --acento-2:#FF3EA5; --acento-forte:#F0B41F; --acento-escuro:#DB9E0F; --acento-texto:#1A1000; --primario-texto:#1A1000;
 }
 
 
-:is(.tema-grafite, .tema-escuro-verde, .tema-sakura-night, .tema-studio-ghibli, .tema-violet-evergarden, .tema-makoto-shinkai) {
+:is(.tema-grafite, .tema-escuro-verde, .tema-sakura-night, .tema-enchanted-forest, .tema-lavender-letters, .tema-summer-sky) {
   --accent-text:color-mix(in srgb, var(--acento) 20%, var(--ink));
   --overlay:rgba(15,23,42,.32); --shadow-md:0 12px 32px rgba(15,23,42,.14); --shadow-sm:0 1px 2px rgba(15,23,42,.08);
   color-scheme:light;

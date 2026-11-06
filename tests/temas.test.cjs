@@ -250,7 +250,7 @@ test('interface nova acompanha o tema: .plugin-* sem cor fixa e contador do card
   const regras = [...css.matchAll(/([^{}]*)\{([^}]*)\}/g)].map(m => ({ seletor: m[1].trim(), corpo: m[2] }));
   const fixas = regras.filter(r => /\.plugin-/.test(r.seletor) && /#[0-9a-fA-F]{3,8}\b|rgba?\(/.test(r.corpo)).map(r => r.seletor);
   assert.deepEqual(fixas, [], 'regras .plugin-* com cor fixa');
-  // --acento puro sobre --accent-soft fica abaixo de 4.5:1 em kiro, evangelion e demon-blood.
+  // --acento puro sobre --accent-soft fica abaixo de 4.5:1 em kiro, purple-mecha e demon-blood.
   const contadores = regras.filter(r => /\.card-head\s*\.small-muted/.test(r.seletor) && /(^|;)\s*color\s*:\s*var\(--acento\)/.test(r.corpo)).map(r => r.seletor);
   assert.deepEqual(contadores, [], 'contador do cabeçalho do card com color:var(--acento) (ilegível em alguns temas)');
 });
@@ -323,4 +323,13 @@ test('padrão de skin: skins não declaram cores do tema', () => {
 test('docs/temas.md cobre todas as variáveis de cor', () => {
   const doc = ler('docs/temas.md');
   assert.deepEqual(VARIAVEIS.filter(v => !doc.includes(`\`--${v}\``)), [], 'variáveis sem explicação em docs/temas.md');
+});
+
+test('temas renomeados: a escolha salva com o id antigo vira o tema novo', () => {
+  const pares = { 'studio-ghibli': 'enchanted-forest', evangelion: 'purple-mecha', 'sailor-moon': 'moon-guardian', 'violet-evergarden': 'lavender-letters', 'cyber-lain': 'wired-dreams', 'makoto-shinkai': 'summer-sky', 'jojo-stand': 'bizarre-aura' };
+  for (const [antigo, novo] of Object.entries(pares)) {
+    assert.equal(aparenciaValida({ ...APARENCIA_PADRAO, tema: antigo }).tema, novo, antigo);
+    assert.ok(TEMAS.some(([id]) => id === novo), novo);
+  }
+  assert.equal(aparenciaValida({ ...APARENCIA_PADRAO, tema: 'escuro-classico' }).tema, 'kiro');
 });

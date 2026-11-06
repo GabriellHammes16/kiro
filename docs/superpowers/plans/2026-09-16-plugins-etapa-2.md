@@ -87,7 +87,7 @@ A nota aberta continua aberta por baixo do modal de Configurações, então `kir
 - [ ] **Step 1: Inspecionar de verdade.** No navegador (`kiro-dev`), para cada um dos 18 temas e para as skins `padrao`, `terminal`, `sharp`, `compacto` e `paper`, aplique a combinação pelo mesmo caminho da interface (`gravarAparencia`) e confira: tela Hoje com o card do plug-in, uma nota aberta, Configurações nas abas Personalização e Plug-ins, menu de contexto. Procure texto ilegível, borda invisível, foco invisível, ícone sumido, card do plug-in sem fundo, layout quebrado. Registre também `getComputedStyle` das variáveis principais para confirmar que a troca de classe aplica.
 - [ ] **Step 2: Write the failing test** para cada defeito real encontrado (por exemplo: toda regra `.plugin-*` usa só variáveis, nenhuma cor fixa; toda cor fixa nova em `styles.css` tem motivo). Se nada estiver quebrado, o teste trava a garantia mais útil: nenhuma regra `.plugin-*` com cor hexadecimal fixa.
 - [ ] **Step 3:** corrija só o que falhou, no arquivo onde a regra mora.
-- [ ] **Step 4:** `node --test` inteiro → PASS; screenshot de três combinações contrastantes (ex.: `alto-contraste`+`sharp`, `sakura-night`+`suave`, `cyber-lain`+`terminal`). Restaure o `localStorage['kiro.aparencia']` original no fim.
+- [ ] **Step 4:** `node --test` inteiro → PASS; screenshot de três combinações contrastantes (ex.: `alto-contraste`+`sharp`, `sakura-night`+`suave`, `wired-dreams`+`terminal`). Restaure o `localStorage['kiro.aparencia']` original no fim.
 - [ ] **Step 5: Commit** — `git commit -m "Temas: conferência com a interface de plug-ins"` (se não houver mudança de código, relate sem commit).
 
 ---
