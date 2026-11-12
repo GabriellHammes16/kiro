@@ -1,7 +1,7 @@
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const { createHash, randomUUID } = require('node:crypto');
-const { validateState, upgradeBackup, folderPaths, descendants, pathKey, folderColor, withHabits, validFolderName, aplicarRenomeacaoDeLinks } = require('./domain.js');
+const { validateState, upgradeBackup, folderPaths, descendants, pathKey, folderColor, withHabits, validFolderName, aplicarRenomeacaoDeLinks, isAttachmentPath } = require('./domain.js');
 const yaml = require('js-yaml');
 const KiroFluxo = require('./fluxo.js');
 const { palavraParaDicionario } = require('./corretor.js');
@@ -708,6 +708,20 @@ class Vault {
     const map=(file,paths)=>{const f=allFolders.filter(f=>f.diskPath&&inside(file,f.diskPath)).sort((a,b)=>b.diskPath.length-a.diskPath.length)[0];return f?paths.get(f.id)+file.slice(f.diskPath.length):file;};
     const result=await this.write(input,{entry,files,directories:entry.directories,map});
     await atomicWrite(await this.safePath(`.trash/${entryId}/restored`),'true');return result;
+  });}
+  // Manda um anexo (PDF, imagem, áudio...) para a lixeira, como uma nota: some do cofre e volta pela Lixeira.
+  // Só arquivos de anexo que existem; o caminho é relativo ao cofre, sem "..", sem unidade e sem barra no começo.
+  excluirAnexo({caminho,revision}){return this.locked(async()=>{
+    if(typeof caminho!=='string'||!isAttachmentPath(caminho)||/(^[\\/]|:|(^|[\\/])\.\.([\\/]|$))/.test(caminho))throw new Error(frase('Anexo inválido.'));
+    const before=await this.read();if(before.state.revision!==revision)throw new Error(frase('O cofre mudou. Recarregue antes de excluir.'));
+    const arquivo=caminho.replace(/\\/g,'/');
+    if(!before.files.has(arquivo)||/\.md$|\.canvas$/i.test(arquivo))throw new Error(frase('Anexo não encontrado no cofre.'));
+    const transaction=`${Date.now()}-${randomUUID()}`, id=`anexo-${randomUUID()}`, base=`.trash/${transaction}/${id}`;
+    const entry={kind:'anexo',id,title:path.posix.basename(arquivo),notes:[],folders:[],ancestors:[],files:[arquivo],directories:[],originalPath:arquivo,deletedAt:Number(transaction.split('-')[0])};
+    await atomicWrite(await this.safePath(`${base}/files/${arquivo}`),before.files.get(arquivo).data);
+    await atomicWrite(await this.safePath(`${base}/entry.json`),JSON.stringify(entry));
+    await fs.rm(await this.safePath(arquivo),{force:true});
+    return (await this.read()).state;
   });}
   async entradasDaLixeira(){
     let transacoes;

@@ -24,6 +24,7 @@ contextBridge.exposeInMainWorld('cadernoDesktop', {
   setupVault: modo => ipcRenderer.invoke('vault:setup', modo),
   trash: () => ipcRenderer.invoke('vault:trash'),
   restore: pedido => ipcRenderer.invoke('vault:restore', pedido),
+  excluirAnexo: pedido => ipcRenderer.invoke('vault:attachment-delete', pedido),
   purgeTrash: pedido => ipcRenderer.invoke('vault:trash-purge', pedido),
   emptyTrash: () => ipcRenderer.invoke('vault:trash-empty'),
   history: pedido => ipcRenderer.invoke('vault:history', pedido),

@@ -260,6 +260,7 @@ else app.whenReady().then(async () => {
   });
   ipcMain.handle('vault:trash', () => vault.trash());
   ipcMain.handle('vault:restore', (_event, pedido) => vault.restore(pedido));
+  ipcMain.handle('vault:attachment-delete', (_event, pedido) => vault.excluirAnexo(pedido));
   ipcMain.handle('vault:trash-purge', (_event, pedido) => vault.purgeTrash(pedido));
   ipcMain.handle('vault:trash-empty', () => vault.emptyTrash());
   ipcMain.handle('vault:history', (_event, pedido) => vault.history(pedido));

@@ -330,6 +330,14 @@
   const mentions = (notes, note) => notes.filter(n => n.id !== note.id && wikiLinks(n.body).some(l => findLinkedNote(notes, l.target)?.id === note.id));
   // Fluxos que citam a nota: um cartão de arquivo com o caminho dela ou um [[link]] para ela
   // num cartão de texto. Fluxo com erro (sem canvas) não conta. Base do "Aparece nos fluxos".
+  // Quem ainda usa um anexo, fora a nota `ignorar`: notas com ![[arquivo]] e cartões de arquivo dos fluxos.
+  // Excluir o arquivo só é seguro quando a lista volta vazia.
+  function quemUsaAnexo(state, arquivo, ignorar = '') {
+    const alvo = pathKey(String(arquivo || '').replace(/\\/g, '/'));
+    const naNota = n => n.id !== ignorar && [...String(n.body || '').matchAll(/!\[\[([^\]|#\n]+)/g)].some(m => pathKey(m[1].trim()) === alvo);
+    const noFluxo = f => f.canvas && f.canvas.nodes.some(n => n && n.type === 'file' && typeof n.file === 'string' && pathKey(n.file) === alvo);
+    return [...(state.notes || []).filter(naNota), ...(state.fluxos || []).filter(noFluxo)].map(x => x.title);
+  }
   function fluxosQueCitam(state, nota) {
     if (!nota || !nota.id) return [];
     const arquivo = nota.file ? pathKey(nota.file) : '';
@@ -381,7 +389,8 @@
   };
   // Cores de pasta são nomes de uma paleta fixa: nada de CSS livre vindo do arquivo do cofre.
   const FOLDER_COLORS = ['azul', 'verde', 'amarelo', 'laranja', 'vermelho', 'rosa', 'roxo', 'cinza'];
-  const folderColor = value => FOLDER_COLORS.includes(value) ? value : '';
+  // Cor da pasta: um dos nomes acima ou uma cor livre #RRGGBB, escolhida no seletor de cor.
+  const folderColor = value => FOLDER_COLORS.includes(value) ? value : (typeof value === 'string' && /^#[0-9a-f]{6}$/i.test(value) ? value.toLowerCase() : '');
   // ---- Aparência: temas, skins e cores manuais (preferência da instalação, em localStorage) ----
   const TEMAS = [
     ['liquid-glass', 'Liquid Glass', 'classicos'],
@@ -1010,7 +1019,7 @@
     return texto.length;
   }
 
-  const api = { ordenarPelaOrdem, reordenar, criarProximas, validRepeat, proximoPrazo, proximaOcorrencia, avisosDeHoje, mesclarEstados, filtrarAcoes, modelosPessoais, expandirModelo, STATUS_DA_TAREFA, statusDaTarefa, moverTarefa, taskLinks, notesCitingTask, taskReference, ATALHOS_EDITAVEIS, combinacaoDoEvento, rotuloDaCombinacao, problemaDoAtalho, atalhosValidos, TEMAS, SKINS, APARENCIA_PADRAO, luminancia, contraste, corValida, aparenciaValida, classesDaAparencia, FOLDER_COLORS, folderColor, calendarioDoMes, somarMeses, habitStats, habitDays, withHabits, validFrequency, localDate, safeUrl, validateState, normalize, isImagePath, isPdfPath, isAudioPath, isAttachmentPath, csvParaTabela, celulasTabela, lerPdf, wikiLinks, parseWikiLink, blocosDaNota, resolverAncoraNaNota, tags, findLinkedNote, mentions, fluxosQueCitam, reescreverLinksPorTitulo, aplicarRenomeacaoDeLinks, buscarNoTexto, substituirNoTexto, substituirTodosNoTexto, validarFavoritos, ehFavorito, alternarFavorito, criarGrupoFavorito, removerGrupoFavorito, moverParaGrupoFavorito, compilarConsulta, avaliarConsulta, filtrarNotasPorConsulta, posicaoParaLinha, linhaParaPosicao, inInbox, withoutInbox, toReview, linkQuery, linkSuggestions, validFolderName, folderPaths, descendants, upgradeBackup, pathKey, mencoesNaoVinculadas, vincularMencao, sumario, arvoreDeEtiquetas, podeVincular };
+  const api = { quemUsaAnexo, ordenarPelaOrdem, reordenar, criarProximas, validRepeat, proximoPrazo, proximaOcorrencia, avisosDeHoje, mesclarEstados, filtrarAcoes, modelosPessoais, expandirModelo, STATUS_DA_TAREFA, statusDaTarefa, moverTarefa, taskLinks, notesCitingTask, taskReference, ATALHOS_EDITAVEIS, combinacaoDoEvento, rotuloDaCombinacao, problemaDoAtalho, atalhosValidos, TEMAS, SKINS, APARENCIA_PADRAO, luminancia, contraste, corValida, aparenciaValida, classesDaAparencia, FOLDER_COLORS, folderColor, calendarioDoMes, somarMeses, habitStats, habitDays, withHabits, validFrequency, localDate, safeUrl, validateState, normalize, isImagePath, isPdfPath, isAudioPath, isAttachmentPath, csvParaTabela, celulasTabela, lerPdf, wikiLinks, parseWikiLink, blocosDaNota, resolverAncoraNaNota, tags, findLinkedNote, mentions, fluxosQueCitam, reescreverLinksPorTitulo, aplicarRenomeacaoDeLinks, buscarNoTexto, substituirNoTexto, substituirTodosNoTexto, validarFavoritos, ehFavorito, alternarFavorito, criarGrupoFavorito, removerGrupoFavorito, moverParaGrupoFavorito, compilarConsulta, avaliarConsulta, filtrarNotasPorConsulta, posicaoParaLinha, linhaParaPosicao, inInbox, withoutInbox, toReview, linkQuery, linkSuggestions, validFolderName, folderPaths, descendants, upgradeBackup, pathKey, mencoesNaoVinculadas, vincularMencao, sumario, arvoreDeEtiquetas, podeVincular };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Kiro = api;
 })(globalThis);

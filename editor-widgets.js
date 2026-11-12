@@ -270,11 +270,25 @@
     class PdfEmbutido extends V.WidgetType {
       constructor(texto) { super(); this.texto = texto; this.pdf = lerPdf(texto); }
       eq(o) { return o.texto === this.texto; }
-      toDOM() {
+      toDOM(view) {
         const s = document.createElement('span');
         const html = opcoes.desenharPdf?.(this.texto);
         if (!html) { s.textContent = `![[${this.texto}]]`; return s; }
         s.innerHTML = html;
+        // Botão direito: menu do PDF. `tirarDaNota` apaga o ![[...]] (e a linha, se ele estava sozinho nela).
+        s.addEventListener('contextmenu', e => {
+          if (!opcoes.menuDoPdf || !this.pdf) return;
+          e.preventDefault(); e.stopPropagation();
+          opcoes.menuDoPdf(e, this.pdf.arquivo, () => {
+            const el = s.isConnected ? elementoEm(view, 'pdf', view.posAtDOM(s)) : null;
+            if (!el) return false;
+            const linha = view.state.doc.lineAt(el.de);
+            const sozinho = linha.text.trim() === view.state.doc.sliceString(el.de, el.ate).trim();
+            const de = sozinho ? linha.from : el.de, ate = sozinho ? Math.min(linha.to + 1, view.state.doc.length) : el.ate;
+            view.dispatch({ changes: { from: de, to: ate }, userEvent: 'delete' });
+            return true;
+          });
+        });
         return s;
       }
       ignoreEvent() { return true; }

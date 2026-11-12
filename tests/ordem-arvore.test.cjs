@@ -42,10 +42,12 @@ test('o cofre guarda a ordem no caderno.json e descarta ids que não existem mai
   try {
     const v = new Vault(dir);
     const atual = await v.load();
-    const folders = [{ id: 'f-mira', title: 'Mira', parentId: '' }, { id: 'f-util', title: 'Utilidades', parentId: '' }];
+    const folders = [{ id: 'f-mira', title: 'Mira', parentId: '', color: '#AABBCC' }, { id: 'f-util', title: 'Utilidades', parentId: '', color: 'url(x)' }];
     await v.save({ ...atual, folders, ordem: { '': ['f-util', 'f-mira', 'sumiu'] } });
     const lido = await v.load();
     assert.deepEqual(lido.ordem, { '': ['f-util', 'f-mira'] });
+    assert.equal(lido.folders.find(f => f.id === 'f-mira').color, '#aabbcc', 'cor livre #rrggbb fica guardada');
+    assert.equal(lido.folders.find(f => f.id === 'f-util').color, '', 'qualquer outra coisa vira sem cor');
     assert.deepEqual(JSON.parse(await fs.readFile(path.join(dir, 'caderno.json'), 'utf8')).ordem, { '': ['f-util', 'f-mira'] });
   } finally { await fs.rm(dir, { recursive: true, force: true }); }
 });

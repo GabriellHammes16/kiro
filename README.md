@@ -41,12 +41,25 @@ Offline, free, and every note stays in a folder you own.
 
 ## Download
 
-Get the latest version from [Releases](https://github.com/GabriellHammes16/kiro/releases):
+Get the latest version from [Releases](https://github.com/GabriellHammes16/kiro/releases/latest).
 
-- **Windows:** `Kiro-X.Y.Z-win.zip` — extract the folder anywhere and open `Kiro.exe`. On the first run Kiro adds itself to the Start menu, so you can pin it from there. There is also an installer, `Kiro-Setup-X.Y.Z.exe`.
-- **Linux:** `Kiro-X.Y.Z.deb` (Ubuntu, Debian) or `Kiro-X.Y.Z.AppImage` (any distribution)
+### Windows
 
-Windows releases are not signed yet (see [Code signing policy](#code-signing-policy)), so Windows may show a warning or, with Smart App Control on, block the installer. The `.zip` avoids most of this: its `Kiro.exe` is the official, unmodified Electron runtime, which Windows already knows.
+1. Download **`Kiro-X.Y.Z-win.zip`**.
+2. Right-click the file → **Extract All…**, and pick a folder of its own that you will keep, such as `Apps\Kiro` inside your user folder. Avoid `Documents\Kiro`: that is where your notes live by default. Do not run Kiro from inside the zip.
+3. Open the folder and double-click **`Kiro.exe`**.
+4. On the first run, Kiro adds itself to the **Start menu** with its own icon. To pin it, open the Start menu, find **Kiro**, right-click it and choose **Pin to taskbar** (on Windows 11 it may be under **More**).
+
+**To update:** close Kiro, extract the new zip into the same folder (replace the files) and open it again. Your notes are not in that folder, so nothing is lost.
+
+**Why a zip?** Kiro is not code-signed yet (see [Code signing policy](#code-signing-policy)). Windows, and Smart App Control in particular, may block a new unsigned program. The `Kiro.exe` in the zip is the official, unmodified Electron runtime, which Windows already knows, so it usually opens without trouble. In File Explorer the file shows the Electron icon; the window, the Start menu entry and the taskbar show Kiro's.
+
+There is also an installer, `Kiro-Setup-X.Y.Z.exe`. It works the same, but Windows is more likely to warn about it or block it. If you see the blue "Windows protected your PC" screen, click **More info → Run anyway**.
+
+### Linux
+
+- `Kiro-X.Y.Z.deb` for Ubuntu and Debian: `sudo apt install ./Kiro-X.Y.Z.deb`
+- `Kiro-X.Y.Z.AppImage` for any distribution: make it executable (`chmod +x Kiro-X.Y.Z.AppImage`) and run it.
 
 ## What you can do
 

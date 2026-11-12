@@ -267,7 +267,7 @@ function cardContinuar(nota) {
   const ultimo = textoPlano(nota.body.trim().split(/\n\s*\n/).filter(p => textoPlano(p)).pop() || '');
   const trecho = ultimo === textoPlano(nota.title || '') ? '' : ultimo;
   const pasta = state.folders.find(f => f.id === nota.folderId);
-  return `<section class="card continuar"><div class="card-head"><h2>${icone('notas')}${t('Continuar de onde parei')}</h2><span class="continuar-quando">${t('editada {quando}', { quando: (quando => KiroIdiomas.idioma() === 'pt-BR' ? quando.toLowerCase() : quando)(dateLabel(Kiro.localDate(new Date(nota.updatedAt)))) })}</span></div><button type="button" class="continuar-nota" data-extra="continuar" data-id="${nota.id}"><span class="continuar-titulo">${pasta ? `<span class="pasta-chip"${pasta.color ? ` data-cor-pasta="${pasta.color}"` : ''}>${icone('pastas')}</span>` : icone('nota')} ${escapeHtml(nota.title || t('Sem título'))}</span>${trecho ? `<span class="continuar-trecho">${trecho.length > 180 ? '…' : ''}${escapeHtml(trecho.slice(-180))}</span>` : ''}<span class="continuar-acao">${t('Continuar escrevendo')} ${icone('direita')}</span></button></section>`;
+  return `<section class="card continuar"><div class="card-head"><h2>${icone('notas')}${t('Continuar de onde parei')}</h2><span class="continuar-quando">${t('editada {quando}', { quando: (quando => KiroIdiomas.idioma() === 'pt-BR' ? quando.toLowerCase() : quando)(dateLabel(Kiro.localDate(new Date(nota.updatedAt)))) })}</span></div><button type="button" class="continuar-nota" data-extra="continuar" data-id="${nota.id}"><span class="continuar-titulo">${pasta ? `<span class="pasta-chip"${atributosDaCor(pasta.color)}>${icone('pastas')}</span>` : icone('nota')} ${escapeHtml(nota.title || t('Sem título'))}</span>${trecho ? `<span class="continuar-trecho">${trecho.length > 180 ? '…' : ''}${escapeHtml(trecho.slice(-180))}</span>` : ''}<span class="continuar-acao">${t('Continuar escrevendo')} ${icone('direita')}</span></button></section>`;
 }
 // ---- Hábitos no Hoje: só os do dia, com a semana clicável e a sequência. ----
 // Inicial do dia da semana (0 = domingo) no idioma atual: 7/jan/2024 foi um domingo.
@@ -415,7 +415,7 @@ function notesMarkup(notes, buscando = false) { return notes.length ? [...notes]
   const folder=state.folders.find(f=>f.id===n.folderId);
   const ligacoes=new Set(Kiro.wikiLinks(n.body).map(l=>Kiro.normalize(l.target))).size;
   const meta=[
-    folder && `<span class="pasta-chip"${folder.color?` data-cor-pasta="${folder.color}"`:""}>${icone('pastas')} ${escapeHtml(folder.path||folder.title)}</span>`,
+    folder && `<span class="pasta-chip"${atributosDaCor(folder.color)}>${icone('pastas')} ${escapeHtml(folder.path||folder.title)}</span>`,
     Kiro.tags(n).map(t=>`#${escapeHtml(t)}`).join(" "),
     ligacoes && (ligacoes===1 ? t('1 ligação') : t('{n} ligações', { n: ligacoes })),
     n.links.length && (n.links.length===1 ? t('1 link externo') : t('{n} links externos', { n: n.links.length })),
@@ -831,7 +831,7 @@ function treeMarkup(parentId, depth) {
     const temFilhos = childFolders(folder.id).length || folderNotes(folder.id).length || folderFluxos(folder.id).length;
     const tools = `<span class="tree-tools"><button class="icon-button" data-action="new-note-folder" data-id="${folder.id}" title="${t('Nova nota nesta pasta')}">${icone('mais')}</button><button class="icon-button" data-action="new-subfolder" data-id="${folder.id}" title="${t('Nova subpasta')}">${icone('pasta-nova')}</button><button class="icon-button" data-action="edit-folder" data-id="${folder.id}" title="${t('Renomear ou mover')}">${icone('renomear')}</button><button class="icon-button" data-action="delete-folder" data-id="${folder.id}" title="${t('Excluir')}">${icone('lixeira')}</button></span>`;
     // Filhos ficam sempre no DOM: abrir e fechar vira transição de CSS, sem redesenhar.
-    return `<div class="tree-node${open?" open":""}" data-id="${folder.id}"${folder.color?` data-cor-pasta="${folder.color}"`:""}><div class="tree-row tree-folder" draggable="true" data-action="toggle-folder" data-id="${folder.id}" style="--depth:${depth}"${folder.description?` title="${escapeHtml(folder.description)}"`:""}><span class="twisty">${temFilhos?icone('direita'):""}</span><span class="tree-icone">${icone('pastas')}</span><span class="tree-name" title="${escapeHtml(folder.title)}">${escapeHtml(folder.title)}</span>${tools}</div><div class="tree-children"><div class="tree-children-inner">${treeMarkup(folder.id,depth+1)}</div></div></div>`;
+    return `<div class="tree-node${open?" open":""}" data-id="${folder.id}"${atributosDaCor(folder.color)}><div class="tree-row tree-folder" draggable="true" data-action="toggle-folder" data-id="${folder.id}" style="--depth:${depth}"${folder.description?` title="${escapeHtml(folder.description)}"`:""}><span class="twisty">${temFilhos?icone('direita'):""}</span><span class="tree-icone">${icone('pastas')}</span><span class="tree-name" title="${escapeHtml(folder.title)}">${escapeHtml(folder.title)}</span>${tools}</div><div class="tree-children"><div class="tree-children-inner">${treeMarkup(folder.id,depth+1)}</div></div></div>`;
   }).join("");
   const notes = folderNotes(parentId).map(note => {
     const tags = Kiro.tags(note).slice(0,2).map(t=>`#${escapeHtml(t)}`).join(" ");
@@ -1854,6 +1854,8 @@ async function moverNota(id, folderId) {
   state.notes = state.notes.map(n => n.id === id ? { ...n, folderId, updatedAt: Date.now() } : n);
   await save();
 }
+// Atributos da cor de uma pasta: as cores com nome vêm do CSS; a cor livre (#rrggbb, já validada) vai direto na variável.
+const atributosDaCor = cor => !cor ? '' : Kiro.FOLDER_COLORS.includes(cor) ? ` data-cor-pasta="${cor}"` : ` data-cor-pasta="livre" style="--cor-pasta:${Kiro.folderColor(cor)}"`;
 const bolinha = cor => `<svg class="icone" viewBox="0 0 24 24"><circle cx="12" cy="12" r="7" style="fill:${cor ? `var(--cor-pasta)` : 'none'};stroke:var(--muted)" data-cor-pasta="${cor}"/></svg>`;
 // As ações buscam a nota ou a pasta na hora do clique: a releitura do cofre a cada 5 s troca
 // os objetos de state, e alterar a cópia de quando o menu abriu não seria gravado.
@@ -1951,7 +1953,7 @@ function taskModal(task={title:"",due:today(),priority:"Média",noteId:""}) {
   $('#tarefa-titulo')?.focus();
   document.querySelector("#cancel").onclick=()=>closeModal();document.querySelector("#task-form").onsubmit=e=>{e.preventDefault();const f=new FormData(e.currentTarget);let saved={...task,id:task.id||uid(),title:f.get("title"),due:f.get("due"),priority:f.get("priority"),noteId:f.get("noteId"),done:task.done||false};const stEscolhido=f.get("status");if(Kiro.STATUS_DA_TAREFA.includes(stEscolhido))saved=Kiro.moverTarefa(saved,stEscolhido);const rep=f.get("repeat"),n=Math.min(365,Math.max(1,Math.round(Number(f.get("repeatN"))||2)));if(rep)saved.repeat=rep==="days"?{every:"days",n}:{every:rep};else delete saved.repeat;const descricao=String(f.get("description")||"").trim();if(descricao)saved.description=descricao;else delete saved.description;const antes=state.tasks;state.tasks=task.id?state.tasks.map(t=>t.id===task.id?saved:t):[saved,...state.tasks];criarProximas(antes);closeModal(true);render();save(null,0,{semRender:true});}; }
 const NOMES_DE_COR = { "":frase("Sem cor"), azul:frase("Azul"), verde:frase("Verde"), amarelo:frase("Amarelo"), laranja:frase("Laranja"), vermelho:frase("Vermelho"), rosa:frase("Rosa"), roxo:frase("Roxo"), cinza:frase("Cinza") };
-function folderModal(folder={title:"",description:"",parentId:""}) { modal(folder.id?t("Editar pasta"):t("Nova pasta de estudo"), `<form class="form" id="folder-form"><div class="field"><label>${t('Nome da pasta')}</label><input name="title" required value="${escapeHtml(folder.title)}" placeholder="${t('Ex.: JAVA, Inglês, programação')}" /><small class="small-muted">${t('Vira uma pasta de verdade no cofre: sem &lt; &gt; : " / \\ | ? * e sem ponto ou espaço no início ou no final.')}</small></div><div class="field"><label>${t('Dentro de')}</label><select name="parentId"><option value="">${t('Raiz do cofre')}</option>${state.folders.filter(f=>!(folder.id?Kiro.descendants(state.folders,folder.id):new Set()).has(f.id)).sort(byTitle).map(f=>`<option value="${f.id}" ${f.id===(folder.parentId||"")?"selected":""}>${escapeHtml(f.path||f.title)}</option>`).join("")}</select></div><div class="field"><span class="rotulo-campo" id="cor-pasta-rotulo">${t('Cor')}</span><div class="amostras" role="radiogroup" aria-labelledby="cor-pasta-rotulo">${["",...Kiro.FOLDER_COLORS].map(cor=>`<label class="amostra" data-cor-pasta="${cor}" title="${t(NOMES_DE_COR[cor])}"><input type="radio" name="color" value="${cor}" ${cor===(folder.color||"")?"checked":""} /><span class="sr-only">${t(NOMES_DE_COR[cor])}</span></label>`).join("")}</div></div><div class="field"><label>${t('Descrição')}</label><textarea name="description" placeholder="${t('Qual é seu objetivo com esta pasta?')}">${escapeHtml(folder.description||"")}</textarea></div><div class="form-actions"><button type="button" class="secondary" id="cancel">${t('Cancelar')}</button><button class="primary">${t('Salvar pasta')}</button></div></form>`);document.querySelector("#cancel").onclick=()=>closeModal();document.querySelector("#folder-form").onsubmit=e=>{e.preventDefault();const f=new FormData(e.currentTarget);const title=f.get("title").trim();
+function folderModal(folder={title:"",description:"",parentId:""}) { modal(folder.id?t("Editar pasta"):t("Nova pasta de estudo"), `<form class="form" id="folder-form"><div class="field"><label>${t('Nome da pasta')}</label><input name="title" required value="${escapeHtml(folder.title)}" placeholder="${t('Ex.: JAVA, Inglês, programação')}" /><small class="small-muted">${t('Vira uma pasta de verdade no cofre: sem &lt; &gt; : " / \\ | ? * e sem ponto ou espaço no início ou no final.')}</small></div><div class="field"><label>${t('Dentro de')}</label><select name="parentId"><option value="">${t('Raiz do cofre')}</option>${state.folders.filter(f=>!(folder.id?Kiro.descendants(state.folders,folder.id):new Set()).has(f.id)).sort(byTitle).map(f=>`<option value="${f.id}" ${f.id===(folder.parentId||"")?"selected":""}>${escapeHtml(f.path||f.title)}</option>`).join("")}</select></div><div class="field"><span class="rotulo-campo" id="cor-pasta-rotulo">${t('Cor')}</span><div class="amostras" role="radiogroup" aria-labelledby="cor-pasta-rotulo">${["",...Kiro.FOLDER_COLORS].map(cor=>`<label class="amostra" data-cor-pasta="${cor}" title="${t(NOMES_DE_COR[cor])}"><input type="radio" name="color" value="${cor}" ${cor===(folder.color||"")?"checked":""} /><span class="sr-only">${t(NOMES_DE_COR[cor])}</span></label>`).join("")}${(livre=>`<label class="cor-ponto cor-livre" title="${t('Outra cor')}"><input type="color" id="cor-pasta-livre" value="${livre||'#7c6cff'}" aria-label="${t('Outra cor da pasta')}" /><input type="radio" name="color" value="${livre}" id="cor-pasta-livre-valor" class="sr-only" tabindex="-1" ${livre?"checked":""} /></label>`)(Kiro.FOLDER_COLORS.includes(folder.color||"")?"":Kiro.folderColor(folder.color||""))}</div></div><div class="field"><label>${t('Descrição')}</label><textarea name="description" placeholder="${t('Qual é seu objetivo com esta pasta?')}">${escapeHtml(folder.description||"")}</textarea></div><div class="form-actions"><button type="button" class="secondary" id="cancel">${t('Cancelar')}</button><button class="primary">${t('Salvar pasta')}</button></div></form>`);document.querySelector("#cancel").onclick=()=>closeModal();document.querySelector("#cor-pasta-livre").oninput=e=>{const r=document.querySelector("#cor-pasta-livre-valor");r.value=e.target.value;r.checked=true;};document.querySelector("#folder-form").onsubmit=e=>{e.preventDefault();const f=new FormData(e.currentTarget);const title=f.get("title").trim();
   // Validar aqui evita que um nome inválido bloqueie a janela no salvamento.
   if(!Kiro.validFolderName(title)){alert(t('Nome de pasta inválido. Evite < > : " / \\ | ? * , nomes reservados do Windows e ponto ou espaço no início ou no final.'));return;}
   const parentId=f.get("parentId")||"";
@@ -2714,6 +2716,11 @@ function opcoesDoEditor({ atual = () => editorDaNota?.editor, menu = menuDaNota 
       desenharImagem: texto => { const img = lerImagem(texto); return img ? htmlDaImagem(img) : null; },
       desenharPdf: texto => { const pdf = Kiro.lerPdf ? Kiro.lerPdf(texto) : null; return pdf ? htmlDoPdf(pdf) : null; },
       desenharAudio: texto => htmlDoAudio(texto),
+      menuDoPdf: (evento, arquivo, tirarDaNota) => abrirMenuContexto(evento, document.body, [
+        { rotulo: t('Abrir PDF'), icone: icone('notas'), acao: () => window.cadernoDesktop ? window.cadernoDesktop.openAttachment(arquivo).catch(() => {}) : window.open(urlDoAnexo(arquivo), '_blank', 'noopener,noreferrer') },
+        { separador: true },
+        { rotulo: t('Excluir PDF'), icone: icone('lixeira'), acao: () => excluirPdf(arquivo, tirarDaNota) },
+      ]),
       abrirImagem: (caminho, nome) => abrirImagemInteira(urlDoAnexo(caminho), nome),
       abrirNota: alvo => { const { target, ref } = Kiro.parseWikiLink(alvo); if (!target && ref && editing) { const a = Kiro.resolverAncoraNaNota(editing.body, ref); if (a) rolarParaTitulo(a.pos); return; } return abrirNota(Kiro.findLinkedNote(state.notes, target) || notaVazia({ title: target }), { ancora: ref }); },
       abrirSite: url => { const limpa = Kiro.safeUrl(url); if (limpa) window.open(limpa, '_blank', 'noopener,noreferrer'); },
@@ -3046,7 +3053,7 @@ function bindGraph() {
     for (const no of nos) {
       no.el = document.createElementNS(ns, 'g');
       no.el.setAttribute('class', `graph-node tipo-${no.tipo}${no.feita ? ' feita' : ''}`);
-      if (no.pasta) no.el.setAttribute('data-cor-pasta', no.pasta);
+      if (no.pasta) { const livre = !Kiro.FOLDER_COLORS.includes(no.pasta); no.el.setAttribute('data-cor-pasta', livre ? 'livre' : no.pasta); if (livre) no.el.style.setProperty('--cor-pasta', Kiro.folderColor(no.pasta)); }
       no.alvo = document.createElementNS(ns, 'circle');
       no.alvo.setAttribute('class', 'graph-hit');
       no.circulo = document.createElementNS(ns, 'circle');
@@ -4215,6 +4222,20 @@ async function extraAction(type,id){
 // A restauração é do próprio Vault: ele devolve a nota ou a pasta inteira, com
 // subpastas, anexos e os identificadores originais. Reconstruir isso aqui, como
 // se fazia antes, quebrava com pastas e travava a janela.
+// Excluir PDF (botão direito no bloco): sai da nota e, se nenhuma outra nota ou fluxo usa o arquivo, vai para a
+// Lixeira do Kiro, de onde volta. Usado em outro lugar, o arquivo fica e o aviso diz onde.
+async function excluirPdf(arquivo, tirarDaNota) {
+  if (busy || failed || !loaded || !editing) return;
+  if (!tirarDaNota()) return;
+  const outros = Kiro.quemUsaAnexo(state, arquivo, editing.id);
+  if (!await salvarNota()) return;
+  if (outros.length) return status(t('O PDF saiu desta nota. O arquivo continua no cofre, porque também está em: {lista}', { lista: outros.slice(0, 3).join(', ') }));
+  try {
+    const pedido = { caminho: arquivo, revision: state.revision };
+    state = doCofre(window.cadernoDesktop ? await window.cadernoDesktop.excluirAnexo(pedido) : await api('attachment-delete', pedido));
+    render(); status(t('PDF movido para a lixeira'));
+  } catch (erro) { status(t('O PDF saiu da nota, mas o arquivo não foi excluído: {erro}', { erro: mensagemDoErro(erro) }), true); }
+}
 const restaurarDoCofre = pedido => window.cadernoDesktop ? window.cadernoDesktop.restore(pedido) : api('restore', pedido);
 async function mostrarHistoricoNota(){
   if(!loaded||failed||busy||!editing?.id)return;
@@ -4257,8 +4278,8 @@ async function showTrash(){
     const quando=ms=>KiroIdiomas.formatarData(new Date(ms),{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'});
     const detalhe=i=>i.kind==='folder'
       ? `${t('pasta')} · ${i.noteCount===1?t('1 nota'):t('{n} notas',{n:i.noteCount})}${i.folderCount>1?` · ${i.folderCount===2?t('1 subpasta'):t('{n} subpastas',{n:i.folderCount-1})}`:''}`
-      : i.kind==='fluxo'?t('fluxo'):t('nota');
-    const nomeDoIcone=i=>i.kind==='folder'?'pastas':i.kind==='fluxo'?'fluxo':'nota';
+      : i.kind==='fluxo'?t('fluxo'):i.kind==='anexo'?t('anexo'):t('nota');
+    const nomeDoIcone=i=>i.kind==='folder'?'pastas':i.kind==='fluxo'?'fluxo':i.kind==='anexo'?'notas':'nota';
     const qtd=itens.length===1?t('1 item'):t('{n} itens',{n:itens.length});
     modal(t('Lixeira'), itens.length ? `<div class="lixeira-topo"><span class="small-muted">${qtd}</span><button type="button" class="secondary perigo lixeira-esvaziar" id="esvaziar-lixeira">${icone('lixeira')} ${t('Esvaziar lixeira')}</button></div><div class="lixeira-lista">${itens.map(i=>`<div class="routine-item lixeira-item"><span class="brand-mark">${icone(nomeDoIcone(i))}</span><span class="routine-title">${escapeHtml(i.title)}<div class="task-info">${detalhe(i)} · ${t('removido em {quando}',{quando:quando(i.deletedAt)})}</div></span><span class="lixeira-acoes"><button class="secondary" data-restore="${escapeHtml(i.entryId)}">${t('Restaurar')}</button><button type="button" class="icon-button perigo" data-apagar="${escapeHtml(i.entryId)}" title="${t('Apagar permanentemente')}" aria-label="${t('Apagar {titulo} permanentemente',{titulo:escapeHtml(i.title)})}">${icone('lixeira')}</button></span></div>`).join('')}</div>` : `<div class="empty lixeira-vazia">${t('A lixeira está vazia.')}</div>`);
     // Pergunta antes, porque não há volta; cancelar devolve à lista.
@@ -5899,6 +5920,9 @@ async function showSettings(aba = abaDasConfiguracoes) {
       <div class="cfg-linha"><label for="cfg-hora-habitos">${texto(t('Horário do aviso dos hábitos'))}</label><input type="time" id="cfg-hora-habitos" value="${horaDoLembrete('habitos')}" /></div>
     </section><div id="cfg-hoje">${conteudoDaAbaHoje()}</div>`)}
     ${painel('sistema', `<section class="cfg-grupo">
+      <header class="cfg-grupo-topo">${texto(t('Sobre o Kiro'), VERSAO !== '0.0.0' ? t('Versão {versao}', { versao: escapeHtml(VERSAO) }) : t('Versão desconhecida'))}</header>
+    </section>
+    <section class="cfg-grupo">
       <header class="cfg-grupo-topo">${texto(t('Internet no Fluxo'), t('O resto do Kiro funciona sem internet.'))}</header>
       <label class="cfg-linha cfg-chave">${texto(t('Prévia de links e vídeos do YouTube'), t('Busca o título e a imagem dos sites e toca vídeos do YouTube nos cartões. Desligado, o Fluxo não se conecta a nenhum site e o link fica só com o endereço.'))}<input type="checkbox" id="cfg-internet-fluxo" ${internetNoFluxo ? 'checked' : ''} /><span class="interruptor" aria-hidden="true"></span></label>
     </section>

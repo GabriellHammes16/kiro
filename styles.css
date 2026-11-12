@@ -803,6 +803,7 @@ body, button, input, textarea, select { font-family:var(--fonte-interface); }
 .cor-ponto input::-webkit-color-swatch-wrapper { padding:0; }
 .cor-ponto input::-webkit-color-swatch { border:0; border-radius:50%; }
 .cor-ponto:hover { box-shadow:0 0 0 2px var(--muted); }
+.cor-livre:has(input[type="radio"]:checked) { box-shadow:0 0 0 2px var(--bg), 0 0 0 4px var(--ink); }
 .cor-ponto:has(input:focus-visible) { outline:2px solid var(--focus-ring); outline-offset:3px; }
 /* "Outra cor": anel de arco-íris para não parecer mais uma amostra fixa. */
 .cor-livre { padding:3px; background:conic-gradient(#FF6B6B, #FFD166, #57CC99, #4CC9F0, #C77DFF, #FF7EB6, #FF6B6B); box-shadow:none; }

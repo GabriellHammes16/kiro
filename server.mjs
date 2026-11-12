@@ -82,6 +82,11 @@ createServer(async (request, response) => {
       await (request.url === '/api/trash-purge' ? vault.purgeTrash(pedido) : vault.emptyTrash());
       return send(response, 200, { ok: true });
     }
+    if (request.url === '/api/attachment-delete' && request.method === 'POST') {
+      if (request.headers['content-type']?.split(';')[0] !== 'application/json') return send(response, 415, { error: frase('Use JSON.') });
+      let bruto = ''; for await (const parte of request) { bruto += parte; if (bruto.length > 4096) return send(response, 413, { error: frase('Pedido grande demais.') }); }
+      return send(response, 200, await vault.excluirAnexo(JSON.parse(bruto)));
+    }
     if (request.url === '/api/restore' && request.method === 'POST') {
       if (request.headers['content-type']?.split(';')[0] !== 'application/json') return send(response, 415, { error: frase('Use JSON.') });
       let bruto = ''; for await (const parte of request) { bruto += parte; if (bruto.length > 4096) return send(response, 413, { error: frase('Pedido grande demais.') }); }
