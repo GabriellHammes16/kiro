@@ -148,10 +148,27 @@ if (process.platform === 'linux') {
   app.commandLine.appendSwitch('enable-logging', 'file');
   app.commandLine.appendSwitch('log-file', join(app.getPath('userData'), 'kiro.log'));
 }
+// Barra de tarefas do Windows: o Kiro.exe é o electron.exe original (sem edição, para manter a reputação dele),
+// então o nome e o ícone do atalho fixado vêm daqui, e não do executável.
+const ID_DO_APP = 'com.kiro.local';
+if (process.platform === 'win32') app.setAppUserModelId(ID_DO_APP);
+app.on('browser-window-created', (_evento, janela) => {
+  if (process.platform === 'win32') janela.setAppDetails({ appId: ID_DO_APP, appIconPath: join(__dirname, '..', 'kiro.ico'), appIconIndex: 0, relaunchCommand: `"${process.execPath}"${app.isPackaged ? '' : ` "${app.getAppPath()}"`}`, relaunchDisplayName: 'Kiro' });
+});
+// Versão em .zip não tem instalador para criar o atalho: o próprio Kiro cria (ou corrige o destino de) um atalho no
+// Menu Iniciar, com o ícone e o id dele. É desse atalho que o Windows tira o ícone ao fixar na barra ou no Iniciar.
+function atalhoNoMenuIniciar() {
+  if (process.platform !== 'win32' || !app.isPackaged) return;
+  const atalho = join(app.getPath('appData'), 'Microsoft', 'Windows', 'Start Menu', 'Programs', 'Kiro.lnk');
+  try {
+    shell.writeShortcutLink(atalho, existsSync(atalho) ? 'replace' : 'create', { target: process.execPath, cwd: dirname(process.execPath), icon: join(__dirname, '..', 'kiro.ico'), iconIndex: 0, appUserModelId: ID_DO_APP, description: 'Kiro' });
+  } catch { /* sem permissão no Menu Iniciar: o Kiro abre do mesmo jeito */ }
+}
 if (!app.requestSingleInstanceLock()) app.quit();
 else app.whenReady().then(async () => {
   KiroIdiomas.definirIdioma(KiroIdiomas.detectar(app.getLocale())); // caixas de erro de partida; a página manda o idioma escolhido
   Menu.setApplicationMenu(null);
+  atalhoNoMenuIniciar();
   settings = join(app.getPath('userData'), 'vault-settings.json');
   // Instalação que veio do KUROI: a escolha de cofre está na pasta com o nome antigo.
   const settingsAntigo = join(dirname(app.getPath('userData')), 'KUROI', 'vault-settings.json');

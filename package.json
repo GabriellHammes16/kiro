@@ -29,6 +29,7 @@
   },
   "build": {
     "appId": "com.kiro.local",
+    "asar": false,
     "productName": "Kiro",
     "directories": {
       "output": "dist"
@@ -53,7 +54,11 @@
       "!kiro logo preta e branca/**"
     ],
     "win": {
-      "target": "nsis",
+      "target": [
+        "nsis",
+        "zip"
+      ],
+      "signAndEditExecutable": false,
       "icon": "kiro.ico"
     },
     "nsis": {

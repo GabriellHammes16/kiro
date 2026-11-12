@@ -22,8 +22,10 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm test
-      - name: Instalador do Windows (sem assinatura)
-        run: npx electron-builder --win nsis --publish never
+      # Kiro.exe sai idêntico ao electron.exe oficial (sem edição e sem .asar, ver package.json): o
+      # Controle Inteligente de Aplicativos já conhece esse arquivo e não o bloqueia como um .exe novo.
+      - name: Instalador e .zip do Windows (sem assinatura)
+        run: npx electron-builder --win nsis zip --publish never
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
       - uses: actions/upload-artifact@v4
@@ -31,6 +33,7 @@ jobs:
           name: kiro-windows
           path: |
             dist/Kiro-Setup-*.exe
+            dist/Kiro-*-win.zip
             dist/win-unpacked/Kiro.exe
           if-no-files-found: error
 

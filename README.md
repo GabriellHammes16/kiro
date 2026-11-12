@@ -43,10 +43,10 @@ Offline, free, and every note stays in a folder you own.
 
 Get the latest version from [Releases](https://github.com/GabriellHammes16/kiro/releases):
 
-- **Windows:** `Kiro-Setup-X.Y.Z.exe`
+- **Windows:** `Kiro-X.Y.Z-win.zip` — extract the folder anywhere and open `Kiro.exe`. On the first run Kiro adds itself to the Start menu, so you can pin it from there. There is also an installer, `Kiro-Setup-X.Y.Z.exe`.
 - **Linux:** `Kiro-X.Y.Z.deb` (Ubuntu, Debian) or `Kiro-X.Y.Z.AppImage` (any distribution)
 
-Windows releases are not signed yet (see [Code signing policy](#code-signing-policy)), so Windows may show a warning or, with Smart App Control on, block the installer.
+Windows releases are not signed yet (see [Code signing policy](#code-signing-policy)), so Windows may show a warning or, with Smart App Control on, block the installer. The `.zip` avoids most of this: its `Kiro.exe` is the official, unmodified Electron runtime, which Windows already knows.
 
 ## What you can do
 
