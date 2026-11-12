@@ -52,6 +52,8 @@ Get the latest version from [Releases](https://github.com/GabriellHammes16/kiro/
 
 **To update:** close Kiro, extract the new zip into the same folder (replace the files) and open it again. Your notes are not in that folder, so nothing is lost.
 
+**To uninstall:** open Windows **Settings → Apps → Installed apps**, find **Kiro** and choose **Uninstall**, or use **Settings → System → Uninstall Kiro** inside Kiro. Kiro closes and removes the app folder, its Start menu entry and its settings. Your notes are never deleted.
+
 **Why a zip?** Kiro is not code-signed yet (see [Code signing policy](#code-signing-policy)). Windows, and Smart App Control in particular, may block a new unsigned program. The `Kiro.exe` in the zip is the official, unmodified Electron runtime, which Windows already knows, so it usually opens without trouble. In File Explorer the file shows the Electron icon; the window, the Start menu entry and the taskbar show Kiro's.
 
 There is also an installer, `Kiro-Setup-X.Y.Z.exe`. It works the same, but Windows is more likely to warn about it or block it. If you see the blue "Windows protected your PC" screen, click **More info → Run anyway**.
