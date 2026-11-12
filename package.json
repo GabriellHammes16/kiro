@@ -24,7 +24,6 @@
     "desktop:dev": "electron . --dev-vault",
     "mcp": "node mcp/server.mjs",
     "build:win": "electron-builder --win nsis",
-    "review-graph": "node scripts/build-review-graph.mjs",
     "build:linux": "electron-builder --linux AppImage deb"
   },
   "build": {
