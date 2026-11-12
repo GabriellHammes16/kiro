@@ -31,12 +31,11 @@ com ele pela entrada padrão.
 
 ### A partir do aplicativo instalado
 
-Os arquivos do Kiro ficam empacotados em `app.asar`, e um `node` externo não
-consegue executar nada de dentro de um asar. Por isso a camada de agentes é
-desempacotada na instalação, e o caminho a usar é o de `app.asar.unpacked`:
+O Kiro é instalado sem `app.asar`: os arquivos ficam soltos em `resources\app`,
+e um `node` externo executa o servidor direto de lá:
 
 ```
-%LOCALAPPDATA%\Programs\Kiro\resources\app.asar.unpacked\mcp\server.mjs
+%LOCALAPPDATA%\Programs\Kiro\resources\app\mcp\server.mjs
 ```
 
 ```json
@@ -44,7 +43,7 @@ desempacotada na instalação, e o caminho a usar é o de `app.asar.unpacked`:
   "mcpServers": {
     "kiro": {
       "command": "node",
-      "args": ["C:/Users/voce/AppData/Local/Programs/Kiro/resources/app.asar.unpacked/mcp/server.mjs"]
+      "args": ["C:/Users/voce/AppData/Local/Programs/Kiro/resources/app/mcp/server.mjs"]
     }
   }
 }
