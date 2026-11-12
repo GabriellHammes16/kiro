@@ -35,6 +35,8 @@ contextBridge.exposeInMainWorld('cadernoDesktop', {
   agentConfig: () => ipcRenderer.invoke('agent:config:get'),
   saveAgentConfig: parcial => ipcRenderer.invoke('agent:config:set', parcial),
   version: () => ipcRenderer.invoke('app:version'),
+  podeDesinstalar: process.platform === 'win32',
+  desinstalar: () => ipcRenderer.invoke('app:desinstalar'),
   printNote: () => ipcRenderer.invoke('nota:imprimir'),
   exportNotePdf: titulo => ipcRenderer.invoke('nota:pdf', titulo),
   plugins: () => ipcRenderer.invoke('plugins:list'),

@@ -5921,6 +5921,7 @@ async function showSettings(aba = abaDasConfiguracoes) {
     </section><div id="cfg-hoje">${conteudoDaAbaHoje()}</div>`)}
     ${painel('sistema', `<section class="cfg-grupo">
       <header class="cfg-grupo-topo">${texto(t('Sobre o Kiro'), VERSAO !== '0.0.0' ? t('Versão {versao}', { versao: escapeHtml(VERSAO) }) : t('Versão desconhecida'))}</header>
+      ${window.cadernoDesktop?.podeDesinstalar ? `<div class="cfg-linha">${texto(t('Desinstalar o Kiro'), t('Remove o app do computador. Suas notas não são apagadas.'))}<button type="button" class="secondary perigo" id="cfg-desinstalar">${t('Desinstalar')}</button></div>` : ''}
     </section>
     <section class="cfg-grupo">
       <header class="cfg-grupo-topo">${texto(t('Internet no Fluxo'), t('O resto do Kiro funciona sem internet.'))}</header>
@@ -6000,6 +6001,10 @@ async function showSettings(aba = abaDasConfiguracoes) {
     aplicarAparencia();
     coresDaJanela();
   }));
+  $('#cfg-desinstalar')?.addEventListener('click', async () => {
+    try { const r = await window.cadernoDesktop.desinstalar(); if (!r?.ok && r?.motivo) status(r.motivo, true); }
+    catch (erro) { status(mensagemDoErro(erro), true); }
+  });
   $('#cfg-notas-solidas')?.addEventListener('change', e => {
     e.stopPropagation(); modalDirty = false;
     gravarPreferencia('vidroNotasSolidas', e.target.checked ? '1' : '0');

@@ -6,8 +6,10 @@ const { criarAgendadorDeBackup } = require('../agendador-backup.cjs');
 const KiroPlugins = require('../plugins.js');
 const { readFile, readdir, mkdir, copyFile } = require('node:fs/promises');
 const { join, dirname } = require('node:path');
-const { existsSync, readFileSync } = require('node:fs');
-const { release } = require('node:os');
+const { existsSync, readFileSync, writeFileSync, rmSync } = require('node:fs');
+const { release, tmpdir } = require('node:os');
+const { execFile, spawn } = require('node:child_process');
+const Desinstalar = require('./desinstalar.cjs');
 const { Vault, atomicWrite } = require('../vault.cjs');
 const { palavraValida, palavraParaDicionario } = require('../corretor.js');
 const { instalarPluginsInclusos } = require('./plugins-inclusos.cjs');
@@ -164,11 +166,48 @@ function atalhoNoMenuIniciar() {
     shell.writeShortcutLink(atalho, existsSync(atalho) ? 'replace' : 'create', { target: process.execPath, cwd: dirname(process.execPath), icon: join(__dirname, '..', 'kiro.ico'), iconIndex: 0, appUserModelId: ID_DO_APP, description: 'Kiro' });
   } catch { /* sem permissão no Menu Iniciar: o Kiro abre do mesmo jeito */ }
 }
+// Versão em .zip: aparece em "Aplicativos instalados" do Windows, com "Desinstalar" chamando o próprio Kiro.
+// A do instalador já tem o desinstalador dela e não entra aqui.
+const pastaDoApp = () => dirname(process.execPath);
+const veioDoInstalador = () => existsSync(join(pastaDoApp(), Desinstalar.DESINSTALADOR_DO_INSTALADOR));
+const reg = argumentos => new Promise(pronto => execFile('reg', argumentos, { windowsHide: true }, () => pronto()));
+function registrarNaListaDoWindows() {
+  if (process.platform !== 'win32' || !app.isPackaged || veioDoInstalador()) return;
+  const valores = Desinstalar.valoresDoRegistro({ exe: process.execPath, icone: join(__dirname, '..', 'kiro.ico'), versao: app.getVersion(), pasta: pastaDoApp() });
+  (async () => { for (const [nome, tipo, valor] of valores) await reg(['add', Desinstalar.CHAVE, '/v', nome, '/t', tipo, '/d', valor, '/f']); })();
+}
+let cofreDaDesinstalacao = null;
+async function desinstalar() {
+  if (process.platform !== 'win32' || !app.isPackaged) return { ok: false, motivo: t('Só o Kiro instalado ou extraído do .zip pode se desinstalar.') };
+  if (veioDoInstalador()) { spawn(join(pastaDoApp(), Desinstalar.DESINSTALADOR_DO_INSTALADOR), [], { detached: true, stdio: 'ignore' }).unref(); app.quit(); return { ok: true }; }
+  const cofre = vault?.directory || cofreDaDesinstalacao, configuracoes = app.getPath('userData');
+  const janela = BrowserWindow.getAllWindows()[0];
+  const { response } = await dialog.showMessageBox(...(janela ? [janela] : []), {
+    type: 'question', title: 'Kiro', message: t('Desinstalar o Kiro?'),
+    detail: [cofre ? t('Suas notas continuam em {cofre} e não serão apagadas.', { cofre }) : '', t('O Kiro vai fechar e remover o app, o atalho do Menu Iniciar e as configurações.')].filter(Boolean).join('\n\n'),
+    buttons: [t('Cancelar'), t('Desinstalar')], defaultId: 0, cancelId: 0,
+  });
+  if (response !== 1) return { ok: false };
+  await reg(['delete', Desinstalar.CHAVE, '/f']);
+  rmSync(join(app.getPath('appData'), 'Microsoft', 'Windows', 'Start Menu', 'Programs', 'Kiro.lnk'), { force: true });
+  const motivo = Desinstalar.motivoParaNaoApagar(pastaDoApp(), cofre, configuracoes);
+  if (motivo) {
+    await dialog.showMessageBox(...(janela ? [janela] : []), { type: 'info', title: 'Kiro', message: t('O Kiro saiu do Menu Iniciar e da lista de aplicativos.'), detail: t('A pasta do app não foi apagada ({motivo}). Apague a pasta {pasta} quando quiser.', { motivo, pasta: pastaDoApp() }) });
+  } else {
+    // Quem apaga é um script que espera o Kiro fechar: um programa não apaga a própria pasta enquanto roda.
+    const script = join(tmpdir(), `kiro-desinstalar-${process.pid}.cmd`);
+    writeFileSync(script, Desinstalar.scriptDeRemocao(process.pid, [pastaDoApp(), configuracoes]));
+    spawn('cmd.exe', ['/c', script], { detached: true, stdio: 'ignore', windowsHide: true }).unref();
+  }
+  app.quit();
+  return { ok: true };
+}
 if (!app.requestSingleInstanceLock()) app.quit();
 else app.whenReady().then(async () => {
   KiroIdiomas.definirIdioma(KiroIdiomas.detectar(app.getLocale())); // caixas de erro de partida; a página manda o idioma escolhido
   Menu.setApplicationMenu(null);
-  atalhoNoMenuIniciar();
+  const pedindoDesinstalar = process.argv.includes('--desinstalar');
+  if (!pedindoDesinstalar) { atalhoNoMenuIniciar(); registrarNaListaDoWindows(); }
   settings = join(app.getPath('userData'), 'vault-settings.json');
   // Instalação que veio do KUROI: a escolha de cofre está na pasta com o nome antigo.
   const settingsAntigo = join(dirname(app.getPath('userData')), 'KUROI', 'vault-settings.json');
@@ -190,6 +229,8 @@ else app.whenReady().then(async () => {
       primeiraVez = !existsSync(directory);
     }
   }
+  // "Desinstalar" na lista do Windows, com o Kiro fechado: pergunta e sai, sem abrir a janela.
+  if (pedindoDesinstalar) { cofreDaDesinstalacao = primeiraVez ? null : directory; const r = await desinstalar(); if (!r.ok) app.quit(); return; }
   vault = primeiraVez ? null : new Vault(directory);
   let agentConfig = primeiraVez ? null : new AgentConfig(directory);
   const agendadorBackup = criarAgendadorDeBackup({
@@ -315,6 +356,7 @@ else app.whenReady().then(async () => {
   // Plug-ins: a lista da pasta, as escolhas do usuário e o espaço de cada plug-in.
   // A versão do app é o que a página compara com o minKiro do manifesto.
   ipcMain.handle('app:version', () => app.getVersion());
+  ipcMain.handle('app:desinstalar', () => desinstalar());
   // Corretor ortográfico e idioma: o que a página manda é validado aqui.
   ipcMain.on('idioma:definir', (_event, codigo) => KiroIdiomas.definirIdioma(String(codigo || '')));
   ipcMain.on('corretor:definir', (event, ligado) => event.sender.session.setSpellCheckerEnabled(ligado === true));
@@ -420,7 +462,10 @@ else app.whenReady().then(async () => {
   });
   createWindow();
   app.on('activate', () => { if (!BrowserWindow.getAllWindows().length) createWindow(); });
-  app.on('second-instance', () => { const window = BrowserWindow.getAllWindows()[0]; if (window) { window.restore(); window.focus(); } });
+  app.on('second-instance', (_evento, argumentos) => {
+    if (argumentos.includes('--desinstalar')) return void desinstalar(); // "Desinstalar" na lista do Windows com o Kiro aberto
+    const window = BrowserWindow.getAllWindows()[0]; if (window) { window.restore(); window.focus(); }
+  });
 }).catch(error => { dialog.showErrorBox(t('Não foi possível abrir o Kiro'), error.message); app.quit(); });
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
 app.on('will-quit', () => globalShortcut.unregisterAll());

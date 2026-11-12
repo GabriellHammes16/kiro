@@ -34,7 +34,6 @@ jobs:
           path: |
             dist/Kiro-Setup-*.exe
             dist/Kiro-*-win.zip
-            dist/win-unpacked/Kiro.exe
           if-no-files-found: error
 
   linux:
