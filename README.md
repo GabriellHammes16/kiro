@@ -1,6 +1,43 @@
-# Kiro — your second brain, on your own computer
+<div align="center">
 
-Kiro is a free note-taking app for Windows and Linux. Write notes in Markdown, link ideas together, plan tasks and habits, and draw idea maps. It works offline, and everything stays in a folder you choose.
+<img src="kiro-logo.png" alt="Kiro logo" width="96" height="96">
+
+# Kiro
+
+**Your external mind.**
+
+Write in Markdown, link your ideas, plan your day and map it all out.<br>
+Offline, free, and every note stays in a folder you own.
+
+[![Latest release](https://img.shields.io/github/v/release/GabriellHammes16/kiro?label=release&color=555)](https://github.com/GabriellHammes16/kiro/releases/latest)
+![Windows and Linux](https://img.shields.io/badge/platform-Windows%20%7C%20Linux-555)
+![Offline first](https://img.shields.io/badge/works-offline-2ea44f)
+![Markdown](https://img.shields.io/badge/notes-Markdown-555)
+![Electron](https://img.shields.io/badge/electron-44-47848F)
+[![License GPL-3.0](https://img.shields.io/badge/license-GPL--3.0-blue)](LICENSE)
+
+[**Download**](https://github.com/GabriellHammes16/kiro/releases/latest) · [What you can do](#what-you-can-do) · [Plug-ins](#plug-ins) · [Privacy](#privacy)
+
+<br>
+
+<img src="docs/images/notes.png" alt="A note in Kiro, with the folder tree on the left" width="100%">
+
+</div>
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/images/today.png" alt="Today page with habits, tasks and quick capture"><br><b>Today</b> — habits, what to do now and a quick capture box.</td>
+    <td width="50%"><img src="docs/images/flow.png" alt="Flow canvas with linked idea cards"><br><b>Flow</b> — idea maps in the open JSON Canvas format.</td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/images/tasks.png" alt="Tasks grouped by date"><br><b>Tasks</b> — by date, month, list or columns; repeat and remind.</td>
+    <td width="50%"><img src="docs/images/graph.png" alt="Graph of linked notes"><br><b>Graph</b> — see how your notes connect.</td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/images/themes.png" alt="Theme picker with classic and anime themes"><br><b>Themes</b> — classic, Liquid Glass and anime-inspired.</td>
+    <td width="50%"><img src="docs/images/penumbra.png" alt="A note with code in the Penumbra theme"><br><b>Penumbra</b> — a soft grey theme for reading at night.</td>
+  </tr>
+</table>
 
 ## Download
 
