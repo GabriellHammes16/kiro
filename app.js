@@ -691,9 +691,11 @@ document.addEventListener('click', e => {
   $(`[data-tarefas-aba="${filtroDasTarefas}"]`)?.focus();
 });
 const byTitle = (a,b) => KiroIdiomas.comparar(a.title, b.title);
-const childFolders = id => state.folders.filter(f=>(f.parentId||"")===id).sort(byTitle);
-const folderNotes = id => state.notes.filter(n=>(n.folderId||"")===id).sort(byTitle);
-const folderFluxos = id => (state.fluxos || []).filter(f => (f.folderId || "") === id).sort(byTitle);
+// Ordem da árvore: a escolhida arrastando (state.ordem) e, para o resto, o título.
+const naOrdem = (itens, id) => Kiro.ordenarPelaOrdem(itens, state.ordem?.[id], byTitle);
+const childFolders = id => naOrdem(state.folders.filter(f=>(f.parentId||"")===id), id);
+const folderNotes = id => naOrdem(state.notes.filter(n=>(n.folderId||"")===id), id);
+const folderFluxos = id => naOrdem((state.fluxos || []).filter(f => (f.folderId || "") === id), id);
 // Árvore no estilo de um explorador de arquivos: pastas aninhadas, notas como folhas.
 // ---- Ícones ----
 // Desenho vetorial no lugar de emoji e símbolos de texto: mesma grade de 24, mesma
@@ -829,7 +831,7 @@ function treeMarkup(parentId, depth) {
     const temFilhos = childFolders(folder.id).length || folderNotes(folder.id).length || folderFluxos(folder.id).length;
     const tools = `<span class="tree-tools"><button class="icon-button" data-action="new-note-folder" data-id="${folder.id}" title="${t('Nova nota nesta pasta')}">${icone('mais')}</button><button class="icon-button" data-action="new-subfolder" data-id="${folder.id}" title="${t('Nova subpasta')}">${icone('pasta-nova')}</button><button class="icon-button" data-action="edit-folder" data-id="${folder.id}" title="${t('Renomear ou mover')}">${icone('renomear')}</button><button class="icon-button" data-action="delete-folder" data-id="${folder.id}" title="${t('Excluir')}">${icone('lixeira')}</button></span>`;
     // Filhos ficam sempre no DOM: abrir e fechar vira transição de CSS, sem redesenhar.
-    return `<div class="tree-node${open?" open":""}" data-id="${folder.id}"${folder.color?` data-cor-pasta="${folder.color}"`:""}><div class="tree-row tree-folder" data-action="toggle-folder" data-id="${folder.id}" style="--depth:${depth}"${folder.description?` title="${escapeHtml(folder.description)}"`:""}><span class="twisty">${temFilhos?icone('direita'):""}</span><span class="tree-icone">${icone('pastas')}</span><span class="tree-name" title="${escapeHtml(folder.title)}">${escapeHtml(folder.title)}</span>${tools}</div><div class="tree-children"><div class="tree-children-inner">${treeMarkup(folder.id,depth+1)}</div></div></div>`;
+    return `<div class="tree-node${open?" open":""}" data-id="${folder.id}"${folder.color?` data-cor-pasta="${folder.color}"`:""}><div class="tree-row tree-folder" draggable="true" data-action="toggle-folder" data-id="${folder.id}" style="--depth:${depth}"${folder.description?` title="${escapeHtml(folder.description)}"`:""}><span class="twisty">${temFilhos?icone('direita'):""}</span><span class="tree-icone">${icone('pastas')}</span><span class="tree-name" title="${escapeHtml(folder.title)}">${escapeHtml(folder.title)}</span>${tools}</div><div class="tree-children"><div class="tree-children-inner">${treeMarkup(folder.id,depth+1)}</div></div></div>`;
   }).join("");
   const notes = folderNotes(parentId).map(note => {
     const tags = Kiro.tags(note).slice(0,2).map(t=>`#${escapeHtml(t)}`).join(" ");
@@ -6323,13 +6325,53 @@ document.addEventListener('dragstart',e=>{const nota=e.target.closest?.('.tree-n
 // Arrastar um item que faz parte de uma seleção leva a seleção inteira; fora dela, a seleção some.
 document.addEventListener('dragstart',e=>{const linha=e.target.closest?.('.tree-note, .tree-fluxo');if(!linha)return;if(selecaoArvore.has(linha.dataset.id)&&selecaoArvore.size>1)e.dataTransfer.setData('text/kiro-selecao','1');else if(selecaoArvore.size){selecaoArvore.clear();marcarSelecaoArvore();}});
 document.addEventListener('dragstart',e=>{const fluxo=e.target.closest?.('.tree-fluxo');if(!fluxo)return;e.dataTransfer.setData('text/kiro-fluxo',fluxo.dataset.id);e.dataTransfer.effectAllowed='move';});
+// Trocar de lugar: soltar na metade de cima de uma linha põe antes dela; na de baixo, depois.
+// Pasta só troca de lugar com pastas irmãs; nota e fluxo, com notas e fluxos (de qualquer pasta).
+document.addEventListener('dragstart',e=>{const pasta=e.target.closest?.('.tree-folder');if(!pasta)return;e.dataTransfer.setData('text/kiro-pasta',pasta.dataset.id);e.dataTransfer.effectAllowed='move';pastaArrastada=pasta.dataset.id;});
+let pastaArrastada=null;
+const paiDaPasta=id=>state.folders.find(f=>f.id===id)?.parentId||'';
+function lugarNaArvore(e){
+  const tipos=e.dataTransfer.types;
+  if(tipos.includes('text/kiro-selecao'))return null;
+  const pasta=tipos.includes('text/kiro-pasta');
+  const linha=e.target.closest?.(pasta?'.tree-folder':'.tree-note, .tree-fluxo');
+  if(!linha||(pasta&&(linha.dataset.id===pastaArrastada||paiDaPasta(linha.dataset.id)!==paiDaPasta(pastaArrastada))))return null;
+  const r=linha.getBoundingClientRect();
+  return {linha,depois:e.clientY>r.top+r.height/2};
+}
+const limparLugar=()=>document.querySelectorAll('.soltar-antes, .soltar-depois').forEach(x=>x.classList.remove('soltar-antes','soltar-depois'));
+async function trocarDeLugar(idMovido,linha,depois){
+  if(busy||failed||!loaded)return;
+  const alvo=linha.dataset.id, ehPasta=linha.classList.contains('tree-folder');
+  const pai=ehPasta?paiDaPasta(alvo):((getNote(alvo)||getFluxo(alvo))?.folderId||'');
+  const irmaos=[...childFolders(pai),...folderNotes(pai),...folderFluxos(pai)].map(x=>x.id);
+  const antes=depois?irmaos[irmaos.indexOf(alvo)+1]??null:alvo;
+  if(antes===idMovido||alvo===idMovido)return;
+  state.ordem=Kiro.reordenar(state.ordem,pai,irmaos,idMovido,antes);
+  const nota=getNote(idMovido),fluxo=getFluxo(idMovido);
+  if(nota&&(nota.folderId||'')!==pai)return moverNota(idMovido,pai);
+  if(fluxo&&(fluxo.folderId||'')!==pai)return moverFluxo(idMovido,pai);
+  await save();
+}
 document.addEventListener('dragover',e=>{
-  if(!e.dataTransfer.types.includes('text/kiro-nota')&&!e.dataTransfer.types.includes('text/kiro-fluxo'))return;
+  const tipos=e.dataTransfer.types;
+  if(!tipos.includes('text/kiro-nota')&&!tipos.includes('text/kiro-fluxo')&&!tipos.includes('text/kiro-pasta'))return;
+  limparLugar();
+  const lugar=lugarNaArvore(e);
+  if(lugar){limparSoltura();e.preventDefault();e.dataTransfer.dropEffect='move';lugar.linha.classList.add(lugar.depois?'soltar-depois':'soltar-antes');return;}
+  if(tipos.includes('text/kiro-pasta')){limparSoltura();return;}
   const alvo=alvoDaSoltura(e);limparSoltura(alvo);if(!alvo)return;
   e.preventDefault();e.dataTransfer.dropEffect='move';alvo.classList.add('soltar-aqui');
 });
-document.addEventListener('dragend',()=>limparSoltura());
+document.addEventListener('dragend',()=>{limparSoltura();limparLugar();pastaArrastada=null;});
 document.addEventListener('drop',e=>{
+  const lugar=lugarNaArvore(e);limparLugar();
+  if(lugar){
+    const movido=e.dataTransfer.getData('text/kiro-pasta')||e.dataTransfer.getData('text/kiro-nota')||e.dataTransfer.getData('text/kiro-fluxo');
+    limparSoltura();pastaArrastada=null;
+    if(movido){e.preventDefault();trocarDeLugar(movido,lugar.linha,lugar.depois);}
+    return;
+  }
   const id=e.dataTransfer.getData('text/kiro-nota'),idFluxo=e.dataTransfer.getData('text/kiro-fluxo');const alvo=(id||idFluxo)&&alvoDaSoltura(e);
   limparSoltura();
   if(!alvo)return;

@@ -70,6 +70,11 @@
       folderPaths(value.folders);
       for (const n of value.notes) if (n.folderId && !value.folders.some(f => f.id === n.folderId)) fail();
     }
+    // Ordem manual da árvore: { idDaPasta ('' = raiz): [ids de pastas, notas e fluxos, na ordem] }.
+    if (value.ordem !== undefined) {
+      if (!value.ordem || typeof value.ordem !== 'object' || Array.isArray(value.ordem)) fail();
+      for (const [chave, ids] of Object.entries(value.ordem)) if ((chave !== '' && !id(chave)) || !Array.isArray(ids) || ids.length > 10000 || !ids.every(id)) fail();
+    }
     if (value.fluxos !== undefined) {
       if (!Array.isArray(value.fluxos)) fail();
       // Abas guardam ids de nota e de fluxo misturados: um id não pode servir aos dois.
@@ -599,12 +604,32 @@
     }
     return saida;
   }
+  // Ordem manual na árvore: quem está na lista vem primeiro, na ordem dela; o resto segue pelo título.
+  function ordenarPelaOrdem(itens, ordem, comparar) {
+    const posicao = new Map((ordem || []).map((x, i) => [x, i]));
+    return [...itens].sort((a, b) => {
+      const pa = posicao.has(a.id) ? posicao.get(a.id) : Infinity, pb = posicao.has(b.id) ? posicao.get(b.id) : Infinity;
+      return pa !== pb ? (pa < pb ? -1 : 1) : comparar(a, b);
+    });
+  }
+  // Põe `id` antes de `antesDe` (ou no fim, sem `antesDe`) entre os irmãos já na ordem em que aparecem.
+  function reordenar(ordem, chave, irmaos, idMovido, antesDe) {
+    const lista = irmaos.filter(x => x !== idMovido);
+    const i = antesDe ? lista.indexOf(antesDe) : -1;
+    lista.splice(i < 0 ? lista.length : i, 0, idMovido);
+    const saida = { ...(ordem || {}) };
+    for (const k of Object.keys(saida)) if (k !== chave) saida[k] = saida[k].filter(x => x !== idMovido);
+    saida[chave] = lista;
+    return saida;
+  }
   function mesclarEstados(base, local, disco) {
     const conflitos = [];
     const lista = chave => mesclarLista(chave, base[chave], local[chave], disco[chave], conflitos);
     const comoLista = log => Object.entries(log || {}).map(([id, dias]) => ({ id, dias }));
     const habitLog = Object.fromEntries(mesclarLista('habitLog', comoLista(base.habitLog), comoLista(local.habitLog), comoLista(disco.habitLog), conflitos).map(x => [x.id, x.dias]));
     const estado = { ...disco, notes: lista('notes'), tasks: lista('tasks'), habits: lista('habits'), habitLog, folders: lista('folders'), fluxos: lista('fluxos'), revision: disco.revision };
+    // A ordem da árvore é uma escolha só: vale a desta janela se ela mudou, senão a do disco.
+    if (JSON.stringify(local.ordem || {}) !== JSON.stringify(base.ordem || {})) estado.ordem = local.ordem;
     return { estado, conflitos };
   }
   // Reescreve [[Título Antigo]], [[Título Antigo|apelido]] e [[Título Antigo#seção]] fora de blocos
@@ -985,7 +1010,7 @@
     return texto.length;
   }
 
-  const api = { criarProximas, validRepeat, proximoPrazo, proximaOcorrencia, avisosDeHoje, mesclarEstados, filtrarAcoes, modelosPessoais, expandirModelo, STATUS_DA_TAREFA, statusDaTarefa, moverTarefa, taskLinks, notesCitingTask, taskReference, ATALHOS_EDITAVEIS, combinacaoDoEvento, rotuloDaCombinacao, problemaDoAtalho, atalhosValidos, TEMAS, SKINS, APARENCIA_PADRAO, luminancia, contraste, corValida, aparenciaValida, classesDaAparencia, FOLDER_COLORS, folderColor, calendarioDoMes, somarMeses, habitStats, habitDays, withHabits, validFrequency, localDate, safeUrl, validateState, normalize, isImagePath, isPdfPath, isAudioPath, isAttachmentPath, csvParaTabela, celulasTabela, lerPdf, wikiLinks, parseWikiLink, blocosDaNota, resolverAncoraNaNota, tags, findLinkedNote, mentions, fluxosQueCitam, reescreverLinksPorTitulo, aplicarRenomeacaoDeLinks, buscarNoTexto, substituirNoTexto, substituirTodosNoTexto, validarFavoritos, ehFavorito, alternarFavorito, criarGrupoFavorito, removerGrupoFavorito, moverParaGrupoFavorito, compilarConsulta, avaliarConsulta, filtrarNotasPorConsulta, posicaoParaLinha, linhaParaPosicao, inInbox, withoutInbox, toReview, linkQuery, linkSuggestions, validFolderName, folderPaths, descendants, upgradeBackup, pathKey, mencoesNaoVinculadas, vincularMencao, sumario, arvoreDeEtiquetas, podeVincular };
+  const api = { ordenarPelaOrdem, reordenar, criarProximas, validRepeat, proximoPrazo, proximaOcorrencia, avisosDeHoje, mesclarEstados, filtrarAcoes, modelosPessoais, expandirModelo, STATUS_DA_TAREFA, statusDaTarefa, moverTarefa, taskLinks, notesCitingTask, taskReference, ATALHOS_EDITAVEIS, combinacaoDoEvento, rotuloDaCombinacao, problemaDoAtalho, atalhosValidos, TEMAS, SKINS, APARENCIA_PADRAO, luminancia, contraste, corValida, aparenciaValida, classesDaAparencia, FOLDER_COLORS, folderColor, calendarioDoMes, somarMeses, habitStats, habitDays, withHabits, validFrequency, localDate, safeUrl, validateState, normalize, isImagePath, isPdfPath, isAudioPath, isAttachmentPath, csvParaTabela, celulasTabela, lerPdf, wikiLinks, parseWikiLink, blocosDaNota, resolverAncoraNaNota, tags, findLinkedNote, mentions, fluxosQueCitam, reescreverLinksPorTitulo, aplicarRenomeacaoDeLinks, buscarNoTexto, substituirNoTexto, substituirTodosNoTexto, validarFavoritos, ehFavorito, alternarFavorito, criarGrupoFavorito, removerGrupoFavorito, moverParaGrupoFavorito, compilarConsulta, avaliarConsulta, filtrarNotasPorConsulta, posicaoParaLinha, linhaParaPosicao, inInbox, withoutInbox, toReview, linkQuery, linkSuggestions, validFolderName, folderPaths, descendants, upgradeBackup, pathKey, mencoesNaoVinculadas, vincularMencao, sumario, arvoreDeEtiquetas, podeVincular };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Kiro = api;
 })(globalThis);

@@ -282,7 +282,7 @@ class Vault {
     });
     const paths=folderPaths(folders);
     for(const f of folders)f.path=paths.get(f.id);
-    const state=validateState(withHabits({formatVersion:3,notes,tasks:data.tasks,routine:data.routine,habits:data.habits,habitLog:data.habitLog,folders,fluxos}));
+    const state=validateState(withHabits({formatVersion:3,notes,tasks:data.tasks,routine:data.routine,habits:data.habits,habitLog:data.habitLog,folders,fluxos,ordem:data.ordem&&typeof data.ordem==='object'&&!Array.isArray(data.ordem)?data.ordem:{}}));
     const revision=hash(JSON.stringify([metadata,[...directories].sort(),[...files].sort(([a],[b])=>a.localeCompare(b)).map(([file,v])=>[file,hash(v.data)])]));
     return {state:{...state,revision,vaultPath:this.directory},files,directories,metadata};
   }
@@ -417,7 +417,10 @@ class Vault {
       put(note.file,equal&&identified?previous:markdown(note,previous));
     }
     for(const folder of input.folders)put(`${paths.get(folder.id)}/${FOLDER_MARKER}`,JSON.stringify({id:folder.id}));
-    const metadata=JSON.stringify({formatVersion:3,tasks:input.tasks,habits:input.habits||[],habitLog:input.habitLog||{},fluxos:registroDeFluxos,folders:input.folders.map(f=>({id:f.id,title:f.title,parentId:f.parentId||'',path:paths.get(f.id),description:f.description||'',color:folderColor(f.color)}))},null,2);
+    // Ordem da árvore: só ids que ainda existem, para o caderno.json não juntar restos.
+    const existentes=new Set([...input.notes,...input.folders,...(input.fluxos||[])].map(x=>x.id));
+    const ordem=Object.fromEntries(Object.entries(input.ordem||{}).filter(([k])=>k===''||existentes.has(k)).map(([k,ids])=>[k,ids.filter(x=>existentes.has(x))]).filter(([,ids])=>ids.length));
+    const metadata=JSON.stringify({formatVersion:3,tasks:input.tasks,ordem,habits:input.habits||[],habitLog:input.habitLog||{},fluxos:registroDeFluxos,folders:input.folders.map(f=>({id:f.id,title:f.title,parentId:f.parentId||'',path:paths.get(f.id),description:f.description||'',color:folderColor(f.color)}))},null,2);
     put('caderno.json',metadata);
     for(const file of desired.keys()){
       await this.safePath(file);let parent=parentPath(file);while(parent){desiredDirs.add(parent);parent=parentPath(parent);}

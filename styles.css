@@ -675,6 +675,8 @@ body, button, input, textarea, select { font-family:var(--fonte-interface); }
 .tree-note[draggable="true"], .tree-fluxo[draggable="true"] { cursor:grab; }
 .tree-row.selecionada { background:color-mix(in srgb, var(--acento) 20%, transparent); box-shadow:inset 0 0 0 1px color-mix(in srgb, var(--acento) 45%, transparent); }
 .tree-folder.soltar-aqui { outline:2px dashed var(--acento); outline-offset:-2px; background:var(--accent-soft); }
+.tree-row.soltar-antes { box-shadow:inset 0 2px 0 var(--acento); }
+.tree-row.soltar-depois { box-shadow:inset 0 -2px 0 var(--acento); }
 .tree.soltar-aqui { outline:2px dashed color-mix(in srgb, var(--acento) 50%, transparent); outline-offset:-4px; border-radius:var(--raio-controle); }
 
 /* Hoje: caixa de entrada e para revisar. */
@@ -1736,15 +1738,17 @@ html:not(.papel-em-video) .papel-so-video { display:none; }
 .tarefas-lista.por-colunas { display:grid; grid-template-columns:repeat(4, minmax(0, 1fr)); gap:var(--esp-3); align-items:start; padding:0; background:transparent; border:0; container-type:inline-size; }
 @media (max-width:1100px) { .tarefas-lista.por-colunas { grid-template-columns:repeat(2, minmax(0, 1fr)); } }
 @media (max-width:640px) { .tarefas-lista.por-colunas { grid-template-columns:1fr; } }
-.por-colunas .status-secao { min-height:160px; margin:0; padding:var(--esp-3) var(--esp-2) var(--esp-2); border:1px solid var(--line); background:var(--panel); }
-.por-colunas .status-secao.alvo { border-style:dashed; }
-.por-colunas .status-secao h2 { padding:0 var(--esp-1) var(--esp-2); margin:0 0 var(--esp-2); border-bottom:1px solid var(--line); }
+/* Uma borda só: a coluna é um painel e os cartões se separam pelo fundo, sem contorno dentro de contorno. */
+.por-colunas .status-secao { min-height:160px; margin:0; padding:var(--esp-3) var(--esp-2) var(--esp-2); border:0; background:var(--panel); }
+.por-colunas .status-secao.alvo { outline:2px dashed color-mix(in srgb, var(--acento) 60%, transparent); outline-offset:-2px; }
+.por-colunas .status-secao h2 { padding:0 var(--esp-1); margin:0 0 var(--esp-2); }
 .por-colunas .status-itens { display:grid; gap:6px; }
-.por-colunas .status-item { border:1px solid var(--line); background:var(--surface-subtle); }
+.por-colunas .status-item { border:0; background:var(--panel-raised); }
+.por-colunas .status-item:hover { background:color-mix(in srgb, var(--ink) 6%, var(--panel-raised)); }
 .por-colunas .status-item .task-item { border-bottom:0; flex-wrap:wrap; align-items:flex-start; row-gap:6px; min-height:0; padding:var(--esp-2); }
 .por-colunas .task-item > .check { margin-top:2px; }
 .por-colunas .task-title { flex:1 1 calc(100% - 34px); min-width:0; overflow-wrap:anywhere; }
-.por-colunas .task-status { margin-left:0; padding:2px 7px; font-size:11px; }
+.por-colunas .task-status { margin-left:0; padding:2px 7px; font-size:11px; border-color:transparent; }
 .por-colunas .task-item .priority { margin-left:0; }
 /* Sobre o cartão, só com o ponteiro em cima: escondidas, não reservam uma linha vazia. */
 .por-colunas .task-item .task-actions { position:absolute; top:4px; right:4px; background:var(--panel-raised); border-radius:var(--raio-controle); }

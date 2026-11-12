@@ -438,7 +438,7 @@ html.tema-liquid-glass :is(.resumo-item, .por-colunas .status-secao, .calendario
   background:var(--vidro-realce); border-color:var(--vidro-borda); box-shadow:var(--vidro-reflexo);
 }
 html.tema-liquid-glass .por-colunas .status-secao { border-radius:var(--raio-card); }
-html.tema-liquid-glass .por-colunas .status-item { border-color:var(--vidro-borda); background:#FFFFFF0D; }
+html.tema-liquid-glass .por-colunas .status-item { background:#FFFFFF0D; }
 /* Colunas já têm superfície própria: o cartão que as embrulha não pode aparecer atrás delas. */
 html.tema-liquid-glass .tarefas-lista.por-colunas { padding:0; background:transparent; border:0; box-shadow:none; -webkit-backdrop-filter:none; backdrop-filter:none; }
 /* Controle segmentado em cápsula: cantos concêntricos e sem as linhas diagonais do reflexo, que viravam uma ponta. */
