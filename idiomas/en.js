@@ -1017,6 +1017,7 @@
   'Escuro': 'Dark',
   'Fundo sólido nas notas': 'Solid background in notes',
   'Fundo sólido no grafo': 'Solid background in graph',
+  'Brilho que segue o mouse': 'Glow that follows the mouse',
   'O que você quer fazer?': 'What would you like to do?',
   'Nenhuma ação encontrada.': 'No actions found.',
   'Fluxos': 'Flows',

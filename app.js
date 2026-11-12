@@ -778,6 +778,7 @@ const TRACOS = {
   'tema-alto-contraste': '<circle cx="12" cy="12" r="8.5"/><path d="M12 3.5a8.5 8.5 0 0 1 0 17z" fill="currentColor"/>',
   'tema-meia-noite': '<path d="M15.5 17.2A6.8 6.8 0 1 1 8 8a5.4 5.4 0 0 0 7.5 9.2z"/><path d="M17.5 3.5v4.5M15.25 5.75h4.5"/><circle cx="20" cy="11.5" r=".8" fill="currentColor"/>',
   'tema-floresta': '<path d="M12 3.5 7 10h2.8L5.5 15.5h13L14.2 10H17z"/><path d="M12 15.5v5"/>',
+  'tema-penumbra': '<path d="M4 19c2.7-1.3 5.3-1.3 8 0 2.7-1.3 5.3-1.3 8 0V9.5c-2.7-1.3-5.3-1.3-8 0-2.7-1.3-5.3-1.3-8 0z"/><path d="M12 9.5V19"/><path d="M15.5 3a2.6 2.6 0 1 0 3.3 3.3A2.1 2.1 0 0 1 15.5 3z"/>',
   'tema-personalizado': '<path d="M12 3.5a8.5 8.5 0 0 0 0 17c1.1 0 1.8-.7 1.8-1.7 0-1.2-1-1.6-1-2.6 0-.9.7-1.6 1.7-1.6h2.1a3.9 3.9 0 0 0 3.9-3.9C20.5 6.9 16.7 3.5 12 3.5z"/><circle cx="7.8" cy="12" r="1.1" fill="currentColor"/><circle cx="10" cy="7.6" r="1.1" fill="currentColor"/><circle cx="15" cy="7.8" r="1.1" fill="currentColor"/>',
   'tema-neon-tokyo': '<path d="M3.5 20.5h17"/><path d="M5 20.5V11h4M9 20.5V5.5h5v15M14 20.5V12h5v8.5"/><path d="M15.5 4.5h2.5v5.5h-2.5" stroke-width="1.5"/>',
   'tema-sakura-night': '<path d="M12 12C9.4 10 8.6 7.3 9.8 4.4L12 5.8l2.2-1.4c1.2 2.9.4 5.6-2.2 7.6z"/><path d="M12 12C9.4 10 8.6 7.3 9.8 4.4L12 5.8l2.2-1.4c1.2 2.9.4 5.6-2.2 7.6z" transform="rotate(72 12 12)"/><path d="M12 12C9.4 10 8.6 7.3 9.8 4.4L12 5.8l2.2-1.4c1.2 2.9.4 5.6-2.2 7.6z" transform="rotate(144 12 12)"/><path d="M12 12C9.4 10 8.6 7.3 9.8 4.4L12 5.8l2.2-1.4c1.2 2.9.4 5.6-2.2 7.6z" transform="rotate(216 12 12)"/><path d="M12 12C9.4 10 8.6 7.3 9.8 4.4L12 5.8l2.2-1.4c1.2 2.9.4 5.6-2.2 7.6z" transform="rotate(288 12 12)"/>',
@@ -939,6 +940,7 @@ function aplicarVidro() {
   html.classList.toggle('cartoes-vidro', opacidade < 100);
   html.classList.toggle('notas-solidas', lerPreferencia('vidroNotasSolidas') === '1');
   html.classList.toggle('grafo-solido', lerPreferencia('vidroGrafoSolido') === '1');
+  html.classList.toggle('sem-brilho', lerPreferencia('vidroSemBrilho') === '1');
 }
 function papelGuardado(acao, valor) {
   return new Promise((ok, erro) => {
@@ -5855,6 +5857,7 @@ async function showSettings(aba = abaDasConfiguracoes) {
         <p class="small-muted" id="cfg-vidro-detalhe">${t('Mais transparência revela a área de trabalho, sem apagar o texto. No navegador, o tema usa um fundo interno.')}</p>
         <label class="cfg-chave cfg-vidro-controle"><span>${t('Fundo sólido nas notas')}</span><input type="checkbox" id="cfg-notas-solidas" ${lerPreferencia('vidroNotasSolidas') === '1' ? 'checked' : ''} /><span class="interruptor" aria-hidden="true"></span></label>
         <label class="cfg-chave cfg-vidro-controle"><span>${t('Fundo sólido no grafo')}</span><input type="checkbox" id="cfg-grafo-solido" ${lerPreferencia('vidroGrafoSolido') === '1' ? 'checked' : ''} /><span class="interruptor" aria-hidden="true"></span></label>
+        <label class="cfg-chave cfg-vidro-controle"><span>${t('Brilho que segue o mouse')}</span><input type="checkbox" id="cfg-brilho-mouse" ${lerPreferencia('vidroSemBrilho') === '1' ? '' : 'checked'} /><span class="interruptor" aria-hidden="true"></span></label>
       </div>
       <div class="cfg-linha cfg-linha-coluna">${texto(t('Tema'), t('Escolhe as cores da interface.'), 'tema-rotulo')}
         ${[['classicos', t('Clássicos')], ['anime', t('Anime')]].map(([grupo, titulo]) => `<div class="temas-grupo"><h4 class="cfg-subtitulo">${titulo}</h4><div class="temas" role="radiogroup" aria-labelledby="tema-rotulo">${TEMAS.filter(tema => tema[2] === grupo).map(opcaoTema).join('')}</div></div>`).join('')}
@@ -5980,6 +5983,11 @@ async function showSettings(aba = abaDasConfiguracoes) {
     e.stopPropagation(); modalDirty = false;
     gravarPreferencia('vidroGrafoSolido', e.target.checked ? '1' : '0');
     aplicarVidro();
+  });
+  $('#cfg-brilho-mouse')?.addEventListener('change', e => {
+    e.stopPropagation(); modalDirty = false;
+    gravarPreferencia('vidroSemBrilho', e.target.checked ? '0' : '1');
+    aplicarVidro(); apagarLuzes();
   });
   $('#papel-segue-sistema')?.addEventListener('change', e => {
     e.stopPropagation(); modalDirty = false;
@@ -6605,7 +6613,7 @@ function moverLuz(agora){
   }
 }
 document.addEventListener('pointermove',e=>{
-  if(e.pointerType==='touch'||SEM_ANIMACAO.matches||!document.documentElement.classList.contains('tema-liquid-glass'))return;
+  if(e.pointerType==='touch'||SEM_ANIMACAO.matches||!document.documentElement.classList.contains('tema-liquid-glass')||document.documentElement.classList.contains('sem-brilho'))return;
   luzEm={x:e.clientX,y:e.clientY};
   if(!luzAgendada&&e.timeStamp-ultimaLuz>=16){luzAgendada=true;requestAnimationFrame(moverLuz);}
 },{passive:true});

@@ -382,6 +382,7 @@
     ['liquid-glass', 'Liquid Glass', 'classicos'],
     ['kiro', 'Kiro', 'classicos'], ['grafite', frase('Areia'), 'classicos'], ['claro', frase('Claro'), 'classicos'], ['escuro-azul', frase('Oceano'), 'classicos'], ['escuro-verde', frase('Jade'), 'classicos'],
     ['escuro-ambar', frase('Café'), 'classicos'], ['alto-contraste', frase('Alto Contraste'), 'classicos'], ['meia-noite', frase('Meia-noite'), 'classicos'], ['floresta', frase('Floresta'), 'classicos'],
+    ['penumbra', 'Penumbra', 'classicos'],
     ['neon-tokyo', 'Neon Tokyo', 'anime'], ['sakura-night', 'Sakura Blossom', 'anime'], ['shonen-fire', 'Shonen Fire', 'anime'], ['enchanted-forest', 'Enchanted Forest', 'anime'],
     ['purple-mecha', 'Purple Mecha', 'anime'], ['moon-guardian', 'Moon Guardian', 'anime'], ['lavender-letters', 'Lavender Letters', 'anime'], ['demon-blood', 'Demon Blood', 'anime'],
     ['wired-dreams', 'Wired Dreams', 'anime'], ['summer-sky', 'Summer Sky', 'anime'], ['bizarre-aura', 'Bizarre Aura', 'anime'],

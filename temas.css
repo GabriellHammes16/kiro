@@ -85,6 +85,12 @@
   --ink:#F1F5DF; --danger:#EDBEB0; --muted:#C1D0AB; --line:#607A4C;
   --acento:#F2D878; --acento-2:#A7D697; --acento-forte:#DBC363; --acento-escuro:#C8AF51; --acento-texto:#252D12; --primario-texto:#252D12;
 }
+/* Penumbra: para ler à noite. Cinza grafite em vez de preto, texto creme em vez de branco e destaque âmbar suave, para cansar menos a vista. */
+.tema-penumbra {
+  --bg:#2B2C2F; --panel:#333438; --panel-raised:#3B3C41; --sidebar-bg:#26272A; --content-bg:#2B2C2F; --campo:#303135;
+  --ink:#DCD8D0; --danger:#EDB8B2; --muted:#B0ACA4; --line:#4A4B50;
+  --acento:#D9B98C; --acento-2:#9DBFB0; --acento-forte:#CBA977; --acento-escuro:#B8966A; --acento-texto:#2A2218; --primario-texto:#2A2218;
+}
 
 /* Anime */
 .tema-neon-tokyo {
@@ -285,6 +291,8 @@ html.tema-liquid-glass .app-shell:not(.cofre-aberto) { background:var(--vidro-fu
 html.tema-liquid-glass #barra-titulo { background:var(--vidro-superficie); }
 html.tema-liquid-glass :is(.content, .cofre-nota, .cofre-metade, .grafo-tela) { background:var(--vidro-fundo-legivel); }
 html.tema-liquid-glass :is(.abas-menu, .abas-barra) { background:var(--vidro-superficie); }
+/* Nota sem fundo sólido: as abas também ficam direto sobre o vidro; com fundo, a faixa quadrada sobrava acima da nota. */
+html.tema-liquid-glass:not(.notas-solidas) :is(.abas-menu, .abas-barra) { background:transparent; }
 
 /* Superfícies de vidro: barra lateral, cartões, campos, menus. */
 html.tema-liquid-glass :is(.sidebar, .cofre-lateral, .painel-direito, .card, .note-card, .cfg-grupo, .capture, .search, .segmentos, .habito-stats, .secondary, .new-note) {
@@ -467,10 +475,12 @@ html.tema-liquid-glass.vidro-claro:not(.vidro-escuro) .check:not(.done) { backgr
 html.tema-liquid-glass.vidro-claro:not(.vidro-escuro) .page-head :is(h1, p) { text-shadow:none; }
 /* Brilho que segue o mouse (app.js): um véu leve na superfície e um fio mais forte na borda. */
 #luzes-vidro { position:fixed; inset:0; z-index:4; overflow:hidden; pointer-events:none; contain:strict; }
-html:not(.tema-liquid-glass) #luzes-vidro { display:none; }
-.luz-vidro { position:absolute; background:radial-gradient(220px circle at var(--luz-x) var(--luz-y), #FFFFFF26, #FFFFFF00 70%); }
+html:not(.tema-liquid-glass) #luzes-vidro, html.sem-brilho #luzes-vidro { display:none; }
+/* No Escuro o brilho é bem mais fraco, para não ofuscar à noite. No Claro, branco sobre branco some: o véu é mais denso e o fio da borda é escuro. */
+.luz-vidro { --luz-veu:#FFFFFF05; --luz-fio:#FFFFFF2E; position:absolute; background:radial-gradient(220px circle at var(--luz-x) var(--luz-y), var(--luz-veu), #FFFFFF00 70%); }
+html.vidro-claro:not(.vidro-escuro) .luz-vidro { --luz-veu:#FFFFFFB3; --luz-fio:#00000038; }
 .luz-vidro::after {
-  content:""; position:absolute; inset:0; border-radius:inherit; padding:1px; background:radial-gradient(220px circle at var(--luz-x) var(--luz-y), #FFFFFFF2, #FFFFFF00 70%);
+  content:""; position:absolute; inset:0; border-radius:inherit; padding:1px; background:radial-gradient(220px circle at var(--luz-x) var(--luz-y), var(--luz-fio), #FFFFFF00 70%);
   -webkit-mask:linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite:xor; mask:linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
 }
 /* O que flutua sobre o conteúdo deixa ver e entorta o que passa por baixo. */
