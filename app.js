@@ -3777,7 +3777,18 @@ document.addEventListener('paste', evento => {
 });
 // Arquivo solto fora da nota não deve abrir a imagem no lugar do aplicativo.
 window.addEventListener('dragover', evento => { if (evento.dataTransfer?.types.includes('Files')) evento.preventDefault(); });
-window.addEventListener('drop', evento => { if (evento.dataTransfer?.types.includes('Files')) evento.preventDefault(); });
+window.addEventListener('drop', evento => {
+  if (!evento.dataTransfer?.types.includes('Files')) return;
+  const tratado = evento.defaultPrevented;
+  evento.preventDefault();
+  // Solto na coluna da nota aberta, mas fora das linhas de texto (o editor trata as linhas):
+  // entra no fim da nota, como o Ctrl+V com o editor sem foco.
+  const coluna = editing && $('#doc-corpo')?.closest('.cofre-metade');
+  if (tratado || !coluna?.contains(evento.target)) return;
+  const arquivos = imagensDoEvento(evento.dataTransfer);
+  const destino = arquivos.length && abrirNoFim();
+  if (destino) colarImagens(destino, arquivos);
+});
 // Abrir o PDF no leitor do sistema: no desktop o esquema kiro-anexo:// não abre em
 // aba (o window.open dele é negado), então o botão sai pelo shell, com o caminho
 // resolvido dentro do cofre. No navegador o link segue normal, para /anexo/.
